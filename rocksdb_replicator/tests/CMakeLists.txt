@@ -1,0 +1,18 @@
+cmake_minimum_required(VERSION 3.1)
+
+add_executable(non_blocking_condition_variable_test non_blocking_condition_variable_test.cpp)
+target_link_libraries(non_blocking_condition_variable_test folly wangle gtest)
+add_test(NAME non_blocking_condition_variable_test COMMAND non_blocking_condition_variable_test)
+
+add_executable(rocksdb_replicator_test rocksdb_replicator_test.cpp)
+target_link_libraries(rocksdb_replicator_test rocksdb_replicator gtest)
+add_test(NAME rocksdb_replicator_test COMMAND rocksdb_replicator_test)
+
+add_executable(fast_read_map_test fast_read_map_test.cpp)
+target_link_libraries(fast_read_map_test folly wangle gtest)
+add_test(NAME fast_read_map_test COMMAND fast_read_map_test)
+
+add_executable(rocksdb_assumption_test rocksdb_assumption_test.cpp)
+target_link_libraries(rocksdb_assumption_test rocksdb_replicator boost_filesystem gtest)
+add_test(NAME rocksdb_assumption_test COMMAND rocksdb_assumption_test)
+
