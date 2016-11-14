@@ -199,9 +199,8 @@ TEST(RocksDBAssumptionTest, SequenceNumber) {
 
 
   // manually write two SST files
-  const ImmutableCFOptions ioptions(options);
-  SstFileWriter sst_file_writer1(EnvOptions(), ioptions, options.comparator);
-  SstFileWriter sst_file_writer2(EnvOptions(), ioptions, options.comparator);
+  SstFileWriter sst_file_writer1(EnvOptions(), options, options.comparator);
+  SstFileWriter sst_file_writer2(EnvOptions(), options, options.comparator);
   string sst_file1 = "/tmp/file1.sst";
   string sst_file2 = "/tmp/file2.sst";
   s = sst_file_writer1.Open(sst_file1);

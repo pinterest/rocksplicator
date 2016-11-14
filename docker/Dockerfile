@@ -231,10 +231,10 @@ RUN cd /opt && \
 
 # rocksdb
 RUN cd /opt/ && \
-    git clone https://github.com/facebook/rocksdb && \
-    (cd rocksdb && \
-      # The version would be v4.1 till our fix with HDFS environment
-      git reset --hard ab5a9a66d2f268b8204d1f9151d717c46d804887 && \
+    wget https://github.com/facebook/rocksdb/archive/rocksdb-4.11.2.zip && \
+    unzip rocksdb-4.11.2.zip && \
+    (cd rocksdb-rocksdb-4.11.2 && \
+      sed -i -- 's/std::rindex/rindex/g' ./util/env_hdfs.cc && \
       export CLASSPATH= && \
       for f in `find /usr/lib/hadoop-hdfs | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \
       for f in `find /usr/lib/hadoop | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \
