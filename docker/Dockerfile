@@ -36,8 +36,8 @@ RUN apt-get -q -y update && \
       curl \
       default-jdk \
       flex \
-      g++-4.9 \
-      gcc-4.9 \
+      g++-5 \
+      gcc-5 \
       gdb \
       git \
       hadoop \
@@ -87,9 +87,8 @@ RUN JAVA_HOME=/usr/lib/jvm/java-6-openjdk-amd64 && \
     echo $JAVA_HOME/jre/lib/amd64/server >> /etc/ld.so.conf.d/rocksdb_admin.conf && \
     echo $JAVA_HOME/jre/lib/amd64/jamvm >> /etc/ld.so.conf.d/rocksdb_admin.conf
 
-# Change the gcc/g++ aliases to point to 4.9
-RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.9 50 && \
-    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.9 50
+# Change the gcc/g++ aliases to point to 5
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-5 60 --slave /usr/bin/g++ g++ /usr/bin/g++-5
 
 # numa
 RUN cd /opt && \
