@@ -114,6 +114,7 @@ class ThriftRouter {
         }
       }))
     << "Failed to watch " << config_path_;
+    LOG(INFO) << "Local AZ used by ThriftRouter: " << local_az;
   }
 
   ~ThriftRouter() {
