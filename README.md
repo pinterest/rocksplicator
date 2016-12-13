@@ -25,6 +25,12 @@ Docker is used for building Rocksplicator. Follow the [Docker installation instr
 cd docker && docker build -t rocksplicator-build .
 ```
 
+### Initialize submodules
+
+```sh
+cd rocksplicator && git submodule update --init
+```
+
 ### Build the libraries & tools
 
 Get into the docker build environment. We are assuming the rocksplicator repo is under $HOME/code/, and $HOME/docker-root is an existing directory.

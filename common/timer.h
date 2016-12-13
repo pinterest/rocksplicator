@@ -50,7 +50,7 @@ class Timer {
     }
   }
 
- private:
+ protected:
   // fetch the current time in MS
   static uint64_t now() {
     struct timeval now;
