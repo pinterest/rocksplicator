@@ -21,6 +21,8 @@
 #include <glog/logging.h>
 #include <sys/time.h>
 #include <stdlib.h>
+
+#include <cstdint>
 #include <string>
 
 #include "common/stats/stats.h"
@@ -33,43 +35,49 @@ namespace common {
 class SlowLogTimer : public common::Timer {
  public:
   explicit SlowLogTimer(const uint32_t metric,
-                        const std::string& log_message,
-                        uint64_t log_latency_threshold=-1,
+                        std::string log_message,
+                        uint64_t log_latency_threshold_ms=-1,
                         double log_sample_rate=0)
-    : Timer(metric), log_message_(log_message),
-      log_latency_threshold_(log_latency_threshold),
-      log_sample_rate_(log_sample_rate) {}
+    : Timer(metric), log_message_(std::move(log_message)),
+      log_latency_threshold_ms_(log_latency_threshold_ms),
+      log_sample_trigger_(calculateLogTrigger(log_sample_rate)) {}
 
   explicit SlowLogTimer(const std::string& metric,
-                        const std::string& log_message,
-                        uint64_t log_latency_threshold=-1,
+                        std::string log_message,
+                        uint64_t log_latency_threshold_ms=-1,
                         double log_sample_rate=0)
-    : Timer(metric), log_message_(log_message),
-      log_latency_threshold_(log_latency_threshold),
-      log_sample_rate_(log_sample_rate) {}
+    : Timer(metric), log_message_(std::move(log_message)),
+      log_latency_threshold_ms_(log_latency_threshold_ms),
+      log_sample_trigger_(calculateLogTrigger(log_sample_rate)) {}
 
   // stop the clock and report the delta through metric_[str|int]_
   // also log the string content
-  ~SlowLogTimer() {
+  virtual ~SlowLogTimer() {
     if (shouldLog()) {
       LOG(WARNING) << "Slow request: " << log_message_;
     }
   }
 
  protected:
-  double generatereRandomDouble0To1() {
-    return rand() / (RAND_MAX + 1.);
+  uint64_t calculateLogTrigger(double log_sample_rate) {
+    if (log_sample_rate == 0) {
+      return UINT64_MAX;
+    } else {
+      return (uint64_t)(1.0 / log_sample_rate);
+    }
   }
 
-  bool shouldLog() {
+  virtual bool shouldLog() {
+    thread_local uint64_t should_log_count = 1;
+    should_log_count ++;
     auto elapsed_time = getElapsedTimeMs();
-    return generatereRandomDouble0To1() <= log_sample_rate_ &&
-            elapsed_time > log_latency_threshold_;
+    return (should_log_count % log_sample_trigger_ == 0) &&
+            elapsed_time > log_latency_threshold_ms_;
   }
 
   const std::string log_message_;
-  const uint64_t log_latency_threshold_;
-  const double log_sample_rate_;
+  const uint64_t log_latency_threshold_ms_;
+  const uint64_t log_sample_trigger_;
 };
 
 }  // namespace common

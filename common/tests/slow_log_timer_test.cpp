@@ -25,12 +25,13 @@
 class TestSlowLogTimer : public common::SlowLogTimer {
  public:
   explicit TestSlowLogTimer(const std::string& metric,
-                              const std::string& log_message,
-                              uint64_t log_latency_threshold=-1,
-                              double log_sample_rate=0)
+                            std::string log_message,
+                            uint64_t log_latency_threshold_ms=-1,
+                            double log_sample_rate=0)
     : SlowLogTimer(metric, log_message,
-                   log_latency_threshold, log_sample_rate) {}
+                   log_latency_threshold_ms, log_sample_rate) {}
   static int logged_count;
+
   ~TestSlowLogTimer() {
     if (shouldLog()) {
       logged_count += 1;
@@ -41,11 +42,12 @@ int TestSlowLogTimer::logged_count = 0;
 
 TEST(SlowLogTest, DoLog) {
   TestSlowLogTimer::logged_count = 0;
-  {
-    TestSlowLogTimer timer("metric", "dolog", 100, 1);
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+  for (int i = 0; i < 200; i ++) {
+    TestSlowLogTimer timer("metric", "dolog", 1, 0.01);
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
   }
-  EXPECT_EQ(TestSlowLogTimer::logged_count, 1);
+  // We expect to reach 399 and logged_count is actually be bumped 4 times
+  EXPECT_EQ(TestSlowLogTimer::logged_count, 4);
 }
 
 TEST(SlowLogTest, DoNotLogForShortLifeCycle) {

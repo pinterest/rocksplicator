@@ -40,7 +40,7 @@ class Timer {
   }
 
   // stop the clock and report the delta through metric_[str|int]_
-  ~Timer() {
+  virtual ~Timer() {
     auto elapsed_time = getElapsedTimeMs();
 
     if (metric_str_.empty()) {
