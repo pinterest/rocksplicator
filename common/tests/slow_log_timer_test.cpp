@@ -26,10 +26,10 @@ class TestSlowLogTimer : public common::SlowLogTimer {
  public:
   explicit TestSlowLogTimer(const std::string& metric,
                             std::string log_message,
-                            uint64_t log_latency_threshold_ms=-1,
-                            double log_sample_rate=0)
-    : SlowLogTimer(metric, log_message,
-                   log_latency_threshold_ms, log_sample_rate) {}
+                            uint64_t log_latency_threshold_ms = -1,
+                            uint64_t log_one_for_every_n_slow_requests = 0)
+    : SlowLogTimer(metric, log_message, log_latency_threshold_ms,
+                   log_one_for_every_n_slow_requests) {}
   static int logged_count;
 
   ~TestSlowLogTimer() {
@@ -43,7 +43,7 @@ int TestSlowLogTimer::logged_count = 0;
 TEST(SlowLogTest, DoLog) {
   TestSlowLogTimer::logged_count = 0;
   for (int i = 0; i < 200; i ++) {
-    TestSlowLogTimer timer("metric", "dolog", 1, 0.01);
+    TestSlowLogTimer timer("metric", "dolog", 1, 100);
     std::this_thread::sleep_for(std::chrono::milliseconds(2));
   }
   // We expect to reach 399 and logged_count is actually be bumped 4 times

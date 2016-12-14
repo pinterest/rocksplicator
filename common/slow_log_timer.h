@@ -36,19 +36,19 @@ class SlowLogTimer : public common::Timer {
  public:
   explicit SlowLogTimer(const uint32_t metric,
                         std::string log_message,
-                        uint64_t log_latency_threshold_ms=-1,
-                        double log_sample_rate=0)
+                        uint64_t log_latency_threshold_ms = -1,
+                        uint64_t log_one_for_every_n_slow_requests = 0)
     : Timer(metric), log_message_(std::move(log_message)),
       log_latency_threshold_ms_(log_latency_threshold_ms),
-      log_sample_trigger_(calculateLogTrigger(log_sample_rate)) {}
+      log_one_for_every_n_slow_requests_(log_one_for_every_n_slow_requests) {}
 
   explicit SlowLogTimer(const std::string& metric,
                         std::string log_message,
-                        uint64_t log_latency_threshold_ms=-1,
-                        double log_sample_rate=0)
+                        uint64_t log_latency_threshold_ms = -1,
+                        uint64_t log_one_for_every_n_slow_requests = 0)
     : Timer(metric), log_message_(std::move(log_message)),
       log_latency_threshold_ms_(log_latency_threshold_ms),
-      log_sample_trigger_(calculateLogTrigger(log_sample_rate)) {}
+      log_one_for_every_n_slow_requests_(log_one_for_every_n_slow_requests) {}
 
   // stop the clock and report the delta through metric_[str|int]_
   // also log the string content
@@ -59,25 +59,23 @@ class SlowLogTimer : public common::Timer {
   }
 
  protected:
-  uint64_t calculateLogTrigger(double log_sample_rate) {
-    if (log_sample_rate == 0) {
-      return UINT64_MAX;
-    } else {
-      return (uint64_t)(1.0 / log_sample_rate);
-    }
-  }
-
   virtual bool shouldLog() {
+    if (log_one_for_every_n_slow_requests_ == 0) {
+      // Never log
+      return false;
+    }
     thread_local uint64_t should_log_count = 1;
     should_log_count ++;
     auto elapsed_time = getElapsedTimeMs();
-    return (should_log_count % log_sample_trigger_ == 0) &&
-            elapsed_time > log_latency_threshold_ms_;
+    if (elapsed_time > log_latency_threshold_ms_) {
+      return should_log_count % log_one_for_every_n_slow_requests_ == 0;
+    }
+    return false;
   }
 
   const std::string log_message_;
   const uint64_t log_latency_threshold_ms_;
-  const uint64_t log_sample_trigger_;
+  const uint64_t log_one_for_every_n_slow_requests_;
 };
 
 }  // namespace common
