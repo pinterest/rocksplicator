@@ -64,11 +64,11 @@ class SlowLogTimer : public common::Timer {
       // Never log
       return false;
     }
-    thread_local uint64_t total_slow_request_count_ = 1;
+    thread_local uint64_t total_slow_request_count = 1;
     auto elapsed_time = getElapsedTimeMs();
     if (elapsed_time > log_latency_threshold_ms_) {
-      total_slow_request_count_ ++;
-      return total_slow_request_count_ % log_one_for_every_n_slow_requests_ == 0;
+      total_slow_request_count ++;
+      return total_slow_request_count % log_one_for_every_n_slow_requests_ == 0;
     }
     return false;
   }
