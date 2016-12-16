@@ -21,8 +21,14 @@ Docker is used for building Rocksplicator. Follow the [Docker installation instr
 
 ### Build docker image
 
+You can build your own docker image (if you want to change the docker file and test it locally).
 ```sh
 cd docker && docker build -t rocksplicator-build .
+```
+
+Or pull the one we uploaded.
+```sh
+docker pull aliced3645/rocksplicator-build
 ```
 
 ### Initialize submodules
