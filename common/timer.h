@@ -58,6 +58,7 @@ class Timer {
     return now.tv_sec * 1000 + now.tv_usec / 1000;
   }
 
+ private:
   const uint32_t metric_int_;
   const std::string metric_str_;
   uint64_t start_;

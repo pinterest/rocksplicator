@@ -59,20 +59,21 @@ class SlowLogTimer : public common::Timer {
   }
 
  protected:
-  virtual bool shouldLog() {
+  bool shouldLog() {
     if (log_one_for_every_n_slow_requests_ == 0) {
       // Never log
       return false;
     }
-    thread_local uint64_t should_log_count = 1;
-    should_log_count ++;
+    thread_local uint64_t total_slow_request_count_ = 1;
     auto elapsed_time = getElapsedTimeMs();
     if (elapsed_time > log_latency_threshold_ms_) {
-      return should_log_count % log_one_for_every_n_slow_requests_ == 0;
+      total_slow_request_count_ ++;
+      return total_slow_request_count_ % log_one_for_every_n_slow_requests_ == 0;
     }
     return false;
   }
 
+ private:
   const std::string log_message_;
   const uint64_t log_latency_threshold_ms_;
   const uint64_t log_one_for_every_n_slow_requests_;
