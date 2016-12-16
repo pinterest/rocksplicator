@@ -40,7 +40,7 @@ class Timer {
   }
 
   // stop the clock and report the delta through metric_[str|int]_
-  ~Timer() {
+  virtual ~Timer() {
     auto elapsed_time = getElapsedTimeMs();
 
     if (metric_str_.empty()) {
@@ -50,7 +50,7 @@ class Timer {
     }
   }
 
- private:
+ protected:
   // fetch the current time in MS
   static uint64_t now() {
     struct timeval now;
@@ -58,6 +58,7 @@ class Timer {
     return now.tv_sec * 1000 + now.tv_usec / 1000;
   }
 
+ private:
   const uint32_t metric_int_;
   const std::string metric_str_;
   uint64_t start_;

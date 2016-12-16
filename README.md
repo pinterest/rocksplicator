@@ -31,6 +31,11 @@ Or pull the one we uploaded.
 docker pull aliced3645/rocksplicator-build
 ```
 
+### Initialize submodules
+
+```sh
+cd rocksplicator && git submodule update --init
+```
 
 ### Build the libraries & tools
 
