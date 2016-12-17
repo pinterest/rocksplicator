@@ -1,5 +1,7 @@
 # Rocksplicator
 
+[![Build Status](https://travis-ci.org/pinterest/rocksplicator.svg)](https://travis-ci.org/pinterest/rocksplicator)
+
 Rocksplicator is a set of C++ libraries and tools for building large scale [RocksDB](http://rocksdb.org/) based stateful services. Its goal is to help application developers solve common difficulties of building large scale stateful services, such as data replication and cluster management. With Rocksplicator, application developers just need to focus on their application logics, and won't need to deal with data replication nor cluster management. A brief introduction of Rocksplicator can be found in our [@Scale presentation](https://atscaleconference.com/videos/experimentation-at-scale-replicated-rocksdb-at-pinterest/) (starting from 17:30).
 
 Rocksplicator includes:
