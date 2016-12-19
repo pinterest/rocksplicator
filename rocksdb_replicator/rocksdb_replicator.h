@@ -30,6 +30,7 @@
 
 #include "common/thrift_client_pool.h"
 #include "rocksdb_replicator/fast_read_map.h"
+#include "rocksdb_replicator/max_number_box.h"
 #include "rocksdb_replicator/non_blocking_condition_variable.h"
 #include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 #include "folly/Executor.h"
@@ -51,6 +52,7 @@ enum class ReturnCode {
   DB_PRE_EXIST = 2,
   WRITE_TO_SLAVE = 3,
   WRITE_ERROR = 4,
+  WAIT_SLAVE_TIMEOUT = 5,
 };
 
 /*
@@ -65,6 +67,10 @@ class RocksDBReplicator {
     // updates. This is useful to implement read-after-write consistency at
     // higher level.
     // 2) WRITE_TO_SLAVE will be thrown if this is a SLAVE db.
+    // 3) WAIT_SLAVE_TIMEOUT will be thrown if replication mode 1 and 2 is
+    // enabled, and no slave gets back to us in time. In this case, the update
+    // is guaranteed to be committed to Master. Slaves may or may not have got
+    // the update.
     rocksdb::Status Write(const rocksdb::WriteOptions& options,
                           rocksdb::WriteBatch* updates,
                           rocksdb::SequenceNumber* seq_no = nullptr);
@@ -107,6 +113,7 @@ class RocksDBReplicator {
       std::pair<std::unique_ptr<rocksdb::TransactionLogIterator>,
                 uint64_t>> cached_iters_;
     std::mutex cached_iters_mutex_;
+    detail::MaxNumberBox max_seq_no_acked_;
 
     friend class ReplicatorHandler;
     friend class RocksDBReplicator;

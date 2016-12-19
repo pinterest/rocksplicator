@@ -37,7 +37,19 @@ DEFINE_int32(replicator_max_updates_per_response, 50,
 DEFINE_int32(replicator_pull_delay_on_error_ms, 5 * 1000,
              "How long to wait before sending the next pull request on error");
 
+DEFINE_int32(replicator_replication_mode, 0,
+             "Replication mode. "
+             "0: ack client once committed to Master; "
+             "1: ack client once committed to Master and written to the TCP "
+             "stack for the connection to one of the Slave; "
+             "2: ack client once committed to Master and one of the Slaves.");
+
+DEFINE_uint64(replicator_timeout_ms, 5 * 1000,
+              "How long to wait for Slave before timeout a client write, 0 means"
+              " waiting forever");
+
 DECLARE_int32(replicator_idle_iter_timeout_ms);
+
 
 namespace {
 
@@ -77,11 +89,29 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
   auto end = GetCurrentTimeMs();
   logMetric(kReplicatorWriteMs, start < end ? end - start : 0, db_name_);
   if (status.ok()) {
+    cond_var_.notifyAll();
+
+    // TODO(bol): change it once RocksDB guarantees the sequence number is in
+    // the write batch.
+    auto cur_seq_no = db_->GetLatestSequenceNumber();
     if (seq_no) {
-      *seq_no = db_->GetLatestSequenceNumber();
+      *seq_no = cur_seq_no;
     }
 
-    cond_var_.notifyAll();
+    switch (FLAGS_replicator_replication_mode) {
+    case 1:
+    case 2:
+      // TODO(bol): This potentially could block all worker threads. We may
+      // consider having a dedicated set of worker threads for admin requests,
+      // and/or provide async write API when this turns out to be a problem.
+      if (!max_seq_no_acked_.wait(cur_seq_no, FLAGS_replicator_timeout_ms)) {
+        throw ReturnCode::WAIT_SLAVE_TIMEOUT;
+      }
+      break;
+    default:
+      CHECK(FLAGS_replicator_replication_mode == 0)
+        << "Invalid replicaton mode " << FLAGS_replicator_replication_mode;
+    }
   }
 
   return status;
@@ -211,6 +241,11 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
   auto db = shared_from_this();
   std::weak_ptr<ReplicatedDB> weak_db = db;
   auto seq_no = static_cast<rocksdb::SequenceNumber>(request->seq_no);
+  if (FLAGS_replicator_replication_mode == 1 ||
+      FLAGS_replicator_replication_mode == 2) {
+    // post the largest sequence number the Slave has committed
+    max_seq_no_acked_.post(seq_no);
+  }
   auto timeout = request->max_wait_ms;
 
   cond_var_.runIfConditionOrWaitForNotify(
@@ -276,6 +311,10 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
           }
 
           (*callback).release()->resultInThread(std::move(response));
+          if (FLAGS_replicator_replication_mode == 1) {
+            // post the largest sequence number we have written to the Slave.
+            db->max_seq_no_acked_.post(next_seq_no - 1);
+          }
           incCounter(kReplicatorOutBytes, read_bytes, db->db_name_);
         } else {
           LOG(ERROR) << "Failed to pull updates from " << db->db_name_
