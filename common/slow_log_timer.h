@@ -36,7 +36,7 @@ class SlowLogTimer : public common::Timer {
  public:
   explicit SlowLogTimer(const uint32_t metric,
                         std::string log_message,
-                        uint64_t log_latency_threshold_ms = -1,
+                        uint64_t log_latency_threshold_ms = 0,
                         uint64_t log_one_for_every_n_slow_requests = 0)
     : Timer(metric), log_message_(std::move(log_message)),
       log_latency_threshold_ms_(log_latency_threshold_ms),
