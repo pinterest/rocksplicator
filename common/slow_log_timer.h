@@ -60,7 +60,8 @@ class SlowLogTimer : public common::Timer {
 
  protected:
   bool shouldLog() {
-    if (log_one_for_every_n_slow_requests_ == 0) {
+    if (log_one_for_every_n_slow_requests_ == 0 ||
+            log_latency_threshold_ms_ == 0) {
       // Never log
       return false;
     }
