@@ -61,6 +61,10 @@ void MaxNumberBox::post(const uint64_t num) {
 }
 
 bool MaxNumberBox::wait(const uint64_t num, const uint64_t timeout_ms) {
+  // We use thread local waiter because 1) avoid constructor and destructor
+  // overhead of Waiter::cv; 2) It is possible that the thread calling wait()
+  // returns from wait() before the thread calling post() calls notify_one()
+  // on Waiter::cv.
   thread_local Waiter me;
 
   std::unique_lock<std::mutex> lk(mtx_);

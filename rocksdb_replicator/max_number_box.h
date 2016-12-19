@@ -75,6 +75,8 @@ class MaxNumberBox {
   };
 
   // mtx_ protects max_number_ and waiters_
+  // We didn't investigate using other mutex types. Our gut feeling is that the
+  // mutex type itself won't be the bottleneck.
   std::mutex mtx_;
   uint64_t max_number_;
   std::vector<Waiter*> waiters_;
