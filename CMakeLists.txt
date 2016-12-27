@@ -4,6 +4,7 @@ project(rocksplicator)
 
 set(CMAKE_CXX_FLAGS "-std=c++1y -gdwarf-2 -O3 -Wall -fPIC -fno-omit-frame-pointer")
 
+include_directories(/usr/local/include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/build")
 
