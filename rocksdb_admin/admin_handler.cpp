@@ -647,4 +647,32 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   callback->result(AddS3SstFilesToDBResponse());
 }
 
+void AdminHandler::async_tm_setDBOptions(
+    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+      SetDBOptionsResponse>>> callback,
+    std::unique_ptr<SetDBOptionsRequest> request) {
+  std::unordered_map<string, string> options;
+  for (const auto& option_pair : request->options) {
+    options.emplace(option_pair);
+  }
+  for (const auto& db_name : request->db_names) {
+    db_admin_lock_.Lock(db_name);
+    SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
+    auto adb = getDB(db_name, nullptr);
+    if (adb == nullptr) {
+      LOG(ERROR) << "Failed to get db: " << db_name;
+      continue;
+    }
+    auto db = adb -> rocksdb();
+    // Assume we always use default column family
+    auto status = db->SetOptions(options);
+    if (!OKOrSetException(status,
+                          AdminErrorCode::DB_ADMIN_ERROR,
+                          &callback)) {
+      return;
+    }
+  }
+  callback->result(SetDBOptionsResponse());
+}
+
 }  // namespace admin

@@ -201,6 +201,6 @@ AddS3SstFilesToDBResponse addS3SstFilesToDB(1:AddS3SstFilesToDBRequest request)
  * Set mutable DB (ColumnFamily) options.
  * The option map in request will be passed down to Rocksdb::DB::SetOptions().
  */
-SetDBOptionsResponse setDBOptions(SetDBOptionsRequest requersrt)
+SetDBOptionsResponse setDBOptions(SetDBOptionsRequest request)
   throws (1:AdminException e)
 }
