@@ -664,6 +664,10 @@ void AdminHandler::async_tm_setDBOptions(
       continue;
     }
     auto db = adb -> rocksdb();
+    if (db == nullptr) {
+      LOG(ERROR) << "Failed to get db: " << db_name;
+      continue;
+    }
     // Assume we always use default column family
     auto status = db->SetOptions(options);
     if (!OKOrSetException(status,
