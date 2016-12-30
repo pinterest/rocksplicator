@@ -78,6 +78,12 @@ class AdminHandler : virtual public AdminSvIf {
         AddS3SstFilesToDBResponse>>> callback,
       std::unique_ptr<AddS3SstFilesToDBRequest> request) override;
 
+  void async_tm_setDBOptions(
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+        SetDBOptionsResponse>>> callback,
+      std::unique_ptr<SetDBOptionsRequest> request) override;
+
+
   std::shared_ptr<ApplicationDB> getDB(const std::string& db_name,
                                        AdminException* ex);
 
@@ -87,8 +93,7 @@ class AdminHandler : virtual public AdminSvIf {
 
   std::unique_ptr<ApplicationDBManager> db_manager_;
   RocksDBOptionsGeneratorType rocksdb_options_;
-  // Lock to synchronize async_tm_backupDB(), async_tm_restoreDB(),
-  // async_tm_closeDB() and async_tm_changeDBRoleAndUpStream().
+  // Lock to synchronize DB admin operations at per DB granularity
   common::ObjectLock<std::string> db_admin_lock_;
 };
 

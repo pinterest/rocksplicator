@@ -109,6 +109,17 @@ struct AddS3SstFilesToDBResponse {
   # for future use
 }
 
+struct SetDBOptionsRequest {
+  # For keys supported in this map, please refer to:
+  # https://github.com/facebook/rocksdb/blob/master/util/cf_options.h#L161
+  1: required map<string, string> options;
+  2: required string db_name;
+}
+
+struct SetDBOptionsResponse {
+  # for future use
+}
+
 service Admin {
 
 /*
@@ -163,4 +174,10 @@ ClearDBResponse clearDB(1:ClearDBRequest request)
 AddS3SstFilesToDBResponse addS3SstFilesToDB(1:AddS3SstFilesToDBRequest request)
   throws (1:AdminException e)
 
+/*
+ * Set mutable DB options.
+ * The option map in request will be passed down to Rocksdb::DB::SetOptions().
+ */
+SetDBOptionsResponse setDBOptions(1:SetDBOptionsRequest request)
+  throws (1:AdminException e)
 }
