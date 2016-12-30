@@ -110,33 +110,10 @@ struct AddS3SstFilesToDBResponse {
 }
 
 struct SetDBOptionsRequest {
-  # Keys supported in the map:
-  #  "write_buffer_size",
-  #  "max_write_buffer_number",
-  #  "arena_block_size",
-  #  "memtable_prefix_bloom_size_ratio",
-  #  "memtable_huge_page_size",
-  #  "max_successive_merges",
-  #  "inplace_update_num_locks",
-  #  "disable_auto_compactions",
-  #  "soft_pending_compaction_bytes_limit",
-  #  "hard_pending_compaction_bytes_limit",
-  #  "level0_file_num_compaction_trigger",
-  #  "level0_slowdown_writes_trigger",
-  #  "level0_stop_writes_trigger",
-  #  "max_compaction_bytes",
-  #  "target_file_size_base",
-  #  "target_file_size_multiplier",
-  #  "max_bytes_for_level_base",
-  #  "max_bytes_for_level_multiplier",
-  #  "verify_checksums_in_compaction(false),
-  #  "max_sequential_skip_in_iterations",
-  #  "paranoid_file_checks(false),
-  #  "report_bg_io_stats(false),
-  #  "compression"
-  #  "min_partial_merge_operands"
+  # For keys supported in this map, please refer to:
+  # https://github.com/facebook/rocksdb/blob/master/util/cf_options.h#L161
   1: required map<string, string> options;
-  2: required list<string> db_names;
+  2: required string db_name;
 }
 
 struct SetDBOptionsResponse {
@@ -198,7 +175,7 @@ AddS3SstFilesToDBResponse addS3SstFilesToDB(1:AddS3SstFilesToDBRequest request)
   throws (1:AdminException e)
 
 /*
- * Set mutable DB (ColumnFamily) options.
+ * Set mutable DB options.
  * The option map in request will be passed down to Rocksdb::DB::SetOptions().
  */
 SetDBOptionsResponse setDBOptions(SetDBOptionsRequest request)

@@ -93,9 +93,7 @@ class AdminHandler : virtual public AdminSvIf {
 
   std::unique_ptr<ApplicationDBManager> db_manager_;
   RocksDBOptionsGeneratorType rocksdb_options_;
-  // Lock to synchronize async_tm_backupDB(), async_tm_restoreDB(),
-  // async_tm_closeDB(), async_tm_changeDBRoleAndUpStream() and
-  // async_tm_setDBOptions()
+  // Lock to synchronize DB admin operations at per DB granularity
   common::ObjectLock<std::string> db_admin_lock_;
 };
 

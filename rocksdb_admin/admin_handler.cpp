@@ -652,29 +652,23 @@ void AdminHandler::async_tm_setDBOptions(
       SetDBOptionsResponse>>> callback,
     std::unique_ptr<SetDBOptionsRequest> request) {
   std::unordered_map<string, string> options;
-  for (const auto& option_pair : request->options) {
-    options.emplace(option_pair);
+  for (auto& option_pair : request->options) {
+    options.emplace(std::move(option_pair));
   }
-  for (const auto& db_name : request->db_names) {
-    db_admin_lock_.Lock(db_name);
-    SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
-    auto adb = getDB(db_name, nullptr);
-    if (adb == nullptr) {
-      LOG(ERROR) << "Failed to get db: " << db_name;
-      continue;
-    }
-    auto db = adb -> rocksdb();
-    if (db == nullptr) {
-      LOG(ERROR) << "Failed to get db: " << db_name;
-      continue;
-    }
-    // Assume we always use default column family
-    auto status = db->SetOptions(options);
-    if (!OKOrSetException(status,
-                          AdminErrorCode::DB_ADMIN_ERROR,
-                          &callback)) {
-      return;
-    }
+  db_admin_lock_.Lock(request->db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
+  ::admin::AdminException e;
+  auto db = getDB(request->db_name, &e);
+  if (db == nullptr) {
+    callback.release()->exceptionInThread(std::move(e));
+    return;
+  }
+  // Assume we always use default column family
+  auto status = db->rocksdb()->SetOptions(options);
+  if (!OKOrSetException(status,
+                        AdminErrorCode::DB_ADMIN_ERROR,
+                        &callback)) {
+    return;
   }
   callback->result(SetDBOptionsResponse());
 }
