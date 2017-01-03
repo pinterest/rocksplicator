@@ -24,7 +24,12 @@
 
 #include "common/object_lock.h"
 #include "rocksdb_admin/application_db_manager.h"
+#ifdef PINTEREST_INTERNAL
+// NEVER SET THIS UNLESS PINTEREST INTERNAL USAGE.
+#include "schemas/gen-cpp2/Admin.h"
+#else
 #include "rocksdb_admin/gen-cpp2/Admin.h"
+#endif
 
 namespace admin {
 
