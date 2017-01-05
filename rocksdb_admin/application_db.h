@@ -74,6 +74,16 @@ class ApplicationDB {
   rocksdb::Status Write(const rocksdb::WriteOptions& options,
                         rocksdb::WriteBatch* write_batch);
 
+  // Compact the db.
+  // options:     (IN) CompactRange options
+  // begin:       (IN) Start key of the compaction.
+  //                   If nullptr start from the very beginning.
+  // end:         (IN) End key of the compaction.
+  //                   If nullptr it will compact to the very last key.
+  rocksdb::Status CompactRange(const rocksdb::CompactRangeOptions& options,
+                               const rocksdb::Slice* begin,
+                               const rocksdb::Slice* end);
+
   // Whether this db instance is slave
   bool IsSlave() const { return role_ == replicator::DBRole::SLAVE; }
 
