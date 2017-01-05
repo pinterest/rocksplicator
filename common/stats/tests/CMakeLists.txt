@@ -5,7 +5,7 @@ file(GLOB TEST_SOURCES ./*.cpp)
 foreach(testsourcefile ${TEST_SOURCES})
   get_filename_component(testname ${testsourcefile} NAME_WE)
   add_executable(${testname} ${testsourcefile})
-  target_link_libraries(${testname} gtest stats)
+  target_link_libraries(${testname} gtest stats curl)
   add_test(NAME ${testname} COMMAND ${testname})
 endforeach(testsourcefile ${TEST_SOURCES})
 
