@@ -31,6 +31,8 @@ const std::string kRocksdbMultiGetMs = "rocksdb_multi_get_ms";
 const std::string kRocksdbWrite = "rocksdb_write";
 const std::string kRocksdbWriteBytes = "rocksdb_write_bytes";
 const std::string kRocksdbWriteMs = "rocksdb_write_ms";
+const std::string kRocksdbCompaction = "rocksdb_compact_range";
+const std::string kRocksdbCompactionMs = "rocksdb_compact_range_ms";
 
 }  // anonymous namespace
 
@@ -93,6 +95,14 @@ rocksdb::Status ApplicationDB::Write(const rocksdb::WriteOptions& options,
   common::Stats::get()->Incr(kRocksdbWriteBytes, write_batch->GetDataSize());
   common::Timer timer(kRocksdbWriteMs);
   return replicated_db_->Write(options, write_batch);
+}
+
+rocksdb::Status ApplicationDB::CompactRange(
+        const rocksdb::CompactRangeOptions& options,
+        const rocksdb::Slice* begin, const rocksdb::Slice* end) {
+  common::Stats::get()->Incr(kRocksdbCompaction);
+  common::Timer timer(kRocksdbCompactionMs);
+  return db_->CompactRange(options, begin, end);
 }
 
 }  // namespace admin
