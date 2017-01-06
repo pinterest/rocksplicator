@@ -22,7 +22,6 @@
 #include <functional>
 #include <map>
 #include <memory>
-#include <random>
 #include <set>
 #include <string>
 #include <vector>
@@ -36,6 +35,7 @@
 #include "folly/SocketAddress.h"
 #include "folly/ThreadLocal.h"
 
+DECLARE_bool(always_prefer_local_host);
 DECLARE_int32(min_client_reconnect_interval_seconds);
 DECLARE_int64(client_connect_timeout_millis);
 
@@ -130,23 +130,27 @@ class ThriftRouter {
    *       every RPC.
    * @param segment   The requested segment
    * @param role      The requested server role.
-   *                  if role::ANY is set, we try to return the best matching
-   *                  hosts basing on
-   *                  (1) Prefer master than slave (2) Prefer local
-   *                  than non local.
    * @param quantity  The number of servers requested.
    *                  Return NOT_FOUND if could not find any server matching the
    *                  conditions.
-   *                  For ONE and TWO, return BAD_HOST if could not find any GOOD
-   *                  server matching the conditions (we may return one server
-   *                  for TWO if only one found).
-   *                  For ALL, return BAD_HOST if there exists at least one bad
-   *                  server matching the conditions.
-   *                  The returned host will be put into clients.
+   *                  For ONE and TWO, return BAD_HOST if could not find ANY
+   *                  good host matching the conditions (we may return one
+   *                  server for TWO if only one found).
+   *                  For ALL, return BAD_HOST if there exists any bad server
+   *                  matching the conditions.
    * @param shard     The requested shard
    * @param clients   The out parameter for returned clients, the clients will be
-   *                  sorted according the to preference we described above.
+   *                  sorted according to the criteria below.
    *
+   *                  If role == ANY && !FLAGS_always_prefer_local_host, we sort
+   *                  the returned hosts first by
+   *                  (1) Prefer master to slave, then (2) Prefer local to
+   *                  non-local.
+   *
+   *                  Otherwise, we sort them by (2) only
+   *
+   *                  If two hosts equal according to the sorting criteria, we
+   *                  randomly order them
    */
   ReturnCode getClientsFor(const std::string& segment,
                            const Role role,
@@ -326,20 +330,24 @@ class ThriftRouter {
 
    private:
     /*
-     * The function does in the following step to produce an order list of Hosts
-     * which is used by getClientsFor to fill the result:
-     * (1) Filter by Role.
-     * (2) if role::ANY is given, sort Master in front of Slave
-     * (3) Within the same type of role, sort Local host in front of foreign hosts.
-     * For the rest of hosts, if they have the same role and not in the same az as
-     * local host, we randomize them.
-     * and multi hosts.
+     * Filter hosts by role, and then sort them according to the following rules
+     *
+     * If role == ANY && !FLAGS_always_prefer_local_host, we sort the returned
+     * hosts first by
+     * (1) Prefer master to slave, then (2) Prefer local to non-local.
+     *
+     * Otherwise, we sort them by (2) only
+     *
+     * If two hosts equal according to the sorting criteria, we randomly order
+     * them
      */
-     auto filterByRoleAndSortByPreference(
+    auto filterByRoleAndSortByPreference(
         const std::vector<std::pair<const Host*, Role>>& host_info,
-        Role role, unsigned rotation_counter) {
+        const Role role,
+        const unsigned rotation_counter) {
       std::vector<const Host*> v;
-      if (role == Role::ANY) {
+      if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
+        // prefer MASTER, then prefer local
         std::vector<const Host*> v_s;
         for (const auto& hi : host_info) {
           if (hi.second == Role::SLAVE) {
@@ -352,8 +360,9 @@ class ThriftRouter {
         MoveUpLocalAndRotateRemote(&v_s, rotation_counter);
         v.insert(v.end(), v_s.begin(), v_s.end());
       } else {
+        // prefer local
         for (const auto& hi : host_info) {
-          if (hi.second == role) {
+          if (role == Role::ANY || hi.second == role) {
             v.push_back(hi.first);
           }
         }
@@ -363,20 +372,22 @@ class ThriftRouter {
     }
 
     void MoveUpLocalAndRotateRemote(
-            std::vector<const Host*>* v, unsigned rotation_counter) {
-      auto find_non_local = [this](const Host* host) {
-            return host->az != this->local_az_;
-            };
-      auto comparator = [this](const Host* h1, const Host* h2) -> bool {
-          if (h1->az != h2->az &&
-                (h1->az == this->local_az_ || h2->az == this->local_az_)) {
-            return h1->az == this->local_az_;
-          } else {
-            return h1->az < h2->az;
-          }
+        std::vector<const Host*>* v,
+        const unsigned rotation_counter) {
+      auto comparator = [this] (const Host* h1, const Host* h2) -> bool {
+        if (h1->az != h2->az &&
+            (h1->az == this->local_az_ || h2->az == this->local_az_)) {
+          return h1->az == this->local_az_;
+        } else {
+          return h1->az < h2->az;
+        }
       };
       std::sort(v->begin(), v->end(), comparator);
-      auto non_local_it = std::find_if(v->begin(), v->end(), find_non_local);
+
+      auto non_local = [this] (const Host* host) -> bool {
+        return host->az != this->local_az_;
+      };
+      auto non_local_it = std::find_if(v->begin(), v->end(), non_local);
       auto rotation_vec_size = std::distance(non_local_it, v->end());
       if (rotation_vec_size <= 1) {
         return;

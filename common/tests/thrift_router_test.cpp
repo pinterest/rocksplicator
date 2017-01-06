@@ -97,6 +97,17 @@ static const char* g_config_v2 =
   "   }"
   "}";
 
+static const char* g_config_v3 =
+  "{"
+  "  \"user_pins\": {"
+  "  \"num_leaf_segments\": 3,"
+  "  \"127.0.0.1:8090:us-east-1a\": [\"00000:S\", \"00001:S\", \"00002:M\"],"
+  "  \"127.0.0.1:8091:us-east-1c\": [\"00000:S\", \"00001:M\", \"00002:S\"],"
+  "  \"127.0.0.1:8092:us-east-1e\": [\"00000:M\", \"00001:S\", \"00002:S\"]"
+  "   }"
+  "}";
+
+
 using ClusterLayout = ThriftRouter<DummyServiceAsyncClient>::ClusterLayout;
 using Role = ThriftRouter<DummyServiceAsyncClient>::Role;
 using Quantity = ThriftRouter<DummyServiceAsyncClient>::Quantity;
@@ -449,7 +460,7 @@ TEST(ThriftRouterTest, LocalAzTest) {
 }
 
 
-TEST(ThriftRouterTest, FoerignAzTest) {
+TEST(ThriftRouterTest, ForeignAzTest) {
   updateConfigFile(g_config_v1az);
   ThriftRouter<DummyServiceAsyncClient> router(
     "us-east-1b", g_config_path, common::parseConfig);
@@ -499,7 +510,7 @@ TEST(ThriftRouterTest, FoerignAzTest) {
   }
 }
 
-TEST(ThriftRouterTest, FoerignAzMultiClientsTest) {
+TEST(ThriftRouterTest, ForeignAzMultiClientsTest) {
   updateConfigFile(g_config_v1az);
   ThriftRouter<DummyServiceAsyncClient> router(
     "us-east-1b", g_config_path, common::parseConfig);
@@ -536,6 +547,117 @@ TEST(ThriftRouterTest, FoerignAzMultiClientsTest) {
   EXPECT_EQ(previous_ping_count[0]
             + previous_ping_count[1]
             + previous_ping_count[2], 300);
+
+  // stop all servers
+  for (auto& s : servers) {
+    s->stop();
+  }
+
+  for (auto& t : thrs) {
+    t->join();
+  }
+}
+
+TEST(ThriftRouterTest, HostOrderTest) {
+  updateConfigFile(g_config_v3);
+  ThriftRouter<DummyServiceAsyncClient> router(
+    "us-east-1c", g_config_path, common::parseConfig);
+
+  std::vector<shared_ptr<DummyServiceAsyncClient>> v;
+  shared_ptr<DummyServiceTestHandler> handlers[3];
+  shared_ptr<ThriftServer> servers[3];
+  unique_ptr<thread> thrs[3];
+
+  tie(handlers[0], servers[0], thrs[0]) = makeServer(8090);
+  tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
+  tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
+  sleep(1);
+
+  EXPECT_EQ(router.getShardNumberFor("user_pins"), 3);
+
+  EXPECT_EQ(handlers[0]->nPings_.load(), 0);
+  EXPECT_EQ(handlers[1]->nPings_.load(), 0);
+  EXPECT_EQ(handlers[2]->nPings_.load(), 0);
+  // ANY, ALL
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::ANY, Quantity::ALL, 2, &v),
+    ReturnCode::OK);
+  EXPECT_EQ(v.size(), 3);
+  EXPECT_NO_THROW(v[0]->future_ping().get());
+  EXPECT_EQ(handlers[0]->nPings_.load(), 1);
+
+  EXPECT_NO_THROW(v[1]->future_ping().get());
+  EXPECT_EQ(handlers[1]->nPings_.load(), 1);
+
+  EXPECT_NO_THROW(v[2]->future_ping().get());
+  EXPECT_EQ(handlers[2]->nPings_.load(), 1);
+
+  // MASTER, ALL
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::MASTER, Quantity::ALL, 2, &v),
+    ReturnCode::OK);
+  EXPECT_EQ(v.size(), 1);
+  EXPECT_NO_THROW(v[0]->future_ping().get());
+  EXPECT_EQ(handlers[0]->nPings_.load(), 2);
+
+  // SLAVE, ALL
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::SLAVE, Quantity::ALL, 2, &v),
+    ReturnCode::OK);
+  EXPECT_EQ(v.size(), 2);
+  EXPECT_NO_THROW(v[0]->future_ping().get());
+  EXPECT_EQ(handlers[1]->nPings_.load(), 2);
+
+  EXPECT_NO_THROW(v[1]->future_ping().get());
+  EXPECT_EQ(handlers[2]->nPings_.load(), 2);
+
+
+  // Set FLAGS_always_prefer_local_host
+  FLAGS_always_prefer_local_host = true;
+
+  EXPECT_EQ(handlers[0]->nPings_.load(), 2);
+  EXPECT_EQ(handlers[1]->nPings_.load(), 2);
+  EXPECT_EQ(handlers[2]->nPings_.load(), 2);
+  // ANY, ALL
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::ANY, Quantity::ALL, 2, &v),
+    ReturnCode::OK);
+  EXPECT_EQ(v.size(), 3);
+  EXPECT_NO_THROW(v[0]->future_ping().get());
+  EXPECT_EQ(handlers[0]->nPings_.load(), 2);
+  EXPECT_EQ(handlers[1]->nPings_.load(), 3);
+  EXPECT_EQ(handlers[2]->nPings_.load(), 2);
+
+  EXPECT_NO_THROW(v[1]->future_ping().get());
+  EXPECT_NO_THROW(v[2]->future_ping().get());
+  EXPECT_EQ(handlers[0]->nPings_.load(), 3);
+  EXPECT_EQ(handlers[1]->nPings_.load(), 3);
+  EXPECT_EQ(handlers[2]->nPings_.load(), 3);
+
+  // MASTER, ALL
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::MASTER, Quantity::ALL, 2, &v),
+    ReturnCode::OK);
+  EXPECT_EQ(v.size(), 1);
+  EXPECT_NO_THROW(v[0]->future_ping().get());
+  EXPECT_EQ(handlers[0]->nPings_.load(), 4);
+
+  // SLAVE, ALL
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::SLAVE, Quantity::ALL, 2, &v),
+    ReturnCode::OK);
+  EXPECT_EQ(v.size(), 2);
+  EXPECT_NO_THROW(v[0]->future_ping().get());
+  EXPECT_EQ(handlers[1]->nPings_.load(), 4);
+
+  EXPECT_NO_THROW(v[1]->future_ping().get());
+  EXPECT_EQ(handlers[2]->nPings_.load(), 4);
+
+  EXPECT_EQ(handlers[0]->nPings_.load(), 4);
+  EXPECT_EQ(handlers[1]->nPings_.load(), 4);
+  EXPECT_EQ(handlers[2]->nPings_.load(), 4);
+
+  FLAGS_always_prefer_local_host = false;
 
   // stop all servers
   for (auto& s : servers) {
