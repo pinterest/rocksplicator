@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stddef.h>
 
+#include <folly/Uri.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <microhttpd.h>
@@ -81,11 +82,13 @@ void StatusServer::StartStatusServerOrDie(EndPointToOPMap op_map) {
 StatusServer::StatusServer(uint16_t port, EndPointToOPMap op_map)
     : port_(port), d_(nullptr), op_map_(std::move(op_map)) {
 
-  op_map_.emplace("/stats.txt", [this]() {
+  // Text
+  op_map_.emplace("/stats.txt", [this]
+      (const std::vector<std::pair<std::string, std::string>>* ) {
     std::string ret = common::Stats::get()->DumpStatsAsText();
     auto itor = op_map_.find("/rocksdb_info.txt");
     if (itor != op_map_.end()) {
-      ret += itor->second();
+      ret += itor->second(nullptr);
     }
 
     return ret;
@@ -98,12 +101,22 @@ StatusServer::StatusServer(uint16_t port, EndPointToOPMap op_map)
 }
 
 std::string StatusServer::GetPageContent(const std::string& end_point) {
-  auto itor = op_map_.find(end_point);
-  if (itor == op_map_.end()) {
-    return "Unsupported http path.\n";
+  // Add dummy url to allow it to be parsed by folly:Uri.
+  folly::Uri u("http://blah.blah" + end_point);
+  auto params = u.getQueryParams();
+
+  auto iter = op_map_.find(u.path().toStdString());
+  if (iter == op_map_.end()) {
+    return  "Unsupported http path.\n";
   }
 
-  return itor->second();
+  std::vector<std::pair<std::string, std::string>> args;
+  for (const auto& p : params) {
+    args.push_back(std::make_pair(p.first.toStdString(),
+                                  p.second.toStdString()));
+  }
+
+  return iter->second(&args);
 }
 
 void StatusServer::Stop() {
