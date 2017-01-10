@@ -3,4 +3,6 @@ build
 .cproject
 .project
 .idea
+*.iml
+target/
 cmake-build-debug/
