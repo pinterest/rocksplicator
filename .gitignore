@@ -6,3 +6,6 @@ build
 *.iml
 target/
 cmake-build-debug/
+
+# vim
+.ycm_extra_conf.py
