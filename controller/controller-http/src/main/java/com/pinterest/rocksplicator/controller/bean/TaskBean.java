@@ -18,7 +18,7 @@ package com.pinterest.rocksplicator.controller.bean;
 
 /**
  * @author Ang Xu (angxu@pinterest.com)
- */
+    */
 public class TaskBean {
 
   public enum State {
