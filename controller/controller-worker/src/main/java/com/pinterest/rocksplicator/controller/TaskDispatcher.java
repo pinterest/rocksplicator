@@ -21,7 +21,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -33,8 +35,8 @@ import java.util.concurrent.Semaphore;
 public class TaskDispatcher {
   private static final Logger LOG = LoggerFactory.getLogger(TaskDispatcher.class);
   private boolean isRunning = false;
-  private final ExecutorService scheduler = Executors.newSingleThreadExecutor();
-  private long dispatcherPollInterval;
+  private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+  private final long dispatcherPollInterval;
   private WorkerPool workerPool;
   private volatile Semaphore idleWorkersSemaphore;
 
@@ -60,11 +62,10 @@ public class TaskDispatcher {
         try {
           idleWorkersSemaphore.acquire();
           // TODO: Add task dispatch logic to assign tasks to worker pool
-          Thread.sleep(dispatcherPollInterval * 1000);
+          scheduler.schedule(this, dispatcherPollInterval, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
           LOG.error("Dispatcher is interrupted!");
         }
-        scheduler.submit(this);
       }
     };
     scheduler.submit(dispatcher);

@@ -57,8 +57,11 @@ public class WorkerPool {
     FutureTask futureTask = new FutureTask(task);
     runningTasks.put(task.getCluster(), futureTask);
     executorService.submit(() -> {
-      task.call();
-      idleWorkersSemaphore.release();
+      try {
+        task.call();
+      } finally {
+        idleWorkersSemaphore.release();
+      }
     });
   }
 
