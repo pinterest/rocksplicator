@@ -20,12 +20,10 @@ import com.pinterest.rocksplicator.controller.tasks.Task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -34,45 +32,17 @@ import java.util.concurrent.TimeUnit;
  * @author Shu Zhang (shu@pinterest.com)
  *
  */
-public class WorkerPool extends ThreadPoolExecutor {
+public class WorkerPool {
 
   // TODO: graceful shutdown.
   private static final Logger LOG = LoggerFactory.getLogger(WorkerPool.class);
   private volatile Semaphore idleWorkersSemaphore;
   private volatile ConcurrentHashMap<String, FutureTask> runningTasks;
+  private volatile ExecutorService executorService;
 
-  public WorkerPool(int workerPoolSize, Semaphore idleWorkersSemaphore) {
-    super(workerPoolSize, workerPoolSize, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
+  public WorkerPool(ExecutorService executorService, Semaphore idleWorkersSemaphore) {
+    this.executorService = executorService;
     this.idleWorkersSemaphore = idleWorkersSemaphore;
-  }
-
-  private class TaskWrapper extends FutureTask {
-    private Task task;
-
-    public TaskWrapper(Task task) {
-      super(task);
-      this.task = task;
-    }
-
-    public Task getTask() {
-      return task;
-    }
-  }
-
-  @Override
-  protected void beforeExecute(Thread t, Runnable r) {
-    super.beforeExecute(t, r);
-    TaskWrapper taskWrapper = (TaskWrapper) r;
-    runningTasks.put(taskWrapper.getTask().getCluster(), taskWrapper);
-  }
-
-  @Override
-  protected void afterExecute(Runnable r, Throwable t) {
-    super.afterExecute(r, t);
-    TaskWrapper taskWrapper = (TaskWrapper) r;
-    runningTasks.remove(taskWrapper.getTask().getCluster());
-    idleWorkersSemaphore.release();
-    // TODO: Write the TaskExecutionResponse back to MySQL
   }
 
   /**
@@ -84,8 +54,12 @@ public class WorkerPool extends ThreadPoolExecutor {
     if (runningTasks.containsKey(task.getCluster())) {
       throw new Exception("Cannot execute more than 1 task for a cluster");
     }
-    TaskWrapper taskWrapper = new TaskWrapper(task);
-    submit(taskWrapper);
+    FutureTask futureTask = new FutureTask(task);
+    runningTasks.put(task.getCluster(), futureTask);
+    executorService.submit(() -> {
+      task.call();
+      idleWorkersSemaphore.release();
+    });
   }
 
   /**

@@ -18,7 +18,10 @@ package com.pinterest.rocksplicator.controller;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -42,9 +45,12 @@ public class WorkerService {
   public static void main(String[] args) {
     try {
       WorkerConfig.initialize();
-      Semaphore idleWorkersSemaphore = new Semaphore(WorkerConfig.getWorkerPoolSize());
-      WorkerPool workerPool = new WorkerPool(
-          WorkerConfig.getWorkerPoolSize(), idleWorkersSemaphore);
+      int workerPoolSize = WorkerConfig.getWorkerPoolSize();
+      Semaphore idleWorkersSemaphore = new Semaphore(workerPoolSize);
+      ThreadPoolExecutor threadPoolExecutor =
+          new ThreadPoolExecutor(workerPoolSize, workerPoolSize, 0,
+              TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
+      WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore);
       TaskDispatcher dispatcher = new TaskDispatcher(
           WorkerConfig.getDispatcherPollInterval(), idleWorkersSemaphore, workerPool);
       dispatcher.start();

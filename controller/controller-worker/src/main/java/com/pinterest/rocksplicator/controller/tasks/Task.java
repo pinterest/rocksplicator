@@ -56,6 +56,16 @@ public abstract class Task<T> implements Callable<T> {
   }
 
   /**
+   * A hook method for doing works before process() is called.
+   */
+  public abstract void preProcess();
+
+  /**
+   * A hook method for doing works after process() is called.
+   */
+  public abstract void postProcess(T response);
+
+  /**
    * Subclasses implement this method for task logic.
    * @return task response
    */
@@ -78,6 +88,7 @@ public abstract class Task<T> implements Callable<T> {
     Date date = new Date();
     long start = date.getTime();
     T response = null;
+    preProcess();
     try {
       response = process();
       this.state = State.DONE;
@@ -90,7 +101,7 @@ public abstract class Task<T> implements Callable<T> {
     } finally {
       Date endDate = new Date();
       long duration = endDate.getTime() - start;
-      writeBackResponse(response);
+      postProcess(response);
     }
   }
 }
