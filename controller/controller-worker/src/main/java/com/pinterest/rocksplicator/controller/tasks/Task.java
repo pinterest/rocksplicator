@@ -77,11 +77,6 @@ public abstract class Task<T> implements Callable<T> {
    */
   public abstract T onFailure();
 
-  /**
-   * Write the response back to DB.
-   * TaskExecutionResponse's
-   */
-  public abstract boolean writeBackResponse(T response);
 
   @Override
   public T call() {
