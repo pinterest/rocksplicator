@@ -1,11 +1,9 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+/*
+ * Copyright 2017 Pinterest, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -21,9 +19,9 @@ package com.pinterest.rocksplicator.controller;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Semaphore;
 
 /**
  *
@@ -34,56 +32,56 @@ import java.util.concurrent.TimeUnit;
  */
 public class TaskDispatcher {
   private static final Logger LOG = LoggerFactory.getLogger(TaskDispatcher.class);
-  private static volatile TaskDispatcher instance = null;
   private boolean isRunning = false;
-  private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+  private final ExecutorService scheduler = Executors.newSingleThreadExecutor();
+  private long dispatcherPollInterval;
+  private WorkerPool workerPool;
+  private volatile Semaphore idleWorkersSemaphore;
 
-  private TaskDispatcher() {}
 
-  public static TaskDispatcher getInstance() {
-    if (instance == null) {
-      synchronized (TaskDispatcher.class) {
-        if (instance == null) {
-          instance = new TaskDispatcher();
-          return instance;
-        }
-      }
-    }
-    return instance;
+  public TaskDispatcher(long dispatcherPollInterval, Semaphore idleWorkersSemaphore,
+                        WorkerPool workerPool) {
+    this.dispatcherPollInterval = dispatcherPollInterval;
+    this.idleWorkersSemaphore = idleWorkersSemaphore;
+    this.workerPool = workerPool;
   }
 
   /**
-   * Start to dispatch tasks.
+   * Start to dispatch.
+   * @return if start is succeeded.
    */
-  public boolean start(long dispatcherPollInterval) {
-    synchronized (TaskDispatcher.class) {
-      if (isRunning) {
-        LOG.error("Dispatcher is already running, cannot start.");
-        return false;
-      }
-      final Runnable dispatcher = new Runnable() {
-        public void run() {
-          // TODO: Add task dispatch logic to assign tasks to worker pool
-        }
-      };
-      scheduler.scheduleAtFixedRate(dispatcher, 0, dispatcherPollInterval, TimeUnit.SECONDS);
-      isRunning = true;
-      return true;
+  public synchronized boolean start() {
+    if (isRunning) {
+      LOG.error("Dispatcher is already running, cannot start.");
+      return false;
     }
+    final Runnable dispatcher = new Runnable() {
+      public void run() {
+        try {
+          idleWorkersSemaphore.acquire();
+          // TODO: Add task dispatch logic to assign tasks to worker pool
+          Thread.sleep(dispatcherPollInterval * 1000);
+        } catch (InterruptedException e) {
+          LOG.error("Dispatcher is interrupted!");
+        }
+        scheduler.submit(this);
+      }
+    };
+    scheduler.submit(dispatcher);
+    isRunning = true;
+    return true;
   }
 
   /**
    * Stop to dispatch tasks.
    */
   public synchronized boolean stop() {
-    synchronized (TaskDispatcher.class) {
-      if (!isRunning) {
-        LOG.error("Dispatcher is not running, cannot stop.");
-        return false;
-      }
-      scheduler.shutdown();
-      isRunning = false;
-      return true;
+    if (!isRunning) {
+      LOG.error("Dispatcher is not running, cannot stop.");
+      return false;
     }
+    scheduler.shutdown();
+    isRunning = false;
+    return true;
   }
 }

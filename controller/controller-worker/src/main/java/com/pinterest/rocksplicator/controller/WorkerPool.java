@@ -1,11 +1,9 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+/*
+ * Copyright 2017 Pinterest, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -19,14 +17,13 @@
 package com.pinterest.rocksplicator.controller;
 
 import com.pinterest.rocksplicator.controller.tasks.Task;
-import com.pinterest.rocksplicator.controller.tasks.TaskExecutionResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -41,15 +38,15 @@ public class WorkerPool extends ThreadPoolExecutor {
 
   // TODO: graceful shutdown.
   private static final Logger LOG = LoggerFactory.getLogger(WorkerPool.class);
-  private static volatile WorkerPool instance = null;
-  private volatile ConcurrentHashMap<String, FutureTask<TaskExecutionResponse>> runningTasks;
+  private volatile Semaphore idleWorkersSemaphore;
+  private volatile ConcurrentHashMap<String, FutureTask> runningTasks;
 
-  private WorkerPool(int corePoolSize, int maximumPoolSize, long keepAliveTime, TimeUnit unit,
-                     BlockingQueue<Runnable> workQueue) {
-    super(corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue);
+  public WorkerPool(int workerPoolSize, Semaphore idleWorkersSemaphore) {
+    super(workerPoolSize, workerPoolSize, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
+    this.idleWorkersSemaphore = idleWorkersSemaphore;
   }
 
-  private class TaskWrapper extends FutureTask<TaskExecutionResponse> {
+  private class TaskWrapper extends FutureTask {
     private Task task;
 
     public TaskWrapper(Task task) {
@@ -74,21 +71,8 @@ public class WorkerPool extends ThreadPoolExecutor {
     super.afterExecute(r, t);
     TaskWrapper taskWrapper = (TaskWrapper) r;
     runningTasks.remove(taskWrapper.getTask().getCluster());
+    idleWorkersSemaphore.release();
     // TODO: Write the TaskExecutionResponse back to MySQL
-  }
-
-  public static WorkerPool getInstance() {
-    if (instance == null) {
-      synchronized (TaskDispatcher.class) {
-        if (instance == null) {
-          int workerPoolSize = WorkerConfig.getWorkerPoolSize();
-          instance = new WorkerPool(workerPoolSize, workerPoolSize,
-              0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(workerPoolSize));
-          return instance;
-        }
-      }
-    }
-    return instance;
   }
 
   /**
@@ -110,10 +94,11 @@ public class WorkerPool extends ThreadPoolExecutor {
    * @return
    */
   public boolean abortTask(String cluster) throws Exception {
-    FutureTask<TaskExecutionResponse> runningTask = runningTasks.get(cluster);
+    FutureTask runningTask = runningTasks.get(cluster);
     if (runningTask.isCancelled()) {
       throw new Exception("Task is already cancelled");
     }
+    // An Interrupted exception will be thrown to Task, and onFailure() will be triggered.
     return runningTask.cancel(true);
   }
 

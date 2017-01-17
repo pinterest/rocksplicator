@@ -1,11 +1,9 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+/*
+ * Copyright 2017 Pinterest, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -15,12 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.pinterest.rocksplicator.controller;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.Semaphore;
+
+/**
+ *
+ * The WorkerService contains:
+ * (1) A task dispatcher to periodically pull data from MySQL task queue
+ * (2) A pool of worker threads executing the tasks
+ * To make sure:
+ * (1) every worker thread can get task from dispatcher immediately
+ * (2) there will be no outstanding tasks pending for worker to pick up
+ * It internally maintains a semaphore as the number of idle workers. Dispatcher will acquire()
+ * the semaphore before getting any task, and will release() only if there is no outstanding
+ * task from MySQL task queue. Workers will release() the semaphore whenever the task is executed
+ * in afterExecute() hook.
+ *
+ * @author Shu Zhang (shu@pinterest.com)
+ */
 public class WorkerService {
 
   private static final Logger LOG = LoggerFactory.getLogger(WorkerService.class);
@@ -28,7 +42,12 @@ public class WorkerService {
   public static void main(String[] args) {
     try {
       WorkerConfig.initialize();
-      TaskDispatcher.getInstance().start(WorkerConfig.getDispatcherPollInterval());
+      Semaphore idleWorkersSemaphore = new Semaphore(WorkerConfig.getWorkerPoolSize());
+      WorkerPool workerPool = new WorkerPool(
+          WorkerConfig.getWorkerPoolSize(), idleWorkersSemaphore);
+      TaskDispatcher dispatcher = new TaskDispatcher(
+          WorkerConfig.getDispatcherPollInterval(), idleWorkersSemaphore, workerPool);
+      dispatcher.start();
     } catch (Exception e) {
       LOG.error("Cannot start the worker service", e);
       System.exit(1);

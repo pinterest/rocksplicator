@@ -7,14 +7,16 @@
     <groupId>com.pinterest.rocksplicator</groupId>
     <artifactId>controller</artifactId>
     <version>0.0.1-SNAPSHOT</version>
+
     <packaging>pom</packaging>
-    <modules>
-        <module>controller-http</module>
-        <module>controller-worker</module>
-    </modules>
     <properties>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
+
+    <modules>
+        <module>controller-http</module>
+        <module>controller-worker</module>
+    </modules>
 
 </project>

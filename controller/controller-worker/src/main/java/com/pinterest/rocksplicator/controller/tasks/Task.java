@@ -1,11 +1,9 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
+/*
+ * Copyright 2017 Pinterest, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -22,6 +20,7 @@ import org.codehaus.jackson.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Date;
 import java.util.concurrent.Callable;
 
 /**
@@ -29,7 +28,7 @@ import java.util.concurrent.Callable;
  *
  * @author Shu Zhang (shu@pinterest.com)
  */
-public abstract class Task implements Callable<TaskExecutionResponse> {
+public abstract class Task<T> implements Callable<T> {
 
   public enum State {
     RUNNING,
@@ -60,25 +59,38 @@ public abstract class Task implements Callable<TaskExecutionResponse> {
    * Subclasses implement this method for task logic.
    * @return task response
    */
-  public abstract TaskExecutionResponse process();
+  public abstract T process();
 
   /**
    * Subclasses implement this method for task failure handling.
    * @return task response when it is failed
    */
-  public abstract TaskExecutionResponse onFailure();
+  public abstract T onFailure();
+
+  /**
+   * Write the response back to DB.
+   * TaskExecutionResponse's
+   */
+  public abstract boolean writeBackResponse(T response);
 
   @Override
-  public TaskExecutionResponse call() {
+  public T call() {
+    Date date = new Date();
+    long start = date.getTime();
+    T response = null;
     try {
-      TaskExecutionResponse response = process();
+      response = process();
       this.state = State.DONE;
       return response;
     } catch (Exception e) {
       LOG.warn("Task " + this.getClass().getName() + "Failed!", e);
-      TaskExecutionResponse response = onFailure();
+      response = onFailure();
       this.state = State.FAILED;
       return response;
+    } finally {
+      Date endDate = new Date();
+      long duration = endDate.getTime() - start;
+      writeBackResponse(response);
     }
   }
 }
