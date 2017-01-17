@@ -16,7 +16,7 @@
 
 package com.pinterest.rocksplicator.controller;
 
-import java.security.Timestamp;
+import java.sql.Timestamp;
 
 /**
  * @author Bo Liu (bol@pinterest.com)
