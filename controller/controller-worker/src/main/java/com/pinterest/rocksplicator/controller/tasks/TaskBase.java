@@ -28,7 +28,7 @@ import java.util.concurrent.Callable;
  *
  * @author Shu Zhang (shu@pinterest.com)
  */
-public abstract class Task<T> implements Callable<T> {
+public abstract class TaskBase<T> implements Callable<T> {
 
   public enum State {
     RUNNING,
@@ -36,12 +36,12 @@ public abstract class Task<T> implements Callable<T> {
     FAILED
   }
 
-  private static final Logger LOG = LoggerFactory.getLogger(Task.class);
+  private static final Logger LOG = LoggerFactory.getLogger(TaskBase.class);
   protected JsonNode taskBody;
   protected String cluster;
   protected State state;
 
-  public Task (String cluster, JsonNode taskBody) {
+  public TaskBase(String cluster, JsonNode taskBody) {
     this.taskBody = taskBody;
     this.cluster = cluster;
     this.state = State.RUNNING;

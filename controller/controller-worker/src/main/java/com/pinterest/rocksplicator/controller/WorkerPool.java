@@ -16,7 +16,7 @@
 
 package com.pinterest.rocksplicator.controller;
 
-import com.pinterest.rocksplicator.controller.tasks.Task;
+import com.pinterest.rocksplicator.controller.tasks.TaskBase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,7 +50,7 @@ public class WorkerPool {
    * @param task the task to execute
    * @throws Exception if there is a running task for the cluster.
    */
-  public void assignTask(Task task) throws Exception {
+  public void assignTask(TaskBase task) throws Exception {
     if (runningTasks.containsKey(task.getCluster())) {
       throw new Exception("Cannot execute more than 1 task for a cluster");
     }
