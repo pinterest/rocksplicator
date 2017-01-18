@@ -16,6 +16,7 @@
 
     <modules>
         <module>controller-http</module>
+        <module>task-queue</module>
         <module>controller-worker</module>
     </modules>
 
