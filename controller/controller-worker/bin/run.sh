@@ -69,7 +69,6 @@ display_usage() {
 	echo -e "  -i/--pid        PID file, default is ${PID_FILE}"
 	echo -e "  -p/--class-path Class path, default is ${CP}"
 	echo -e "  -o/--worker-opts  JVM and other options, default is ${WORKER_OPTS}"
-	echo -e "  --debug-app     Running in debug mode"
 	echo -e "\nACTION:"
 	echo -e "  run     Run service in foreground. This is the default action."
 	echo -e "  start   Run service in background."
