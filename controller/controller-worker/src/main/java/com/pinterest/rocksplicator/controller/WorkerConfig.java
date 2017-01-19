@@ -17,31 +17,53 @@
 
 package com.pinterest.rocksplicator.controller;
 
-import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class WorkerConfig {
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+
+/**
+ * Contains all configuration about the worker.
+ *
+ * @author Shu Zhang (shu@pinterest.com)
+ */
+public final class WorkerConfig {
 
   private static final Logger LOG = LoggerFactory.getLogger(WorkerService.class);
   private static final String WORKER_POOL_SIZE_KEY = "worker_pool_size";
   private static final String DISPATCHER_POLL_INTERVAL_KEY = "dispatcher_poll_interval";
+  private static String HOST_NAME;
   private static PropertiesConfiguration configuration;
 
-  public static void initialize() throws ConfigurationException {
+  static {
     String workerConfig = System.getProperty("worker_config");
     configuration = new PropertiesConfiguration();
-    configuration.load(ClassLoader.getSystemResourceAsStream(workerConfig));
+    try {
+      configuration.load(ClassLoader.getSystemResourceAsStream(workerConfig));
+    } catch (Exception e) {
+      LOG.error("Cannot load worker configuration", e);
+      configuration = null;
+    }
     LOG.info("Worker config loaded: " + workerConfig);
+    try {
+      HOST_NAME = InetAddress.getLocalHost().getHostName();
+    } catch (UnknownHostException e) {
+      HOST_NAME = "UnKnown";
+    }
   }
 
-  public static long getDispatcherPollInterval() {
-    return configuration == null? 60 : configuration.getLong(DISPATCHER_POLL_INTERVAL_KEY);
+  public static long getDispatcherPollIntervalSec() {
+    return configuration == null ? 60 : configuration.getLong(DISPATCHER_POLL_INTERVAL_KEY);
   }
 
   public static int getWorkerPoolSize() {
-    return configuration == null? 10 : configuration.getInt(WORKER_POOL_SIZE_KEY);
+    return configuration == null ? 10 : configuration.getInt(WORKER_POOL_SIZE_KEY);
+  }
+
+  public static String getHostName() {
+    return HOST_NAME;
   }
 
 }
