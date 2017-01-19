@@ -27,7 +27,7 @@ import java.util.concurrent.Semaphore;
 
 /**
  *
- * Thread pool executor service for executing Rocksplicator tasks.
+ * The worker pool contains an executor service for executing Rocksplicator tasks.
  *
  * @author Shu Zhang (shu@pinterest.com)
  *
@@ -51,15 +51,14 @@ public final class WorkerPool {
    * @param task the task to execute
    * @throws Exception if there is a running task for the cluster.
    */
-  public boolean assignTask(TaskBase task) throws Exception {
-    if (runningTasks.containsKey(task.getCluster())) {
+  public boolean assignTask(TaskBase task) {
+    FutureTask futureTask = new FutureTask(task);
+    if (runningTasks.putIfAbsent(task.getCluster(), futureTask) != null) {
       String errorMessage =
           "Cannot add execute more than 1 task for the cluster " + task.getCluster();
       LOG.error(errorMessage);
       return false;
     }
-    FutureTask futureTask = new FutureTask(task);
-    runningTasks.put(task.getCluster(), futureTask);
     executorService.submit(() -> {
       try {
         futureTask.run();

@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author Shu Zhang (shu@pinterest.com)
  *
  */
-public final class SleepIncrementTask extends TaskBase<Object> {
+public final class SleepIncrementTask extends TaskBase<Integer> {
 
   public static AtomicInteger executionCounter = new AtomicInteger(0);
   // Can be adjusted in unit tests.
@@ -41,16 +41,16 @@ public final class SleepIncrementTask extends TaskBase<Object> {
   public void preProcess() {}
 
   @Override
-  public void postProcess(Object response) {}
+  public void postProcess(Integer response) {}
 
   @Override
-  public Object process() throws Exception{
+  public Integer process() throws Exception{
     Thread.sleep(sleepTimeMillis);
     return SleepIncrementTask.executionCounter.addAndGet(1);
   }
 
   @Override
-  public String onFailure() {
+  public Integer onFailure() {
     return null;
   }
 }

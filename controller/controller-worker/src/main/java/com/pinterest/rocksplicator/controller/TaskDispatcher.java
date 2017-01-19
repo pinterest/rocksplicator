@@ -84,7 +84,7 @@ public final class TaskDispatcher {
           }
           scheduler.schedule(this, dispatcherPollIntervalSec, TimeUnit.SECONDS);
         } catch (Exception e) {
-          LOG.error("Dispatcher is interrupted!");
+          LOG.error("Dispatcher is interrupted!", e);
         }
       }
     };
