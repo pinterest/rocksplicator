@@ -121,10 +121,6 @@ public class DispatcherTest {
     }
     Assert.assertTrue(SleepIncrementTask.executionCounter.intValue() <= 3);
     Assert.assertTrue(SleepIncrementTask.executionCounter.intValue() >= 2);
-    synchronized (SleepIncrementTask.notifyObject) {
-      SleepIncrementTask.notifyObject.wait();
-    }
-    Assert.assertEquals(2, idleWorkersSemaphore.availablePermits());
     dispatcher.stop();
   }
 

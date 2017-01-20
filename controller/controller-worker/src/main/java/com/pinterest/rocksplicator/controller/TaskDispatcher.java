@@ -51,6 +51,13 @@ public final class TaskDispatcher {
     this.taskQueue = taskQueue;
   }
 
+  private void failTaskAndReleaseSemaphore(Task dequeuedTask, Semaphore idleWorkersSemaphore) {
+    if (dequeuedTask != null && !taskQueue.failTask(dequeuedTask.id)) {
+      LOG.error("Cannot fail " + dequeuedTask.name + " to the queue");
+    }
+    idleWorkersSemaphore.release();
+  }
+
   /**
    * Start to dispatch.
    * @return if start is succeeded.
@@ -71,20 +78,16 @@ public final class TaskDispatcher {
             Task dequeuedTask = taskQueue.dequeueTask(WorkerConfig.getHostName());
             if (dequeuedTask == null) {
               LOG.info("No outstanding pending tasks to be dequeued");
-              idleWorkersSemaphore.release();
+              failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore);
               break;
             } else {
               TaskBase task = TaskFactory.getWorkerTask(dequeuedTask);
               if (task == null) {
-                LOG.error("Cannot assign " + dequeuedTask.name + " to worker");
-                if (!taskQueue.failTask(dequeuedTask.id)) {
-                  LOG.error("Cannot fail " + dequeuedTask.name + " to the queue");
-                }
-                idleWorkersSemaphore.release();
+                failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore);
                 break;
               } else {
                 if (!workerPool.assignTask(task)) {
-                  idleWorkersSemaphore.release();
+                  failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore);
                   break;
                 }
               }
