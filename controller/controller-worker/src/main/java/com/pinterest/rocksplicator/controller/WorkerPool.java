@@ -81,7 +81,7 @@ public final class WorkerPool {
       LOG.error("No running task of cluster " + cluster);
       return false;
     }
-    // An Interrupted exception will be thrown to Task, and onFailure() will be triggered.'
+    // An Interrupted exception will be thrown to Task, and onFailure() will be triggered.
     return runningTask.cancel(true);
   }
 

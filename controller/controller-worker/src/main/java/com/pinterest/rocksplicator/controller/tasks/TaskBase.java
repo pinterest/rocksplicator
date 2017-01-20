@@ -91,6 +91,7 @@ public abstract class TaskBase<T> implements Callable<T> {
     try {
       response = process();
       this.state = State.DONE;
+      postProcess(response);
       return response;
     } catch (Exception e) {
       LOG.warn("Task " + this.getClass().getName() + " Failed!", e);
@@ -100,7 +101,6 @@ public abstract class TaskBase<T> implements Callable<T> {
     } finally {
       Date endDate = new Date();
       long duration = endDate.getTime() - start;
-      postProcess(response);
     }
   }
 }

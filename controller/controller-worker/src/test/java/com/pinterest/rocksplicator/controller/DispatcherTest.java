@@ -53,21 +53,36 @@ public class DispatcherTest {
 
   @Before
   public void setup() {
-    SleepIncrementTask.executionCounter.set(0);
+    SleepIncrementTask.executionCounter = 0;
     SleepIncrementTask.sleepTimeMillis = 1000;
     taskQueue = PowerMockito.mock(TaskQueue.class);
-    // We will need to dequeue 5 times at most
-    PowerMockito.when(taskQueue.dequeueTask(anyString()))
-        .thenReturn(getSleepIncrementTaskFromQueue())
-        .thenReturn(getSleepIncrementTaskFromQueue())
-        .thenReturn(getSleepIncrementTaskFromQueue())
-        .thenReturn(getSleepIncrementTaskFromQueue())
-        .thenReturn(getSleepIncrementTaskFromQueue());
     PowerMockito.when(taskQueue.failTask(anyLong())).thenReturn(true);
   }
 
   @Test
+  public void testNoPendingTask() throws Exception {
+    // Assuming there is no task in the queue in the test.
+    PowerMockito.when(taskQueue.dequeueTask(anyString())).thenReturn(null);
+    Semaphore idleWorkersSemaphore = new Semaphore(1);
+    ThreadPoolExecutor threadPoolExecutor =
+        new ThreadPoolExecutor(1, 1, 0,
+            TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
+    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore);
+    TaskDispatcher dispatcher = new TaskDispatcher(1, idleWorkersSemaphore, workerPool, taskQueue);
+    dispatcher.start();
+    Thread.sleep(1000);
+    Assert.assertEquals(1, idleWorkersSemaphore.availablePermits());
+    Thread.sleep(1000);
+    Assert.assertEquals(1, idleWorkersSemaphore.availablePermits());
+    dispatcher.stop();
+  }
+
+  @Test
   public void testSingleTaskLifeCycle() throws Exception {
+    // Assuming there is only one task in the queue
+    PowerMockito.when(taskQueue.dequeueTask(anyString()))
+        .thenReturn(getSleepIncrementTaskFromQueue())
+        .thenReturn(null);
     Semaphore idleWorkersSemaphore = new Semaphore(1);
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(1, 1, 0,
@@ -75,32 +90,42 @@ public class DispatcherTest {
     WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore);
     TaskDispatcher dispatcher = new TaskDispatcher(2, idleWorkersSemaphore, workerPool, taskQueue);
     dispatcher.start();
-    // Give it enough time for the initialization
-    Thread.sleep(1500);
+    // Wait for first task to be done
+    synchronized (SleepIncrementTask.notifyObject) {
+      SleepIncrementTask.notifyObject.wait();
+    }
     verify(taskQueue, atLeastOnce()).dequeueTask(anyString());
-    Assert.assertEquals(0, idleWorkersSemaphore.availablePermits());
-    Thread.sleep(800);
-    Assert.assertEquals(1, SleepIncrementTask.executionCounter.get());
+    Assert.assertEquals(1, SleepIncrementTask.executionCounter.intValue());
     Assert.assertEquals(1, idleWorkersSemaphore.availablePermits());
     dispatcher.stop();
   }
 
   @Test
   public void testingMultiTasks() throws Exception {
+    PowerMockito.when(taskQueue.dequeueTask(anyString()))
+        .thenReturn(getSleepIncrementTaskFromQueue())
+        .thenReturn(getSleepIncrementTaskFromQueue())
+        .thenReturn(getSleepIncrementTaskFromQueue())
+        .thenReturn(null);
     SleepIncrementTask.sleepTimeMillis = 3000;
     Semaphore idleWorkersSemaphore = new Semaphore(2);
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(2, 2, 0,
-            TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
+            TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(2));
     WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore);
-    TaskDispatcher dispatcher = new TaskDispatcher(1, idleWorkersSemaphore, workerPool, taskQueue);
+    TaskDispatcher dispatcher = new TaskDispatcher(2, idleWorkersSemaphore, workerPool, taskQueue);
     dispatcher.start();
-    // Give it enough time for the initialization;
-    Thread.sleep(4900);
-    // The test is sometimes flaky, 2 and 3 are both possible
-    Assert.assertTrue(SleepIncrementTask.executionCounter.get() >= 2 &&
-            SleepIncrementTask.executionCounter.get() <= 3);
-    Assert.assertEquals(0, idleWorkersSemaphore.availablePermits());
+    synchronized (SleepIncrementTask.notifyObject) {
+      SleepIncrementTask.notifyObject.wait();
+      SleepIncrementTask.notifyObject.wait();
+    }
+    Assert.assertTrue(SleepIncrementTask.executionCounter.intValue() <= 3);
+    Assert.assertTrue(SleepIncrementTask.executionCounter.intValue() >= 2);
+    synchronized (SleepIncrementTask.notifyObject) {
+      SleepIncrementTask.notifyObject.wait();
+    }
+    Assert.assertEquals(2, idleWorkersSemaphore.availablePermits());
+    dispatcher.stop();
   }
 
 }

@@ -64,21 +64,29 @@ public final class TaskDispatcher {
     final Runnable dispatcher = new Runnable() {
       public void run() {
         try {
-          LOG.info("Pulling tasks from DB queue");
-          Task dequeuedTask = taskQueue.dequeueTask(WorkerConfig.getHostName());
-          if (dequeuedTask == null) {
-            LOG.info("No outstanding pending tasks to be dequeued");
-          } else {
-            TaskBase task = TaskFactory.getWorkerTask(dequeuedTask);
-            if (task == null) {
-              LOG.error("Cannot assign " + dequeuedTask.name + " to worker");
-              if (!taskQueue.failTask(dequeuedTask.id)) {
-                LOG.error("Cannot fail " + dequeuedTask.name + " to the queue");
-              }
+          while (true) {
+            LOG.info("Pulling tasks from DB queue, available workers: "
+                + idleWorkersSemaphore.availablePermits());
+            idleWorkersSemaphore.acquire();
+            Task dequeuedTask = taskQueue.dequeueTask(WorkerConfig.getHostName());
+            if (dequeuedTask == null) {
+              LOG.info("No outstanding pending tasks to be dequeued");
+              idleWorkersSemaphore.release();
+              break;
             } else {
-              idleWorkersSemaphore.acquire();
-              if (!workerPool.assignTask(task)) {
+              TaskBase task = TaskFactory.getWorkerTask(dequeuedTask);
+              if (task == null) {
+                LOG.error("Cannot assign " + dequeuedTask.name + " to worker");
+                if (!taskQueue.failTask(dequeuedTask.id)) {
+                  LOG.error("Cannot fail " + dequeuedTask.name + " to the queue");
+                }
                 idleWorkersSemaphore.release();
+                break;
+              } else {
+                if (!workerPool.assignTask(task)) {
+                  idleWorkersSemaphore.release();
+                  break;
+                }
               }
             }
           }

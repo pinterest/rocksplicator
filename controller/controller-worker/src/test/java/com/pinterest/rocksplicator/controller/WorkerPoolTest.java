@@ -42,7 +42,7 @@ public class WorkerPoolTest {
 
   @Before
   public void setup() {
-    SleepIncrementTask.executionCounter.set(0);
+    SleepIncrementTask.executionCounter = 0;
   }
 
   @Test
@@ -53,10 +53,10 @@ public class WorkerPoolTest {
     WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore);
     workerPool.assignTask(getSleepIncrementTask());
     Thread.sleep(2000);
-    Assert.assertEquals(1, SleepIncrementTask.executionCounter.get());
+    Assert.assertEquals(1, SleepIncrementTask.executionCounter.intValue());
     workerPool.assignTask(getSleepIncrementTask());
     Thread.sleep(2000);
-    Assert.assertEquals(2, SleepIncrementTask.executionCounter.get());
+    Assert.assertEquals(2, SleepIncrementTask.executionCounter.intValue());
     Assert.assertEquals(2, idleWorkersSemaphore.availablePermits());
   }
 
@@ -69,10 +69,10 @@ public class WorkerPoolTest {
     TaskBase task = getSleepIncrementTask();
     workerPool.assignTask(task);
     Thread.sleep(2000);
-    Assert.assertEquals(1, SleepIncrementTask.executionCounter.get());
+    Assert.assertEquals(1, SleepIncrementTask.executionCounter.intValue());
     workerPool.assignTask(task);
     Thread.sleep(2000);
-    Assert.assertEquals(2, SleepIncrementTask.executionCounter.get());
+    Assert.assertEquals(2, (int)SleepIncrementTask.executionCounter);
     Assert.assertEquals(2, idleWorkersSemaphore.availablePermits());
   }
 
@@ -85,11 +85,11 @@ public class WorkerPoolTest {
     TaskBase task = getSleepIncrementTask();
     workerPool.assignTask(task);
     Thread.sleep(2000);
-    Assert.assertEquals(1, SleepIncrementTask.executionCounter.get());
+    Assert.assertEquals(1, SleepIncrementTask.executionCounter.intValue());
     workerPool.assignTask(task);
     Assert.assertEquals(1, idleWorkersSemaphore.availablePermits());
     Thread.sleep(100);
-    Assert.assertEquals(1, SleepIncrementTask.executionCounter.get());
+    Assert.assertEquals(1, SleepIncrementTask.executionCounter.intValue());
     Thread.sleep(1000);
   }
 
@@ -118,7 +118,7 @@ public class WorkerPoolTest {
     workerPool.assignTask(getSleepIncrementTask());
     Thread.sleep(1500);
     // Only expect 2 to finish because the pool size is 2
-    Assert.assertEquals(2, SleepIncrementTask.executionCounter.get());
+    Assert.assertEquals(2, SleepIncrementTask.executionCounter.intValue());
     Assert.assertEquals(2, idleWorkersSemaphore.availablePermits());
     Thread.sleep(1000);
   }
