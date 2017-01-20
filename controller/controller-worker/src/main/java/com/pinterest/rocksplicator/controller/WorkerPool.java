@@ -27,22 +27,23 @@ import java.util.concurrent.Semaphore;
 
 /**
  *
- * Thread pool executor service for executing Rocksplicator tasks.
+ * The worker pool contains an executor service for executing Rocksplicator tasks.
  *
  * @author Shu Zhang (shu@pinterest.com)
  *
  */
-public class WorkerPool {
+public final class WorkerPool {
 
   // TODO: graceful shutdown.
   private static final Logger LOG = LoggerFactory.getLogger(WorkerPool.class);
-  private volatile Semaphore idleWorkersSemaphore;
-  private volatile ConcurrentHashMap<String, FutureTask> runningTasks;
-  private volatile ExecutorService executorService;
+  private final Semaphore idleWorkersSemaphore;
+  private final ConcurrentHashMap<String, FutureTask> runningTasks;
+  private final ExecutorService executorService;
 
   public WorkerPool(ExecutorService executorService, Semaphore idleWorkersSemaphore) {
     this.executorService = executorService;
     this.idleWorkersSemaphore = idleWorkersSemaphore;
+    this.runningTasks = new ConcurrentHashMap<>();
   }
 
   /**
@@ -50,19 +51,27 @@ public class WorkerPool {
    * @param task the task to execute
    * @throws Exception if there is a running task for the cluster.
    */
-  public void assignTask(TaskBase task) throws Exception {
-    if (runningTasks.containsKey(task.getCluster())) {
-      throw new Exception("Cannot execute more than 1 task for a cluster");
+  public boolean assignTask(TaskBase task) {
+    if (task == null) {
+      LOG.error("The task is null, cannot be assigned");
+      return false;
     }
     FutureTask futureTask = new FutureTask(task);
-    runningTasks.put(task.getCluster(), futureTask);
+    if (runningTasks.putIfAbsent(task.getCluster(), futureTask) != null) {
+      String errorMessage =
+          "Cannot add execute more than 1 task for the cluster " + task.getCluster();
+      LOG.error(errorMessage);
+      return false;
+    }
     executorService.submit(() -> {
       try {
-        task.call();
+        futureTask.run();
       } finally {
+        runningTasks.remove(task.getCluster());
         idleWorkersSemaphore.release();
       }
     });
+    return true;
   }
 
   /**
@@ -72,21 +81,12 @@ public class WorkerPool {
    */
   public boolean abortTask(String cluster) throws Exception {
     FutureTask runningTask = runningTasks.get(cluster);
-    if (runningTask.isCancelled()) {
-      throw new Exception("Task is already cancelled");
+    if (runningTask == null) {
+      LOG.error("No running task of cluster " + cluster);
+      return false;
     }
     // An Interrupted exception will be thrown to Task, and onFailure() will be triggered.
     return runningTask.cancel(true);
   }
-
-  /**
-   * Check if a task is running for a cluster
-   * @param cluster
-   * @return
-   */
-  public boolean hasRunningTask(String cluster) {
-    return runningTasks.containsKey(cluster);
-  }
-
 
 }

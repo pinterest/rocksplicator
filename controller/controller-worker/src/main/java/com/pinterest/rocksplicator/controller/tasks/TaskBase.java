@@ -37,11 +37,13 @@ public abstract class TaskBase<T> implements Callable<T> {
   }
 
   private static final Logger LOG = LoggerFactory.getLogger(TaskBase.class);
-  protected JsonNode taskBody;
-  protected String cluster;
+  protected final JsonNode taskBody;
+  protected final String cluster;
+  protected final long id;
   protected State state;
 
-  public TaskBase(String cluster, JsonNode taskBody) {
+  public TaskBase(long id, String cluster, JsonNode taskBody) {
+    this.id = id;
     this.taskBody = taskBody;
     this.cluster = cluster;
     this.state = State.RUNNING;
@@ -54,6 +56,8 @@ public abstract class TaskBase<T> implements Callable<T> {
   public State getState() {
     return this.state;
   }
+
+  public long getId() { return this.id; }
 
   /**
    * A hook method for doing works before process() is called.
@@ -69,7 +73,7 @@ public abstract class TaskBase<T> implements Callable<T> {
    * Subclasses implement this method for task logic.
    * @return task response
    */
-  public abstract T process();
+  public abstract T process() throws Exception;
 
   /**
    * Subclasses implement this method for task failure handling.
@@ -87,16 +91,16 @@ public abstract class TaskBase<T> implements Callable<T> {
     try {
       response = process();
       this.state = State.DONE;
+      postProcess(response);
       return response;
     } catch (Exception e) {
-      LOG.warn("Task " + this.getClass().getName() + "Failed!", e);
+      LOG.warn("Task " + this.getClass().getName() + " Failed!", e);
       response = onFailure();
       this.state = State.FAILED;
       return response;
     } finally {
       Date endDate = new Date();
       long duration = endDate.getTime() - start;
-      postProcess(response);
     }
   }
 }

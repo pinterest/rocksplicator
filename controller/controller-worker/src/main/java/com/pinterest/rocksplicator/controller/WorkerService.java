@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
  * (1) A task dispatcher to periodically pull data from MySQL task queue
  * (2) A pool of worker threads executing the tasks
  * To make sure:
- * (1) every worker thread can get task from dispatcher immediately
+ * (1) every worker thread can get task from dispatcher immediately (if there is idle worker thread)
  * (2) there will be no outstanding tasks pending for worker to pick up
  * It internally maintains a semaphore as the number of idle workers. Dispatcher will acquire()
  * the semaphore before getting any task, and will release() only if there is no outstanding
@@ -44,15 +44,15 @@ public class WorkerService {
 
   public static void main(String[] args) {
     try {
-      WorkerConfig.initialize();
       int workerPoolSize = WorkerConfig.getWorkerPoolSize();
       Semaphore idleWorkersSemaphore = new Semaphore(workerPoolSize);
       ThreadPoolExecutor threadPoolExecutor =
           new ThreadPoolExecutor(workerPoolSize, workerPoolSize, 0,
               TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
       WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore);
+      TaskQueue taskQueue = new TaskQueue();
       TaskDispatcher dispatcher = new TaskDispatcher(
-          WorkerConfig.getDispatcherPollInterval(), idleWorkersSemaphore, workerPool);
+          WorkerConfig.getDispatcherPollIntervalSec(), idleWorkersSemaphore, workerPool, taskQueue);
       dispatcher.start();
     } catch (Exception e) {
       LOG.error("Cannot start the worker service", e);
