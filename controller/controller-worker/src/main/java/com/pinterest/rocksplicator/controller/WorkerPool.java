@@ -52,6 +52,10 @@ public final class WorkerPool {
    * @throws Exception if there is a running task for the cluster.
    */
   public boolean assignTask(TaskBase task) {
+    if (task == null) {
+      LOG.error("The task is null, cannot be assigned");
+      return false;
+    }
     FutureTask futureTask = new FutureTask(task);
     if (runningTasks.putIfAbsent(task.getCluster(), futureTask) != null) {
       String errorMessage =

@@ -82,14 +82,9 @@ public final class TaskDispatcher {
               break;
             } else {
               TaskBase task = TaskFactory.getWorkerTask(dequeuedTask);
-              if (task == null) {
+              if (!workerPool.assignTask(task)) {
                 failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore);
                 break;
-              } else {
-                if (!workerPool.assignTask(task)) {
-                  failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore);
-                  break;
-                }
               }
             }
           }
