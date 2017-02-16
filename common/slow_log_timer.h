@@ -74,7 +74,6 @@ class SlowLogTimer : public common::Timer {
     return false;
   }
 
- private:
   const std::string log_message_;
   const uint64_t log_latency_threshold_ms_;
   const uint64_t log_one_for_every_n_slow_requests_;
