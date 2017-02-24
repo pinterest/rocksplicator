@@ -92,7 +92,7 @@ ZK_HOST_LIST = [ 'observerzookeeper010:2181',
                  'observerzookeeper019:2181',
                  'observerzookeeper020:2181',
                ]
-gevent.monkey.patch_all()               
+gevent.monkey.patch_all()
 
 
 # return datetime string in format: 20150313-220328
@@ -330,8 +330,9 @@ def config(args):
             zone_to_hosts.setdefault(zone, []).append(host_and_zone)
 
         LOG(zone_to_hosts)
-        if len(zone_to_hosts) != 3:
-            raise Exception('Must have 3 zones, while %d zones found' % len(zone_to_hosts))
+        num_zones = en(zone_to_hosts)
+        if len(zone_to_hosts) <= 1:
+            raise Exception('Must have more than 1 zone, while %d zones found' % len(zone_to_hosts))
 
         if len(set(len(x) for x in zone_to_hosts.values())) > 1:
             raise Exception('Every zone should have the same # of hosts')
@@ -342,10 +343,10 @@ def config(args):
             segment_dict[host_and_zone] = []
 
         current_zone = 0
-        n_masters_per_zone = max(1, args.shard_num / 3)
+        n_masters_per_zone = max(1, args.shard_num / num_zones)
         for hosts in zone_to_hosts.itervalues():
             begin_master_idx = current_zone * n_masters_per_zone
-            if current_zone == 2:
+            if current_zone == num_zones - 1:
                 end_master_idx = args.shard_num
             else:
                 end_master_idx = begin_master_idx + n_masters_per_zone
