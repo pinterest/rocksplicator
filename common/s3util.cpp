@@ -134,7 +134,7 @@ GetObjectMetadataResponse S3Util::getObjectMetadata(const string &key) {
   map<string, string> metadata;
   if (headObjectResult.IsSuccess()) {
     metadata = headObjectResult.GetResult().GetMetadata();
-    return GetObjectMetadataResponse(metadata, "");
+    return GetObjectMetadataResponse(std::move(metadata), "");
   } else {
     return GetObjectMetadataResponse(
             metadata, headObjectResult.GetError().GetMessage());
