@@ -21,6 +21,7 @@
 #include <aws/core/utils/ratelimiter/DefaultRateLimiter.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/GetObjectRequest.h>
+#include <aws/s3/model/HeadObjectRequest.h>
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/ListObjectsResult.h>
 #include <aws/s3/model/Object.h>
@@ -37,6 +38,7 @@ using std::vector;
 using std::tuple;
 using Aws::S3::Model::GetObjectRequest;
 using Aws::S3::Model::ListObjectsRequest;
+using Aws::S3::Model::HeadObjectRequest;
 using Aws::Utils::RateLimits::DefaultRateLimiter;
 
 namespace common {
@@ -121,6 +123,21 @@ GetObjectsResponse S3Util::getObjects(
       }
     }
     return GetObjectsResponse(results, "");
+  }
+}
+
+GetObjectMetadataResponse S3Util::getObjectMetadata(const string &key) {
+  HeadObjectRequest headObjectRequest;
+  headObjectRequest.SetBucket(bucket_);
+  headObjectRequest.SetKey(key);
+  auto headObjectResult = s3Client.HeadObject(headObjectRequest);
+  map<string, string> metadata;
+  if (headObjectResult.IsSuccess()) {
+    metadata = headObjectResult.GetResult().GetMetadata();
+    return GetObjectMetadataResponse(metadata, "");
+  } else {
+    return GetObjectMetadataResponse(
+            metadata, headObjectResult.GetError().GetMessage());
   }
 }
 

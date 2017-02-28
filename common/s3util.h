@@ -21,10 +21,12 @@
 #include <aws/s3/S3Client.h>
 #include <aws/core/client/ClientConfiguration.h>
 
+#include <map>
 #include <string>
 #include <tuple>
 #include <vector>
 
+using std::map;
 using std::string;
 using std::vector;
 using std::tuple;
@@ -56,6 +58,7 @@ using GetObjectResponse = S3UtilResponse<bool>;
 using SdkGetObjectResponse = Aws::S3::Model::GetObjectOutcome;
 using ListObjectsResponse = S3UtilResponse<vector<string>>;
 using GetObjectsResponse = S3UtilResponse<vector<GetObjectResponse>>;
+using GetObjectMetadataResponse = S3UtilResponse<map<string, string>>;
 
 class S3Util {
  public:
@@ -78,6 +81,9 @@ class S3Util {
   GetObjectsResponse getObjects(
       const string& prefix, const string& local_directory,
       const string& delimiter = "/");
+  // Get the metadata dict of an object. For details of the metadata,
+  // http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html#object-metadata
+  GetObjectMetadataResponse getObjectMetadata(const string& key);
 
   // Some utility methods
   // Given an s3 full path like "s3://<bucket>/<path>",
