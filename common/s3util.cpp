@@ -130,15 +130,29 @@ GetObjectMetadataResponse S3Util::getObjectMetadata(const string &key) {
   HeadObjectRequest headObjectRequest;
   headObjectRequest.SetBucket(bucket_);
   headObjectRequest.SetKey(key);
-  auto headObjectResult = s3Client.HeadObject(headObjectRequest);
   map<string, string> metadata;
-  if (headObjectResult.IsSuccess()) {
-    metadata = headObjectResult.GetResult().GetMetadata();
-    return GetObjectMetadataResponse(std::move(metadata), "");
-  } else {
+  // Copied from Aws S3 Client
+  Aws::StringStream ss;
+  ss << this->uri_ << "/" << headObjectRequest.GetBucket() << "/"
+     << headObjectRequest.GetKey();
+  XmlOutcome headObjectOutcome = s3Client.MakeHttpRequest(
+          ss.str(), headObjectRequest,HttpMethod::HTTP_HEAD);
+  if (!headObjectOutcome.IsSuccess()) {
     return GetObjectMetadataResponse(
-            metadata, headObjectResult.GetError().GetMessage());
+            metadata, headObjectOutcome.GetError().GetMessage());
   }
+  const auto& headers = headObjectOutcome.GetResult().GetHeaderValueCollection();
+  const auto& md5Iter = headers.find("etag");
+  if(md5Iter != headers.end()) {
+    auto md5str = md5Iter->second;
+    md5str.erase(std::remove(md5str.begin(), md5str.end(), '\"'), md5str.end());
+    metadata["md5"] = md5str;
+  }
+  const auto& contentLengthIter = headers.find("content-length");
+  if(contentLengthIter != headers.end()) {
+    metadata["content-length"] = contentLengthIter->second;
+  }
+  return GetObjectMetadataResponse(std::move(metadata), "");
 }
 
 tuple<string, string> S3Util::parseFullS3Path(const string& s3_path) {
