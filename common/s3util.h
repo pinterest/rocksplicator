@@ -68,23 +68,24 @@ using ListObjectsResponse = S3UtilResponse<vector<string>>;
 using GetObjectsResponse = S3UtilResponse<vector<GetObjectResponse>>;
 using GetObjectMetadataResponse = S3UtilResponse<map<string, string>>;
 
-/**
- * A wrapper of S3Client so we can control the HTTP request and
- * response directly
- */
-class CutomizedS3Client: public S3Client {
- public:
-  CutomizedS3Client(
-          const ClientConfiguration& config): S3Client(config) {}
-  XmlOutcome MakeHttpRequest(const Aws::String& uri,
-          const Aws::AmazonWebServiceRequest& request,
-          HttpMethod method = HttpMethod::HTTP_POST) const {
-    return MakeRequest(uri, request, method);
-  }
-};
 
 class S3Util {
  public:
+  /**
+   * A wrapper of S3Client so we can control the HTTP request and
+   * response directly
+   */
+  class CutomizedS3Client: public S3Client {
+   public:
+    CutomizedS3Client(
+            const ClientConfiguration& config): S3Client(config) {}
+    XmlOutcome MakeHttpRequest(const Aws::String& uri,
+            const Aws::AmazonWebServiceRequest& request,
+            HttpMethod method = HttpMethod::HTTP_POST) const {
+      return MakeRequest(uri, request, method);
+    }
+  };
+
   // Don't recommend using this directly. Using BuildS3Util instead.
   S3Util(const string& bucket,
          const ClientConfiguration& client_config) :

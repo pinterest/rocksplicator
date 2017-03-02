@@ -132,7 +132,7 @@ GetObjectMetadataResponse S3Util::getObjectMetadata(const string &key) {
   headObjectRequest.SetKey(key);
   map<string, string> metadata;
   Aws::StringStream ss;
-  ss << this->uri_ << "/" << headObjectRequest.GetBucket() << "/"
+  ss << uri_ << "/" << headObjectRequest.GetBucket() << "/"
      << headObjectRequest.GetKey();
   XmlOutcome headObjectOutcome = s3Client.MakeHttpRequest(
           ss.str(), headObjectRequest,HttpMethod::HTTP_HEAD);
