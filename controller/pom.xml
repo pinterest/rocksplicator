@@ -12,11 +12,13 @@
     <properties>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
+        <dropwizard.version>1.0.5</dropwizard.version>
+        <curator.version>2.9.0</curator.version>
     </properties>
 
     <modules>
+        <module>controller-common</module>
         <module>controller-http</module>
-        <module>task-queue</module>
         <module>controller-worker</module>
     </modules>
 

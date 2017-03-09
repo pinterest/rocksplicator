@@ -15,7 +15,7 @@
     <dependencies>
         <dependency>
             <groupId>com.pinterest.rocksplicator</groupId>
-            <artifactId>task-queue</artifactId>
+            <artifactId>controller-common</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
         <dependency>

@@ -12,15 +12,10 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <properties>
-        <dropwizard.version>1.0.5</dropwizard.version>
-        <curator.version>2.9.0</curator.version>
-    </properties>
-
     <dependencies>
         <dependency>
             <groupId>com.pinterest.rocksplicator</groupId>
-            <artifactId>task-queue</artifactId>
+            <artifactId>controller-common</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
         <dependency>
@@ -36,7 +31,7 @@
         <dependency>
             <groupId>org.apache.curator</groupId>
             <artifactId>curator-framework</artifactId>
-            <version>2.9.0</version>
+            <version>${curator.version}</version>
         </dependency>
     </dependencies>
 
