@@ -15,7 +15,7 @@
     <dependencies>
         <dependency>
             <groupId>com.pinterest.rocksplicator</groupId>
-            <artifactId>task-queue</artifactId>
+            <artifactId>controller-common</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
         <dependency>
@@ -66,12 +66,6 @@
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
             <version>19.0</version>
-        </dependency>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.11</version>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.powermock</groupId>

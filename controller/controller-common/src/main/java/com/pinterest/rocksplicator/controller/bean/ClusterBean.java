@@ -16,16 +16,41 @@
 
 package com.pinterest.rocksplicator.controller.bean;
 
+
+import org.hibernate.validator.constraints.NotEmpty;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * @author Ang Xu (angxu@pinterest.com)
  */
-public class TaskBean {
+public class ClusterBean {
 
-  public enum State {
-    PENDING,
-    RUNNING,
-    DONE,
-    FAILED
+  @NotEmpty
+  /** name of the cluster */
+  private String name;
+
+  /** list of segments in this cluster */
+  private List<SegmentBean> segments = Collections.emptyList();
+
+  public String getName() {
+    return name;
+  }
+
+  public ClusterBean setName(String name) {
+    this.name = name;
+    return this;
+  }
+
+  public List<SegmentBean> getSegments() {
+    return new ArrayList<>(segments);
+  }
+
+  public ClusterBean setSegments(List<SegmentBean> segments) {
+    this.segments = Collections.unmodifiableList(segments);
+    return this;
   }
 
 }

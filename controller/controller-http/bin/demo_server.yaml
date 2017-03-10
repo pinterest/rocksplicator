@@ -2,3 +2,5 @@ server:
   applicationConnectors:
     - type: http
       port: 8080
+
+zkEndpoints: observerzookeeper010:2181

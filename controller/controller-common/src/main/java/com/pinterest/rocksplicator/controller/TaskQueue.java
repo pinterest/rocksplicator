@@ -18,7 +18,9 @@ package com.pinterest.rocksplicator.controller;
 
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 /**
  * @author Bo Liu (bol@pinterest.com)
@@ -175,5 +177,22 @@ public final class TaskQueue {
   public List<Task> peekTasks(final String clusterName,
                               final Integer state) {
     return new ArrayList<Task>();
+  }
+
+  /**
+   * Find task by its id.
+   * @param id id of the task
+   * @return task or null
+   */
+  public Task findTask(long id) {
+    return new Task();
+  }
+
+  /**
+   * Return all clusters managed by this task queue.
+   * @return a set of cluster names
+   */
+  public Set<String> getAllClusters() {
+    return Collections.emptySet();
   }
 }

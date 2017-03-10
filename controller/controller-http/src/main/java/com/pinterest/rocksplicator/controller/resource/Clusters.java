@@ -16,23 +16,49 @@
 
 package com.pinterest.rocksplicator.controller.resource;
 
+import com.pinterest.rocksplicator.controller.TaskQueue;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
+import com.pinterest.rocksplicator.controller.config.ConfigParser;
 
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.zookeeper.data.Stat;
+import org.eclipse.jetty.http.HttpStatus;
 import org.hibernate.validator.constraints.NotEmpty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
 /**
  * @author Ang Xu (angxu@pinterest.com)
  */
 @Path("/v1/clusters")
 public class Clusters {
+  private static final Logger LOG = LoggerFactory.getLogger(Clusters.class);
+
+  private final String zkPath;
+  private final CuratorFramework zkClient;
+  private final TaskQueue taskQueue;
+
+  public Clusters(String zkPath,
+                  CuratorFramework zkClient,
+                  TaskQueue taskQueue) {
+    this.zkPath = zkPath;
+    this.zkClient = zkClient;
+    this.taskQueue = taskQueue;
+  }
 
   /**
    * Retrieves cluster information by cluster name.
@@ -42,8 +68,19 @@ public class Clusters {
    */
   @GET
   @Path("/{clusterName : [a-zA-Z0-9\\-_]+}")
+  @Produces(MediaType.APPLICATION_JSON)
   public ClusterBean get(@PathParam("clusterName") String clusterName) {
-    throw new UnsupportedOperationException("method not implemented.");
+    final ClusterBean clusterBean;
+    try {
+      clusterBean = checkExistenceAndGetClusterBean(clusterName);
+    } catch (Exception e) {
+      LOG.error("Failed to read from zookeeper.", e);
+      throw new WebApplicationException(e);
+    }
+    if (clusterBean == null) {
+      throw new WebApplicationException(HttpStatus.NOT_FOUND_404);
+    }
+    return clusterBean;
   }
 
   /**
@@ -53,7 +90,20 @@ public class Clusters {
    */
   @GET
   public List<ClusterBean> getAll() {
-    throw new UnsupportedOperationException("method not implemented.");
+    final Set<String> clusters = taskQueue.getAllClusters();
+    final List<ClusterBean> clusterBeans = new ArrayList<>(clusters.size());
+    try {
+      for (String cluster : clusters) {
+        ClusterBean clusterBean = checkExistenceAndGetClusterBean(cluster);
+        if (clusterBean != null) {
+          clusterBeans.add(clusterBean);
+        }
+      }
+    } catch (Exception e) {
+      LOG.error("Failed to read from zookeeper.", e);
+      throw new WebApplicationException(e);
+    }
+    return clusterBeans;
   }
 
   /**
@@ -107,21 +157,36 @@ public class Clusters {
    * release the lock via {@link #unlock(String)}.
    *
    * @param clusterName name of the cluster to lock
+   * @return true if the given cluster is locked, false otherwise
    */
   @POST
   @Path("/lock/{clusterName : [a-zA-Z0-9\\-_]+}")
-  public void lock(@PathParam("clusterName") String clusterName) {
-    throw new UnsupportedOperationException("method not implemented.");
+  public boolean lock(@PathParam("clusterName") String clusterName) {
+    return taskQueue.lockCluster(clusterName);
   }
 
   /**
    * Unlocks a given cluster.
    *
    * @param clusterName name of the cluster to unlock
+   * @return true if the given cluster is unlocked, false otherwise
    */
   @POST
   @Path("/unlock/{clusterName : [a-zA-Z0-9\\-_]+}")
-  public void unlock(@PathParam("clusterName") String clusterName) {
-    throw new UnsupportedOperationException("method not implemented.");
+  public boolean unlock(@PathParam("clusterName") String clusterName) {
+    return taskQueue.unlockCluster(clusterName);
+  }
+
+  private ClusterBean checkExistenceAndGetClusterBean(String clusterName) throws Exception {
+    if (zkClient.checkExists().forPath(zkPath + clusterName) == null) {
+      LOG.error("Znode {} doesn't exist.", zkPath + clusterName);
+      return null;
+    }
+    byte[] data = zkClient.getData().forPath(zkPath + clusterName);
+    ClusterBean clusterBean = ConfigParser.parseClusterConfig(clusterName, data);
+    if (clusterBean == null) {
+      LOG.error("Failed to parse config for cluster {}.", clusterName);
+    }
+    return clusterBean;
   }
 }

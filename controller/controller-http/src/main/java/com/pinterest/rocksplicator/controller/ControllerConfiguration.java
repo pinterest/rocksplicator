@@ -16,10 +16,38 @@
 
 package com.pinterest.rocksplicator.controller;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.dropwizard.Configuration;
+import org.hibernate.validator.constraints.NotEmpty;
 
 /**
  * @author Ang Xu (angxu@pinterest.com)
  */
 public class ControllerConfiguration extends Configuration {
+
+  @NotEmpty
+  private String zkEndpoints;
+
+  @NotEmpty
+  private String zkPath = "/config/services/rocksdb/";
+
+  @JsonProperty
+  public String getZkEndpoints() {
+    return zkEndpoints;
+  }
+
+  @JsonProperty
+  public void setZkEndpoints(String zkEndpoints) {
+    this.zkEndpoints = zkEndpoints;
+  }
+
+  @JsonProperty
+  public String getZkPath() {
+    return zkPath;
+  }
+
+  @JsonProperty
+  public void setZkPath(String zkPath) {
+    this.zkPath = zkPath;
+  }
 }
