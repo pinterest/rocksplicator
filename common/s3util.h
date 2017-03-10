@@ -50,11 +50,11 @@ class S3UtilResponse {
   S3UtilResponse(T body, string error):
     body_(std::move(body)), error_(std::move(error)) {}
 
-  T Body() {
+  const T& Body() const {
     return body_;
   }
 
-  string Error() {
+  const string& Error() const {
     return error_;
   }
  private:
@@ -130,7 +130,7 @@ class S3Util {
       const string& bucket = "",
       const uint32_t connect_timeout_ms = 60000,
       const uint32_t request_timeout_ms = 60000);
-      
+
 
  private:
   const string bucket_;
