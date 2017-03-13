@@ -94,7 +94,15 @@ rocksdb::Status ApplicationDB::Write(const rocksdb::WriteOptions& options,
   common::Stats::get()->Incr(kRocksdbWrite);
   common::Stats::get()->Incr(kRocksdbWriteBytes, write_batch->GetDataSize());
   common::Timer timer(kRocksdbWriteMs);
-  return replicated_db_->Write(options, write_batch);
+  if (replicated_db_) {
+    return replicated_db_->Write(options, write_batch);
+  } else {
+    // ApplicationDBManager can be use to manage rocksdb instance lifecycle
+    // without replication. In this case, ApplicationDB has the replicator::DBRole
+    // as SLAVE and no upstream_addr. Thus the replicated_db_ is nullptr, and
+    // we'll write to the local db_
+    return db_->Write(options, write_batch);
+  }
 }
 
 rocksdb::Status ApplicationDB::CompactRange(
