@@ -94,7 +94,11 @@ rocksdb::Status ApplicationDB::Write(const rocksdb::WriteOptions& options,
   common::Stats::get()->Incr(kRocksdbWrite);
   common::Stats::get()->Incr(kRocksdbWriteBytes, write_batch->GetDataSize());
   common::Timer timer(kRocksdbWriteMs);
-  return replicated_db_->Write(options, write_batch);
+  if (replicated_db_) {
+    return replicated_db_->Write(options, write_batch);
+  } else {
+    return db_->Write(options, write_batch);
+  }
 }
 
 rocksdb::Status ApplicationDB::CompactRange(
