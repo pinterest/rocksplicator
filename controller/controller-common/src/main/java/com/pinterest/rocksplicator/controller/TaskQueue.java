@@ -25,14 +25,14 @@ import java.util.Set;
 /**
  * @author Bo Liu (bol@pinterest.com)
  */
-public final class TaskQueue {
+public interface TaskQueue {
 
   /**
    * Create a new cluster in the task queue.
    * @param clusterName
    * @return false on error
    */
-  public boolean createCluster(final String clusterName) {
+  default boolean createCluster(final String clusterName) {
     return true;
   }
 
@@ -44,7 +44,7 @@ public final class TaskQueue {
    *                        delay required
    * @return false on error
    */
-  public boolean enqueueTask(final TaskEntity taskEntity,
+  default boolean enqueueTask(final TaskEntity taskEntity,
                              final String clusterName,
                              final int runDelaySeconds) {
     return true;
@@ -57,7 +57,7 @@ public final class TaskQueue {
    * @param worker the worker who is calling this function
    * @return the dequeued task, or null if no eligible task found
    */
-  public Task dequeueTask(final String worker) {
+  default Task dequeueTask(final String worker) {
     return new Task(new TaskEntity());
   }
 
@@ -68,7 +68,7 @@ public final class TaskQueue {
    * @param output output of this task
    * @return false on error
    */
-  public boolean finishTask(final long id, final String output) {
+  default boolean finishTask(final long id, final String output) {
     return true;
   }
 
@@ -76,10 +76,10 @@ public final class TaskQueue {
    * Ack the task queue that the task has failed.
    * It will also atomically unlock the cluster the task associated with.
    * @param id which task to fail
-   * @param output output of this task
+   * @param reason output of this task
    * @return false on error
    */
-  public boolean failTask(final long id, final String output) {
+  default boolean failTask(final long id, final String reason) {
     return true;
   }
 
@@ -91,7 +91,7 @@ public final class TaskQueue {
    * @param worker the worker who is calling this function
    * @return the task id for the newly enqueued task on success, -1 on error
    */
-  public long finishTaskAndEnqueueRunningTask(final long id,
+  default long finishTaskAndEnqueueRunningTask(final long id,
                                               final TaskEntity newTaskEntity,
                                               final String worker) {
     return 0;
@@ -104,7 +104,7 @@ public final class TaskQueue {
    * @param runDelaySeconds the run delay seconds for the task to enqueue
    * @return false on error
    */
-  public boolean finishTaskAndEnqueuePendingTask(final long id,
+  default boolean finishTaskAndEnqueuePendingTask(final long id,
                                                  final TaskEntity taskEntity,
                                                  final int runDelaySeconds) {
     return true;
@@ -115,7 +115,7 @@ public final class TaskQueue {
    * @param cluster which cluster to lock
    * @return false on error
    */
-  public boolean lockCluster(final String cluster) {
+  default boolean lockCluster(final String cluster) {
     return true;
   }
 
@@ -124,7 +124,7 @@ public final class TaskQueue {
    * @param cluster which cluster to unlock
    * @return false on error
    */
-  public boolean unlockCluster(final String cluster) {
+  default boolean unlockCluster(final String cluster) {
     return true;
   }
 
@@ -134,7 +134,7 @@ public final class TaskQueue {
    * @param cluster which cluster to remove
    * @return false on error
    */
-  public boolean removeCluster(final String cluster) {
+  default boolean removeCluster(final String cluster) {
     return true;
   }
 
@@ -142,7 +142,7 @@ public final class TaskQueue {
    * Remove finished tasks.
    * @return the number of finished tasks which are removed by this call.
    */
-  public int removeFinishedTasks() {
+  default int removeFinishedTasks() {
     return 0;
   }
 
@@ -151,7 +151,7 @@ public final class TaskQueue {
    * A zombie task is a task in running state whose last known alive time is more than a threshold.
    * @return the number of zombie tasks which are rest by this call
    */
-  public int resetZombieTasks(final int zombieThresholdSeconds) {
+  default int resetZombieTasks(final int zombieThresholdSeconds) {
     return 0;
   }
 
@@ -160,7 +160,7 @@ public final class TaskQueue {
    * @param id which task to keep alive
    * @return false on error
    */
-  public boolean keepTaskAlive(final long id) {
+  default boolean keepTaskAlive(final long id) {
     return true;
   }
 
@@ -172,7 +172,7 @@ public final class TaskQueue {
    * @param state peek tasks in this state only
    * @return the list of tasks found
    */
-  public List<Task> peekTasks(final String clusterName,
+  default List<Task> peekTasks(final String clusterName,
                               final Integer state) {
     return new ArrayList<>();
   }
@@ -182,7 +182,7 @@ public final class TaskQueue {
    * @param id id of the task
    * @return task or null
    */
-  public Task findTask(long id) {
+  default Task findTask(long id) {
     return new Task(new TaskEntity());
   }
 
@@ -190,7 +190,7 @@ public final class TaskQueue {
    * Return all clusters managed by this task queue.
    * @return a set of cluster names
    */
-  public Set<String> getAllClusters() {
+  default Set<String> getAllClusters() {
     return Collections.emptySet();
   }
 }

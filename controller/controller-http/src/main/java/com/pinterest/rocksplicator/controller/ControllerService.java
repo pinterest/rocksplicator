@@ -42,7 +42,7 @@ public class ControllerService extends Application<ControllerConfiguration> {
   public void run(ControllerConfiguration configuration,
                   Environment environment) throws Exception {
     //TODO(angxu) initialize taskQueue in the right way after implementation is ready
-    TaskQueue taskQueue = new TaskQueue();
+    TaskQueue taskQueue = new TaskQueue(){};
     CuratorFramework zkClient = CuratorFrameworkFactory.newClient(
         configuration.getZkEndpoints(), new RetryOneTime(3000));
 
