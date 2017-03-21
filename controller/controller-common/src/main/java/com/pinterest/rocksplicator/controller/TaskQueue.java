@@ -38,15 +38,13 @@ public final class TaskQueue {
 
   /**
    * Enqueue a task.
-   * @param taskBody The task body in json format
-   * @param priority The priority of the task
+   * @param taskEntity entity of the task to enqueue
    * @param clusterName Which cluster is this task for
    * @param runDelaySeconds the task should be delayed for this many of seconds to run. If <= 0, no
    *                        delay required
    * @return false on error
    */
-  public boolean enqueueTask(final String taskBody,
-                             final int priority,
+  public boolean enqueueTask(final TaskEntity taskEntity,
                              final String clusterName,
                              final int runDelaySeconds) {
     return true;
@@ -60,16 +58,17 @@ public final class TaskQueue {
    * @return the dequeued task, or null if no eligible task found
    */
   public Task dequeueTask(final String worker) {
-    return new Task();
+    return new Task(new TaskEntity());
   }
 
   /**
    * Ack the task queue that the task has finished.
    * It will also atomically unlock the cluster the task associated with.
    * @param id which task to finish
+   * @param output output of this task
    * @return false on error
    */
-  public boolean finishTask(final long id) {
+  public boolean finishTask(final long id, final String output) {
     return true;
   }
 
@@ -77,9 +76,10 @@ public final class TaskQueue {
    * Ack the task queue that the task has failed.
    * It will also atomically unlock the cluster the task associated with.
    * @param id which task to fail
+   * @param output output of this task
    * @return false on error
    */
-  public boolean failTask(final long id) {
+  public boolean failTask(final long id, final String output) {
     return true;
   }
 
@@ -87,12 +87,12 @@ public final class TaskQueue {
    * Atomically finish a task, and enqueue a new task associated with the same cluster as task(id).
    * The newly enqueued task if of priority 0 and in running state.
    * @param id which task to finish
-   * @param newTaskBody the task body of the new task
+   * @param newTaskEntity the task entity of the new task
    * @param worker the worker who is calling this function
    * @return the task id for the newly enqueued task on success, -1 on error
    */
   public long finishTaskAndEnqueueRunningTask(final long id,
-                                              final String newTaskBody,
+                                              final TaskEntity newTaskEntity,
                                               final String worker) {
     return 0;
   }
@@ -100,14 +100,12 @@ public final class TaskQueue {
   /**
    * Atomically ack the task queue that the task has finished, and enqueue a new task.
    * @param id which task to finish
-   * @param taskBody the task body of the task to enqueue
-   * @param priority the priority of the task to enqueue
+   * @param taskEntity the task entity of the task to enqueue
    * @param runDelaySeconds the run delay seconds for the task to enqueue
    * @return false on error
    */
   public boolean finishTaskAndEnqueuePendingTask(final long id,
-                                                 final String taskBody,
-                                                 final int priority,
+                                                 final TaskEntity taskEntity,
                                                  final int runDelaySeconds) {
     return true;
   }
@@ -176,7 +174,7 @@ public final class TaskQueue {
    */
   public List<Task> peekTasks(final String clusterName,
                               final Integer state) {
-    return new ArrayList<Task>();
+    return new ArrayList<>();
   }
 
   /**
@@ -185,7 +183,7 @@ public final class TaskQueue {
    * @return task or null
    */
   public Task findTask(long id) {
-    return new Task();
+    return new Task(new TaskEntity());
   }
 
   /**

@@ -17,6 +17,8 @@
 package com.pinterest.rocksplicator.controller;
 
 import com.pinterest.rocksplicator.controller.tasks.SleepIncrementTask;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -40,23 +42,26 @@ import static org.mockito.Mockito.verify;
 public class DispatcherTest {
 
   private static Integer nameCounter = 0;
+  private int sleepTimeMillis;
   private TaskQueue taskQueue;
 
-  private Task getSleepIncrementTaskFromQueue() {
-    Task task = new Task();
-    task.name = "SleepIncrementTask";
-    task.body = "{}";
+  private Task getSleepIncrementTaskFromQueue() throws JsonProcessingException {
+    Task task = new Task(
+        new SleepIncrementTask(sleepTimeMillis)
+            .getEntity()
+    );
     task.clusterName = nameCounter.toString();
     nameCounter += 1;
     return task;
   }
 
+
   @Before
   public void setup() {
     SleepIncrementTask.executionCounter = 0;
-    SleepIncrementTask.sleepTimeMillis = 1000;
+    sleepTimeMillis = 1000;
     taskQueue = PowerMockito.mock(TaskQueue.class);
-    PowerMockito.when(taskQueue.failTask(anyLong())).thenReturn(true);
+    PowerMockito.when(taskQueue.failTask(anyLong(), anyString())).thenReturn(true);
   }
 
   @Test
@@ -67,7 +72,7 @@ public class DispatcherTest {
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(1, 1, 0,
             TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
-    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore);
+    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, taskQueue);
     TaskDispatcher dispatcher = new TaskDispatcher(1, idleWorkersSemaphore, workerPool, taskQueue);
     dispatcher.start();
     Thread.sleep(1000);
@@ -87,7 +92,7 @@ public class DispatcherTest {
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(1, 1, 0,
             TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
-    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore);
+    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, taskQueue);
     TaskDispatcher dispatcher = new TaskDispatcher(2, idleWorkersSemaphore, workerPool, taskQueue);
     dispatcher.start();
     // Wait for first task to be done
@@ -102,17 +107,17 @@ public class DispatcherTest {
 
   @Test
   public void testingMultiTasks() throws Exception {
+    sleepTimeMillis = 3000;
     PowerMockito.when(taskQueue.dequeueTask(anyString()))
         .thenReturn(getSleepIncrementTaskFromQueue())
         .thenReturn(getSleepIncrementTaskFromQueue())
         .thenReturn(getSleepIncrementTaskFromQueue())
         .thenReturn(null);
-    SleepIncrementTask.sleepTimeMillis = 3000;
     Semaphore idleWorkersSemaphore = new Semaphore(2);
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(2, 2, 0,
             TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(2));
-    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore);
+    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, taskQueue);
     TaskDispatcher dispatcher = new TaskDispatcher(2, idleWorkersSemaphore, workerPool, taskQueue);
     dispatcher.start();
     synchronized (SleepIncrementTask.notifyObject) {

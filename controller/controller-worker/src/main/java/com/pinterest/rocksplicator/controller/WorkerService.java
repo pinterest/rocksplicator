@@ -49,8 +49,8 @@ public class WorkerService {
       ThreadPoolExecutor threadPoolExecutor =
           new ThreadPoolExecutor(workerPoolSize, workerPoolSize, 0,
               TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
-      WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore);
       TaskQueue taskQueue = new TaskQueue();
+      WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, taskQueue);
       TaskDispatcher dispatcher = new TaskDispatcher(
           WorkerConfig.getDispatcherPollIntervalSec(), idleWorkersSemaphore, workerPool, taskQueue);
       dispatcher.start();
