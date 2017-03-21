@@ -16,12 +16,17 @@
 
 package com.pinterest.rocksplicator.controller;
 
+import com.pinterest.rocksplicator.controller.tasks.Context;
 import com.pinterest.rocksplicator.controller.tasks.TaskBase;
+import com.pinterest.rocksplicator.controller.tasks.TaskFactory;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.sql.Timestamp;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.Semaphore;
 
@@ -37,13 +42,17 @@ public final class WorkerPool {
   // TODO: graceful shutdown.
   private static final Logger LOG = LoggerFactory.getLogger(WorkerPool.class);
   private final Semaphore idleWorkersSemaphore;
-  private final ConcurrentHashMap<String, FutureTask> runningTasks;
+  private final ConcurrentHashMap<String, Future> runningTasks;
   private final ExecutorService executorService;
+  private final TaskQueue taskQueue;
 
-  public WorkerPool(ExecutorService executorService, Semaphore idleWorkersSemaphore) {
+  public WorkerPool(ExecutorService executorService,
+                    Semaphore idleWorkersSemaphore,
+                    TaskQueue taskQueue) {
     this.executorService = executorService;
     this.idleWorkersSemaphore = idleWorkersSemaphore;
     this.runningTasks = new ConcurrentHashMap<>();
+    this.taskQueue = taskQueue;
   }
 
   /**
@@ -51,26 +60,31 @@ public final class WorkerPool {
    * @param task the task to execute
    * @throws Exception if there is a running task for the cluster.
    */
-  public boolean assignTask(TaskBase task) {
+  public synchronized boolean assignTask(TaskInternal task) throws Exception {
     if (task == null) {
       LOG.error("The task is null, cannot be assigned");
       return false;
     }
-    FutureTask futureTask = new FutureTask(task);
-    if (runningTasks.putIfAbsent(task.getCluster(), futureTask) != null) {
-      String errorMessage =
-          "Cannot add execute more than 1 task for the cluster " + task.getCluster();
-      LOG.error(errorMessage);
-      return false;
-    }
-    executorService.submit(() -> {
+    TaskBase baseTask = TaskFactory.getWorkerTask(task);
+
+    Future<?> future = executorService.submit(() -> {
       try {
-        futureTask.run();
+        final Context ctx = new Context(task.id, task.clusterName, taskQueue,
+            WorkerConfig.getHostName() + ":" + Thread.currentThread().getName());
+        baseTask.process(ctx);
+        LOG.info("Finished processing task {}.", task.name);
+      } catch (Throwable t) {
+        LOG.error("Unexpected exception thrown from task {}.", task, t);
+        // This is just a defensive maneuver. It's okay if the task has already been
+        // completed by itself. Therefore, the result of this operation is ignored.
+        taskQueue.failTask(task.id, t.getMessage());
       } finally {
-        runningTasks.remove(task.getCluster());
+        runningTasks.remove(task.clusterName);
         idleWorkersSemaphore.release();
       }
     });
+
+    runningTasks.put(task.clusterName, future);
     return true;
   }
 
@@ -79,8 +93,8 @@ public final class WorkerPool {
    * @param cluster the name of the cluster
    * @return
    */
-  public boolean abortTask(String cluster) throws Exception {
-    FutureTask runningTask = runningTasks.get(cluster);
+  public synchronized boolean abortTask(String cluster) throws Exception {
+    Future runningTask = runningTasks.get(cluster);
     if (runningTask == null) {
       LOG.error("No running task of cluster " + cluster);
       return false;

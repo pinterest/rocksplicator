@@ -16,91 +16,72 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
-import org.codehaus.jackson.JsonNode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.pinterest.rocksplicator.controller.Task;
 
-import java.util.Date;
-import java.util.concurrent.Callable;
+import com.fasterxml.jackson.core.JsonProcessingException;
+
 
 /**
  * Task interface.
  *
  * @author Shu Zhang (shu@pinterest.com)
  */
-public abstract class TaskBase<T> implements Callable<T> {
+public abstract class TaskBase<PARAM extends Parameter> {
 
-  public enum State {
-    RUNNING,
-    DONE,
-    FAILED
+  public static int RESERVED_PRIORITY = 0;
+  public static int HIGH_PRIORITY = 1;
+  public static int DEFAULT_PRIORITY = 2;
+
+  private final PARAM param;
+
+  public TaskBase(PARAM param) {
+    this.param = param;
   }
-
-  private static final Logger LOG = LoggerFactory.getLogger(TaskBase.class);
-  protected final JsonNode taskBody;
-  protected final String cluster;
-  protected final long id;
-  protected State state;
-
-  public TaskBase(long id, String cluster, JsonNode taskBody) {
-    this.id = id;
-    this.taskBody = taskBody;
-    this.cluster = cluster;
-    this.state = State.RUNNING;
-  }
-
-  public String getCluster() {
-    return this.cluster;
-  }
-
-  public State getState() {
-    return this.state;
-  }
-
-  public long getId() { return this.id; }
 
   /**
-   * A hook method for doing works before process() is called.
+   * Returns fully qualified class name of this task
+   *
+   * @return name of the task
    */
-  public abstract void preProcess();
+  public String getName() {
+    return getClass().getName();
+  }
 
   /**
-   * A hook method for doing works after process() is called.
+   * Returns the priority of this task
+   *
+   * @return priority
    */
-  public abstract void postProcess(T response);
+  public int getPriority() {
+    return DEFAULT_PRIORITY;
+  }
+
+  /**
+   * Returns the parameter of this task
+   *
+   * @return parameter
+   */
+  public PARAM getParameter() {
+    return param;
+  }
+
+  /**
+   * Returns a {@link Task} bean which represents the content of this task
+   *
+   * @return Task bean
+   * @throws JsonProcessingException
+   */
+  public Task getBean() throws JsonProcessingException {
+    Task task = new Task();
+    task.name = getName();
+    task.body = getParameter().serialize();
+    task.priority = getPriority();
+    return task;
+  }
 
   /**
    * Subclasses implement this method for task logic.
-   * @return task response
    */
-  public abstract T process() throws Exception;
+  public abstract void process(Context ctx) throws Exception;
 
-  /**
-   * Subclasses implement this method for task failure handling.
-   * @return task response when it is failed
-   */
-  public abstract T onFailure();
-
-
-  @Override
-  public T call() {
-    Date date = new Date();
-    long start = date.getTime();
-    T response = null;
-    preProcess();
-    try {
-      response = process();
-      this.state = State.DONE;
-      postProcess(response);
-      return response;
-    } catch (Exception e) {
-      LOG.warn("Task " + this.getClass().getName() + " Failed!", e);
-      response = onFailure();
-      this.state = State.FAILED;
-      return response;
-    } finally {
-      Date endDate = new Date();
-      long duration = endDate.getTime() - start;
-    }
-  }
 }

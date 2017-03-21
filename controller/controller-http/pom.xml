@@ -15,7 +15,7 @@
     <dependencies>
         <dependency>
             <groupId>com.pinterest.rocksplicator</groupId>
-            <artifactId>controller-common</artifactId>
+            <artifactId>controller-worker</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
         <dependency>

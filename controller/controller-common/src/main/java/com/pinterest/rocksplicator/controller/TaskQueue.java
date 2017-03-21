@@ -59,17 +59,18 @@ public final class TaskQueue {
    * @param worker the worker who is calling this function
    * @return the dequeued task, or null if no eligible task found
    */
-  public Task dequeueTask(final String worker) {
-    return new Task();
+  public TaskInternal dequeueTask(final String worker) {
+    return new TaskInternal(new Task());
   }
 
   /**
    * Ack the task queue that the task has finished.
    * It will also atomically unlock the cluster the task associated with.
    * @param id which task to finish
+   * @param output output of this task
    * @return false on error
    */
-  public boolean finishTask(final long id) {
+  public boolean finishTask(final long id, final String output) {
     return true;
   }
 
@@ -77,9 +78,10 @@ public final class TaskQueue {
    * Ack the task queue that the task has failed.
    * It will also atomically unlock the cluster the task associated with.
    * @param id which task to fail
+   * @param output output of this task
    * @return false on error
    */
-  public boolean failTask(final long id) {
+  public boolean failTask(final long id, final String output) {
     return true;
   }
 
@@ -174,9 +176,9 @@ public final class TaskQueue {
    * @param state peek tasks in this state only
    * @return the list of tasks found
    */
-  public List<Task> peekTasks(final String clusterName,
+  public List<TaskInternal> peekTasks(final String clusterName,
                               final Integer state) {
-    return new ArrayList<Task>();
+    return new ArrayList<>();
   }
 
   /**
@@ -184,8 +186,8 @@ public final class TaskQueue {
    * @param id id of the task
    * @return task or null
    */
-  public Task findTask(long id) {
-    return new Task();
+  public TaskInternal findTask(long id) {
+    return new TaskInternal(new Task());
   }
 
   /**

@@ -16,21 +16,12 @@
 
 package com.pinterest.rocksplicator.controller;
 
-import java.sql.Timestamp;
 
 /**
  * @author Bo Liu (bol@pinterest.com)
  */
-final public class Task {
-  public long id;
+public class Task {
   public String name;
   public int priority;
-  public int state;
-  public String clusterName;
   public String body;
-  public Timestamp createdAt;
-  public Timestamp runAfter;
-  public Timestamp lastAliveAt;
-  public String claimedWorker;
-  public String output;
 }

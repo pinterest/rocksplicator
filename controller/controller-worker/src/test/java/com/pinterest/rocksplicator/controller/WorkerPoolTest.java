@@ -17,8 +17,8 @@
 package com.pinterest.rocksplicator.controller;
 
 import com.pinterest.rocksplicator.controller.tasks.SleepIncrementTask;
-import com.pinterest.rocksplicator.controller.tasks.TaskBase;
-import com.pinterest.rocksplicator.controller.tasks.TaskFactory;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -31,13 +31,14 @@ import java.util.concurrent.TimeUnit;
 public class WorkerPoolTest {
   static Integer nameCounter = 0;
 
-  private TaskBase getSleepIncrementTask() {
-    Task task = new Task();
-    task.name = "SleepIncrementTask";
-    task.body = "{}";
+  private TaskInternal getSleepIncrementTask() throws JsonProcessingException {
+    TaskInternal task = new TaskInternal(
+        new SleepIncrementTask(1000)
+            .getBean()
+    );
     task.clusterName = nameCounter.toString();
     nameCounter += 1;
-    return TaskFactory.getWorkerTask(task);
+    return task;
   }
 
   @Before
@@ -50,7 +51,7 @@ public class WorkerPoolTest {
     Semaphore idleWorkersSemaphore = new Semaphore(0);
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
-    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore);
+    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue());
     workerPool.assignTask(getSleepIncrementTask());
     Thread.sleep(2000);
     Assert.assertEquals(1, SleepIncrementTask.executionCounter.intValue());
@@ -65,8 +66,8 @@ public class WorkerPoolTest {
     Semaphore idleWorkersSemaphore = new Semaphore(0);
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
-    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore);
-    TaskBase task = getSleepIncrementTask();
+    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue());
+    TaskInternal task = getSleepIncrementTask();
     workerPool.assignTask(task);
     Thread.sleep(2000);
     Assert.assertEquals(1, SleepIncrementTask.executionCounter.intValue());
@@ -81,8 +82,8 @@ public class WorkerPoolTest {
     Semaphore idleWorkersSemaphore = new Semaphore(0);
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
-    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore);
-    TaskBase task = getSleepIncrementTask();
+    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue());
+    TaskInternal task = getSleepIncrementTask();
     workerPool.assignTask(task);
     Thread.sleep(2000);
     Assert.assertEquals(1, SleepIncrementTask.executionCounter.intValue());
@@ -98,11 +99,11 @@ public class WorkerPoolTest {
     Semaphore idleWorkersSemaphore = new Semaphore(0);
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
-    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore);
-    TaskBase task = getSleepIncrementTask();
+    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue());
+    TaskInternal task = getSleepIncrementTask();
     workerPool.assignTask(task);
     Thread.sleep(10);
-    workerPool.abortTask(task.getCluster());
+    workerPool.abortTask(task.clusterName);
     Thread.sleep(100);
     Assert.assertEquals(1, idleWorkersSemaphore.availablePermits());
   }
@@ -112,7 +113,7 @@ public class WorkerPoolTest {
     Semaphore idleWorkersSemaphore = new Semaphore(0);
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(2, 2, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
-    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore);
+    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue());
     workerPool.assignTask(getSleepIncrementTask());
     workerPool.assignTask(getSleepIncrementTask());
     workerPool.assignTask(getSleepIncrementTask());

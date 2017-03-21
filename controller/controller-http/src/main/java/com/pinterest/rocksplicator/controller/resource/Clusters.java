@@ -21,7 +21,6 @@ import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.config.ConfigParser;
 
 import org.apache.curator.framework.CuratorFramework;
-import org.apache.zookeeper.data.Stat;
 import org.eclipse.jetty.http.HttpStatus;
 import org.hibernate.validator.constraints.NotEmpty;
 import org.slf4j.Logger;
@@ -39,7 +38,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 
 /**
  * @author Ang Xu (angxu@pinterest.com)
