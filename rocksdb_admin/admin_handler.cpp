@@ -19,12 +19,12 @@
 
 #include "rocksdb_admin/admin_handler.h"
 
-#include <ifaddrs.h>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "boost/filesystem.hpp"
+#include "common/network_util.h"
 #include "common/rocksdb_glogger/rocksdb_glogger.h"
 #include "common/s3util.h"
 #include "common/thrift_router.h"
@@ -88,26 +88,6 @@ folly::Future<std::unique_ptr<rocksdb::DB>> GetRocksdbFuture(
   return future;
 }
 
-std::string getLocalIPAddress() {
-  ifaddrs* ips;
-  CHECK_EQ(::getifaddrs(&ips), 0);
-  ifaddrs* ips_tmp = ips;
-  std::string local_ip;
-  const std::string interface = "eth0";
-  while (ips_tmp) {
-    if (interface == ips_tmp->ifa_name) {
-      if (ips_tmp->ifa_addr->sa_family == AF_INET) {
-        local_ip = folly::IPAddressV4(
-            (reinterpret_cast<sockaddr_in*>(ips_tmp->ifa_addr))
-            ->sin_addr).str();
-        break;
-      }
-    }
-    ips_tmp = ips_tmp->ifa_next;
-  }
-  freeifaddrs(ips);
-  return local_ip;
-}
 
 std::unique_ptr<::admin::ApplicationDBManager> CreateDBBasedOnConfig(
     const admin::RocksDBOptionsGeneratorType& rocksdb_options) {
@@ -118,7 +98,7 @@ std::unique_ptr<::admin::ApplicationDBManager> CreateDBBasedOnConfig(
   auto cluster_layout = common::parseConfig(std::move(content));
   CHECK(cluster_layout);
 
-  folly::SocketAddress local_addr(getLocalIPAddress(), FLAGS_port);
+  folly::SocketAddress local_addr(common::getLocalIPAddress(), FLAGS_port);
 
   std::vector<std::function<void(void)>> ops;
   for (const auto& segment : cluster_layout->segments) {
