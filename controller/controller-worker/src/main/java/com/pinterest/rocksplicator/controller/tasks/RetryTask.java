@@ -24,6 +24,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * This task provides retry functionality for an arbitrary {@link TaskBase}.
+ * It will keep retrying the given task until 1) the task succeeds or 2) the maxRetry
+ * limit has been reached.
+ *
  * @author Ang Xu (angxu@pinterest.com)
  */
 final class RetryTask extends TaskBase<RetryTask.Param> {
@@ -56,7 +60,7 @@ final class RetryTask extends TaskBase<RetryTask.Param> {
       }
 
       DelayAckTaskQueue.State state = dq.getState();
-      if (t != null || state.state == DelayAckTaskQueue.State.FAILED) {
+      if (t != null || state.state == DelayAckTaskQueue.State.StateName.FAILED) {
         String output = (t == null ? state.output : t.getMessage());
         long nextId = taskQueue.finishTaskAndEnqueueRunningTask(id, output, getParameter().getTask(), ctx.getWorker());
         if (nextId < 0) {
@@ -65,7 +69,7 @@ final class RetryTask extends TaskBase<RetryTask.Param> {
         }
         id = nextId;
         retry ++;
-      } else if (state.state == DelayAckTaskQueue.State.DONE) {
+      } else if (state.state == DelayAckTaskQueue.State.StateName.DONE) {
         if (!taskQueue.finishTask(id, state.output)) {
           LOG.error("Failed to finish task {} with result {}", id, state.output);
         }

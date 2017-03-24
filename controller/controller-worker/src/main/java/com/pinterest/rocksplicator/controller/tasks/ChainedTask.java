@@ -26,6 +26,11 @@ import org.slf4j.LoggerFactory;
 import java.util.Stack;
 
 /**
+ * This task is a wrapper of two individual tasks: t1 and t2. Upon running, it will
+ * try to execute t1 first; and if t1 returns successfully, it will execute t2 and
+ * mark t1 as done in an atomic manner, otherwise it marks t1 as failed and t2 will
+ * not be executed at all.
+ *
  * @author Ang Xu (angxu@pinterest.com)
  */
 final class ChainedTask extends TaskBase<ChainedTask.Param> {
@@ -64,10 +69,10 @@ final class ChainedTask extends TaskBase<ChainedTask.Param> {
         task.process(ctx);
 
         DelayAckTaskQueue.State state = dq.getState();
-        if (state.state == DelayAckTaskQueue.State.UNFINISHED) {
+        if (state.state == DelayAckTaskQueue.State.StateName.UNFINISHED) {
           LOG.error("Task {} finished processing without ack", id);
           return;
-        } else if (state.state == DelayAckTaskQueue.State.FAILED) {
+        } else if (state.state == DelayAckTaskQueue.State.StateName.FAILED) {
           LOG.error("Task {} failed with reason: {}. Abort the task chain.", id, state.output);
           return;
         } else if (tasks.isEmpty()) {

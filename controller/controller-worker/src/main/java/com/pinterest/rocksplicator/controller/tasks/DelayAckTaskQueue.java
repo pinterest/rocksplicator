@@ -35,14 +35,17 @@ class DelayAckTaskQueue implements TaskQueue {
   private final AtomicReference<State> stateRef;
 
   public static class State {
-    public static int UNFINISHED = 0;
-    public static int DONE = 1;
-    public static int FAILED = 2;
 
-    final int state;
-    final String output;
+    public enum StateName {
+      UNFINISHED,
+      DONE,
+      FAILED
+    }
 
-    State(int state, String output) {
+    public final StateName state;
+    public final String output;
+
+    State(StateName state, String output) {
       this.state = state;
       this.output = output;
     }
@@ -50,7 +53,7 @@ class DelayAckTaskQueue implements TaskQueue {
 
   DelayAckTaskQueue(TaskQueue taskQueue) {
     this.taskQueue = taskQueue;
-    this.stateRef = new AtomicReference<>(new State(State.UNFINISHED, ""));
+    this.stateRef = new AtomicReference<>(new State(State.StateName.UNFINISHED, ""));
   }
 
   public State getState() {
@@ -62,10 +65,10 @@ class DelayAckTaskQueue implements TaskQueue {
     State s;
     do {
       s = stateRef.get();
-      if (s.state != State.UNFINISHED) {
+      if (s.state != State.StateName.UNFINISHED) {
         return false;
       }
-    } while (!stateRef.compareAndSet(s, new State(State.DONE, output)));
+    } while (!stateRef.compareAndSet(s, new State(State.StateName.DONE, output)));
 
     return true;
   }
@@ -75,10 +78,10 @@ class DelayAckTaskQueue implements TaskQueue {
     State s;
     do {
       s = stateRef.get();
-      if (s.state != State.UNFINISHED) {
+      if (s.state != State.StateName.UNFINISHED) {
         return false;
       }
-    } while (!stateRef.compareAndSet(s, new State(State.FAILED, reason)));
+    } while (!stateRef.compareAndSet(s, new State(State.StateName.FAILED, reason)));
 
     return true;
   }
