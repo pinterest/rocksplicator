@@ -31,10 +31,10 @@ import java.util.concurrent.TimeUnit;
 public class WorkerPoolTest {
   static Integer nameCounter = 0;
 
-  private TaskInternal getSleepIncrementTask() throws JsonProcessingException {
-    TaskInternal task = new TaskInternal(
+  private Task getSleepIncrementTask() throws JsonProcessingException {
+    Task task = new Task(
         new SleepIncrementTask(1000)
-            .getBean()
+            .getEntity()
     );
     task.clusterName = nameCounter.toString();
     nameCounter += 1;
@@ -67,7 +67,7 @@ public class WorkerPoolTest {
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
     WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue());
-    TaskInternal task = getSleepIncrementTask();
+    Task task = getSleepIncrementTask();
     workerPool.assignTask(task);
     Thread.sleep(2000);
     Assert.assertEquals(1, SleepIncrementTask.executionCounter.intValue());
@@ -83,7 +83,7 @@ public class WorkerPoolTest {
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
     WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue());
-    TaskInternal task = getSleepIncrementTask();
+    Task task = getSleepIncrementTask();
     workerPool.assignTask(task);
     Thread.sleep(2000);
     Assert.assertEquals(1, SleepIncrementTask.executionCounter.intValue());
@@ -100,7 +100,7 @@ public class WorkerPoolTest {
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
     WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue());
-    TaskInternal task = getSleepIncrementTask();
+    Task task = getSleepIncrementTask();
     workerPool.assignTask(task);
     Thread.sleep(10);
     workerPool.abortTask(task.clusterName);

@@ -16,7 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
-import com.pinterest.rocksplicator.controller.Task;
+import com.pinterest.rocksplicator.controller.TaskEntity;
 
 import io.dropwizard.util.Generics;
 import org.slf4j.Logger;
@@ -33,7 +33,7 @@ public final class TaskFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(TaskFactory.class);
 
-  public static TaskBase getWorkerTask(Task task) {
+  public static TaskBase getWorkerTask(TaskEntity task) {
     try {
       Class<TaskBase> taskClazz = loadTaskClass(task.name);
       Class<Parameter> paramClazz = Generics.getTypeParameter(taskClazz, Parameter.class);

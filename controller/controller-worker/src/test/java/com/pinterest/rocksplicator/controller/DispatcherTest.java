@@ -45,10 +45,10 @@ public class DispatcherTest {
   private int sleepTimeMillis;
   private TaskQueue taskQueue;
 
-  private TaskInternal getSleepIncrementTaskFromQueue() throws JsonProcessingException {
-    TaskInternal task = new TaskInternal(
+  private Task getSleepIncrementTaskFromQueue() throws JsonProcessingException {
+    Task task = new Task(
         new SleepIncrementTask(sleepTimeMillis)
-            .getBean()
+            .getEntity()
     );
     task.clusterName = nameCounter.toString();
     nameCounter += 1;

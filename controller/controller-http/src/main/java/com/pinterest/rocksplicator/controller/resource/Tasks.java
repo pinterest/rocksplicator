@@ -16,7 +16,6 @@
 
 package com.pinterest.rocksplicator.controller.resource;
 
-import com.pinterest.rocksplicator.controller.TaskInternal;
 import com.pinterest.rocksplicator.controller.Task;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 import com.pinterest.rocksplicator.controller.bean.TaskState;
@@ -54,7 +53,7 @@ public class Tasks {
   @GET
   @Path("/{id : [0-9]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public TaskInternal get(@PathParam("id") Long id) {
+  public Task get(@PathParam("id") Long id) {
     return taskQueue.findTask(id);
   }
 
@@ -68,8 +67,8 @@ public class Tasks {
    */
   @GET
   @Produces(MediaType.APPLICATION_JSON)
-  public List<TaskInternal> findTasks(@QueryParam("clusterName") Optional<String> clusterName,
-                                      @QueryParam("state") Optional<TaskState> state) {
+  public List<Task> findTasks(@QueryParam("clusterName") Optional<String> clusterName,
+                              @QueryParam("state") Optional<TaskState> state) {
     if (!clusterName.isPresent() && !state.isPresent()) {
       throw new WebApplicationException("Either clusterName or state must be present.",
           HttpStatus.BAD_REQUEST_400);

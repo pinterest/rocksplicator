@@ -16,7 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
-import com.pinterest.rocksplicator.controller.Task;
+import com.pinterest.rocksplicator.controller.TaskEntity;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
@@ -66,17 +66,17 @@ public abstract class TaskBase<PARAM extends Parameter> {
   }
 
   /**
-   * Returns a {@link Task} bean which represents the content of this task
+   * Returns a {@link TaskEntity} which represents the content of this task
    *
-   * @return Task bean
+   * @return TaskEntity entity of the task
    * @throws JsonProcessingException
    */
-  public Task getBean() throws JsonProcessingException {
-    Task task = new Task();
-    task.name = getName();
-    task.body = getParameter().serialize();
-    task.priority = getPriority();
-    return task;
+  public TaskEntity getEntity() throws JsonProcessingException {
+    TaskEntity taskEntity = new TaskEntity();
+    taskEntity.name = getName();
+    taskEntity.body = getParameter().serialize();
+    taskEntity.priority = getPriority();
+    return taskEntity;
   }
 
   /**

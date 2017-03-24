@@ -23,11 +23,9 @@ import com.pinterest.rocksplicator.controller.tasks.TaskFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Timestamp;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
 import java.util.concurrent.Semaphore;
 
 /**
@@ -60,7 +58,7 @@ public final class WorkerPool {
    * @param task the task to execute
    * @throws Exception if there is a running task for the cluster.
    */
-  public synchronized boolean assignTask(TaskInternal task) throws Exception {
+  public synchronized boolean assignTask(Task task) throws Exception {
     if (task == null) {
       LOG.error("The task is null, cannot be assigned");
       return false;
@@ -99,7 +97,7 @@ public final class WorkerPool {
       LOG.error("No running task of cluster " + cluster);
       return false;
     }
-    // An Interrupted exception will be thrown to Task, and onFailure() will be triggered.
+    // An Interrupted exception will be thrown to TaskEntity, and onFailure() will be triggered.
     return runningTask.cancel(true);
   }
 

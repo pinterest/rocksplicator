@@ -49,7 +49,7 @@ public final class TaskDispatcher {
     this.taskQueue = taskQueue;
   }
 
-  private void failTaskAndReleaseSemaphore(TaskInternal dequeuedTask,
+  private void failTaskAndReleaseSemaphore(Task dequeuedTask,
                                            Semaphore idleWorkersSemaphore,
                                            String reason) {
     if (dequeuedTask != null && !taskQueue.failTask(dequeuedTask.id, reason)) {
@@ -75,7 +75,7 @@ public final class TaskDispatcher {
             LOG.info("Pulling tasks from DB queue, available workers: "
                 + idleWorkersSemaphore.availablePermits());
             idleWorkersSemaphore.acquire();
-            TaskInternal dequeuedTask = taskQueue.dequeueTask(WorkerConfig.getHostName());
+            Task dequeuedTask = taskQueue.dequeueTask(WorkerConfig.getHostName());
             if (dequeuedTask == null) {
               LOG.info("No outstanding pending tasks to be dequeued");
               failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore, null);
