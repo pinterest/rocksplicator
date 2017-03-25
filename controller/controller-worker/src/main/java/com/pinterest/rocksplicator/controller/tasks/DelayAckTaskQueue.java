@@ -17,7 +17,7 @@
 package com.pinterest.rocksplicator.controller.tasks;
 
 import com.pinterest.rocksplicator.controller.Task;
-import com.pinterest.rocksplicator.controller.TaskInternal;
+import com.pinterest.rocksplicator.controller.TaskEntity;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 
 import java.util.List;
@@ -93,21 +93,21 @@ class DelayAckTaskQueue implements TaskQueue {
   }
 
   @Override
-  public boolean enqueueTask(final Task task,
+  public boolean enqueueTask(final TaskEntity task,
                              final String clusterName,
                              final int runDelaySeconds) {
     return taskQueue.enqueueTask(task, clusterName, runDelaySeconds);
   }
 
   @Override
-  public TaskInternal dequeueTask(final String worker) {
+  public Task dequeueTask(final String worker) {
     return taskQueue.dequeueTask(worker);
   }
 
   @Override
   public long finishTaskAndEnqueueRunningTask(final long id,
                                               final String output,
-                                              final Task newTask,
+                                              final TaskEntity newTask,
                                               final String worker) {
     return taskQueue.finishTaskAndEnqueueRunningTask(id, output, newTask, worker);
   }
@@ -115,7 +115,7 @@ class DelayAckTaskQueue implements TaskQueue {
   @Override
   public boolean finishTaskAndEnqueuePendingTask(final long id,
                                                  final String output,
-                                                 final Task newTask,
+                                                 final TaskEntity newTask,
                                                  final int runDelaySeconds) {
     return taskQueue.finishTaskAndEnqueuePendingTask(id, output, newTask, runDelaySeconds);
   }
@@ -151,13 +151,13 @@ class DelayAckTaskQueue implements TaskQueue {
   }
 
   @Override
-  public List<TaskInternal> peekTasks(final String clusterName,
+  public List<Task> peekTasks(final String clusterName,
                                       final Integer state) {
     return taskQueue.peekTasks(clusterName, state);
   }
 
   @Override
-  public TaskInternal findTask(long id) {
+  public Task findTask(long id) {
     return taskQueue.findTask(id);
   }
 

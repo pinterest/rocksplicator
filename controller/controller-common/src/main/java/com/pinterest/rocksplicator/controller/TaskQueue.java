@@ -87,26 +87,30 @@ public interface TaskQueue {
    * Atomically finish a task, and enqueue a new task associated with the same cluster as task(id).
    * The newly enqueued task if of priority 0 and in running state.
    * @param id which task to finish
+   * @param output output of the finished task
    * @param newTaskEntity the task entity of the new task
    * @param worker the worker who is calling this function
    * @return the task id for the newly enqueued task on success, -1 on error
    */
   default long finishTaskAndEnqueueRunningTask(final long id,
-                                              final TaskEntity newTaskEntity,
-                                              final String worker) {
+                                               final String output,
+                                               final TaskEntity newTaskEntity,
+                                               final String worker) {
     return 0;
   }
 
   /**
    * Atomically ack the task queue that the task has finished, and enqueue a new task.
    * @param id which task to finish
+   * @param output output of the finished task
    * @param taskEntity the task entity of the task to enqueue
    * @param runDelaySeconds the run delay seconds for the task to enqueue
    * @return false on error
    */
   default boolean finishTaskAndEnqueuePendingTask(final long id,
-                                                 final TaskEntity taskEntity,
-                                                 final int runDelaySeconds) {
+                                                  final String output,
+                                                  final TaskEntity taskEntity,
+                                                  final int runDelaySeconds) {
     return true;
   }
 

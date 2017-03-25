@@ -16,7 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
-import com.pinterest.rocksplicator.controller.Task;
+import com.pinterest.rocksplicator.controller.TaskEntity;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -53,7 +53,7 @@ final class ChainedTask extends TaskBase<ChainedTask.Param> {
     final String worker = ctx.getWorker();
     final TaskQueue taskQueue = ctx.getTaskQueue();
 
-    Stack<Task> tasks = new Stack<>();
+    Stack<TaskEntity> tasks = new Stack<>();
     tasks.push(getParameter().getT2());
     tasks.push(getParameter().getT1());
 
@@ -95,25 +95,25 @@ final class ChainedTask extends TaskBase<ChainedTask.Param> {
 
   public static class Param extends Parameter {
     @JsonProperty
-    private Task t1; // first task to execute
+    private TaskEntity t1; // first task to execute
 
     @JsonProperty
-    private Task t2; // second task to execute
+    private TaskEntity t2; // second task to execute
 
-    public Task getT1() {
+    public TaskEntity getT1() {
       return t1;
     }
 
-    public Param setT1(Task t1) {
+    public Param setT1(TaskEntity t1) {
       this.t1 = t1;
       return this;
     }
 
-    public Task getT2() {
+    public TaskEntity getT2() {
       return t2;
     }
 
-    public Param setT2(Task t2) {
+    public Param setT2(TaskEntity t2) {
       this.t2 = t2;
       return this;
     }

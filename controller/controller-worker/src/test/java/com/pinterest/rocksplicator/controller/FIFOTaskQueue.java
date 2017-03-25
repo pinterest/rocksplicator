@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class FIFOTaskQueue implements TaskQueue {
 
   private final AtomicLong currentId = new AtomicLong(0);
-  private final BlockingQueue<TaskInternal> taskQueue;
+  private final BlockingQueue<Task> taskQueue;
   private final ConcurrentMap<Long, String> result = new ConcurrentHashMap<>();
 
   public FIFOTaskQueue(int capacity) {
@@ -43,11 +43,11 @@ public class FIFOTaskQueue implements TaskQueue {
   }
 
   @Override
-  public boolean enqueueTask(final Task task,
+  public boolean enqueueTask(final TaskEntity task,
                       final String clusterName,
                       final int runDelaySeconds) {
 
-    TaskInternal taskInternal = new TaskInternal(task);
+    Task taskInternal = new Task(task);
     taskInternal.id = currentId.getAndIncrement();
     taskInternal.clusterName = clusterName;
     taskInternal.runAfter = new Timestamp(System.currentTimeMillis() + runDelaySeconds * 1000);
@@ -56,12 +56,12 @@ public class FIFOTaskQueue implements TaskQueue {
   }
 
   @Override
-  public TaskInternal dequeueTask(final String worker) {
+  public Task dequeueTask(final String worker) {
     if (taskQueue.peek() == null) {
       return null;
     }
 
-    TaskInternal taskInternal = taskQueue.poll();
+    Task taskInternal = taskQueue.poll();
     if (taskInternal != null) {
       taskInternal.claimedWorker = worker;
     }
@@ -80,9 +80,9 @@ public class FIFOTaskQueue implements TaskQueue {
 
   @Override
   public long finishTaskAndEnqueueRunningTask(final long id,
-                                               final String output,
-                                               final Task newTask,
-                                               final String worker) {
+                                              final String output,
+                                              final TaskEntity newTask,
+                                              final String worker) {
     result.putIfAbsent(id, output);
     return currentId.getAndIncrement();
   }

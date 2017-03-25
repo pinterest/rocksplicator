@@ -134,10 +134,10 @@ public class DispatcherTest {
 
   @Test
   public void testChainedTask() throws Exception {
-    Task task = new SleepIncrementTask(100)
+    TaskEntity task = new SleepIncrementTask(100)
         .andThen(new SleepIncrementTask(150))
         .andThen(new SleepIncrementTask(200))
-        .getBean();
+        .getEntity();
 
     final CountDownLatch latch = new CountDownLatch(3);
     FIFOTaskQueue tq = new FIFOTaskQueue(10) {
@@ -150,7 +150,7 @@ public class DispatcherTest {
       @Override
       public long finishTaskAndEnqueueRunningTask(final long id,
                                                   final String output,
-                                                  final Task newTask,
+                                                  final TaskEntity newTask,
                                                   final String worker) {
         latch.countDown();
         return super.finishTaskAndEnqueueRunningTask(id, output, newTask, worker);
@@ -178,7 +178,7 @@ public class DispatcherTest {
   @Test
   public void testRetryTask() throws Exception {
     final String errorMsg = "Boom!!!";
-    Task task = new ThrowingTask(errorMsg).retry(3).getBean();
+    TaskEntity task = new ThrowingTask(errorMsg).retry(3).getEntity();
     final CountDownLatch latch = new CountDownLatch(3);
     FIFOTaskQueue tq = new FIFOTaskQueue(10) {
       @Override
@@ -190,7 +190,7 @@ public class DispatcherTest {
       @Override
       public long finishTaskAndEnqueueRunningTask(final long id,
                                                   final String output,
-                                                  final Task newTask,
+                                                  final TaskEntity newTask,
                                                   final String worker) {
         latch.countDown();
         return super.finishTaskAndEnqueueRunningTask(id, output, newTask, worker);

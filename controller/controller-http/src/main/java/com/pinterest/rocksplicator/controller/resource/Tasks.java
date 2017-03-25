@@ -53,7 +53,7 @@ public class Tasks {
   @GET
   @Path("/{id : [0-9]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public TaskInternal get(@PathParam("id") Long id) {
+  public Task get(@PathParam("id") Long id) {
     return taskQueue.findTask(id);
   }
 
@@ -67,7 +67,7 @@ public class Tasks {
    */
   @GET
   @Produces(MediaType.APPLICATION_JSON)
-  public List<TaskInternal> findTasks(@QueryParam("clusterName") Optional<String> clusterName,
+  public List<Task> findTasks(@QueryParam("clusterName") Optional<String> clusterName,
                                       @QueryParam("state") Optional<TaskState> state) {
     if (!clusterName.isPresent() && !state.isPresent()) {
       throw new WebApplicationException("Either clusterName or state must be present.",

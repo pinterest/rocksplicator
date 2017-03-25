@@ -94,8 +94,8 @@ public abstract class TaskBase<PARAM extends Parameter> {
   public TaskBase andThen(TaskBase nextTask) throws JsonProcessingException {
     return new ChainedTask(
         new ChainedTask.Param()
-            .setT1(this.getBean())
-            .setT2(nextTask.getBean())
+            .setT1(this.getEntity())
+            .setT2(nextTask.getEntity())
     );
   }
 
@@ -108,7 +108,7 @@ public abstract class TaskBase<PARAM extends Parameter> {
   public TaskBase retry(int maxRetry) throws JsonProcessingException {
     return new RetryTask(
         new RetryTask.Param()
-            .setTask(this.getBean())
+            .setTask(this.getEntity())
             .setMaxRetry(maxRetry)
     );
   }

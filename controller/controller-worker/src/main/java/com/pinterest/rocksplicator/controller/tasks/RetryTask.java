@@ -17,6 +17,7 @@
 package com.pinterest.rocksplicator.controller.tasks;
 
 import com.pinterest.rocksplicator.controller.Task;
+import com.pinterest.rocksplicator.controller.TaskEntity;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -84,16 +85,16 @@ final class RetryTask extends TaskBase<RetryTask.Param> {
 
   public static class Param extends Parameter {
     @JsonProperty
-    private Task task;
+    private TaskEntity task;
 
     @JsonProperty
     private int maxRetry;
 
-    public Task getTask() {
+    public TaskEntity getTask() {
       return task;
     }
 
-    public RetryTask.Param setTask(Task task) {
+    public RetryTask.Param setTask(TaskEntity task) {
       this.task = task;
       return this;
     }
