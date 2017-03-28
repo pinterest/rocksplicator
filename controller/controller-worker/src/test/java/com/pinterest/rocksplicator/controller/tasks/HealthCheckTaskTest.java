@@ -101,8 +101,7 @@ public class HealthCheckTaskTest {
 
   @Test
   public void testFail() throws Exception {
-    final String errorMsg = "Oops..";
-    doThrow(new TException(errorMsg)).when(client).ping();
+    doThrow(new TException()).when(client).ping();
     when(clientFactory.getClient(any())).thenReturn(client);
 
     HealthCheckTask t = new HealthCheckTask(
@@ -117,8 +116,10 @@ public class HealthCheckTaskTest {
     Context ctx = new Context(123, CLUSTER, taskQueue, null);
     t.process(ctx);
 
-    Assert.assertTrue(taskQueue.getResult(123).startsWith("Cluster devtest is unhealthy"));
-    Assert.assertTrue(taskQueue.getResult(123).contains(errorMsg));
+    Assert.assertTrue(taskQueue.getResult(123).startsWith("Unable to ping hosts"));
+    Assert.assertTrue(taskQueue.getResult(123).contains("127.0.0.1:8090"));
+    Assert.assertTrue(taskQueue.getResult(123).contains("127.0.0.1:8091"));
+    Assert.assertTrue(taskQueue.getResult(123).contains("127.0.0.1:8092"));
   }
 
 }

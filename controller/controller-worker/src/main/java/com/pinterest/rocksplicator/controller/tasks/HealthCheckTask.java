@@ -25,8 +25,7 @@ import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.curator.framework.CuratorFramework;
-import org.apache.curator.framework.recipes.locks.InterProcessLock;
-import org.apache.curator.framework.recipes.locks.InterProcessMutex;
+import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,9 +58,7 @@ public class HealthCheckTask extends TaskBase<HealthCheckTask.Param> {
   public void process(Context ctx) throws Exception {
     final String clusterName = ctx.getCluster();
     final String zkPath = getParameter().getZkPath();
-    final InterProcessLock lock =
-        new InterProcessMutex(zkClient,  zkPath + clusterName + ".lock");
-    lock.acquire();
+
     try {
       byte[] data = zkClient.getData().forPath(zkPath + clusterName);
       ClusterBean clusterBean = ConfigParser.parseClusterConfig(clusterName, data);
@@ -76,19 +73,28 @@ public class HealthCheckTask extends TaskBase<HealthCheckTask.Param> {
       }
 
       // ping all hosts
+      Set<String> badHosts = new HashSet<>();
       for (InetSocketAddress hostAddr : hosts) {
-        clientFactory.getClient(hostAddr).ping();
+        try {
+          clientFactory.getClient(hostAddr).ping();
+        } catch (TException tex) {
+          // record bad host
+          badHosts.add(hostAddr.toString());
+        }
+      }
+
+      if (!badHosts.isEmpty()) {
+        ctx.getTaskQueue().failTask(ctx.getId(),
+            String.format("Unable to ping hosts: %s", badHosts));
+        return;
       }
 
       LOG.info("All hosts are good");
-
       ctx.getTaskQueue().finishTask(ctx.getId(),
           String.format("Cluster %s is healthy", clusterName));
     } catch (Exception ex) {
       ctx.getTaskQueue().failTask(ctx.getId(),
           String.format("Cluster %s is unhealthy, reason = %s", clusterName, ex.getMessage()));
-    } finally {
-      lock.release();
     }
   }
 

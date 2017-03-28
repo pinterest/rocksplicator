@@ -21,10 +21,11 @@ import com.pinterest.rocksdb_admin.thrift.Admin;
 import java.net.InetSocketAddress;
 
 /**
+ * Factory class to generate clients to rocksdb_admin.
+ *
  * @author Ang Xu (angxu@pinterest.com)
  */
 public interface AdminClientFactory {
 
   Admin.Client getClient(InetSocketAddress addr);
-
 }
