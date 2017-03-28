@@ -22,6 +22,7 @@ import com.pinterest.rocksplicator.controller.bean.SegmentBean;
 import com.pinterest.rocksplicator.controller.bean.ShardBean;
 import com.pinterest.rocksplicator.controller.config.ConfigParser;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
+import com.pinterest.rocksplicator.controller.util.ZKUtil;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.curator.framework.CuratorFramework;
@@ -57,10 +58,9 @@ public class HealthCheckTask extends TaskBase<HealthCheckTask.Param> {
   @Override
   public void process(Context ctx) throws Exception {
     final String clusterName = ctx.getCluster();
-    final String zkPath = getParameter().getZkPath();
 
     try {
-      byte[] data = zkClient.getData().forPath(zkPath + clusterName);
+      byte[] data = zkClient.getData().forPath(ZKUtil.getClusterConfigZKPath(clusterName));
       ClusterBean clusterBean = ConfigParser.parseClusterConfig(clusterName, data);
 
       Set<InetSocketAddress> hosts = new HashSet<>();
@@ -101,7 +101,7 @@ public class HealthCheckTask extends TaskBase<HealthCheckTask.Param> {
 
   /**
    * Count the number of replicas for each shard within a segment.
-   * Throws exception is the number doesn't match the expected one.
+   * Throws exception if the number doesn't match the expected one.
    */
   private void checkSegment(SegmentBean segment, int numReplicas) throws Exception {
     Map<Integer, Integer> shardCount = new HashMap<>();
@@ -134,20 +134,7 @@ public class HealthCheckTask extends TaskBase<HealthCheckTask.Param> {
   public static class Param extends Parameter {
 
     @JsonProperty
-    private String zkPath;
-
-    @JsonProperty
     private int numReplicas;
-
-
-    public String getZkPath() {
-      return zkPath;
-    }
-
-    public Param setZkPath(String zkPath) {
-      this.zkPath = zkPath;
-      return this;
-    }
 
     public int getNumReplicas() {
       return numReplicas;

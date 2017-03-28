@@ -19,6 +19,7 @@ package com.pinterest.rocksplicator.controller.tasks;
 import com.pinterest.rocksdb_admin.thrift.Admin;
 import com.pinterest.rocksplicator.controller.FIFOTaskQueue;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
+import com.pinterest.rocksplicator.controller.util.ZKUtil;
 
 import com.google.inject.Guice;
 import com.google.inject.Injector;
@@ -43,7 +44,6 @@ import static org.mockito.Mockito.*;
  */
 public class HealthCheckTaskTest {
 
-  private static final String ZK_PATH = "/config/services/rocksdb/";
   private static final String CLUSTER = "devtest";
   private static final String CONFIG =
       "{" +
@@ -73,8 +73,8 @@ public class HealthCheckTaskTest {
         zkServer.getConnectString(), new RetryOneTime(3000));
     zkClient.start();
 
-    zkClient.createContainers(ZK_PATH + CLUSTER);
-    zkClient.setData().forPath(ZK_PATH + CLUSTER, CONFIG.getBytes());
+    zkClient.createContainers(ZKUtil.getClusterConfigZKPath(CLUSTER));
+    zkClient.setData().forPath(ZKUtil.getClusterConfigZKPath(CLUSTER), CONFIG.getBytes());
 
     TaskModule module = new TaskModule(zkClient, clientFactory);
     injector = Guice.createInjector(module);
@@ -91,9 +91,7 @@ public class HealthCheckTaskTest {
     when(clientFactory.getClient(any())).thenReturn(client);
 
     HealthCheckTask t = new HealthCheckTask(
-        new HealthCheckTask.Param()
-            .setZkPath(ZK_PATH)
-            .setNumReplicas(3)
+        new HealthCheckTask.Param().setNumReplicas(3)
     );
     injector.injectMembers(t);
 
@@ -110,9 +108,7 @@ public class HealthCheckTaskTest {
     when(clientFactory.getClient(any())).thenReturn(client);
 
     HealthCheckTask t = new HealthCheckTask(
-        new HealthCheckTask.Param()
-            .setZkPath(ZK_PATH)
-            .setNumReplicas(3)
+        new HealthCheckTask.Param().setNumReplicas(3)
     );
     injector.injectMembers(t);
 
