@@ -57,7 +57,7 @@ public class HealthCheckTask extends TaskBase<HealthCheckTask.Param> {
 
   @Override
   public void process(Context ctx) throws Exception {
-    final String clusterName = getParameter().getClusterName();
+    final String clusterName = ctx.getCluster();
     final String zkPath = getParameter().getZkPath();
     final InterProcessLock lock =
         new InterProcessMutex(zkClient,  zkPath + clusterName + ".lock");
@@ -128,22 +128,11 @@ public class HealthCheckTask extends TaskBase<HealthCheckTask.Param> {
   public static class Param extends Parameter {
 
     @JsonProperty
-    private String clusterName;
-
-    @JsonProperty
     private String zkPath;
 
     @JsonProperty
     private int numReplicas;
 
-    public String getClusterName() {
-      return clusterName;
-    }
-
-    public Param setClusterName(String clusterName) {
-      this.clusterName = clusterName;
-      return this;
-    }
 
     public String getZkPath() {
       return zkPath;

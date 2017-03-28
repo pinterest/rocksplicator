@@ -20,34 +20,28 @@
         <dependency>
             <groupId>org.apache.thrift</groupId>
             <artifactId>libthrift</artifactId>
-            <version>0.5.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.twitter</groupId>
-            <artifactId>scrooge-core_2.9.2</artifactId>
-            <version>3.4.0</version>
-        </dependency>
-        <dependency>
-            <groupId>com.twitter</groupId>
-            <artifactId>finagle-thrift_2.9.2</artifactId>
-            <version>6.5.1</version>
+            <version>0.10.0</version>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
             <plugin>
-                <groupId>com.twitter</groupId>
-                <artifactId>scrooge-maven-plugin</artifactId>
-                <!-- this version must match the version from scrooge-gen.ivy.xml -->
-                <version>3.16.0</version>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.6.1</version>
                 <configuration>
-                    <language>java</language>
-                    <!-- default is scala, can also be java -->
-                    <thriftOpts>
-                        <!-- add other Scrooge command line options using thriftOpts -->
-                        <thriftOpt>--finagle</thriftOpt>
-                    </thriftOpts>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.thrift</groupId>
+                <artifactId>thrift-maven-plugin</artifactId>
+                <version>0.10.0</version>
+                <configuration>
+                    <thriftExecutable>/usr/local/bin/thrift</thriftExecutable>
+                    <thriftSourceRoot>${basedir}/../../rocksdb_admin</thriftSourceRoot>
                 </configuration>
                 <executions>
                     <execution>

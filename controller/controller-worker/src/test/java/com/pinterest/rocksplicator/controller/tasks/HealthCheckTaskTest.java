@@ -25,9 +25,7 @@ import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.RetryOneTime;
 import org.apache.curator.test.TestingServer;
 import org.apache.thrift.TException;
-import org.mockito.Matchers;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
@@ -36,8 +34,8 @@ import org.testng.annotations.Test;
 
 import java.io.IOException;
 
-
 import static org.mockito.Mockito.*;
+
 /**
  * @author Ang Xu (angxu@pinterest.com)
  */
@@ -58,7 +56,7 @@ public class HealthCheckTaskTest {
   private TestingServer zkServer;
   private CuratorFramework zkClient;
 
-  @Mock private Admin.Iface server;
+  @Mock private Admin.Client client;
   @Mock private AdminClientFactory clientFactory;
 
 
@@ -84,11 +82,10 @@ public class HealthCheckTaskTest {
 
   @Test
   public void testSuccessful() throws Exception {
-    when(clientFactory.getClient(any())).thenReturn(server);
+    when(clientFactory.getClient(any())).thenReturn(client);
 
     HealthCheckTask t = new HealthCheckTask(
         new HealthCheckTask.Param()
-            .setClusterName(CLUSTER)
             .setZkPath(ZK_PATH)
             .setNumReplicas(3)
     );
@@ -105,12 +102,11 @@ public class HealthCheckTaskTest {
   @Test
   public void testFail() throws Exception {
     final String errorMsg = "Oops..";
-    doThrow(new TException(errorMsg)).when(server).ping();
-    Mockito.when(clientFactory.getClient(Matchers.any())).thenReturn(server);
+    doThrow(new TException(errorMsg)).when(client).ping();
+    when(clientFactory.getClient(any())).thenReturn(client);
 
     HealthCheckTask t = new HealthCheckTask(
         new HealthCheckTask.Param()
-            .setClusterName(CLUSTER)
             .setZkPath(ZK_PATH)
             .setNumReplicas(3)
     );

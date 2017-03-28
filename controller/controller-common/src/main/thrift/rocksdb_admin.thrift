@@ -1,1 +1,0 @@
-../../../../../rocksdb_admin/rocksdb_admin.thrift

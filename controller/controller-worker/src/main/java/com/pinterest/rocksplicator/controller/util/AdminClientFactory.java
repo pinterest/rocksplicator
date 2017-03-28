@@ -25,6 +25,6 @@ import java.net.InetSocketAddress;
  */
 public interface AdminClientFactory {
 
-  Admin.Iface getClient(InetSocketAddress addr);
+  Admin.Client getClient(InetSocketAddress addr);
 
 }
