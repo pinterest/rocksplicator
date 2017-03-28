@@ -18,6 +18,8 @@ package com.pinterest.rocksplicator.controller.tasks;
 
 import com.pinterest.rocksplicator.controller.TaskEntity;
 
+import com.google.inject.Guice;
+import com.google.inject.Injector;
 import io.dropwizard.util.Generics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,13 +34,23 @@ import org.slf4j.LoggerFactory;
 public final class TaskFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(TaskFactory.class);
+  private static volatile Injector INJECTOR;
+
+  public static void setInjector(Injector injector) {
+    INJECTOR = injector;
+  }
 
   public static TaskBase getWorkerTask(TaskEntity task) {
     try {
       Class<TaskBase> taskClazz = loadTaskClass(task.name);
       Class<Parameter> paramClazz = Generics.getTypeParameter(taskClazz, Parameter.class);
       Parameter parameter = Parameter.deserialize(task.body, paramClazz);
-      return taskClazz.getConstructor(paramClazz).newInstance(parameter);
+      TaskBase taskBase = taskClazz.getConstructor(paramClazz).newInstance(parameter);
+      Injector injector = INJECTOR;
+      if (injector != null) {
+        injector.injectMembers(taskBase);
+      }
+      return taskBase;
     } catch (Exception e) {
       LOG.error("Cannot instantiate the implementation of " + task.name, e);
       return null;

@@ -45,6 +45,7 @@ public class WorkerService {
   public static void main(String[] args) {
     try {
       int workerPoolSize = WorkerConfig.getWorkerPoolSize();
+      //TODO(angxu) initialize dependency injector and set it to TaskFactory
       Semaphore idleWorkersSemaphore = new Semaphore(workerPoolSize);
       ThreadPoolExecutor threadPoolExecutor =
           new ThreadPoolExecutor(workerPoolSize, workerPoolSize, 0,

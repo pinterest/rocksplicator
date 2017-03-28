@@ -20,6 +20,8 @@ import com.pinterest.rocksdb_admin.thrift.Admin;
 import com.pinterest.rocksplicator.controller.FIFOTaskQueue;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
 
+import com.google.inject.Guice;
+import com.google.inject.Injector;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.RetryOneTime;
@@ -55,6 +57,7 @@ public class HealthCheckTaskTest {
 
   private TestingServer zkServer;
   private CuratorFramework zkClient;
+  private Injector injector;
 
   @Mock private Admin.Client client;
   @Mock private AdminClientFactory clientFactory;
@@ -72,6 +75,9 @@ public class HealthCheckTaskTest {
 
     zkClient.createContainers(ZK_PATH + CLUSTER);
     zkClient.setData().forPath(ZK_PATH + CLUSTER, CONFIG.getBytes());
+
+    TaskModule module = new TaskModule(zkClient, clientFactory);
+    injector = Guice.createInjector(module);
   }
 
   @AfterMethod
@@ -89,8 +95,7 @@ public class HealthCheckTaskTest {
             .setZkPath(ZK_PATH)
             .setNumReplicas(3)
     );
-    t.zkClient = zkClient;
-    t.clientFactory = clientFactory;
+    injector.injectMembers(t);
 
     FIFOTaskQueue taskQueue = new FIFOTaskQueue(10);
     Context ctx = new Context(123, CLUSTER, taskQueue, null);
@@ -109,8 +114,7 @@ public class HealthCheckTaskTest {
             .setZkPath(ZK_PATH)
             .setNumReplicas(3)
     );
-    t.zkClient = zkClient;
-    t.clientFactory = clientFactory;
+    injector.injectMembers(t);
 
     FIFOTaskQueue taskQueue = new FIFOTaskQueue(10);
     Context ctx = new Context(123, CLUSTER, taskQueue, null);

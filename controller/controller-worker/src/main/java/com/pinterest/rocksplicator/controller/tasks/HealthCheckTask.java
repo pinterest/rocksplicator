@@ -45,10 +45,10 @@ public class HealthCheckTask extends TaskBase<HealthCheckTask.Param> {
   public static final Logger LOG = LoggerFactory.getLogger(HealthCheckTask.class);
 
   @Inject
-  public CuratorFramework zkClient;
+  private CuratorFramework zkClient;
 
   @Inject
-  public AdminClientFactory clientFactory;
+  private AdminClientFactory clientFactory;
 
   public HealthCheckTask(Param param) {
     super(param);
