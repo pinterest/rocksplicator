@@ -39,6 +39,11 @@ import javax.inject.Inject;
 
 
 /**
+ * This task performs health-check for a given cluster. Things it checks on are:
+ *
+ * 1) whether all segments and shards have the expected number of replicas
+ * 2) whether all hosts are up and running
+ *
  * @author Ang Xu (angxu@pinterest.com)
  */
 public class HealthCheckTask extends TaskBase<HealthCheckTask.Param> {
