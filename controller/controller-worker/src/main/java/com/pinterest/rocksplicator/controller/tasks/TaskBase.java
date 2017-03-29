@@ -84,4 +84,32 @@ public abstract class TaskBase<PARAM extends Parameter> {
    */
   public abstract void process(Context ctx) throws Exception;
 
+  /**
+   * Returns a chained task of this task and {@code nextTask} in a way that if this task returns
+   * successfully, the nextTask will be processed immediately after this task.
+   * @param nextTask
+   * @return a chained task
+   * @throws JsonProcessingException
+   */
+  public TaskBase andThen(TaskBase nextTask) throws JsonProcessingException {
+    return new ChainedTask(
+        new ChainedTask.Param()
+            .setT1(this.getEntity())
+            .setT2(nextTask.getEntity())
+    );
+  }
+
+  /**
+   * Returns a retry task that will retry this task up to {@code maxRetry} times.
+   * @param maxRetry max number of retries
+   * @return a retry task
+   * @throws JsonProcessingException
+   */
+  public TaskBase retry(int maxRetry) throws JsonProcessingException {
+    return new RetryTask(
+        new RetryTask.Param()
+            .setTask(this.getEntity())
+            .setMaxRetry(maxRetry)
+    );
+  }
 }

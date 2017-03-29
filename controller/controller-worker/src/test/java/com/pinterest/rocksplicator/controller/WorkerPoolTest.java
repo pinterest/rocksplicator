@@ -51,7 +51,7 @@ public class WorkerPoolTest {
     Semaphore idleWorkersSemaphore = new Semaphore(0);
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
-    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue());
+    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue() {});
     workerPool.assignTask(getSleepIncrementTask());
     Thread.sleep(2000);
     Assert.assertEquals(1, SleepIncrementTask.executionCounter.intValue());
@@ -66,7 +66,7 @@ public class WorkerPoolTest {
     Semaphore idleWorkersSemaphore = new Semaphore(0);
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
-    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue());
+    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue(){});
     Task task = getSleepIncrementTask();
     workerPool.assignTask(task);
     Thread.sleep(2000);
@@ -82,7 +82,7 @@ public class WorkerPoolTest {
     Semaphore idleWorkersSemaphore = new Semaphore(0);
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
-    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue());
+    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue(){});
     Task task = getSleepIncrementTask();
     workerPool.assignTask(task);
     Thread.sleep(2000);
@@ -99,7 +99,7 @@ public class WorkerPoolTest {
     Semaphore idleWorkersSemaphore = new Semaphore(0);
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
-    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue());
+    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue(){});
     Task task = getSleepIncrementTask();
     workerPool.assignTask(task);
     Thread.sleep(10);
@@ -113,7 +113,7 @@ public class WorkerPoolTest {
     Semaphore idleWorkersSemaphore = new Semaphore(0);
     ThreadPoolExecutor threadPoolExecutor =
         new ThreadPoolExecutor(2, 2, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
-    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue());
+    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, new TaskQueue() {});
     workerPool.assignTask(getSleepIncrementTask());
     workerPool.assignTask(getSleepIncrementTask());
     workerPool.assignTask(getSleepIncrementTask());
