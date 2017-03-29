@@ -28,7 +28,7 @@ namespace common {
 
 wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor() {
   static wangle::CPUThreadPoolExecutor g_executor(
-    sysconf(_SC_NPROCESSORS_ONLN)
+    sysconf(_SC_NPROCESSORS_ONLN),
     std::make_unique<
       wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
       wangle::QueueBehaviorIfFull::BLOCK>>(FLAGS_cpu_executor_queue_size));
