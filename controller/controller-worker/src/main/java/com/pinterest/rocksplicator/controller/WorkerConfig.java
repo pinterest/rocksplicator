@@ -34,8 +34,11 @@ public final class WorkerConfig {
   private static final Logger LOG = LoggerFactory.getLogger(WorkerService.class);
   private static final String WORKER_POOL_SIZE_KEY = "worker_pool_size";
   private static final String DISPATCHER_POLL_INTERVAL_KEY = "dispatcher_poll_interval";
+  private static final String ZK_PATH_KEY = "zk_path";
   private static String HOST_NAME;
   private static PropertiesConfiguration configuration;
+
+  private static final String DEFAULT_ZK_PATH = "/config/services/rocksdb/";
 
   static {
     String workerConfig = System.getProperty("worker_config");
@@ -64,6 +67,11 @@ public final class WorkerConfig {
 
   public static String getHostName() {
     return HOST_NAME;
+  }
+
+  public static String getZKPath() {
+    return configuration == null ? DEFAULT_ZK_PATH :
+                                   configuration.getString(ZK_PATH_KEY, DEFAULT_ZK_PATH);
   }
 
 }

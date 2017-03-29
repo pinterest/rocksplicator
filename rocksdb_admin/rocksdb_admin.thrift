@@ -14,6 +14,7 @@
 #
 
 namespace cpp2 admin
+namespace java com.pinterest.rocksdb_admin.thrift
 
 enum AdminErrorCode {
   DB_NOT_FOUND = 1,
