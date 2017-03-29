@@ -25,13 +25,15 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * A {@link TaskQueue} wrapper which delays the calls to the actual
- * {@link #finishTask(long, String)} and {@link #failTask(long, String)}.
- *
- * It enables ChainedTask to achieve ack-and-enqueue operation atomically.
+ * A {@link TaskQueue} wrapper which saves the task execution result locally instead of in mysql
+ * backend. It enables task-chaining by allowing the next task in the chain to get the result of
+ * previous task and do ack-and-enqueue operation atomically.
  */
-class DelayAckTaskQueue implements TaskQueue {
+class LocalAckTaskQueue implements TaskQueue {
+
+  /** the actual TaskQueue being wrapped */
   private final TaskQueue taskQueue;
+  /** an atomic reference to store the task execution result locally */
   private final AtomicReference<State> stateRef;
 
   public static class State {
@@ -51,7 +53,7 @@ class DelayAckTaskQueue implements TaskQueue {
     }
   }
 
-  DelayAckTaskQueue(TaskQueue taskQueue) {
+  LocalAckTaskQueue(TaskQueue taskQueue) {
     this.taskQueue = taskQueue;
     this.stateRef = new AtomicReference<>(new State(State.StateName.UNFINISHED, ""));
   }

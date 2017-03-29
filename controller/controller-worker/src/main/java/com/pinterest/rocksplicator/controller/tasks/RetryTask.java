@@ -16,7 +16,6 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
-import com.pinterest.rocksplicator.controller.Task;
 import com.pinterest.rocksplicator.controller.TaskEntity;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 
@@ -52,16 +51,16 @@ final class RetryTask extends TaskBase<RetryTask.Param> {
     int retry = 0;
     while (retry < getParameter().getMaxRetry()) {
       Throwable t = null;
-      DelayAckTaskQueue dq = new DelayAckTaskQueue(taskQueue);
+      LocalAckTaskQueue lq = new LocalAckTaskQueue(taskQueue);
       try {
-        ctx = new Context(id, ctx.getCluster(), dq, ctx.getWorker());
+        ctx = new Context(id, ctx.getCluster(), lq, ctx.getWorker());
         task.process(ctx);
       } catch (Throwable th) {
         t = th;
       }
 
-      DelayAckTaskQueue.State state = dq.getState();
-      if (t != null || state.state == DelayAckTaskQueue.State.StateName.FAILED) {
+      LocalAckTaskQueue.State state = lq.getState();
+      if (t != null || state.state == LocalAckTaskQueue.State.StateName.FAILED) {
         String output = (t == null ? state.output : t.getMessage());
         long nextId = taskQueue.finishTaskAndEnqueueRunningTask(id, output, getParameter().getTask(), ctx.getWorker());
         if (nextId < 0) {
@@ -70,7 +69,7 @@ final class RetryTask extends TaskBase<RetryTask.Param> {
         }
         id = nextId;
         retry ++;
-      } else if (state.state == DelayAckTaskQueue.State.StateName.DONE) {
+      } else if (state.state == LocalAckTaskQueue.State.StateName.DONE) {
         if (!taskQueue.finishTask(id, state.output)) {
           LOG.error("Failed to finish task {} with result {}", id, state.output);
         }

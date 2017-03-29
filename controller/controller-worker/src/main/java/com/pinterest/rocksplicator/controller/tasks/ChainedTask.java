@@ -64,15 +64,15 @@ final class ChainedTask extends TaskBase<ChainedTask.Param> {
         tasks.push(chainedTask.getParameter().getT2());
         tasks.push(chainedTask.getParameter().getT1());
       } else {
-        DelayAckTaskQueue dq = new DelayAckTaskQueue(taskQueue);
-        ctx = new Context(id, cluster, dq, worker);
+        LocalAckTaskQueue lq = new LocalAckTaskQueue(taskQueue);
+        ctx = new Context(id, cluster, lq, worker);
         task.process(ctx);
 
-        DelayAckTaskQueue.State state = dq.getState();
-        if (state.state == DelayAckTaskQueue.State.StateName.UNFINISHED) {
+        LocalAckTaskQueue.State state = lq.getState();
+        if (state.state == LocalAckTaskQueue.State.StateName.UNFINISHED) {
           LOG.error("Task {} finished processing without ack", id);
           return;
-        } else if (state.state == DelayAckTaskQueue.State.StateName.FAILED) {
+        } else if (state.state == LocalAckTaskQueue.State.StateName.FAILED) {
           LOG.error("Task {} failed with reason: {}. Abort the task chain.", id, state.output);
           return;
         } else if (tasks.isEmpty()) {
