@@ -18,20 +18,23 @@
 
 #include "common/global_cpu_executor.h"
 
-#include "gflags/gflags.h"
 #include "wangle/concurrent/CPUThreadPoolExecutor.h"
-
-DEFINE_int64(cpu_executor_queue_size, 1 << 14,
-             "The queue size in the global cpu executor");
 
 namespace common {
 
 wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor() {
+  static const auto n_threads = sysconf(_SC_NPROCESSORS_ONLN);
+  static const auto queue_sz = (1 << 14);
+
+  LOG(INFO) << "Running global CPU thread pool with "
+            << n_threads << " threads, and "
+            << queue_sz << " length queue.";
+
   static wangle::CPUThreadPoolExecutor g_executor(
-    sysconf(_SC_NPROCESSORS_ONLN),
+    n_threads,
     std::make_unique<
       wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
-      wangle::QueueBehaviorIfFull::BLOCK>>(FLAGS_cpu_executor_queue_size));
+      wangle::QueueBehaviorIfFull::BLOCK>>(queue_sz));
 
   return &g_executor;
 }
