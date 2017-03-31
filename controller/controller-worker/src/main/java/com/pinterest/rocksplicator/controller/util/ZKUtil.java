@@ -17,6 +17,10 @@
 package com.pinterest.rocksplicator.controller.util;
 
 import com.pinterest.rocksplicator.controller.WorkerConfig;
+import com.pinterest.rocksplicator.controller.bean.ClusterBean;
+import com.pinterest.rocksplicator.controller.config.ConfigParser;
+
+import org.apache.curator.framework.CuratorFramework;
 
 /**
  * @author Ang Xu (angxu@pinterest.com)
@@ -28,5 +32,36 @@ public final class ZKUtil {
 
   public static String getClusterConfigZKPath(String clusterName) {
     return WorkerConfig.getZKPath() + clusterName;
+  }
+
+  /**
+   * Get config for a given cluster from Zookeeper.
+   *
+   * @param zkClient zookeeper client to use
+   * @param clusterName name of the cluster
+   * @return serialized cluster config, or null if there is an error
+   */
+  public static ClusterBean getClusterConfig(CuratorFramework zkClient, String clusterName)
+      throws Exception {
+    if (zkClient.checkExists().forPath(getClusterConfigZKPath(clusterName)) == null) {
+      return null;
+    }
+
+    byte[] data = zkClient.getData().forPath(ZKUtil.getClusterConfigZKPath(clusterName));
+    return ConfigParser.parseClusterConfig(clusterName, data);
+  }
+
+  /**
+   * Update config in zookeeper for a given cluster.
+   *
+   * @param zkClient zookeeper client to use
+   * @param clusterBean config of the cluster
+   */
+  public static void updateClusterConfig(CuratorFramework zkClient, ClusterBean clusterBean)
+      throws Exception {
+    zkClient.setData().forPath(
+        getClusterConfigZKPath(clusterBean.getName()),
+        ConfigParser.serializeClusterConfig(clusterBean).getBytes()
+    );
   }
 }
