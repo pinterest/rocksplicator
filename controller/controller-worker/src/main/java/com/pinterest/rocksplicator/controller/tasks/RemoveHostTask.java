@@ -88,15 +88,18 @@ public class RemoveHostTask extends TaskBase<RemoveHostTask.Param> {
       return;
     }
     for (SegmentBean segmentBean : clusterBean.getSegments()) {
+      // filter out the host to remove
       List<HostBean> newHostList = segmentBean.getHosts().stream()
-          .filter(hostBean -> !hostBean.equals(toRemove))
+          .filter(hostBean ->
+              !(hostBean.getIp().equals(toRemove.getIp()) &&
+                    hostBean.getPort() == toRemove.getPort()))
           .collect(Collectors.toList());
       segmentBean.setHosts(newHostList);
     }
     ZKUtil.updateClusterConfig(zkClient, clusterBean);
     LOG.info("Updated config to {}", ConfigParser.serializeClusterConfig(clusterBean));
     ctx.getTaskQueue().finishTask(ctx.getId(),
-        "Successfully removed host: " + toRemove.getIp() + ":" + toRemove.getPort());
+        "Successfully removed host " + toRemove.getIp() + ":" + toRemove.getPort());
   }
 
   public static class Param extends Parameter {
