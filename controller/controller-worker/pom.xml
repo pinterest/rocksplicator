@@ -109,6 +109,13 @@
             <version>${curator.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>com.pinterest.rocksplicator</groupId>
+            <artifactId>controller-common</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+            <type>test-jar</type>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

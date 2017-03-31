@@ -254,19 +254,19 @@ public class ConfigParserTest {
     assertConfigEquals(originalConfig, serializedConfig);
   }
 
-  private Optional<SegmentBean> findSegment(List<SegmentBean> segments, String segmentName) {
+  public static Optional<SegmentBean> findSegment(List<SegmentBean> segments, String segmentName) {
     return segments.stream().filter(s -> s.getName().equals(segmentName)).findAny();
   }
 
-  private Optional<HostBean> findHost(List<HostBean> hosts, String ip, int port) {
+  public static Optional<HostBean> findHost(List<HostBean> hosts, String ip, int port) {
     return hosts.stream().filter(h -> h.getIp().equals(ip) && h.getPort() == port).findAny();
   }
 
-  private Optional<ShardBean> findShard(List<ShardBean> shards, int id) {
+  public static Optional<ShardBean> findShard(List<ShardBean> shards, int id) {
     return shards.stream().filter(s -> s.getId() == id).findAny();
   }
 
-  private void assertConfigEquals(String conf1, String conf2) {
+  public static void assertConfigEquals(String conf1, String conf2) {
     ClusterBean cluster1 = ConfigParser.parseClusterConfig("", conf1.getBytes());
     ClusterBean cluster2 = ConfigParser.parseClusterConfig("", conf2.getBytes());
 
