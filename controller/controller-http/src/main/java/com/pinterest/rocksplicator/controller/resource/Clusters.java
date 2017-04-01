@@ -16,10 +16,17 @@
 
 package com.pinterest.rocksplicator.controller.resource;
 
+import com.pinterest.rocksplicator.controller.TaskEntity;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
+import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.config.ConfigParser;
+import com.pinterest.rocksplicator.controller.tasks.AddHostTask;
+import com.pinterest.rocksplicator.controller.tasks.HealthCheckTask;
+import com.pinterest.rocksplicator.controller.tasks.PromoteTask;
+import com.pinterest.rocksplicator.controller.tasks.RemoveHostTask;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.curator.framework.CuratorFramework;
 import org.eclipse.jetty.http.HttpStatus;
 import org.hibernate.validator.constraints.NotEmpty;
@@ -124,14 +131,41 @@ public class Clusters {
    *
    * @param clusterName name of the cluster
    * @param oldHost     host to be replaced, in the format of ip:port
-   * @param newHost     (optional) new host to add, in the format of ip:port
+   * @param newHostOp   (optional) new host to add, in the format of ip:port
    */
   @POST
   @Path("/replaceHost/{clusterName : [a-zA-Z0-9\\-_]+}")
   public void replaceHost(@PathParam("clusterName") String clusterName,
-                          @NotEmpty @QueryParam("oldHost") String oldHost,
-                          @QueryParam("newHost") Optional<String> newHost) {
-    throw new UnsupportedOperationException("method not implemented.");
+                          @NotEmpty @QueryParam("oldHost") HostBean oldHost,
+                          @QueryParam("newHost") Optional<HostBean> newHostOp) {
+
+    //TODO(angxu) support adding random new host later
+    if (!newHostOp.isPresent()) {
+      throw new UnsupportedOperationException("method not implemented.");
+    }
+
+    HostBean newHost = newHostOp.get();
+    try {
+      TaskEntity task = new RemoveHostTask(oldHost)
+          .andThen(new PromoteTask())
+          .andThen(
+              new AddHostTask(
+                  newHost.getIp(),
+                  newHost.getPort(),
+                  newHost.getAvailabilityZone(),
+                  //TODO(angxu) make it configurable
+                  "/rocksdb",
+                  //TODO(angxu) make it configurable
+                  50))
+          .andThen(new PromoteTask())
+          .andThen(new HealthCheckTask())
+          //TODO(angxu) Add .retry(maxRetry) if necessary
+          .getEntity();
+
+      taskQueue.enqueueTask(task, clusterName, 0);
+    } catch (JsonProcessingException e) {
+      throw new WebApplicationException(e);
+    }
   }
 
   /**

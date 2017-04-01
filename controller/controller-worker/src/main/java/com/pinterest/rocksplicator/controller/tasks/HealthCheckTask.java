@@ -56,6 +56,13 @@ public class HealthCheckTask extends TaskBase<HealthCheckTask.Param> {
   @Inject
   private AdminClientFactory clientFactory;
 
+  /**
+   * Construct a new HealthCheckTask with number of replicas equals to 3
+   */
+  public HealthCheckTask() {
+    this(new Param().setNumReplicas(3));
+  }
+
   public HealthCheckTask(Param param) {
     super(param);
   }
