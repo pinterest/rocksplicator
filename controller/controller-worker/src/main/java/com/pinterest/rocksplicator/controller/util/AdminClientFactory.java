@@ -17,6 +17,7 @@
 package com.pinterest.rocksplicator.controller.util;
 
 import com.pinterest.rocksdb_admin.thrift.Admin;
+import com.pinterest.rocksplicator.controller.bean.HostBean;
 
 import java.net.InetSocketAddress;
 
@@ -28,4 +29,6 @@ import java.net.InetSocketAddress;
 public interface AdminClientFactory {
 
   Admin.Client getClient(InetSocketAddress addr);
+
+  Admin.Client getClient(HostBean host);
 }

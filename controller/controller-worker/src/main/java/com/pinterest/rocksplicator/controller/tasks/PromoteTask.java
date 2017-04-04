@@ -97,7 +97,7 @@ public class PromoteTask extends TaskBase<PromoteTask.Param> {
         // pick new master
         HostBean master = pickNewMaster(entry.getValue(), dbName);
         // promote new mater
-        promoteMaster(master, dbName);
+        ShardUtil.promoteNewMaster(clientFactory.getClient(master), dbName);
         // flip slave to master in config
         List<ShardBean> newShardList = master.getShards().stream()
             .map(shard -> {
@@ -135,9 +135,7 @@ public class PromoteTask extends TaskBase<PromoteTask.Param> {
     HostBean newMaster = null;
     long maxSeqNum = Long.MIN_VALUE;
     for (HostBean host : hosts) {
-      Admin.Client client = clientFactory.getClient(
-          new InetSocketAddress(host.getIp(), host.getPort())
-      );
+      Admin.Client client = clientFactory.getClient(host);
 
       long seqNum = client.getSequenceNumber(new GetSequenceNumberRequest(dbName)).getSeq_num();
       if (seqNum > maxSeqNum) {
@@ -146,13 +144,6 @@ public class PromoteTask extends TaskBase<PromoteTask.Param> {
       }
     }
     return newMaster;
-  }
-
-  private void promoteMaster(HostBean master, String dbName) throws TException {
-    Admin.Client client = clientFactory.getClient(
-        new InetSocketAddress(master.getIp(), master.getPort())
-    );
-    client.changeDBRoleAndUpStream(new ChangeDBRoleAndUpstreamRequest(dbName, "MASTER"));
   }
 
   // empty parameter

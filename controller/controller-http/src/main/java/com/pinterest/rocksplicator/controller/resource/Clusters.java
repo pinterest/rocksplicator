@@ -24,6 +24,7 @@ import com.pinterest.rocksplicator.controller.config.ConfigParser;
 import com.pinterest.rocksplicator.controller.tasks.AddHostTask;
 import com.pinterest.rocksplicator.controller.tasks.HealthCheckTask;
 import com.pinterest.rocksplicator.controller.tasks.PromoteTask;
+import com.pinterest.rocksplicator.controller.tasks.RebalanceTask;
 import com.pinterest.rocksplicator.controller.tasks.RemoveHostTask;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -120,6 +121,7 @@ public class Clusters {
   @POST
   @Path("/initialize/{clusterName : [a-zA-Z0-9\\-_]+}")
   public void initialize(@PathParam("clusterName") String clusterName) {
+    taskQueue.createCluster(clusterName);
     throw new UnsupportedOperationException("method not implemented.");
   }
 
@@ -156,8 +158,9 @@ public class Clusters {
                   //TODO(angxu) make it configurable
                   "/rocksdb",
                   //TODO(angxu) make it configurable
-                  50))
-          .andThen(new PromoteTask())
+                  50)
+          )
+          .andThen(new RebalanceTask())
           .andThen(new HealthCheckTask())
           //TODO(angxu) Add .retry(maxRetry) if necessary
           .getEntity();

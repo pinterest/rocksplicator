@@ -16,6 +16,13 @@
 
 package com.pinterest.rocksplicator.controller.util;
 
+import com.pinterest.rocksdb_admin.thrift.Admin;
+import com.pinterest.rocksdb_admin.thrift.ChangeDBRoleAndUpstreamRequest;
+import com.pinterest.rocksplicator.controller.bean.HostBean;
+
+import org.apache.thrift.TException;
+
+
 /**
  * @author Ang Xu (angxu@pinterest.com)
  */
@@ -38,5 +45,25 @@ public final class ShardUtil {
                                    String dateTimeStr) {
     return String.format(HDFS_PATH_FORMAT,
         hdfsDir, clusterName, segmentName, shardId, upstreamIp, dateTimeStr);
+  }
+
+  public static void promoteNewMaster(Admin.Client client, String dbName) throws TException {
+    client.changeDBRoleAndUpStream(new ChangeDBRoleAndUpstreamRequest(dbName, "MASTER"));
+  }
+
+  public static void changeUpstream(Admin.Client client,
+                                    HostBean upStream,
+                                    String dbName) throws TException  {
+    client.changeDBRoleAndUpStream(
+        new ChangeDBRoleAndUpstreamRequest(dbName, "SLAVE")
+            .setUpstream_ip(upStream.getIp())
+            .setUpstream_port((short)upStream.getPort())
+    );
+  }
+
+  public static void demote(Admin.Client client,
+                            HostBean upStream,
+                            String dbName) throws TException {
+    changeUpstream(client, upStream, dbName);
   }
 }

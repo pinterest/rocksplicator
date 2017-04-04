@@ -73,9 +73,9 @@ public class RemoveHostTask extends TaskBase<RemoveHostTask.Param> {
   public void process(Context ctx) throws Exception {
     final String clusterName = ctx.getCluster();
     final HostBean toRemove = getParameter().getHostToRemove();
+    final Admin.Client client = clientFactory.getClient(toRemove);
 
     InetSocketAddress hostAddr = new InetSocketAddress(toRemove.getIp(), toRemove.getPort());
-    Admin.Client client = clientFactory.getClient(hostAddr);
 
     // 1) if it's not forceRemoval, ping the host to remove to make sure it's not running
     if (!getParameter().getForceRemoval()) {

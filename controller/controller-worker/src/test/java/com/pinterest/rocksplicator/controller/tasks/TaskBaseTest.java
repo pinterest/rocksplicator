@@ -20,6 +20,7 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.when;
 
 import com.pinterest.rocksdb_admin.thrift.Admin;
+import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
 import com.pinterest.rocksplicator.controller.util.ZKUtil;
 
@@ -35,6 +36,7 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 
 /**
  * @author Ang Xu (angxu@pinterest.com)
@@ -76,7 +78,8 @@ public abstract class TaskBaseTest {
     injector = Guice.createInjector(module);
 
     // mock client factory
-    when(clientFactory.getClient(any())).thenReturn(client);
+    when(clientFactory.getClient(any(InetSocketAddress.class))).thenReturn(client);
+    when(clientFactory.getClient(any(HostBean.class))).thenReturn(client);
   }
 
   @AfterMethod
