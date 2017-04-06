@@ -548,15 +548,23 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   static auto s3Util = common::S3Util::BuildS3Util(
     s3_download_limit_mb, s3_bucket);
 
+  admin::AdminException e;
+  e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+
   if (s3_download_limit_mb != request->s3_download_limit_mb ||
       s3_bucket != request->s3_bucket) {
     // TODO(bol) currently we use the parameters in the first request recieved.
     // Fixing me by upgrading to new s3 sdk and changing the S3Util interface.
-    LOG(ERROR) << "Ignoring download limit: " << request->s3_download_limit_mb
-               << " and s3 bucket: " << request->s3_bucket
-               << " use " << s3_download_limit_mb
-               << " and " << s3_bucket
-               << " instead.";
+    std::string err_msg = "Inconsistent download limit: "
+      + folly::to<std::string>(request->s3_download_limit_mb)
+      + " and s3 bucket: " + request->s3_bucket + " received. "
+      + folly::to<std::string>(s3_download_limit_mb)
+      + " and " + s3_bucket + " required.";
+
+    e.message = request->db_name + " " + err_msg;
+    callback.release()->exceptionInThread(std::move(e));
+    LOG(ERROR) << err_msg;
+    return;
   }
 
   db_admin_lock_.Lock(request->db_name);
@@ -564,8 +572,6 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
 
   replicator::DBRole db_role;
   std::unique_ptr<folly::SocketAddress> upstream_addr;
-  admin::AdminException e;
-  e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
   {
     auto db = getDB(request->db_name, nullptr);
     if (db == nullptr) {
