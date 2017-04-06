@@ -539,13 +539,39 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       AddS3SstFilesToDBResponse>>> callback,
     std::unique_ptr<AddS3SstFilesToDBRequest> request) {
+  // Though it is claimed that AWS s3 sdk is a light weight library. However,
+  // we couldn't afford to create a new client for every SST file downloading
+  // request, which is not even on any critical code path. Otherwise, we will
+  // see latency spike when uploading data to production clusters.
+  static const uint32_t s3_download_limit_mb = request->s3_download_limit_mb;
+  static const std::string s3_bucket = request->s3_bucket;
+  static auto s3Util = common::S3Util::BuildS3Util(
+    s3_download_limit_mb, s3_bucket);
+
+  admin::AdminException e;
+  e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+
+  if (s3_download_limit_mb != request->s3_download_limit_mb ||
+      s3_bucket != request->s3_bucket) {
+    // TODO(bol) currently we use the parameters in the first request recieved.
+    // Fixing me by upgrading to new s3 sdk and changing the S3Util interface.
+    std::string err_msg = "Inconsistent download limit: "
+      + folly::to<std::string>(request->s3_download_limit_mb)
+      + " and s3 bucket: " + request->s3_bucket + " received. "
+      + folly::to<std::string>(s3_download_limit_mb)
+      + " and " + s3_bucket + " required.";
+
+    e.message = request->db_name + " " + err_msg;
+    callback.release()->exceptionInThread(std::move(e));
+    LOG(ERROR) << err_msg;
+    return;
+  }
+
   db_admin_lock_.Lock(request->db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
   replicator::DBRole db_role;
   std::unique_ptr<folly::SocketAddress> upstream_addr;
-  admin::AdminException e;
-  e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
   {
     auto db = getDB(request->db_name, nullptr);
     if (db == nullptr) {
@@ -576,8 +602,6 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     return;
   }
 
-  auto s3Util = common::S3Util::BuildS3Util(request->s3_download_limit_mb,
-                                            request->s3_bucket);
   auto responses = s3Util->getObjects(request->s3_path, local_path);
   if (!responses.Error().empty() || responses.Body().size() == 0) {
     e.message = "Failed to list any object from " + request->s3_path;
