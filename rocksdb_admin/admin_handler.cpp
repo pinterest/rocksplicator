@@ -51,6 +51,9 @@ DEFINE_int32(port, 9090, "Port of the server");
 DEFINE_string(shard_config_path, "",
              "Local path of file storing shard mapping for Aperture");
 
+DEFINE_bool(compact_db_after_load_sst, false,
+            "Compact DB after loading SST files");
+
 DECLARE_int32(rocksdb_replicator_port);
 
 namespace {
@@ -637,6 +640,13 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
       LOG(ERROR) << "Failed to add file " << local_path + file_name << " "
                  << status.ToString();
       return;
+    }
+  }
+
+  if (FLAGS_compact_db_after_load_sst) {
+    auto status = db->CompactRange(nullptr, nullptr);
+    if (!status.ok()) {
+      LOG(ERROR) << "Failed to compact DB: " << status.ToString();
     }
   }
 
