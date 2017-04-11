@@ -20,6 +20,25 @@ package com.pinterest.rocksplicator.controller.bean;
  * @author Ang Xu (angxu@pinterest.com)
  */
 public enum Role {
-  MASTER,
-  SLAVE
+  MASTER("M"),
+  SLAVE("S");
+
+  private final String value;
+
+  Role(String v) {
+    value = v;
+  }
+
+  public String getValue() {
+    return value;
+  }
+
+  public static Role fromValue(String value) {
+    for (Role r : values()) {
+      if (value.equals(r.getValue())) {
+        return r;
+      }
+    }
+    throw new IllegalArgumentException(value + " doesn't match any role");
+  }
 }

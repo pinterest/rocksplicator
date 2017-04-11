@@ -22,6 +22,7 @@ import com.pinterest.rocksplicator.controller.bean.Role;
 import com.pinterest.rocksplicator.controller.bean.SegmentBean;
 import com.pinterest.rocksplicator.controller.bean.ShardBean;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
@@ -93,6 +94,31 @@ public final class ConfigParser {
     }
   }
 
+  /**
+   * Convert a {@link ClusterBean} back into its string representation.
+   *
+   * @param clusterBean cluster config to serialize
+   * @return String representation of cluster config
+   */
+  public static String serializeClusterConfig(ClusterBean clusterBean)
+      throws JsonProcessingException {
+    Map<String, Object> clusterMap = new HashMap<>();
+    for (SegmentBean segmentBean : clusterBean.getSegments()) {
+      Map<String, Object> segmentMap = new HashMap<>();
+      segmentMap.put(NUM_SHARDS, segmentBean.getNumShards());
+      for (HostBean hostBean : segmentBean.getHosts()) {
+        List<String> shardList = hostBean.getShards().stream()
+            .map(shard -> String.format("%05d:%s", shard.getId(), shard.getRole().getValue()))
+            .collect(Collectors.toList());
+        segmentMap.put(String.format("%s:%d:%s", hostBean.getIp(),
+            hostBean.getPort(), hostBean.getAvailabilityZone()), shardList);
+      }
+      clusterMap.put(segmentBean.getName(), segmentMap);
+    }
+
+    return OBJECT_MAPPER.writeValueAsString(clusterMap);
+  }
+
   @VisibleForTesting
   static HostBean parseHost(String hostInfo) throws IllegalArgumentException {
     String[] split = hostInfo.split(DELIMITER);
@@ -111,16 +137,8 @@ public final class ConfigParser {
     if (split.length < 1 || split.length > 2) {
       throw new IllegalArgumentException("Invalid shardInfo format: " + shardInfo);
     }
-    final Role role;
-    if (split.length < 2 || split[1].equals("M")) {
-      role = Role.MASTER;
-    } else if (split[1].equals("S")) {
-      role = Role.SLAVE;
-    } else {
-      throw new IllegalArgumentException("Unknown role in shardInfo: " + shardInfo);
-    }
     return new ShardBean()
         .setId(Integer.valueOf(split[0]))
-        .setRole(role);
+        .setRole(split.length < 2 ? Role.MASTER : Role.fromValue(split[1]));
   }
 }

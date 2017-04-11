@@ -22,6 +22,7 @@ import com.pinterest.rocksplicator.controller.bean.Role;
 import com.pinterest.rocksplicator.controller.bean.SegmentBean;
 import com.pinterest.rocksplicator.controller.bean.ShardBean;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import org.testng.Assert;
 import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
@@ -72,6 +73,37 @@ public class ConfigParserTest {
         {"not_an_integer"},
         {"00123:X"},
         {"00123:M:S"},
+    };
+  }
+
+  @DataProvider(name = "config")
+  public Object[][] createConfig() {
+    return new Object[][] {
+        {
+            "{" +
+            "  \"user_pins\": {" +
+            "    \"num_shards\": 3," +
+            "    \"127.0.0.1:8090\": [\"00000\", \"00001\", \"00002\"]," +
+            "    \"127.0.0.1:8091\": [\"00002\"]," +
+            "    \"127.0.0.1:8092\": [\"00002\"]" +
+            "   }," +
+            "  \"interest_pins\": {" +
+            "  \"num_shards\": 2," +
+            "  \"127.0.0.1:8090\": [\"00000\"]," +
+            "  \"127.0.0.1:8091\": [\"00001\"]" +
+            "   }" +
+            "}"
+        },
+        {
+            "{" +
+            "  \"user_pins\": {" +
+            "  \"num_shards\": 3," +
+            "  \"127.0.0.1:8090:us-east-1a\": [\"00000:M\", \"00001:S\", \"00002:S\"]," +
+            "  \"127.0.0.1:8091:us-east-1c\": [\"00000:S\", \"00001:M\", \"00002:S\"]," +
+            "  \"127.0.0.1:8092:us-east-1e\": [\"00000:S\", \"00001:S\", \"00002:M\"]" +
+            "   }" +
+            "}"
+        }
     };
   }
 
@@ -215,6 +247,13 @@ public class ConfigParserTest {
     Assert.assertEquals(shard.getRole(), Role.MASTER);
   }
 
+  @Test(dataProvider = "config")
+  public void testSerializeClusterConfig(String originalConfig) throws JsonProcessingException {
+    ClusterBean deserialized= ConfigParser.parseClusterConfig("", originalConfig.getBytes());
+    String serializedConfig = ConfigParser.serializeClusterConfig(deserialized);
+    assertConfigEquals(originalConfig, serializedConfig);
+  }
+
   private Optional<SegmentBean> findSegment(List<SegmentBean> segments, String segmentName) {
     return segments.stream().filter(s -> s.getName().equals(segmentName)).findAny();
   }
@@ -225,5 +264,29 @@ public class ConfigParserTest {
 
   private Optional<ShardBean> findShard(List<ShardBean> shards, int id) {
     return shards.stream().filter(s -> s.getId() == id).findAny();
+  }
+
+  private void assertConfigEquals(String conf1, String conf2) {
+    ClusterBean cluster1 = ConfigParser.parseClusterConfig("", conf1.getBytes());
+    ClusterBean cluster2 = ConfigParser.parseClusterConfig("", conf2.getBytes());
+
+    Assert.assertNotNull(cluster1);
+    Assert.assertNotNull(cluster2);
+    Assert.assertEquals(cluster1.getSegments().size(), cluster2.getSegments().size());
+    for (SegmentBean segment1 : cluster1.getSegments()) {
+      SegmentBean segment2 = findSegment(cluster2.getSegments(), segment1.getName()).get();
+      Assert.assertEquals(segment1.getNumShards(), segment2.getNumShards());
+      Assert.assertEquals(segment1.getHosts().size(), segment2.getHosts().size());
+      for (HostBean host1 : segment1.getHosts()) {
+        HostBean host2 = findHost(segment2.getHosts(),host1.getIp(), host1.getPort()).get();
+        Assert.assertEquals(host1.getAvailabilityZone(), host2.getAvailabilityZone());
+        Assert.assertEquals(host1.getShards().size(), host2.getShards().size());
+        for (ShardBean shard1 : host1.getShards()) {
+          ShardBean shard2 = findShard(host2.getShards(), shard1.getId()).get();
+          Assert.assertEquals(shard1.getRole(), shard2.getRole());
+        }
+      }
+    }
+
   }
 }
