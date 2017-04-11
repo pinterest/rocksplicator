@@ -121,7 +121,6 @@ public class Clusters {
   @POST
   @Path("/initialize/{clusterName : [a-zA-Z0-9\\-_]+}")
   public void initialize(@PathParam("clusterName") String clusterName) {
-    taskQueue.createCluster(clusterName);
     throw new UnsupportedOperationException("method not implemented.");
   }
 
