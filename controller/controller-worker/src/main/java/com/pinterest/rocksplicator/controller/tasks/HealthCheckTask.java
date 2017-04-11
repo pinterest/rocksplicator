@@ -65,8 +65,11 @@ public class HealthCheckTask extends TaskBase<HealthCheckTask.Param> {
     final String clusterName = ctx.getCluster();
 
     try {
-      byte[] data = zkClient.getData().forPath(ZKUtil.getClusterConfigZKPath(clusterName));
-      ClusterBean clusterBean = ConfigParser.parseClusterConfig(clusterName, data);
+      ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, clusterName);
+      if (clusterBean == null) {
+        ctx.getTaskQueue().failTask(ctx.getId(), "Failed to read cluster config from zookeeper.");
+        return;
+      }
 
       Set<InetSocketAddress> hosts = new HashSet<>();
       for (SegmentBean segmentBean : clusterBean.getSegments()) {
