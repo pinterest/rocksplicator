@@ -38,14 +38,14 @@ import javax.inject.Inject;
 /**
  * This task removes a given host from a cluster. It consists of the following steps:
  *
- * 1) Check if the host is still up and running. Fail if yes.
+ * 1) Check if the host is still up and running. Fail if yes. (skipped if forceRemoval is true)
  * 2) Update cluster config by removing that host.
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
 public class RemoveHostTask extends TaskBase<RemoveHostTask.Param> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HealthCheckTask.class);
+  private static final Logger LOG = LoggerFactory.getLogger(RemoveHostTask.class);
 
   @Inject
   private CuratorFramework zkClient;
@@ -54,7 +54,15 @@ public class RemoveHostTask extends TaskBase<RemoveHostTask.Param> {
   private AdminClientFactory clientFactory;
 
   public RemoveHostTask(HostBean hostToRemove) {
-    this(new Param().setHostToRemove(hostToRemove));
+    this(hostToRemove, false);
+  }
+
+  public RemoveHostTask(HostBean hostToRemove, boolean forceRemoval) {
+    this(
+        new Param()
+            .setHostToRemove(hostToRemove)
+            .setForceRemoval(forceRemoval)
+    );
   }
 
   public RemoveHostTask(Param param) {
@@ -69,15 +77,17 @@ public class RemoveHostTask extends TaskBase<RemoveHostTask.Param> {
     InetSocketAddress hostAddr = new InetSocketAddress(toRemove.getIp(), toRemove.getPort());
     Admin.Client client = clientFactory.getClient(hostAddr);
 
-    // 1) ping the host to remove to make sure it's not running
-    try {
-      client.ping();
-      LOG.error("Host {} is still alive!", hostAddr);
-      // if we reach here, it means the process is still alive as #ping() succeeded.
-      ctx.getTaskQueue().failTask(ctx.getId(), "Host is still alive!");
-      return;
-    } catch (TException tex) {
-      // continue if #ping() failed.
+    // 1) if it's not forceRemoval, ping the host to remove to make sure it's not running
+    if (!getParameter().getForceRemoval()) {
+      try {
+        client.ping();
+        LOG.error("Host {} is still alive!", hostAddr);
+        // if we reach here, it means the process is still alive as #ping() succeeded.
+        ctx.getTaskQueue().failTask(ctx.getId(), "Host is still alive!");
+        return;
+      } catch (TException tex) {
+        // continue if #ping() failed.
+      }
     }
 
     // 2) update cluster config to reflect the change
@@ -107,12 +117,24 @@ public class RemoveHostTask extends TaskBase<RemoveHostTask.Param> {
     @JsonProperty
     private HostBean hostToRemove;
 
+    @JsonProperty
+    private boolean forceRemoval = false;
+
     public HostBean getHostToRemove() {
       return hostToRemove;
     }
 
     public Param setHostToRemove(HostBean hostToRemove) {
       this.hostToRemove = hostToRemove;
+      return this;
+    }
+
+    public boolean getForceRemoval() {
+      return forceRemoval;
+    }
+
+    public Param setForceRemoval(boolean forceRemoval) {
+      this.forceRemoval = forceRemoval;
       return this;
     }
   }

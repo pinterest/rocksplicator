@@ -71,5 +71,24 @@ public class RemoveHostTaskTest extends TaskBaseTest {
         CONFIG.getBytes());
   }
 
+  @Test
+  public void testForceRemoval() throws Exception {
+    RemoveHostTask task = new RemoveHostTask(
+        new HostBean().setIp("127.0.0.1").setPort(8090), true
+    );
+    injector.injectMembers(task);
+
+    FIFOTaskQueue taskQueue = new FIFOTaskQueue(10);
+    Context ctx = new Context(123, CLUSTER, taskQueue, null);
+    task.process(ctx);
+
+    Assert.assertEquals(taskQueue.getResult(123), "Successfully removed host 127.0.0.1:8090");
+
+    ClusterBean newConfig = ZKUtil.getClusterConfig(zkClient, CLUSTER);
+    Assert.assertEquals(newConfig.getSegments().size(), 1);
+    SegmentBean segment = newConfig.getSegments().get(0);
+    Assert.assertEquals(segment.getHosts().size(), 2);
+    Assert.assertEquals(segment.getHosts().stream().filter(host -> host.getPort() == 8090).count(), 0);
+  }
 
 }
