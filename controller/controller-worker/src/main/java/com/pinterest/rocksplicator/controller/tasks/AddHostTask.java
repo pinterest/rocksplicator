@@ -17,6 +17,7 @@
 package com.pinterest.rocksplicator.controller.tasks;
 
 import com.pinterest.rocksdb_admin.thrift.Admin;
+import com.pinterest.rocksdb_admin.thrift.AdminException;
 import com.pinterest.rocksdb_admin.thrift.BackupDBRequest;
 import com.pinterest.rocksdb_admin.thrift.RestoreDBRequest;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
@@ -57,7 +58,6 @@ import javax.inject.Inject;
 public class AddHostTask extends TaskBase<AddHostTask.Param> {
   private static final Logger LOG = LoggerFactory.getLogger(AddHostTask.class);
   private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyymmdd-hhmmss");
-
 
   @Inject
   private CuratorFramework zkClient;
@@ -125,30 +125,38 @@ public class AddHostTask extends TaskBase<AddHostTask.Param> {
       }
 
       // 3) upload shard data to the new host
-      for (int  shardId : shardToServe) {
-        HostBean upstream = findMasterShard(shardId, segment.getHosts());
-        if (upstream == null) {
-          //TODO: should we fail the task in this case?
-          LOG.error("Failed to find master shard for segment={}, shardId={}",
-                    segment.getName(), shardId);
-          continue;
+      try {
+        for (int shardId : shardToServe) {
+          HostBean upstream = findMasterShard(shardId, segment.getHosts());
+          if (upstream == null) {
+            //TODO: should we fail the task in this case?
+            LOG.error("Failed to find master shard for segment={}, shardId={}",
+                segment.getName(), shardId);
+            continue;
+          }
+          Admin.Client upstreamClient = clientFactory.getClient(
+              new InetSocketAddress(upstream.getIp(), upstream.getPort())
+          );
+          String dbName = ShardUtil.getDBNameFromSegmentAndShardId(segment.getName(), shardId);
+          String hdfsPath = ShardUtil.getHdfsPath(hdfsDir, clusterName, segment.getName(), shardId,
+              upstream.getIp(), getCurrentDateTime());
+
+          upstreamClient.backupDB(new BackupDBRequest(dbName, hdfsPath).setLimit_mbs(rateLimitMbs));
+          LOG.info("Backed up {} from {} to {}.", dbName, upstream.getIp(), hdfsPath);
+
+          client.restoreDB(
+              new RestoreDBRequest(dbName, hdfsPath, upstream.getIp(), (short) upstream.getPort())
+                  .setLimit_mbs(rateLimitMbs)
+          );
+          LOG.info("Restored {} from {} to {}.", dbName, hdfsPath, hostToAdd.getIp());
         }
-        Admin.Client upstreamClient = clientFactory.getClient(
-            new InetSocketAddress(upstream.getIp(), upstream.getPort())
-        );
-        String dbName = ShardUtil.getDBNameFromSegmentAndShardId(segment.getName(), shardId);
-        String hdfsPath = String.format("%s/%s/%s/%05d/%s/%s", hdfsDir, clusterName,
-            segment.getName(), shardId, upstream.getIp(), getCurrentDateTime());
-
-        upstreamClient.backupDB(new BackupDBRequest(dbName, hdfsPath).setLimit_mbs(rateLimitMbs));
-        LOG.info("Backed up {} from {} to {}.", dbName, upstream.getIp(), hdfsPath);
-
-        client.restoreDB(
-            new RestoreDBRequest(dbName, hdfsPath, upstream.getIp(), (short)upstream.getPort())
-                .setLimit_mbs(rateLimitMbs)
-        );
-        LOG.info("Restored {} from {} to {}.", dbName, hdfsPath, hostToAdd.getIp());
+      } catch (TException ex) {
+        String errMsg = String.format("Failed to upload shard data to host %s.", hostToAdd.getIp());
+        LOG.error(errMsg, ex);
+        ctx.getTaskQueue().failTask(ctx.getId(), errMsg);
+        return;
       }
+
       // add shard config to new host
       hostToAdd.setShards(
           shardToServe.stream()

@@ -21,10 +21,22 @@ package com.pinterest.rocksplicator.controller.util;
  */
 public final class ShardUtil {
 
+  public static final String HDFS_PATH_FORMAT = "%s/%s/%s/%05d/%s/%s";
+
   private ShardUtil() {
   }
 
   public static String getDBNameFromSegmentAndShardId(String segment, int shardId) {
     return String.format("%s%05d", segment, shardId);
+  }
+
+  public static String getHdfsPath(String hdfsDir,
+                                   String clusterName,
+                                   String segmentName,
+                                   int shardId,
+                                   String upstreamIp,
+                                   String dateTimeStr) {
+    return String.format(HDFS_PATH_FORMAT,
+        hdfsDir, clusterName, segmentName, shardId, upstreamIp, dateTimeStr);
   }
 }
