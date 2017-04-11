@@ -21,6 +21,7 @@
 #include <aws/core/utils/ratelimiter/DefaultRateLimiter.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/GetObjectRequest.h>
+#include <aws/s3/model/HeadObjectRequest.h>
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/ListObjectsResult.h>
 #include <aws/s3/model/Object.h>
@@ -37,6 +38,7 @@ using std::vector;
 using std::tuple;
 using Aws::S3::Model::GetObjectRequest;
 using Aws::S3::Model::ListObjectsRequest;
+using Aws::S3::Model::HeadObjectRequest;
 using Aws::Utils::RateLimits::DefaultRateLimiter;
 
 namespace common {
@@ -122,6 +124,34 @@ GetObjectsResponse S3Util::getObjects(
     }
     return GetObjectsResponse(results, "");
   }
+}
+
+GetObjectMetadataResponse S3Util::getObjectMetadata(const string &key) {
+  HeadObjectRequest headObjectRequest;
+  headObjectRequest.SetBucket(bucket_);
+  headObjectRequest.SetKey(key);
+  map<string, string> metadata;
+  Aws::StringStream ss;
+  ss << uri_ << "/" << headObjectRequest.GetBucket() << "/"
+     << headObjectRequest.GetKey();
+  XmlOutcome headObjectOutcome = s3Client.MakeHttpRequest(
+          ss.str(), headObjectRequest,HttpMethod::HTTP_HEAD);
+  if (!headObjectOutcome.IsSuccess()) {
+    return GetObjectMetadataResponse(
+            metadata, headObjectOutcome.GetError().GetMessage());
+  }
+  const auto& headers = headObjectOutcome.GetResult().GetHeaderValueCollection();
+  const auto& md5Iter = headers.find("etag");
+  if(md5Iter != headers.end()) {
+    auto md5str = md5Iter->second;
+    md5str.erase(std::remove(md5str.begin(), md5str.end(), '\"'), md5str.end());
+    metadata["md5"] = md5str;
+  }
+  const auto& contentLengthIter = headers.find("content-length");
+  if(contentLengthIter != headers.end()) {
+    metadata["content-length"] = contentLengthIter->second;
+  }
+  return GetObjectMetadataResponse(std::move(metadata), "");
 }
 
 tuple<string, string> S3Util::parseFullS3Path(const string& s3_path) {

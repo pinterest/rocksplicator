@@ -19,12 +19,12 @@
 
 #include "rocksdb_admin/admin_handler.h"
 
-#include <ifaddrs.h>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "boost/filesystem.hpp"
+#include "common/network_util.h"
 #include "common/rocksdb_glogger/rocksdb_glogger.h"
 #include "common/s3util.h"
 #include "common/thrift_router.h"
@@ -50,6 +50,9 @@ DEFINE_int32(port, 9090, "Port of the server");
 
 DEFINE_string(shard_config_path, "",
              "Local path of file storing shard mapping for Aperture");
+
+DEFINE_bool(compact_db_after_load_sst, false,
+            "Compact DB after loading SST files");
 
 DECLARE_int32(rocksdb_replicator_port);
 
@@ -88,26 +91,6 @@ folly::Future<std::unique_ptr<rocksdb::DB>> GetRocksdbFuture(
   return future;
 }
 
-std::string getLocalIPAddress() {
-  ifaddrs* ips;
-  CHECK_EQ(::getifaddrs(&ips), 0);
-  ifaddrs* ips_tmp = ips;
-  std::string local_ip;
-  const std::string interface = "eth0";
-  while (ips_tmp) {
-    if (interface == ips_tmp->ifa_name) {
-      if (ips_tmp->ifa_addr->sa_family == AF_INET) {
-        local_ip = folly::IPAddressV4(
-            (reinterpret_cast<sockaddr_in*>(ips_tmp->ifa_addr))
-            ->sin_addr).str();
-        break;
-      }
-    }
-    ips_tmp = ips_tmp->ifa_next;
-  }
-  freeifaddrs(ips);
-  return local_ip;
-}
 
 std::unique_ptr<::admin::ApplicationDBManager> CreateDBBasedOnConfig(
     const admin::RocksDBOptionsGeneratorType& rocksdb_options) {
@@ -118,7 +101,7 @@ std::unique_ptr<::admin::ApplicationDBManager> CreateDBBasedOnConfig(
   auto cluster_layout = common::parseConfig(std::move(content));
   CHECK(cluster_layout);
 
-  folly::SocketAddress local_addr(getLocalIPAddress(), FLAGS_port);
+  folly::SocketAddress local_addr(common::getLocalIPAddress(), FLAGS_port);
 
   std::vector<std::function<void(void)>> ops;
   for (const auto& segment : cluster_layout->segments) {
@@ -559,13 +542,39 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       AddS3SstFilesToDBResponse>>> callback,
     std::unique_ptr<AddS3SstFilesToDBRequest> request) {
+  // Though it is claimed that AWS s3 sdk is a light weight library. However,
+  // we couldn't afford to create a new client for every SST file downloading
+  // request, which is not even on any critical code path. Otherwise, we will
+  // see latency spike when uploading data to production clusters.
+  static const uint32_t s3_download_limit_mb = request->s3_download_limit_mb;
+  static const std::string s3_bucket = request->s3_bucket;
+  static auto s3Util = common::S3Util::BuildS3Util(
+    s3_download_limit_mb, s3_bucket);
+
+  admin::AdminException e;
+  e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+
+  if (s3_download_limit_mb != request->s3_download_limit_mb ||
+      s3_bucket != request->s3_bucket) {
+    // TODO(bol) currently we use the parameters in the first request recieved.
+    // Fixing me by upgrading to new s3 sdk and changing the S3Util interface.
+    std::string err_msg = "Inconsistent download limit: "
+      + folly::to<std::string>(request->s3_download_limit_mb)
+      + " and s3 bucket: " + request->s3_bucket + " received. "
+      + folly::to<std::string>(s3_download_limit_mb)
+      + " and " + s3_bucket + " required.";
+
+    e.message = request->db_name + " " + err_msg;
+    callback.release()->exceptionInThread(std::move(e));
+    LOG(ERROR) << err_msg;
+    return;
+  }
+
   db_admin_lock_.Lock(request->db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
   replicator::DBRole db_role;
   std::unique_ptr<folly::SocketAddress> upstream_addr;
-  admin::AdminException e;
-  e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
   {
     auto db = getDB(request->db_name, nullptr);
     if (db == nullptr) {
@@ -596,8 +605,6 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     return;
   }
 
-  auto s3Util = common::S3Util::BuildS3Util(request->s3_download_limit_mb,
-                                            request->s3_bucket);
   auto responses = s3Util->getObjects(request->s3_path, local_path);
   if (!responses.Error().empty() || responses.Body().size() == 0) {
     e.message = "Failed to list any object from " + request->s3_path;
@@ -633,6 +640,13 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
       LOG(ERROR) << "Failed to add file " << local_path + file_name << " "
                  << status.ToString();
       return;
+    }
+  }
+
+  if (FLAGS_compact_db_after_load_sst) {
+    auto status = db->CompactRange(nullptr, nullptr);
+    if (!status.ok()) {
+      LOG(ERROR) << "Failed to compact DB: " << status.ToString();
     }
   }
 

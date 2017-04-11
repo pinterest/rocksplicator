@@ -20,6 +20,9 @@
 #include "common/stats/stats.h"
 #include "common/timer.h"
 
+DEFINE_bool(disable_rocksplicator_db_stats, false,
+            "Disable the stats for rocksplicator db");
+
 namespace {
 
 const std::string kRocksdbNewIterator = "rocksdb_new_iterator";
@@ -75,9 +78,16 @@ rocksdb::Status ApplicationDB::Get(
     const rocksdb::ReadOptions& options,
     const rocksdb::Slice& slice,
     std::string* value) {
-  common::Stats::get()->Incr(kRocksdbGet);
-  common::Timer timer(kRocksdbGetMs);
-  return db_->Get(options, slice, value);
+  // TODO(bol) apply it to all other stats or sample the stats.
+  // We need to call Get() nearly 10M times per second, which makes it too
+  // expensive to tract stats for every call.
+  if (FLAGS_disable_rocksplicator_db_stats) {
+    return db_->Get(options, slice, value);
+  } else {
+    common::Stats::get()->Incr(kRocksdbGet);
+    common::Timer timer(kRocksdbGetMs);
+    return db_->Get(options, slice, value);
+  }
 }
 
 std::vector<rocksdb::Status> ApplicationDB::MultiGet(
@@ -94,7 +104,15 @@ rocksdb::Status ApplicationDB::Write(const rocksdb::WriteOptions& options,
   common::Stats::get()->Incr(kRocksdbWrite);
   common::Stats::get()->Incr(kRocksdbWriteBytes, write_batch->GetDataSize());
   common::Timer timer(kRocksdbWriteMs);
-  return replicated_db_->Write(options, write_batch);
+  if (replicated_db_) {
+    return replicated_db_->Write(options, write_batch);
+  } else {
+    // ApplicationDBManager can be use to manage rocksdb instance lifecycle
+    // without replication. In this case, ApplicationDB has the replicator::DBRole
+    // as SLAVE and no upstream_addr. Thus the replicated_db_ is nullptr, and
+    // we'll write to the local db_
+    return db_->Write(options, write_batch);
+  }
 }
 
 rocksdb::Status ApplicationDB::CompactRange(

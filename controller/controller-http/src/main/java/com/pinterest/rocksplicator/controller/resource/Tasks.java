@@ -16,7 +16,11 @@
 
 package com.pinterest.rocksplicator.controller.resource;
 
-import com.pinterest.rocksplicator.controller.bean.TaskBean;
+import com.pinterest.rocksplicator.controller.Task;
+import com.pinterest.rocksplicator.controller.TaskQueue;
+import com.pinterest.rocksplicator.controller.bean.TaskState;
+
+import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,6 +29,7 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 
 /**
@@ -33,32 +38,43 @@ import javax.ws.rs.core.MediaType;
 @Path("/v1/tasks")
 public class Tasks {
 
+  private final TaskQueue taskQueue;
+
+  public Tasks(TaskQueue taskQueue) {
+    this.taskQueue = taskQueue;
+  }
+
   /**
    * Retrieves a task by the task id.
    *
    * @param id  task id
-   * @return    {@link TaskBean} or null if task doesn't exist
+   * @return    {@link Task} or null if task doesn't exist
    */
   @GET
   @Path("/{id : [0-9]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public TaskBean get(@PathParam("id") Long id) {
-    throw new UnsupportedOperationException("method not implemented");
+  public Task get(@PathParam("id") Long id) {
+    return taskQueue.findTask(id);
   }
 
   /**
    * Retrieves all the tasks that match the given cluster name and/or
-   * the {@link com.pinterest.rocksplicator.controller.bean.TaskBean.State state}.
+   * the {@link TaskState state}.
    *
    * @param clusterName name of the cluster being queried
    * @param state       state of the task being queried.
-   * @return            a list of {@link TaskBean}s
+   * @return            a list of {@link Task}s
    */
   @GET
   @Produces(MediaType.APPLICATION_JSON)
-  public List<TaskBean> findTasks(@QueryParam("clusterName") Optional<String> clusterName,
-                                  @QueryParam("state") Optional<TaskBean.State> state) {
-    throw new UnsupportedOperationException("method not implemented");
+  public List<Task> findTasks(@QueryParam("clusterName") Optional<String> clusterName,
+                                      @QueryParam("state") Optional<TaskState> state) {
+    if (!clusterName.isPresent() && !state.isPresent()) {
+      throw new WebApplicationException("Either clusterName or state must be present.",
+          HttpStatus.BAD_REQUEST_400);
+    }
+    return taskQueue.peekTasks(clusterName.orElse(null),
+                               state.map(TaskState::intValue).orElse(null));
   }
 
 }

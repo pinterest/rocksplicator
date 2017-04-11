@@ -14,18 +14,16 @@
  * limitations under the License.
  */
 
-package com.pinterest.rocksplicator.controller.bean;
+package com.pinterest.rocksplicator.controller;
+
 
 /**
- * @author Ang Xu (angxu@pinterest.com)
+ * A {@TaskEntity} is the minimum unit which can be enqueued to a {@TaskQueue}.
+ *
+ * @author Bo Liu (bol@pinterest.com)
  */
-public class TaskBean {
-
-  public enum State {
-    PENDING,
-    RUNNING,
-    DONE,
-    FAILED
-  }
-
+public class TaskEntity {
+  public String name;
+  public int priority;
+  public String body;
 }

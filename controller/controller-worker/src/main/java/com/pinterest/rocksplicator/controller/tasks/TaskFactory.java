@@ -16,14 +16,14 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
-import com.google.common.collect.ImmutableMap;
-import com.pinterest.rocksplicator.controller.Task;
-import org.codehaus.jackson.JsonNode;
-import org.codehaus.jackson.map.ObjectMapper;
+import com.pinterest.rocksplicator.controller.TaskEntity;
+
+import com.google.inject.Guice;
+import com.google.inject.Injector;
+import io.dropwizard.util.Generics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Map;
 
 /**
  * The factory that produces worker task objects basing on the Task POJO from task-queue.
@@ -34,30 +34,32 @@ import java.util.Map;
 public final class TaskFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(TaskFactory.class);
-  private static final Map<String, Class> tasks;
+  private static volatile Injector INJECTOR;
 
-  static {
-    // Initialize all supported tasks.
-    tasks = ImmutableMap.of(
-      "SleepIncrementTask", SleepIncrementTask.class
-    );
+  public static void setInjector(Injector injector) {
+    INJECTOR = injector;
   }
 
-  public static TaskBase getWorkerTask(Task task) {
-    if (tasks.get(task.name) == null) {
-      LOG.error(task.name + " doesn't have implementation");
-      return null;
-    }
+  public static TaskBase getWorkerTask(TaskEntity task) {
     try {
-      ObjectMapper mapper = new ObjectMapper();
-      JsonNode taskBody = mapper.readTree(task.body);
-      TaskBase workerTask = (TaskBase) tasks.get(task.name).getConstructor(
-          long.class, String.class, JsonNode.class).newInstance(
-          task.id, task.clusterName, taskBody);
-      return workerTask;
+      Class<TaskBase> taskClazz = loadTaskClass(task.name);
+      Class<Parameter> paramClazz = Generics.getTypeParameter(taskClazz, Parameter.class);
+      Parameter parameter = Parameter.deserialize(task.body, paramClazz);
+      TaskBase taskBase = taskClazz.getConstructor(paramClazz).newInstance(parameter);
+      Injector injector = INJECTOR;
+      if (injector != null) {
+        injector.injectMembers(taskBase);
+      }
+      return taskBase;
     } catch (Exception e) {
       LOG.error("Cannot instantiate the implementation of " + task.name, e);
       return null;
     }
+  }
+
+  @SuppressWarnings("unchecked")
+  public static Class<TaskBase> loadTaskClass(String taskName) throws ClassNotFoundException {
+    Class clazz = Thread.currentThread().getContextClassLoader().loadClass(taskName);
+    return clazz;
   }
 }

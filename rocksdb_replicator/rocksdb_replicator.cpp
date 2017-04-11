@@ -22,13 +22,12 @@
 
 #include <string>
 
+#include "common/global_cpu_executor.h"
 #include "rocksdb_replicator/replicator_handler.h"
+#include "wangle/concurrent/CPUThreadPoolExecutor.h"
 
 DEFINE_int32(rocksdb_replicator_port, 9091,
              "The port # for the internal thrift server.");
-
-DEFINE_int32(num_replicator_worker_threads, 16,
-             "The number of worker threads.");
 
 DEFINE_int32(num_replicator_io_threads, 8,
              "The number of io threads.");
@@ -36,7 +35,7 @@ DEFINE_int32(num_replicator_io_threads, 8,
 namespace replicator {
 
 RocksDBReplicator::RocksDBReplicator()
-    : executor_(FLAGS_num_replicator_worker_threads)
+    : executor_(common::getGlobalCPUExecutor())
     , client_pool_(FLAGS_num_replicator_io_threads)
     , db_map_()
     , server_("disabled", false)
@@ -67,7 +66,7 @@ ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
                                     const folly::SocketAddress& upstream_addr,
                                     ReplicatedDB** replicated_db) {
   std::shared_ptr<ReplicatedDB> new_db(
-      new ReplicatedDB(db_name, std::move(db), &executor_,
+      new ReplicatedDB(db_name, std::move(db), executor_,
                        role, upstream_addr, &client_pool_));
 
   if (!db_map_.add(db_name, new_db)) {

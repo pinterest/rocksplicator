@@ -16,8 +16,6 @@
 
 package com.pinterest.rocksplicator.controller;
 
-import com.pinterest.rocksplicator.controller.tasks.TaskBase;
-import com.pinterest.rocksplicator.controller.tasks.TaskFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,8 +49,10 @@ public final class TaskDispatcher {
     this.taskQueue = taskQueue;
   }
 
-  private void failTaskAndReleaseSemaphore(Task dequeuedTask, Semaphore idleWorkersSemaphore) {
-    if (dequeuedTask != null && !taskQueue.failTask(dequeuedTask.id)) {
+  private void failTaskAndReleaseSemaphore(Task dequeuedTask,
+                                           Semaphore idleWorkersSemaphore,
+                                           String reason) {
+    if (dequeuedTask != null && !taskQueue.failTask(dequeuedTask.id, reason)) {
       LOG.error("Cannot fail " + dequeuedTask.name + " to the queue");
     }
     idleWorkersSemaphore.release();
@@ -78,12 +78,11 @@ public final class TaskDispatcher {
             Task dequeuedTask = taskQueue.dequeueTask(WorkerConfig.getHostName());
             if (dequeuedTask == null) {
               LOG.info("No outstanding pending tasks to be dequeued");
-              failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore);
+              failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore, null);
               break;
             } else {
-              TaskBase task = TaskFactory.getWorkerTask(dequeuedTask);
-              if (!workerPool.assignTask(task)) {
-                failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore);
+              if (!workerPool.assignTask(dequeuedTask)) {
+                failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore, "Failed to assign to worker");
                 break;
               }
             }

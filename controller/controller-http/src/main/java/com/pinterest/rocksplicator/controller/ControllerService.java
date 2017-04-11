@@ -20,7 +20,13 @@ import com.pinterest.rocksplicator.controller.resource.Clusters;
 import com.pinterest.rocksplicator.controller.resource.Tasks;
 
 import io.dropwizard.Application;
+import io.dropwizard.lifecycle.Managed;
 import io.dropwizard.setup.Environment;
+import org.apache.curator.CuratorZookeeperClient;
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.CuratorFrameworkFactory;
+import org.apache.curator.retry.RetryForever;
+import org.apache.curator.retry.RetryOneTime;
 
 /**
  * @author Ang Xu (angxu@pinterest.com)
@@ -35,8 +41,27 @@ public class ControllerService extends Application<ControllerConfiguration> {
   @Override
   public void run(ControllerConfiguration configuration,
                   Environment environment) throws Exception {
-    environment.jersey().register(new Clusters());
-    environment.jersey().register(new Tasks());
+    //TODO(angxu) initialize taskQueue in the right way after implementation is ready
+    TaskQueue taskQueue = new TaskQueue(){};
+    CuratorFramework zkClient = CuratorFrameworkFactory.newClient(
+        configuration.getZkEndpoints(), new RetryOneTime(3000));
+
+    environment.lifecycle().manage(new Managed() {
+      @Override
+      public void start() throws Exception {
+        zkClient.start();
+      }
+
+      @Override
+      public void stop() throws Exception {
+        zkClient.close();
+      }
+    });
+
+    environment.jersey().register(
+        new Clusters(configuration.getZkPath(), zkClient, taskQueue)
+    );
+    environment.jersey().register(new Tasks(taskQueue));
 
   }
 

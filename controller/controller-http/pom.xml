@@ -12,15 +12,26 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <properties>
-        <dropwizard.version>1.0.5</dropwizard.version>
-    </properties>
-
     <dependencies>
+        <dependency>
+            <groupId>com.pinterest.rocksplicator</groupId>
+            <artifactId>controller-worker</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
         <dependency>
             <groupId>io.dropwizard</groupId>
             <artifactId>dropwizard-core</artifactId>
             <version>${dropwizard.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.dropwizard</groupId>
+            <artifactId>dropwizard-jdbi</artifactId>
+            <version>${dropwizard.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.curator</groupId>
+            <artifactId>curator-framework</artifactId>
+            <version>${curator.version}</version>
         </dependency>
     </dependencies>
 
