@@ -57,7 +57,7 @@ public interface TaskQueue {
    * @return the dequeued task, or null if no eligible task found
    */
   default Task dequeueTask(final String worker) {
-    return new Task(new TaskEntity());
+    return null;
   }
 
   /**
