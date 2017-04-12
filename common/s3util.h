@@ -92,7 +92,7 @@ class S3Util {
   // If you must, make sure to call Aws::InitAPI(options); before constructor
   S3Util(const string& bucket,
          const ClientConfiguration& client_config,
-         SDKOptions options) :
+         const SDKOptions& options) :
     bucket_(std::move(bucket)), s3Client(client_config), options_(options) {
 
     Aws::StringStream ss;

@@ -19,7 +19,6 @@
 #include <string>
 #include <tuple>
 
-#include "boost/filesystem.hpp"
 #include "common/s3util.h"
 #include "gtest/gtest.h"
 
@@ -52,27 +51,11 @@ TEST(S3UtilTest, ParseS3StringTest) {
   EXPECT_TRUE(std::get<1>(result) == "");
 }
 
-TEST(S3UtilTest, GetObjectS3Test) {
-  static shared_ptr<common::S3Util> myUtil =
-      common::S3Util::BuildS3Util(50, "media.pinterest.com", 60000, 60000);
-
-  std::string local_path1 = "/tmp/png1";
-  auto resp = myUtil->getObject("appimg-ffd41c0b40b526209375026b74666266.png",
-                                local_path1);
-  EXPECT_EQ(resp.Error(), "");
-
-  myUtil.reset();
-  myUtil = common::S3Util::BuildS3Util(50, "media.pinterest.com", 60000, 60000);
-  std::string local_path2 = "/tmp/png2";
-  resp = myUtil->getObject("appimg-ffd41c0b40b526209375026b74666266.png",
-                           local_path2);
-  EXPECT_EQ(resp.Error(), "");
-
-  boost::filesystem::remove_all(local_path1);
-  boost::filesystem::remove_all(local_path2);
-}
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+
+
+
