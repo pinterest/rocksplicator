@@ -253,13 +253,16 @@ RUN cd /opt/ && \
 RUN cd /opt && \
     git clone https://github.com/aws/aws-sdk-cpp.git && \
     (cd aws-sdk-cpp && \
-      # Rebase to : https://github.com/aws/aws-sdk-cpp/commit/aa15fabd189d333e1e9b535e225c2ac1945ba1be
-      git reset --hard aa15fabd189d333e1e9b535e225c2ac1945ba1be && \
+      # Rebase to : https://github.com/aws/aws-sdk-cpp/commit/39a03136ef8525bc94d82669432491e653154677
+      git reset --hard 39a03136ef8525bc94d82669432491e653154677 && \
       mkdir build && cd build && \
-      cmake -DCMAKE_BUILD_TYPE=Release -DCUSTOM_MEMORY_MANAGEMENT=0 -DSTATIC_LINKING=1 -DBUILD_ONLY="aws-cpp-sdk-s3" .. && \
+      cmake -DCMAKE_BUILD_TYPE=Release -DCUSTOM_MEMORY_MANAGEMENT=0 -DSTATIC_LINKING=1 -DBUILD_ONLY="s3" .. && \
       make -j ${BUILD_JOBS} && \
       make install && \
-      cmake -DCMAKE_BUILD_TYPE=Release -DCUSTOM_MEMORY_MANAGEMENT=0 -DSTATIC_LINKING=0 -DBUILD_ONLY="aws-cpp-sdk-s3" .. && \
+      rm -rf /usr/local/lib/cmake/aws-cpp-* && \
+      rm -rf build && mkdir build && cd build && \
+      cmake -DCMAKE_BUILD_TYPE=Release -DCUSTOM_MEMORY_MANAGEMENT=0 -DSTATIC_LINKING=0 -DBUILD_ONLY="s3" .. && \
+      cd .. && \
       make -j ${BUILD_JOBS} && \
       make install && \
       ldconfig) && \

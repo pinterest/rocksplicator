@@ -20,6 +20,7 @@
 
 #include <aws/s3/S3Client.h>
 #include <aws/s3/S3Endpoint.h>
+#include <aws/core/Aws.h>
 #include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/http/HttpClient.h>
 #include <aws/core/http/HttpResponse.h>
@@ -36,6 +37,7 @@ using std::string;
 using std::vector;
 using std::tuple;
 using std::shared_ptr;
+using Aws::SDKOptions;
 using Aws::Client::ClientConfiguration;
 using Aws::Client::XmlOutcome;
 using Aws::Http::HttpMethod;
@@ -87,9 +89,12 @@ class S3Util {
   };
 
   // Don't recommend using this directly. Using BuildS3Util instead.
+  // If you must, make sure to call Aws::InitAPI(options); before constructor
   S3Util(const string& bucket,
-         const ClientConfiguration& client_config) :
-    bucket_(std::move(bucket)), s3Client(client_config) {
+         const ClientConfiguration& client_config,
+         SDKOptions options) :
+    bucket_(std::move(bucket)), s3Client(client_config), options_(options) {
+
     Aws::StringStream ss;
     ss << Aws::Http::SchemeMapper::ToString(client_config.scheme) << "://";
 
@@ -99,6 +104,10 @@ class S3Util {
       ss << client_config.endpointOverride;
     }
     uri_ = ss.str();
+  }
+
+  ~S3Util() {
+    Aws::ShutdownAPI(options_);
   }
 
   // Download an S3 Object to a local file
@@ -137,6 +146,7 @@ class S3Util {
   // S3Client is thread safe:
   // https://github.com/aws/aws-sdk-cpp/issues/166
   CutomizedS3Client s3Client;
+  SDKOptions options_;
   std::string uri_;
 };
 }  // namespace common
