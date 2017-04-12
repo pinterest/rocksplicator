@@ -36,7 +36,7 @@ cd docker && docker build -t rocksplicator-build .
 
 Or pull the one we uploaded.
 ```sh
-docker pull aliced3645/rocksplicator-build
+docker pull cdonaghy/rocksplicator-build
 ```
 
 ### Initialize submodules
