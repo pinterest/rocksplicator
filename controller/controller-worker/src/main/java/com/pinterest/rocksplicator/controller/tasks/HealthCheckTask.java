@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import javax.inject.Inject;
 
 
@@ -91,7 +92,7 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
       for (InetSocketAddress hostAddr : hosts) {
         try {
           clientFactory.getClient(hostAddr).ping();
-        } catch (TException tex) {
+        } catch (TException | ExecutionException ex) {
           // record bad host
           badHosts.add(hostAddr.toString());
         }

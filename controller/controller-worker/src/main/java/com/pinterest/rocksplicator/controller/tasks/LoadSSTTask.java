@@ -138,10 +138,11 @@ public class LoadSSTTask extends AbstractTask<LoadSSTTask.Param> {
    * @param host        destination host to load sst files
    * @param role        db role
    * @throws TException
+   * @throws ExecutionException
    * @return {@code true} if all sst files are successfully loaded.
    */
   private boolean loadSSTFromS3(String segmentName, HostBean host, Role role)
-      throws TException {
+      throws TException, ExecutionException {
     Admin.Client client = clientFactory.getClient(host);
     for (ShardBean shard : host.getShards()) {
       if (shard.getRole() == role) {

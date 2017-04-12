@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import javax.inject.Inject;
@@ -128,7 +129,8 @@ public class PromoteTask extends AbstractTask<PromoteTask.Param> {
    * @param dbName name of the DB to serve new master shard
    * @return host being picked as new master
    */
-  private HostBean pickNewMaster(List<HostBean> hosts, String dbName) throws TException{
+  private HostBean pickNewMaster(List<HostBean> hosts, String dbName)
+      throws TException, ExecutionException {
     HostBean newMaster = null;
     long maxSeqNum = Long.MIN_VALUE;
     for (HostBean host : hosts) {
