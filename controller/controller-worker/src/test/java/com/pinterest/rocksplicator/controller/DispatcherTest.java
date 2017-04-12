@@ -20,13 +20,11 @@ import com.pinterest.rocksplicator.controller.tasks.SleepIncrementTask;
 import com.pinterest.rocksplicator.controller.tasks.ThrowingTask;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.powermock.api.mockito.PowerMockito;
 import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.testng.Assert;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CountDownLatch;
@@ -39,7 +37,6 @@ import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 
-@RunWith(PowerMockRunner.class)
 @PrepareForTest(TaskQueue.class)
 public class DispatcherTest {
 
@@ -58,7 +55,7 @@ public class DispatcherTest {
   }
 
 
-  @Before
+  @BeforeMethod
   public void setup() {
     SleepIncrementTask.executionCounter = 0;
     sleepTimeMillis = 1000;
@@ -174,6 +171,56 @@ public class DispatcherTest {
     Assert.assertEquals(tq.getResult(2), "2");
     dispatcher.stop();
   }
+
+  @Test
+  public void testChainedTaskWithError() throws Exception {
+    TaskEntity task = new SleepIncrementTask(100)
+        .andThen(new ThrowingTask("Oops..."))
+        .andThen(new SleepIncrementTask(150))
+        .getEntity();
+
+    final CountDownLatch latch = new CountDownLatch(2);
+    FIFOTaskQueue tq = new FIFOTaskQueue(10) {
+      @Override
+      public boolean finishTask(final long id, final String output) {
+        latch.countDown();
+        return super.finishTask(id, output);
+      }
+
+      @Override
+      public boolean failTask(final long id, final String reason) {
+        latch.countDown();
+        return super.failTask(id, reason);
+      }
+
+      @Override
+      public long finishTaskAndEnqueueRunningTask(final long id,
+                                                  final String output,
+                                                  final TaskEntity newTask,
+                                                  final String worker) {
+        latch.countDown();
+        return super.finishTaskAndEnqueueRunningTask(id, output, newTask, worker);
+      }
+    };
+    tq.enqueueTask(task, Integer.toString(++nameCounter), 0);
+
+    Semaphore idleWorkersSemaphore = new Semaphore(2);
+    ThreadPoolExecutor threadPoolExecutor =
+        new ThreadPoolExecutor(2, 2, 0,
+            TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(2));
+    WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, tq);
+    TaskDispatcher dispatcher = new TaskDispatcher(2, idleWorkersSemaphore, workerPool, tq);
+    dispatcher.start();
+
+    Assert.assertTrue(latch.await(30, TimeUnit.SECONDS));
+    Assert.assertEquals(SleepIncrementTask.executionCounter.intValue(), 1);
+
+    Assert.assertEquals(tq.getResult(0), "0");
+    Assert.assertEquals(tq.getResult(1), "Oops...");
+    dispatcher.stop();
+  }
+
+
 
   @Test
   public void testRetryTask() throws Exception {

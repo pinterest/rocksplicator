@@ -58,15 +58,24 @@ final class ChainedTask extends TaskBase<ChainedTask.Param> {
     tasks.push(getParameter().getT1());
 
     while (!tasks.isEmpty()) {
-      TaskBase task = TaskFactory.getWorkerTask(tasks.pop());
-      if (task instanceof ChainedTask) {
-        ChainedTask chainedTask = (ChainedTask)task;
+      TaskEntity taskEntity = tasks.pop();
+      TaskBase task = TaskFactory.getWorkerTask(taskEntity);
+      if (task == null) {
+        taskQueue.failTask(id, "Failed to instantiate task " + taskEntity.name);
+        return;
+      } else if (task instanceof ChainedTask) {
+        ChainedTask chainedTask = (ChainedTask) task;
         tasks.push(chainedTask.getParameter().getT2());
         tasks.push(chainedTask.getParameter().getT1());
       } else {
         LocalAckTaskQueue lq = new LocalAckTaskQueue(taskQueue);
         ctx = new Context(id, cluster, lq, worker);
-        task.process(ctx);
+        try {
+          task.process(ctx);
+        } catch (Exception ex) {
+          LOG.error("Unexpected exception from task: {} in task chain.", task.getName(), ex);
+          lq.failTask(id, ex.getMessage());
+        }
 
         LocalAckTaskQueue.State state = lq.getState();
         if (state.state == LocalAckTaskQueue.State.StateName.UNFINISHED) {
@@ -74,6 +83,7 @@ final class ChainedTask extends TaskBase<ChainedTask.Param> {
           return;
         } else if (state.state == LocalAckTaskQueue.State.StateName.FAILED) {
           LOG.error("Task {} failed with reason: {}. Abort the task chain.", id, state.output);
+          taskQueue.failTask(id, state.output);
           return;
         } else if (tasks.isEmpty()) {
           LOG.info("Finished processing chained task");

@@ -19,9 +19,9 @@ package com.pinterest.rocksplicator.controller;
 import com.pinterest.rocksplicator.controller.tasks.SleepIncrementTask;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Semaphore;
@@ -41,7 +41,7 @@ public class WorkerPoolTest {
     return task;
   }
 
-  @Before
+  @BeforeMethod
   public void setup() {
     SleepIncrementTask.executionCounter = 0;
   }
