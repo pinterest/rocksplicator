@@ -41,7 +41,7 @@ public final class WorkerConfig {
   private static final String DEFAULT_ZK_PATH = "/config/services/rocksdb/";
 
   static {
-    String workerConfig = System.getProperty("worker_config");
+    String workerConfig = System.getProperty("worker_config", "controller.worker.properties");
     configuration = new PropertiesConfiguration();
     try {
       configuration.load(ClassLoader.getSystemResourceAsStream(workerConfig));
