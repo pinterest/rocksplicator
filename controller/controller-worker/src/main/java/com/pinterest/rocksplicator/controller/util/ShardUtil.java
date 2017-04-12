@@ -29,6 +29,7 @@ import org.apache.thrift.TException;
 public final class ShardUtil {
 
   public static final String HDFS_PATH_FORMAT = "%s/%s/%s/%05d/%s/%s";
+  public static final String S3_PATH_FORMAT = "%s/part-%d-";
 
   private ShardUtil() {
   }
@@ -45,6 +46,10 @@ public final class ShardUtil {
                                    String dateTimeStr) {
     return String.format(HDFS_PATH_FORMAT,
         hdfsDir, clusterName, segmentName, shardId, upstreamIp, dateTimeStr);
+  }
+
+  public static String getS3Path(String s3Prefix, int shardId) {
+    return String.format(S3_PATH_FORMAT, s3Prefix, shardId);
   }
 
   public static void promoteNewMaster(Admin.Client client, String dbName) throws TException {

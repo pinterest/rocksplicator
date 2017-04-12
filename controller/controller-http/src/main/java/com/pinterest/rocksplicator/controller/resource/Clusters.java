@@ -23,6 +23,7 @@ import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.config.ConfigParser;
 import com.pinterest.rocksplicator.controller.tasks.AddHostTask;
 import com.pinterest.rocksplicator.controller.tasks.HealthCheckTask;
+import com.pinterest.rocksplicator.controller.tasks.LoadSSTTask;
 import com.pinterest.rocksplicator.controller.tasks.PromoteTask;
 import com.pinterest.rocksplicator.controller.tasks.RebalanceTask;
 import com.pinterest.rocksplicator.controller.tasks.RemoveHostTask;
@@ -171,17 +172,30 @@ public class Clusters {
   }
 
   /**
-   * Loads a dataset into a given cluster.
+   * Loads sst files from s3 into a given cluster.
    *
    * @param clusterName name of the cluster
-   * @param dataSetName name of the dataset
-   * @param dataPath    data path on S3
+   * @param segmentName name of the segment
+   * @param s3Bucket    S3 bucket name
+   * @param s3Prefix    prefix of the S3 path
+   * @param concurrency maximum number of hosts concurrently loading
+   * @param rateLimit   s3 download size limit in mb
    */
   @POST
   @Path("/loadData/{clusterName : [a-zA-Z0-9\\-_]+}")
   public void loadData(@PathParam("clusterName") String clusterName,
-                       @NotEmpty @QueryParam("dataSetName") String dataSetName,
-                       @NotEmpty @QueryParam("dataPath") String dataPath) {
+                       @NotEmpty @QueryParam("segmentName") String segmentName,
+                       @NotEmpty @QueryParam("s3Bucket") String s3Bucket,
+                       @NotEmpty @QueryParam("s3Prefix") String s3Prefix,
+                       @QueryParam("concurrency") Optional<Integer> concurrency,
+                       @QueryParam("rateLimit") Optional<Integer> rateLimit) {
+    try {
+      TaskEntity task = new LoadSSTTask(segmentName, s3Bucket, s3Prefix,
+          concurrency.orElse(20), rateLimit.orElse(64)).getEntity();
+      taskQueue.enqueueTask(task, clusterName, 0);
+    } catch (JsonProcessingException e) {
+      throw new WebApplicationException(e);
+    }
     throw new UnsupportedOperationException("method not implemented.");
   }
 
