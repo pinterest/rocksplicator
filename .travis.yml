@@ -9,4 +9,4 @@ before_install:
 - docker pull aliced3645/rocksplicator-build
 
 script:
-- docker run -v $(pwd):/rocksplicator -v $HOME/docker-root:/root aliced3645/rocksplicator-build /bin/sh -c "cd /rocksplicator; mkdir -p build; cd build; cmake .. ; make -j ; make test"
+- docker run -v $(pwd):/rocksplicator -v $HOME/docker-root:/root cdonaghy/rocksplicator-build /bin/sh -c "cd /rocksplicator; mkdir -p build; cd build; cmake .. ; make -j ; env CTEST_OUTPUT_ON_FAILURE=1 make test"
