@@ -196,7 +196,6 @@ public class Clusters {
     } catch (JsonProcessingException e) {
       throw new WebApplicationException(e);
     }
-    throw new UnsupportedOperationException("method not implemented.");
   }
 
   /**
