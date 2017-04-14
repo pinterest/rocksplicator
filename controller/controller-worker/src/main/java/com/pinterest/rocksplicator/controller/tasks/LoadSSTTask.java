@@ -98,41 +98,36 @@ public class LoadSSTTask extends TaskBase<LoadSSTTask.Param> {
 
     final ExecutorService executor = Executors.newFixedThreadPool(getParameter().getConcurrency());
 
-    // first pass load sst to masters
-    List<Future<Boolean>> futures = new ArrayList<>(segmentBean.getHosts().size());
-    for (HostBean host : segmentBean.getHosts()) {
-      Future<Boolean> future = executor.submit(() -> loadSSTFromS3(segment, host, Role.MASTER));
-      futures.add(future);
-    }
     try {
-      for (Future<?> future : futures) {
-        future.get();
-      }
+      // first pass load sst to masters
+      doLoadSST(executor, segmentBean, Role.MASTER);
+      LOG.info("First pass done.");
+      // second pass load sst to slaves
+      doLoadSST(executor, segmentBean, Role.SLAVE);
+      LOG.info("Second pass done.");
     } catch (InterruptedException | ExecutionException ex) {
-      LOG.error("First pass failed.", ex);
-      ctx.getTaskQueue().failTask(ctx.getId(), "First pass failed. " + ex.getMessage());
-      return;
-    }
-
-    // second pass load sst to slaves
-    futures = new ArrayList<>(segmentBean.getHosts().size());
-    for (HostBean host : segmentBean.getHosts()) {
-      Future<Boolean> future = executor.submit(() -> loadSSTFromS3(segment, host, Role.SLAVE));
-      futures.add(future);
-    }
-    try {
-      for (Future<?> future : futures) {
-        future.get();
-      }
-    } catch (InterruptedException | ExecutionException ex) {
-      LOG.error("Second pass failed.", ex);
-      ctx.getTaskQueue().failTask(ctx.getId(), "Second pass failed. " + ex.getMessage());
+      LOG.error("Failed to load sst to cluster {}.", clusterName, ex);
+      ctx.getTaskQueue().failTask(ctx.getId(), "Failed to load sst, error=" + ex.getMessage());
       return;
     }
 
     executor.shutdown();
     executor.shutdownNow();
     ctx.getTaskQueue().finishTask(ctx.getId(), "Finished loading sst to " + clusterName);
+  }
+
+  private void doLoadSST(ExecutorService executor, SegmentBean segment, Role role)
+      throws ExecutionException, InterruptedException {
+    List<Future<Boolean>> futures = new ArrayList<>(segment.getHosts().size());
+    for (HostBean host : segment.getHosts()) {
+      Future<Boolean> future = executor.submit(() ->
+          loadSSTFromS3(segment.getName(), host, role)
+      );
+      futures.add(future);
+    }
+    for (Future<?> future : futures) {
+      future.get();
+    }
   }
 
   /**

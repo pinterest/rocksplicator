@@ -89,6 +89,6 @@ public class LoadSSTTaskTest extends TaskBaseTest {
     task.process(ctx);
 
     Assert.assertEquals(taskQueue.getResult(123),
-        "First pass failed. org.apache.thrift.TException: Boom!");
+        "Failed to load sst, error=org.apache.thrift.TException: Boom!");
   }
 }
