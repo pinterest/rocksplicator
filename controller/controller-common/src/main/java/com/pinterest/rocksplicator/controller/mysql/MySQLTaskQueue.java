@@ -18,15 +18,17 @@ package com.pinterest.rocksplicator.controller.mysql;
 
 import com.pinterest.rocksplicator.controller.TaskQueue;
 import com.pinterest.rocksplicator.controller.mysql.entity.TagEntity;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.persistence.EntityManager;
 import javax.persistence.LockModeType;
 import javax.persistence.Query;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 /**
  * A {@link TaskQueue} which talks to MySQL directly on all kinds of queue operations through JPA.
@@ -43,6 +45,7 @@ public class MySQLTaskQueue implements TaskQueue {
   public MySQLTaskQueue(EntityManager entityManager) {
     this.entityManager = entityManager;
   }
+
 
   @Override
   public boolean createCluster(final String clusterName) {
