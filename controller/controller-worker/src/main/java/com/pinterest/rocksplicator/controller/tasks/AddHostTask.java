@@ -92,9 +92,7 @@ public class AddHostTask extends TaskBase<AddHostTask.Param> {
     final String hdfsDir = getParameter().getHdfsDir();
     final HostBean hostToAdd = getParameter().getHostToAdd();
     final int rateLimitMbs = getParameter().getRateLimitMbs();
-
-    InetSocketAddress hostAddr = new InetSocketAddress(hostToAdd.getIp(), hostToAdd.getPort());
-    Admin.Client client = clientFactory.getClient(hostAddr);
+    final Admin.Client client = clientFactory.getClient(hostToAdd);
 
     // 1) ping the host to add to make sure it's up and running.
     try {
@@ -134,9 +132,7 @@ public class AddHostTask extends TaskBase<AddHostTask.Param> {
                 segment.getName(), shardId);
             continue;
           }
-          Admin.Client upstreamClient = clientFactory.getClient(
-              new InetSocketAddress(upstream.getIp(), upstream.getPort())
-          );
+          Admin.Client upstreamClient = clientFactory.getClient(upstream);
           String dbName = ShardUtil.getDBNameFromSegmentAndShardId(segment.getName(), shardId);
           String hdfsPath = ShardUtil.getHdfsPath(hdfsDir, clusterName, segment.getName(), shardId,
               upstream.getIp(), getCurrentDateTime());
