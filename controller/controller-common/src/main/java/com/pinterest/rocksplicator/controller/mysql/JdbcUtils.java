@@ -18,17 +18,15 @@ public class JdbcUtils {
   private static int QUERYING_INTERVAL_IN_MILLISECONDS = 3000;
   private static final String DB_URL_TEMPLATE = "jdbc:mysql://%s:%d/%s";
 
-  public static String constructJdbcUrl(String dbHost, int dbPort, String dbName) {
-    return String.format(DB_URL_TEMPLATE, dbHost, dbPort, dbName);
-  }
-
   /**
    * Create a mysql connection.
    */
-  public static Connection createMySqlConnection(String dbURL) {
+  public static Connection createMySqlConnection(
+      String dbHost, int dbPort, String dbName, String userName, String password) {
+    String dbURL = String.format(DB_URL_TEMPLATE, dbHost, dbPort, dbName);
     try {
       Class.forName("com.mysql.jdbc.Driver");
-      Connection mysqlConnection = DriverManager.getConnection(dbURL, "root", "");
+      Connection mysqlConnection = DriverManager.getConnection(dbURL, userName, password);
       mysqlConnection.setAutoCommit(false);
       return mysqlConnection;
     } catch (ClassNotFoundException e) {
@@ -50,9 +48,9 @@ public class JdbcUtils {
       try {
         connection.close();
       } catch (SQLException e) {
-        LOG.debug("Could not close JDBC Connection", e);
+        LOG.error("Could not close JDBC Connection", e);
       } catch (Throwable e) {
-        LOG.info("Unexpected exception on closing JDBC Connection", e);
+        LOG.error("Unexpected exception on closing JDBC Connection", e);
       }
     }
   }
@@ -67,22 +65,21 @@ public class JdbcUtils {
       try {
         statement.close();
       } catch (SQLException e) {
-        LOG.debug("Could not close JDBC Statement", e);
+        LOG.error("Could not close JDBC Statement", e);
       } catch (Throwable e) {
-        LOG.info("Unexpected exception on closing JDBC Statement", e);
+        LOG.error("Unexpected exception on closing JDBC Statement", e);
       }
     }
   }
 
   /**
    * Execute mysql update query
-   * @param dbURL: db url
+   * @param connection: mysql db connection
    * @param updateSql: update query to execute
    * @return
    */
-  public static boolean executeUpdateQuery(String dbURL, String updateSql) {
+  public static boolean executeUpdateQuery(Connection connection, String updateSql) {
     for (int i = 0; i < MAX_MYSQL_EXECUTE_RETRY; i ++) {
-      Connection connection = createMySqlConnection(dbURL);
       if (connection == null) {
         return false;
       }
@@ -96,7 +93,6 @@ public class JdbcUtils {
         LOG.error(String.format("Query %s execution failed and this is %d try", updateSql, i+1), e);
       } finally {
         closeStatement(statement);
-        closeConnection(connection);
         // TODO(shu): exponential backoff?
         try {
           Thread.sleep(QUERYING_INTERVAL_IN_MILLISECONDS);

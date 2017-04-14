@@ -17,6 +17,8 @@
 package com.pinterest.rocksplicator.controller.mysql;
 
 import com.pinterest.rocksplicator.controller.TaskQueue;
+
+import java.sql.Connection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -49,7 +51,6 @@ import org.slf4j.LoggerFactory;
 public class MySQLTaskQueue implements TaskQueue{
 
   private static final Logger LOG = LoggerFactory.getLogger(MySQLTaskQueue.class);
-  private static final String MYSQL_DB_NAME = "controller";
   private static final String TAG_TABLE_NAME = "tag";
   private static final String TASK_TABLE_NAME = "task";
   private static final String INSERT_TAG_QUERY_TEMPLATE =
@@ -58,29 +59,29 @@ public class MySQLTaskQueue implements TaskQueue{
       "UPDATE TAG SET locks=1 WHERE name='%s' AND locks=0";
   private static final String UNLOCK_CLUSTER_QUERY_TEMPLATE =
       "UPDATE TAG SET locks=0 WHERE name='%s' AND locks=1";
-  private String dbURL;
+  private final Connection connection;
 
-  MySQLTaskQueue(String dbHost, int dbPort) {
-    this.dbURL = JdbcUtils.constructJdbcUrl(dbHost, dbPort, MYSQL_DB_NAME);
+  MySQLTaskQueue(Connection connection) {
+    this.connection = connection;
   }
 
   @Override
   public boolean createCluster(final String clusterName) {
     String insertQuery = String.format(
         INSERT_TAG_QUERY_TEMPLATE, TAG_TABLE_NAME, clusterName, 0);
-    return JdbcUtils.executeUpdateQuery(dbURL, insertQuery);
+    return JdbcUtils.executeUpdateQuery(connection, insertQuery);
   }
 
   @Override
   public boolean lockCluster(final String clusterName) {
     String lockQuery = String.format(LOCK_CLUSTER_QUERY_TEMPLATE, clusterName);
-    return JdbcUtils.executeUpdateQuery(dbURL, lockQuery);
+    return JdbcUtils.executeUpdateQuery(connection, lockQuery);
   }
 
   @Override
   public boolean unlockCluster(final String clusterName) {
     String unlockQuery = String.format(UNLOCK_CLUSTER_QUERY_TEMPLATE, clusterName);
-    return JdbcUtils.executeUpdateQuery(dbURL, unlockQuery);
+    return JdbcUtils.executeUpdateQuery(connection, unlockQuery);
   }
 
 }

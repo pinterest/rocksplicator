@@ -16,14 +16,19 @@
 
 package com.pinterest.rocksplicator.controller.mysql;
 
+import java.sql.Connection;
+
 public class MySQLTaskQueueIntegrationTest {
 
   public static void main(String[] args) {
-    MySQLTaskQueue queue = new MySQLTaskQueue("localhost", 3306);
+    Connection connection = JdbcUtils.createMySqlConnection(
+        "localhost", 3306, "controller", "root", "");
+    MySQLTaskQueue queue = new MySQLTaskQueue(connection);
     String testCluster = "integ_test";
     queue.createCluster(testCluster);
     queue.lockCluster(testCluster);
     queue.unlockCluster(testCluster);
+    JdbcUtils.closeConnection(connection);
   }
 
 }
