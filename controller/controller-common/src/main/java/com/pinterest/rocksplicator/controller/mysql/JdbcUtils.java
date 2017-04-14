@@ -5,8 +5,14 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 
 /**
  * Util functions for JDBC operations.
@@ -76,7 +82,7 @@ public class JdbcUtils {
    * Execute mysql update query
    * @param connection: mysql db connection
    * @param updateSql: update query to execute
-   * @return
+   * @return: true if update executed successfully, false if else.
    */
   public static boolean executeUpdateQuery(Connection connection, String updateSql) {
     for (int i = 0; i < MAX_MYSQL_EXECUTE_RETRY; i ++) {
@@ -102,4 +108,52 @@ public class JdbcUtils {
     return false;
   }
 
+
+  /**
+   * Execute mysql query.
+   * @param connection: mysql db connection
+   * @param querySql: query to execute
+   * @return a list of query result, null if else.
+   */
+  public static List<HashMap<String, Object>> executeQuery(Connection connection, String querySql) {
+    for (int i = 0; i < MAX_MYSQL_EXECUTE_RETRY; i ++) {
+      Statement statement = null;
+      ResultSet resultSet = null;
+      try {
+        statement = connection.createStatement();
+        resultSet = statement.executeQuery(querySql);
+        ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
+        List<HashMap<String, Object>> results = new ArrayList<>();
+        while (resultSet.next()) {
+          HashMap<String, Object> result = new HashMap<>();
+          for (int j = 1; j <= resultSetMetaData.getColumnCount(); j ++) {
+            String columnLabel = resultSetMetaData.getColumnLabel(j);
+            int columnType = resultSetMetaData.getColumnType(j);
+            switch (columnType) {
+              case Types.TINYINT:
+                result.put(columnLabel, resultSet.getInt(j));
+                break;
+              case Types.BIGINT:
+                result.put(columnLabel, resultSet.getLong(j));
+                break;
+              default:
+                result.put(columnLabel, resultSet.getString(j));
+                break;
+            }
+          }
+          results.add(result);
+        }
+        return results;
+      } catch (SQLException e) {
+        LOG.error(String.format("Query %s execution failed and this is %d try", querySql, i+1), e);
+      } finally {
+        closeStatement(statement);
+        // TODO(shu): exponential backoff?
+        try {
+          Thread.sleep(QUERYING_INTERVAL_IN_MILLISECONDS);
+        } catch (InterruptedException e) {}
+      }
+    }
+    return null;
+  }
 }

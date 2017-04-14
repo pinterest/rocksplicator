@@ -16,19 +16,44 @@
 
 package com.pinterest.rocksplicator.controller.mysql;
 
+import org.testng.Assert;
+import org.testng.SkipException;
+import org.testng.annotations.BeforeTest;
+import org.testng.annotations.Test;
+
 import java.sql.Connection;
+import java.util.Set;
 
 public class MySQLTaskQueueIntegrationTest {
 
-  public static void main(String[] args) {
-    Connection connection = JdbcUtils.createMySqlConnection(
-        "localhost", 3306, "controller", "root", "");
-    MySQLTaskQueue queue = new MySQLTaskQueue(connection);
-    String testCluster = "integ_test";
-    queue.createCluster(testCluster);
-    queue.lockCluster(testCluster);
-    queue.unlockCluster(testCluster);
-    JdbcUtils.closeConnection(connection);
+  protected Connection getConnection() {
+    return JdbcUtils.createMySqlConnection("localhost", 3306, "controller", "root", "");
   }
 
+  @BeforeTest
+  protected void checkMySQLRunning() {
+    Connection connection = getConnection();
+    if (connection == null) {
+      throw new SkipException("MySQL is not running");
+    }
+  }
+
+  @Test
+  public void testClusterTable() {
+    Connection connection = getConnection();
+    MySQLTaskQueue queue = new MySQLTaskQueue(connection);
+    String testCluster = "integ_test";
+    Assert.assertTrue(queue.createCluster(testCluster));
+    Set<String> clusters = queue.getAllClusters();
+    Assert.assertEquals(1, clusters.size());
+    Assert.assertTrue(clusters.contains(testCluster));
+    Assert.assertTrue(queue.lockCluster(testCluster));
+    Assert.assertFalse(queue.lockCluster(testCluster));
+    Assert.assertFalse(queue.removeCluster("integ_test"));
+    Assert.assertTrue(queue.unlockCluster(testCluster));
+    Assert.assertTrue(queue.removeCluster("integ_test"));
+    Assert.assertFalse(queue.lockCluster("integ_test"));
+    Assert.assertFalse(queue.removeCluster("integ_test"));
+    JdbcUtils.closeConnection(connection);
+  }
 }
