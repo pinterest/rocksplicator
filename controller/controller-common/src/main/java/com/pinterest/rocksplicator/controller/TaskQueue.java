@@ -16,7 +16,6 @@
 
 package com.pinterest.rocksplicator.controller;
 
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
