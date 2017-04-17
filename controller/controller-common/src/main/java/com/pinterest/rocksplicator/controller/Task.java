@@ -19,12 +19,12 @@ package com.pinterest.rocksplicator.controller;
 import java.sql.Timestamp;
 
 /**
- * A {@link Task} is a POJO contains both {@link TaskEntity} and the metadata of this task.
+ * A {@link Task} is a POJO contains both {@link TaskBase} and the metadata of this task.
  * It can be retrieved from {@TaskQueue}.
  *
  * @author Bo Liu (bol@pinterest.com)
  */
-public class Task extends TaskEntity {
+public class Task extends TaskBase {
   public long id;
   public int state;
   public String clusterName;
@@ -34,7 +34,7 @@ public class Task extends TaskEntity {
   public String claimedWorker;
   public String output;
 
-  public Task(TaskEntity t) {
+  public Task(TaskBase t) {
     super.name = t.name;
     super.body = t.body;
     super.priority = t.priority;

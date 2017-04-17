@@ -16,7 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
-import com.pinterest.rocksplicator.controller.TaskEntity;
+import com.pinterest.rocksplicator.controller.TaskBase;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -33,7 +33,7 @@ import java.util.Stack;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-final class ChainedTask extends TaskBase<ChainedTask.Param> {
+final class ChainedTask extends com.pinterest.rocksplicator.controller.tasks.TaskBase {
 
   private static final Logger LOG = LoggerFactory.getLogger(ChainedTask.class);
 
@@ -53,15 +53,15 @@ final class ChainedTask extends TaskBase<ChainedTask.Param> {
     final String worker = ctx.getWorker();
     final TaskQueue taskQueue = ctx.getTaskQueue();
 
-    Stack<TaskEntity> tasks = new Stack<>();
+    Stack<TaskBase> tasks = new Stack<>();
     tasks.push(getParameter().getT2());
     tasks.push(getParameter().getT1());
 
     while (!tasks.isEmpty()) {
-      TaskEntity taskEntity = tasks.pop();
-      TaskBase task = TaskFactory.getWorkerTask(taskEntity);
+      TaskBase taskBase = tasks.pop();
+      com.pinterest.rocksplicator.controller.tasks.TaskBase task = TaskFactory.getWorkerTask(taskBase);
       if (task == null) {
-        taskQueue.failTask(id, "Failed to instantiate task " + taskEntity.name);
+        taskQueue.failTask(id, "Failed to instantiate task " + taskBase.name);
         return;
       } else if (task instanceof ChainedTask) {
         ChainedTask chainedTask = (ChainedTask) task;
@@ -105,25 +105,25 @@ final class ChainedTask extends TaskBase<ChainedTask.Param> {
 
   public static class Param extends Parameter {
     @JsonProperty
-    private TaskEntity t1; // first task to execute
+    private TaskBase t1; // first task to execute
 
     @JsonProperty
-    private TaskEntity t2; // second task to execute
+    private TaskBase t2; // second task to execute
 
-    public TaskEntity getT1() {
+    public TaskBase getT1() {
       return t1;
     }
 
-    public Param setT1(TaskEntity t1) {
+    public Param setT1(TaskBase t1) {
       this.t1 = t1;
       return this;
     }
 
-    public TaskEntity getT2() {
+    public TaskBase getT2() {
       return t2;
     }
 
-    public Param setT2(TaskEntity t2) {
+    public Param setT2(TaskBase t2) {
       this.t2 = t2;
       return this;
     }

@@ -21,27 +21,29 @@ import org.testng.SkipException;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
 
-import java.sql.Connection;
+import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.Persistence;
 import java.util.Set;
 
 public class MySQLTaskQueueIntegrationTest {
 
-  protected Connection getConnection() {
-    return JdbcUtils.createMySqlConnection("localhost", 3306, "controller", "root", "");
-  }
+  private EntityManager entityManager;
 
   @BeforeTest
   protected void checkMySQLRunning() {
-    Connection connection = getConnection();
-    if (connection == null) {
-      throw new SkipException("MySQL is not running");
+    try {
+      EntityManagerFactory entityManagerFactory =
+          Persistence.createEntityManagerFactory("controller-test");
+      this.entityManager = entityManagerFactory.createEntityManager();
+    } catch (Exception e) {
+      throw new SkipException("MySQL is not running correctly");
     }
   }
 
   @Test
-  public void testClusterTable() {
-    Connection connection = getConnection();
-    MySQLTaskQueue queue = new MySQLTaskQueue(connection);
+  public void testClusterTable() throws MySQLTaskQueue.MySQLTaskQueueException {
+    MySQLTaskQueue queue = new MySQLTaskQueue(entityManager);
     String testCluster = "integ_test";
     Assert.assertTrue(queue.createCluster(testCluster));
     Set<String> clusters = queue.getAllClusters();
@@ -49,11 +51,9 @@ public class MySQLTaskQueueIntegrationTest {
     Assert.assertTrue(clusters.contains(testCluster));
     Assert.assertTrue(queue.lockCluster(testCluster));
     Assert.assertFalse(queue.lockCluster(testCluster));
-    Assert.assertFalse(queue.removeCluster("integ_test"));
+    Assert.assertFalse(queue.removeCluster(testCluster));
     Assert.assertTrue(queue.unlockCluster(testCluster));
-    Assert.assertTrue(queue.removeCluster("integ_test"));
-    Assert.assertFalse(queue.lockCluster("integ_test"));
-    Assert.assertFalse(queue.removeCluster("integ_test"));
-    JdbcUtils.closeConnection(connection);
+    Assert.assertTrue(queue.removeCluster(testCluster));
+    Assert.assertFalse(queue.removeCluster(testCluster));
   }
 }

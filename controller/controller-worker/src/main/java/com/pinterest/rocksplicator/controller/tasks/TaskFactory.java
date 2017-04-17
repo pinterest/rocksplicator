@@ -16,9 +16,8 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
-import com.pinterest.rocksplicator.controller.TaskEntity;
+import com.pinterest.rocksplicator.controller.TaskBase;
 
-import com.google.inject.Guice;
 import com.google.inject.Injector;
 import io.dropwizard.util.Generics;
 import org.slf4j.Logger;
@@ -40,12 +39,12 @@ public final class TaskFactory {
     INJECTOR = injector;
   }
 
-  public static TaskBase getWorkerTask(TaskEntity task) {
+  public static com.pinterest.rocksplicator.controller.tasks.TaskBase getWorkerTask(TaskBase task) {
     try {
-      Class<TaskBase> taskClazz = loadTaskClass(task.name);
+      Class<com.pinterest.rocksplicator.controller.tasks.TaskBase> taskClazz = loadTaskClass(task.name);
       Class<Parameter> paramClazz = Generics.getTypeParameter(taskClazz, Parameter.class);
       Parameter parameter = Parameter.deserialize(task.body, paramClazz);
-      TaskBase taskBase = taskClazz.getConstructor(paramClazz).newInstance(parameter);
+      com.pinterest.rocksplicator.controller.tasks.TaskBase taskBase = taskClazz.getConstructor(paramClazz).newInstance(parameter);
       Injector injector = INJECTOR;
       if (injector != null) {
         injector.injectMembers(taskBase);
@@ -58,7 +57,7 @@ public final class TaskFactory {
   }
 
   @SuppressWarnings("unchecked")
-  public static Class<TaskBase> loadTaskClass(String taskName) throws ClassNotFoundException {
+  public static Class<com.pinterest.rocksplicator.controller.tasks.TaskBase> loadTaskClass(String taskName) throws ClassNotFoundException {
     Class clazz = Thread.currentThread().getContextClassLoader().loadClass(taskName);
     return clazz;
   }

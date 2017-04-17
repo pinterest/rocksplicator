@@ -17,7 +17,7 @@
 package com.pinterest.rocksplicator.controller.tasks;
 
 import com.pinterest.rocksplicator.controller.Task;
-import com.pinterest.rocksplicator.controller.TaskEntity;
+import com.pinterest.rocksplicator.controller.TaskBase;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 
 import java.util.List;
@@ -95,7 +95,7 @@ class LocalAckTaskQueue implements TaskQueue {
   }
 
   @Override
-  public boolean enqueueTask(final TaskEntity task,
+  public boolean enqueueTask(final TaskBase task,
                              final String clusterName,
                              final int runDelaySeconds) {
     return taskQueue.enqueueTask(task, clusterName, runDelaySeconds);
@@ -109,7 +109,7 @@ class LocalAckTaskQueue implements TaskQueue {
   @Override
   public long finishTaskAndEnqueueRunningTask(final long id,
                                               final String output,
-                                              final TaskEntity newTask,
+                                              final TaskBase newTask,
                                               final String worker) {
     return taskQueue.finishTaskAndEnqueueRunningTask(id, output, newTask, worker);
   }
@@ -117,7 +117,7 @@ class LocalAckTaskQueue implements TaskQueue {
   @Override
   public boolean finishTaskAndEnqueuePendingTask(final long id,
                                                  final String output,
-                                                 final TaskEntity newTask,
+                                                 final TaskBase newTask,
                                                  final int runDelaySeconds) {
     return taskQueue.finishTaskAndEnqueuePendingTask(id, output, newTask, runDelaySeconds);
   }

@@ -37,13 +37,13 @@ public interface TaskQueue {
 
   /**
    * Enqueue a task.
-   * @param taskEntity entity of the task to enqueue
+   * @param taskBase entity of the task to enqueue
    * @param clusterName Which cluster is this task for
    * @param runDelaySeconds the task should be delayed for this many of seconds to run. If <= 0, no
    *                        delay required
    * @return false on error
    */
-  default boolean enqueueTask(final TaskEntity taskEntity,
+  default boolean enqueueTask(final TaskBase taskBase,
                              final String clusterName,
                              final int runDelaySeconds) {
     return true;
@@ -87,13 +87,13 @@ public interface TaskQueue {
    * The newly enqueued task if of priority 0 and in running state.
    * @param id which task to finish
    * @param output output of the finished task
-   * @param newTaskEntity the task entity of the new task
+   * @param newTaskBase the task entity of the new task
    * @param worker the worker who is calling this function
    * @return the task id for the newly enqueued task on success, -1 on error
    */
   default long finishTaskAndEnqueueRunningTask(final long id,
                                                final String output,
-                                               final TaskEntity newTaskEntity,
+                                               final TaskBase newTaskBase,
                                                final String worker) {
     return 0;
   }
@@ -102,13 +102,13 @@ public interface TaskQueue {
    * Atomically ack the task queue that the task has finished, and enqueue a new task.
    * @param id which task to finish
    * @param output output of the finished task
-   * @param taskEntity the task entity of the task to enqueue
+   * @param taskBase the task entity of the task to enqueue
    * @param runDelaySeconds the run delay seconds for the task to enqueue
    * @return false on error
    */
   default boolean finishTaskAndEnqueuePendingTask(final long id,
                                                   final String output,
-                                                  final TaskEntity taskEntity,
+                                                  final TaskBase taskBase,
                                                   final int runDelaySeconds) {
     return true;
   }
@@ -186,7 +186,7 @@ public interface TaskQueue {
    * @return task or null
    */
   default Task findTask(long id) {
-    return new Task(new TaskEntity());
+    return new Task(new TaskBase());
   }
 
   /**

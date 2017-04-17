@@ -131,7 +131,7 @@ public class DispatcherTest {
 
   @Test
   public void testChainedTask() throws Exception {
-    TaskEntity task = new SleepIncrementTask(100)
+    TaskBase task = new SleepIncrementTask(100)
         .andThen(new SleepIncrementTask(150))
         .andThen(new SleepIncrementTask(200))
         .getEntity();
@@ -147,7 +147,7 @@ public class DispatcherTest {
       @Override
       public long finishTaskAndEnqueueRunningTask(final long id,
                                                   final String output,
-                                                  final TaskEntity newTask,
+                                                  final TaskBase newTask,
                                                   final String worker) {
         latch.countDown();
         return super.finishTaskAndEnqueueRunningTask(id, output, newTask, worker);
@@ -174,7 +174,7 @@ public class DispatcherTest {
 
   @Test
   public void testChainedTaskWithError() throws Exception {
-    TaskEntity task = new SleepIncrementTask(100)
+    TaskBase task = new SleepIncrementTask(100)
         .andThen(new ThrowingTask("Oops..."))
         .andThen(new SleepIncrementTask(150))
         .getEntity();
@@ -196,7 +196,7 @@ public class DispatcherTest {
       @Override
       public long finishTaskAndEnqueueRunningTask(final long id,
                                                   final String output,
-                                                  final TaskEntity newTask,
+                                                  final TaskBase newTask,
                                                   final String worker) {
         latch.countDown();
         return super.finishTaskAndEnqueueRunningTask(id, output, newTask, worker);
@@ -225,7 +225,7 @@ public class DispatcherTest {
   @Test
   public void testRetryTask() throws Exception {
     final String errorMsg = "Boom!!!";
-    TaskEntity task = new ThrowingTask(errorMsg).retry(3).getEntity();
+    TaskBase task = new ThrowingTask(errorMsg).retry(3).getEntity();
     final CountDownLatch latch = new CountDownLatch(3);
     FIFOTaskQueue tq = new FIFOTaskQueue(10) {
       @Override
@@ -237,7 +237,7 @@ public class DispatcherTest {
       @Override
       public long finishTaskAndEnqueueRunningTask(final long id,
                                                   final String output,
-                                                  final TaskEntity newTask,
+                                                  final TaskBase newTask,
                                                   final String worker) {
         latch.countDown();
         return super.finishTaskAndEnqueueRunningTask(id, output, newTask, worker);
