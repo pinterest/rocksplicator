@@ -22,6 +22,7 @@ import javax.persistence.Id;
 import javax.persistence.NamedQueries;
 import javax.persistence.NamedQuery;
 import javax.persistence.Table;
+import javax.validation.constraints.NotNull;
 import java.util.Date;
 
 /**
@@ -49,12 +50,15 @@ public class TagEntity {
 
   @Id
   @Column(name = "name")
+  @NotNull
   private String name;
 
   @Column(name = "locks")
+  @NotNull
   private int locks;
 
   @Column(name = "created_at")
+  @NotNull
   private Date createdAt;
 
   @Column(name = "owner")
