@@ -39,12 +39,6 @@ import java.util.Date;
 @NamedQueries({
     @NamedQuery(name = "tag.findAll",
                 query = "SELECT t.name FROM tag t"),
-    @NamedQuery(name = "tag.findLock",
-                query = "SELECT t.locks FROM tag t WHERE t.name = :name"),
-    @NamedQuery(name = "tag.lock",
-                query = "UPDATE tag t SET t.locks = 1 WHERE t.name = :name AND t.locks = 0"),
-    @NamedQuery(name = "tag.unlock",
-                query = "UPDATE tag t SET t.locks = 0 WHERE t.name = :name AND t.locks = 1")
 })
 public class TagEntity {
 
