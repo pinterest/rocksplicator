@@ -45,6 +45,7 @@ public class MySQLTaskQueueIntegrationTest {
   public void testClusterTable() throws MySQLTaskQueue.MySQLTaskQueueException {
     MySQLTaskQueue queue = new MySQLTaskQueue(entityManager);
     String testCluster = "integ_test";
+    Assert.assertFalse(queue.lockCluster(testCluster));
     Assert.assertTrue(queue.createCluster(testCluster));
     Set<String> clusters = queue.getAllClusters();
     Assert.assertEquals(1, clusters.size());
