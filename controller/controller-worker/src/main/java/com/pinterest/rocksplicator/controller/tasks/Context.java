@@ -20,7 +20,7 @@ import com.pinterest.rocksplicator.controller.TaskQueue;
 
 
 /**
- * Runtime context needed to drive {@link TaskBase}
+ * Runtime context needed to drive {@link AbstractTask}
  *
  * @author Ang Xu (angxu@pinterest.com)
  */

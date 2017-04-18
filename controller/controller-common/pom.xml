@@ -24,6 +24,12 @@
             </exclusions>
         </dependency>
         <dependency>
+            <!-- Ecpliselink is a workable persistenceprovider -->
+            <groupId>org.eclipse.persistence</groupId>
+            <artifactId>eclipselink</artifactId>
+            <version>2.6.4</version>
+        </dependency>
+        <dependency>
             <groupId>mysql</groupId>
             <artifactId>mysql-connector-java</artifactId>
             <!-- There are some timezone issue in mysql conenction in 6.X version -->

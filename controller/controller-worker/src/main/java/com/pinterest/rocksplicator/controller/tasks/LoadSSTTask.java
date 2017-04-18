@@ -47,7 +47,7 @@ import javax.inject.Inject;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-public class LoadSSTTask extends TaskBase<LoadSSTTask.Param> {
+public class LoadSSTTask extends AbstractTask<LoadSSTTask.Param> {
   private static final Logger LOG = LoggerFactory.getLogger(LoadSSTTask.class);
   @Inject
   private CuratorFramework zkClient;

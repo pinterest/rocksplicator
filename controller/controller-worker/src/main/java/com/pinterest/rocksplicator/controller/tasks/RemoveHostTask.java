@@ -43,7 +43,7 @@ import javax.inject.Inject;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-public class RemoveHostTask extends TaskBase<RemoveHostTask.Param> {
+public class RemoveHostTask extends AbstractTask<RemoveHostTask.Param> {
 
   private static final Logger LOG = LoggerFactory.getLogger(RemoveHostTask.class);
 

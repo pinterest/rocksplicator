@@ -16,9 +16,8 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
-import com.pinterest.rocksplicator.controller.TaskEntity;
+import com.pinterest.rocksplicator.controller.TaskBase;
 
-import com.google.inject.Guice;
 import com.google.inject.Injector;
 import io.dropwizard.util.Generics;
 import org.slf4j.Logger;
@@ -40,17 +39,17 @@ public final class TaskFactory {
     INJECTOR = injector;
   }
 
-  public static TaskBase getWorkerTask(TaskEntity task) {
+  public static AbstractTask getWorkerTask(TaskBase task) {
     try {
-      Class<TaskBase> taskClazz = loadTaskClass(task.name);
+      Class<AbstractTask> taskClazz = loadTaskClass(task.name);
       Class<Parameter> paramClazz = Generics.getTypeParameter(taskClazz, Parameter.class);
       Parameter parameter = Parameter.deserialize(task.body, paramClazz);
-      TaskBase taskBase = taskClazz.getConstructor(paramClazz).newInstance(parameter);
+      AbstractTask abstractTask = taskClazz.getConstructor(paramClazz).newInstance(parameter);
       Injector injector = INJECTOR;
       if (injector != null) {
-        injector.injectMembers(taskBase);
+        injector.injectMembers(abstractTask);
       }
-      return taskBase;
+      return abstractTask;
     } catch (Exception e) {
       LOG.error("Cannot instantiate the implementation of " + task.name, e);
       return null;
@@ -58,7 +57,7 @@ public final class TaskFactory {
   }
 
   @SuppressWarnings("unchecked")
-  public static Class<TaskBase> loadTaskClass(String taskName) throws ClassNotFoundException {
+  public static Class<AbstractTask> loadTaskClass(String taskName) throws ClassNotFoundException {
     Class clazz = Thread.currentThread().getContextClassLoader().loadClass(taskName);
     return clazz;
   }

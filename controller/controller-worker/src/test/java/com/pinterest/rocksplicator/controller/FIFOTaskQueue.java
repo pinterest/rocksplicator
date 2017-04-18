@@ -43,7 +43,7 @@ public class FIFOTaskQueue implements TaskQueue {
   }
 
   @Override
-  public boolean enqueueTask(final TaskEntity task,
+  public boolean enqueueTask(final TaskBase task,
                       final String clusterName,
                       final int runDelaySeconds) {
 
@@ -81,7 +81,7 @@ public class FIFOTaskQueue implements TaskQueue {
   @Override
   public long finishTaskAndEnqueueRunningTask(final long id,
                                               final String output,
-                                              final TaskEntity newTask,
+                                              final TaskBase newTask,
                                               final String worker) {
     result.putIfAbsent(id, output);
     return currentId.getAndIncrement();

@@ -17,9 +17,7 @@
 package com.pinterest.rocksplicator.controller.tasks;
 
 import com.pinterest.rocksdb_admin.thrift.Admin;
-import com.pinterest.rocksdb_admin.thrift.ChangeDBRoleAndUpstreamRequest;
 import com.pinterest.rocksdb_admin.thrift.GetSequenceNumberRequest;
-import com.pinterest.rocksdb_admin.thrift.GetSequenceNumberResponse;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.bean.Role;
@@ -35,7 +33,6 @@ import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -48,7 +45,7 @@ import javax.inject.Inject;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-public class PromoteTask extends TaskBase<PromoteTask.Param> {
+public class PromoteTask extends AbstractTask<PromoteTask.Param> {
   private static final Logger LOG = LoggerFactory.getLogger(PromoteTask.class);
 
   @Inject

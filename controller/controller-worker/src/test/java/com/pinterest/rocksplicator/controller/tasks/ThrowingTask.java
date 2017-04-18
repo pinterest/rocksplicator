@@ -21,7 +21,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 /**
  * @author Ang Xu (angxu@pinterest.com)
  */
-public class ThrowingTask extends TaskBase<ThrowingTask.Param>  {
+public class ThrowingTask extends AbstractTask<ThrowingTask.Param> {
 
   public ThrowingTask(String errorMsg) {
     this(new Param().setErrorMsg(errorMsg));

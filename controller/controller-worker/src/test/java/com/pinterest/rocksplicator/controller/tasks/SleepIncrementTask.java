@@ -25,7 +25,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @author Shu Zhang (shu@pinterest.com)
  *
  */
-public final class SleepIncrementTask extends TaskBase<SleepIncrementTask.Param> {
+public final class SleepIncrementTask extends AbstractTask<SleepIncrementTask.Param> {
 
   public static Integer executionCounter = 0;
   public static Object notifyObject = new Object();

@@ -18,11 +18,11 @@ package com.pinterest.rocksplicator.controller;
 
 
 /**
- * A {@TaskEntity} is the minimum unit which can be enqueued to a {@TaskQueue}.
+ * A {@TaskBase} is the minimum unit which can be enqueued to a {@TaskQueue}.
  *
  * @author Bo Liu (bol@pinterest.com)
  */
-public class TaskEntity {
+public class TaskBase {
   public String name;
   public int priority;
   public String body;

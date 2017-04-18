@@ -16,7 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
-import com.pinterest.rocksplicator.controller.TaskEntity;
+import com.pinterest.rocksplicator.controller.TaskBase;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -24,13 +24,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * This task provides retry functionality for an arbitrary {@link TaskBase}.
+ * This task provides retry functionality for an arbitrary {@link AbstractTask}.
  * It will keep retrying the given task until 1) the task succeeds or 2) the maxRetry
  * limit has been reached.
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-final class RetryTask extends TaskBase<RetryTask.Param> {
+final class RetryTask extends AbstractTask {
   private static final Logger LOG = LoggerFactory.getLogger(RetryTask.class);
 
   public RetryTask(Param param) {
@@ -47,7 +47,7 @@ final class RetryTask extends TaskBase<RetryTask.Param> {
     long id = ctx.getId();
     final TaskQueue taskQueue = ctx.getTaskQueue();
 
-    TaskBase task = TaskFactory.getWorkerTask(getParameter().getTask());
+    AbstractTask task = TaskFactory.getWorkerTask(getParameter().getTask());
     int retry = 0;
     while (retry < getParameter().getMaxRetry()) {
       Throwable t = null;
@@ -84,16 +84,16 @@ final class RetryTask extends TaskBase<RetryTask.Param> {
 
   public static class Param extends Parameter {
     @JsonProperty
-    private TaskEntity task;
+    private TaskBase task;
 
     @JsonProperty
     private int maxRetry;
 
-    public TaskEntity getTask() {
+    public TaskBase getTask() {
       return task;
     }
 
-    public RetryTask.Param setTask(TaskEntity task) {
+    public RetryTask.Param setTask(TaskBase task) {
       this.task = task;
       return this;
     }

@@ -17,7 +17,6 @@
 package com.pinterest.rocksplicator.controller.tasks;
 
 import com.pinterest.rocksdb_admin.thrift.Admin;
-import com.pinterest.rocksdb_admin.thrift.AdminException;
 import com.pinterest.rocksdb_admin.thrift.BackupDBRequest;
 import com.pinterest.rocksdb_admin.thrift.RestoreDBRequest;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
@@ -36,7 +35,6 @@ import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.InetSocketAddress;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -55,7 +53,7 @@ import javax.inject.Inject;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-public class AddHostTask extends TaskBase<AddHostTask.Param> {
+public class AddHostTask extends AbstractTask<AddHostTask.Param> {
   private static final Logger LOG = LoggerFactory.getLogger(AddHostTask.class);
   private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyymmdd-hhmmss");
 

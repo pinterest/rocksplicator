@@ -17,7 +17,7 @@
 package com.pinterest.rocksplicator.controller;
 
 import com.pinterest.rocksplicator.controller.tasks.Context;
-import com.pinterest.rocksplicator.controller.tasks.TaskBase;
+import com.pinterest.rocksplicator.controller.tasks.AbstractTask;
 import com.pinterest.rocksplicator.controller.tasks.TaskFactory;
 
 import org.slf4j.Logger;
@@ -63,7 +63,7 @@ public final class WorkerPool {
       LOG.error("The task is null, cannot be assigned");
       return false;
     }
-    TaskBase baseTask = TaskFactory.getWorkerTask(task);
+    AbstractTask baseTask = TaskFactory.getWorkerTask(task);
 
     Future<?> future = executorService.submit(() -> {
       try {

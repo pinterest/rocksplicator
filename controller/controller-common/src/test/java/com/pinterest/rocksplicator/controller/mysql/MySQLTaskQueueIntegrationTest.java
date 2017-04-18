@@ -16,19 +16,45 @@
 
 package com.pinterest.rocksplicator.controller.mysql;
 
-import java.sql.Connection;
+import org.testng.Assert;
+import org.testng.SkipException;
+import org.testng.annotations.BeforeTest;
+import org.testng.annotations.Test;
+
+import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.Persistence;
+import java.util.Set;
 
 public class MySQLTaskQueueIntegrationTest {
 
-  public static void main(String[] args) {
-    Connection connection = JdbcUtils.createMySqlConnection(
-        "localhost", 3306, "controller", "root", "");
-    MySQLTaskQueue queue = new MySQLTaskQueue(connection);
-    String testCluster = "integ_test";
-    queue.createCluster(testCluster);
-    queue.lockCluster(testCluster);
-    queue.unlockCluster(testCluster);
-    JdbcUtils.closeConnection(connection);
+  private EntityManager entityManager;
+
+  @BeforeTest
+  protected void checkMySQLRunning() {
+    try {
+      EntityManagerFactory entityManagerFactory =
+          Persistence.createEntityManagerFactory("controller-test");
+      this.entityManager = entityManagerFactory.createEntityManager();
+    } catch (Exception e) {
+      throw new SkipException("MySQL is not running correctly");
+    }
   }
 
+  @Test
+  public void testClusterTable() throws MySQLTaskQueue.MySQLTaskQueueException {
+    MySQLTaskQueue queue = new MySQLTaskQueue(entityManager);
+    String testCluster = "integ_test";
+    Assert.assertFalse(queue.lockCluster(testCluster));
+    Assert.assertTrue(queue.createCluster(testCluster));
+    Set<String> clusters = queue.getAllClusters();
+    Assert.assertEquals(1, clusters.size());
+    Assert.assertTrue(clusters.contains(testCluster));
+    Assert.assertTrue(queue.lockCluster(testCluster));
+    Assert.assertFalse(queue.lockCluster(testCluster));
+    Assert.assertFalse(queue.removeCluster(testCluster));
+    Assert.assertTrue(queue.unlockCluster(testCluster));
+    Assert.assertTrue(queue.removeCluster(testCluster));
+    Assert.assertFalse(queue.removeCluster(testCluster));
+  }
 }

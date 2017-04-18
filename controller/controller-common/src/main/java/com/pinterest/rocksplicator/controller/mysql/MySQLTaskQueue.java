@@ -17,71 +17,120 @@
 package com.pinterest.rocksplicator.controller.mysql;
 
 import com.pinterest.rocksplicator.controller.TaskQueue;
-
-import java.sql.Connection;
+import com.pinterest.rocksplicator.controller.mysql.entity.TagEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.persistence.EntityManager;
+import javax.persistence.LockModeType;
+import javax.persistence.Query;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 /**
- * A {@link TaskQueue} which talks to MySQL directly on all kinds of queue operations.
- *
- * MySQL task queue table schema:
- *  id BIGINT AUTO_INCREMENT,
- *  name VARCHAR(128),
- *  priority TINYINT UNSIGNED NOT NULL, # 0 is the highest priority
- *  state  TINYINT UNSIGNED NOT NULL, # 0: Pending, 1: Running, 2: Done, 3: FAILED
- *  tag_name VARCHAR(128) NOT NULL,
- *  body TEXT NOT NULL,
- *  created_at DATETIME NOT NULL,
- *  run_after DATETIME NOT NULL,
- *  claimed_worker VARCHAR(128),
- *  last_alive_at DATETIME,
- *  output TEXT,
- *  PRIMARY KEY (id),
- *  FOREIGN KEY (tag_name) REFERENCES tag(name) ON UPDATE RESTRICT ON DELETE CASCADE
- *
- * MySQL tag table schema:
- *  name VARCHAR(128) NOT NULL,
- *  locks TINYINT UNSIGNED NOT NULL,
- *  created_at DATETIME NOT NULL,
- *  owner VARCHAR(256),
- *  PRIMARY KEY (name)
- *
+ * A {@link TaskQueue} which talks to MySQL directly on all kinds of queue operations through JPA.
  */
-public class MySQLTaskQueue implements TaskQueue{
+public class MySQLTaskQueue implements TaskQueue {
 
+  class MySQLTaskQueueException extends Exception {
+    public MySQLTaskQueueException() { super(); }
+  }
+
+  private EntityManager entityManager;
   private static final Logger LOG = LoggerFactory.getLogger(MySQLTaskQueue.class);
-  private static final String TAG_TABLE_NAME = "tag";
-  private static final String TASK_TABLE_NAME = "task";
-  private static final String INSERT_TAG_QUERY_TEMPLATE =
-      "INSERT IGNORE INTO %s (name, locks, created_at) VALUES ('%s', %d, NOW())";
-  private static final String LOCK_CLUSTER_QUERY_TEMPLATE =
-      "UPDATE TAG SET locks=1 WHERE name='%s' AND locks=0";
-  private static final String UNLOCK_CLUSTER_QUERY_TEMPLATE =
-      "UPDATE TAG SET locks=0 WHERE name='%s' AND locks=1";
-  private final Connection connection;
 
-  MySQLTaskQueue(Connection connection) {
-    this.connection = connection;
+  public MySQLTaskQueue(EntityManager entityManager) {
+    this.entityManager = entityManager;
   }
 
   @Override
   public boolean createCluster(final String clusterName) {
-    String insertQuery = String.format(
-        INSERT_TAG_QUERY_TEMPLATE, TAG_TABLE_NAME, clusterName, 0);
-    return JdbcUtils.executeUpdateQuery(connection, insertQuery);
+    TagEntity cluster = entityManager.find(TagEntity.class, clusterName);
+    if (cluster != null) {
+      LOG.error("Cluster {} is already existed", clusterName);
+      return false;
+    }
+    TagEntity newCluster = new TagEntity().setName(clusterName);
+    entityManager.getTransaction().begin();
+    entityManager.persist(newCluster);
+    entityManager.getTransaction().commit();
+    return true;
   }
 
   @Override
   public boolean lockCluster(final String clusterName) {
-    String lockQuery = String.format(LOCK_CLUSTER_QUERY_TEMPLATE, clusterName);
-    return JdbcUtils.executeUpdateQuery(connection, lockQuery);
+    entityManager.getTransaction().begin();
+    TagEntity cluster = entityManager.find(
+        TagEntity.class, clusterName, LockModeType.PESSIMISTIC_WRITE);
+    try {
+      if (cluster == null) {
+        LOG.error("Cluster {} hasn't been created", clusterName);
+        throw new MySQLTaskQueueException();
+      }
+      if (cluster.getLocks() == 1) {
+        LOG.error("Cluster {} is already locked, cannot double lock", clusterName);
+        throw new MySQLTaskQueueException();
+      }
+    } catch (MySQLTaskQueueException e) {
+      entityManager.getTransaction().rollback();
+      return false;
+    }
+    cluster.setLocks(1);
+    entityManager.persist(cluster);
+    entityManager.getTransaction().commit();
+    return true;
   }
 
   @Override
   public boolean unlockCluster(final String clusterName) {
-    String unlockQuery = String.format(UNLOCK_CLUSTER_QUERY_TEMPLATE, clusterName);
-    return JdbcUtils.executeUpdateQuery(connection, unlockQuery);
+    entityManager.getTransaction().begin();
+    TagEntity cluster = entityManager.find(
+        TagEntity.class, clusterName, LockModeType.PESSIMISTIC_WRITE);
+    if (cluster == null) {
+      LOG.error("Cluster {} hasn't been created", clusterName);
+      entityManager.getTransaction().rollback();
+      return false;
+    }
+    cluster.setLocks(0);
+    entityManager.persist(cluster);
+    entityManager.getTransaction().commit();
+    return true;
+  }
+
+
+  @Override
+  public boolean removeCluster(final String clusterName) {
+    entityManager.getTransaction().begin();
+    TagEntity cluster = entityManager.find(
+        TagEntity.class, clusterName, LockModeType.PESSIMISTIC_WRITE);
+    try {
+      if (cluster == null) {
+        LOG.error("Cluster {} hasn't been created", clusterName);
+        throw new MySQLTaskQueueException();
+      }
+      if (cluster.getLocks() == 1) {
+        LOG.error("Cluster {} is already locked, cannot remove.", clusterName);
+        throw new MySQLTaskQueueException();
+      }
+    } catch (MySQLTaskQueueException e) {
+      entityManager.getTransaction().rollback();
+      return false;
+    }
+    entityManager.remove(cluster);
+    entityManager.getTransaction().commit();
+    return true;
+  }
+
+  @Override
+  public Set<String> getAllClusters() {
+    Query query = entityManager.createNamedQuery("tag.findAll");
+    List<String> result = query.getResultList();
+    Set<String> clusterNames = new HashSet<>();
+    result.stream().forEach(name -> {
+      clusterNames.add(name);
+    });
+    return clusterNames;
   }
 
 }

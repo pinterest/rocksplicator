@@ -16,7 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.resource;
 
-import com.pinterest.rocksplicator.controller.TaskEntity;
+import com.pinterest.rocksplicator.controller.TaskBase;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
@@ -148,7 +148,7 @@ public class Clusters {
 
     HostBean newHost = newHostOp.get();
     try {
-      TaskEntity task = new RemoveHostTask(oldHost)
+      TaskBase task = new RemoveHostTask(oldHost)
           .andThen(new PromoteTask())
           .andThen(
               new AddHostTask(
@@ -190,7 +190,7 @@ public class Clusters {
                        @QueryParam("concurrency") Optional<Integer> concurrency,
                        @QueryParam("rateLimit") Optional<Integer> rateLimit) {
     try {
-      TaskEntity task = new LoadSSTTask(segmentName, s3Bucket, s3Prefix,
+      TaskBase task = new LoadSSTTask(segmentName, s3Bucket, s3Prefix,
           concurrency.orElse(20), rateLimit.orElse(64)).getEntity();
       taskQueue.enqueueTask(task, clusterName, 0);
     } catch (JsonProcessingException e) {
