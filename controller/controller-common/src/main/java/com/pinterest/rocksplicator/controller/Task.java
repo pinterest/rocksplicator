@@ -17,6 +17,7 @@
 package com.pinterest.rocksplicator.controller;
 
 import java.sql.Timestamp;
+import java.util.Date;
 
 /**
  * A {@link Task} is a POJO contains both {@link TaskBase} and the metadata of this task.
@@ -25,18 +26,82 @@ import java.sql.Timestamp;
  * @author Bo Liu (bol@pinterest.com)
  */
 public class Task extends TaskBase {
+
+  public static int PENDING = 0;
+  public static int RUNNING = 1;
+  public static int DONE = 2;
+  public static int FAILED = 3;
+
   public long id;
   public int state;
+  public String name;
   public String clusterName;
-  public Timestamp createdAt;
-  public Timestamp runAfter;
-  public Timestamp lastAliveAt;
+  public Date createdAt;
+  public Date runAfter;
+  public Date lastAliveAt;
   public String claimedWorker;
   public String output;
+
+  public Task setId(long id) {
+    this.id = id;
+    return this;
+  }
+
+  public Task setState(int state) {
+    this.state = state;
+    return this;
+  }
+
+  public Task setClusterName(String clusterName) {
+    this.clusterName = clusterName;
+    return this;
+  }
+
+  public Task setCreatedAt(Date createdAt) {
+    this.createdAt = createdAt;
+    return this;
+  }
+
+  public Task setRunAfter(Date runAfter) {
+    this.runAfter = runAfter;
+    return this;
+  }
+
+  public Task setLastAliveAt(Date lastAliveAt) {
+    this.lastAliveAt = lastAliveAt;
+    return this;
+  }
+
+  public Task setClaimedWorker(String claimedWorker) {
+    this.claimedWorker = claimedWorker;
+    return this;
+  }
+
+  public Task setOutput(String output) {
+    this.output = output;
+    return this;
+  }
+
+  public Task setName(String name) {
+    this.name = name;
+    return this;
+  }
+
+  public Task setPriority(int priority) {
+    this.priority = priority;
+    return this;
+  }
+
+  public Task setBody(String body) {
+    this.body = body;
+    return this;
+  }
 
   public Task(TaskBase t) {
     super.name = t.name;
     super.body = t.body;
     super.priority = t.priority;
   }
+
+  public Task() {}
 }
