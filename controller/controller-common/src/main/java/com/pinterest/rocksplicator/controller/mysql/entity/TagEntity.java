@@ -38,7 +38,7 @@ import java.util.Date;
 @Table(name = "tag")
 @NamedQueries({
     @NamedQuery(name = "tag.findAll",
-                query = "SELECT t.name FROM tag t"),
+        query = "SELECT t.name FROM tag t"),
 })
 public class TagEntity {
 
