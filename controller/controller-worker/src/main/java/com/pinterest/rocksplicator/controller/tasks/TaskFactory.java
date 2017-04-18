@@ -39,17 +39,17 @@ public final class TaskFactory {
     INJECTOR = injector;
   }
 
-  public static com.pinterest.rocksplicator.controller.tasks.TaskBase getWorkerTask(TaskBase task) {
+  public static AbstractTask getWorkerTask(TaskBase task) {
     try {
-      Class<com.pinterest.rocksplicator.controller.tasks.TaskBase> taskClazz = loadTaskClass(task.name);
+      Class<AbstractTask> taskClazz = loadTaskClass(task.name);
       Class<Parameter> paramClazz = Generics.getTypeParameter(taskClazz, Parameter.class);
       Parameter parameter = Parameter.deserialize(task.body, paramClazz);
-      com.pinterest.rocksplicator.controller.tasks.TaskBase taskBase = taskClazz.getConstructor(paramClazz).newInstance(parameter);
+      AbstractTask abstractTask = taskClazz.getConstructor(paramClazz).newInstance(parameter);
       Injector injector = INJECTOR;
       if (injector != null) {
-        injector.injectMembers(taskBase);
+        injector.injectMembers(abstractTask);
       }
-      return taskBase;
+      return abstractTask;
     } catch (Exception e) {
       LOG.error("Cannot instantiate the implementation of " + task.name, e);
       return null;
@@ -57,7 +57,7 @@ public final class TaskFactory {
   }
 
   @SuppressWarnings("unchecked")
-  public static Class<com.pinterest.rocksplicator.controller.tasks.TaskBase> loadTaskClass(String taskName) throws ClassNotFoundException {
+  public static Class<AbstractTask> loadTaskClass(String taskName) throws ClassNotFoundException {
     Class clazz = Thread.currentThread().getContextClassLoader().loadClass(taskName);
     return clazz;
   }

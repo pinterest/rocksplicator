@@ -46,7 +46,7 @@ import javax.inject.Inject;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-public class RebalanceTask extends TaskBase<RebalanceTask.Param> {
+public class RebalanceTask extends AbstractTask<RebalanceTask.Param> {
   private static final Logger LOG = LoggerFactory.getLogger(PromoteTask.class);
 
   @Inject

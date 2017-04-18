@@ -24,13 +24,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * This task provides retry functionality for an arbitrary {@link com.pinterest.rocksplicator.controller.tasks.TaskBase}.
+ * This task provides retry functionality for an arbitrary {@link AbstractTask}.
  * It will keep retrying the given task until 1) the task succeeds or 2) the maxRetry
  * limit has been reached.
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-final class RetryTask extends com.pinterest.rocksplicator.controller.tasks.TaskBase {
+final class RetryTask extends AbstractTask {
   private static final Logger LOG = LoggerFactory.getLogger(RetryTask.class);
 
   public RetryTask(Param param) {
@@ -47,7 +47,7 @@ final class RetryTask extends com.pinterest.rocksplicator.controller.tasks.TaskB
     long id = ctx.getId();
     final TaskQueue taskQueue = ctx.getTaskQueue();
 
-    com.pinterest.rocksplicator.controller.tasks.TaskBase task = TaskFactory.getWorkerTask(getParameter().getTask());
+    AbstractTask task = TaskFactory.getWorkerTask(getParameter().getTask());
     int retry = 0;
     while (retry < getParameter().getMaxRetry()) {
       Throwable t = null;

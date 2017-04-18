@@ -17,6 +17,7 @@
 package com.pinterest.rocksplicator.controller.tasks;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.pinterest.rocksplicator.controller.TaskBase;
 
 
 /**
@@ -24,7 +25,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
  *
  * @author Shu Zhang (shu@pinterest.com)
  */
-public abstract class TaskBase<PARAM extends Parameter> {
+public abstract class AbstractTask<PARAM extends Parameter> {
 
   public static int RESERVED_PRIORITY = 0;
   public static int HIGH_PRIORITY = 1;
@@ -32,7 +33,7 @@ public abstract class TaskBase<PARAM extends Parameter> {
 
   private final PARAM param;
 
-  public TaskBase(PARAM param) {
+  public AbstractTask(PARAM param) {
     this.param = param;
   }
 
@@ -64,13 +65,13 @@ public abstract class TaskBase<PARAM extends Parameter> {
   }
 
   /**
-   * Returns a {@link com.pinterest.rocksplicator.controller.TaskBase} which represents the content of this task
+   * Returns a {@link TaskBase} which represents the content of this task
    *
    * @return TaskEntity entity of the task
    * @throws JsonProcessingException
    */
-  public com.pinterest.rocksplicator.controller.TaskBase getEntity() throws JsonProcessingException {
-    com.pinterest.rocksplicator.controller.TaskBase taskBase = new com.pinterest.rocksplicator.controller.TaskBase();
+  public TaskBase getEntity() throws JsonProcessingException {
+    TaskBase taskBase = new TaskBase();
     taskBase.name = getName();
     taskBase.body = getParameter().serialize();
     taskBase.priority = getPriority();
@@ -89,7 +90,7 @@ public abstract class TaskBase<PARAM extends Parameter> {
    * @return a chained task
    * @throws JsonProcessingException
    */
-  public TaskBase andThen(TaskBase nextTask) throws JsonProcessingException {
+  public AbstractTask andThen(AbstractTask nextTask) throws JsonProcessingException {
     return new ChainedTask(
         new ChainedTask.Param()
             .setT1(this.getEntity())
@@ -103,7 +104,7 @@ public abstract class TaskBase<PARAM extends Parameter> {
    * @return a retry task
    * @throws JsonProcessingException
    */
-  public TaskBase retry(int maxRetry) throws JsonProcessingException {
+  public AbstractTask retry(int maxRetry) throws JsonProcessingException {
     return new RetryTask(
         new RetryTask.Param()
             .setTask(this.getEntity())

@@ -24,7 +24,7 @@ import io.dropwizard.jackson.Jackson;
 import java.io.IOException;
 
 /**
- * A marker class which holds all the necessary parameters to run a {@link TaskBase}.
+ * A marker class which holds all the necessary parameters to run a {@link AbstractTask}.
  *
  * @author Ang Xu (angxu@pinterest.com)
  */

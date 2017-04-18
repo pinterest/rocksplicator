@@ -33,7 +33,7 @@ import java.util.Stack;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-final class ChainedTask extends com.pinterest.rocksplicator.controller.tasks.TaskBase {
+final class ChainedTask extends AbstractTask {
 
   private static final Logger LOG = LoggerFactory.getLogger(ChainedTask.class);
 
@@ -59,7 +59,7 @@ final class ChainedTask extends com.pinterest.rocksplicator.controller.tasks.Tas
 
     while (!tasks.isEmpty()) {
       TaskBase taskBase = tasks.pop();
-      com.pinterest.rocksplicator.controller.tasks.TaskBase task = TaskFactory.getWorkerTask(taskBase);
+      AbstractTask task = TaskFactory.getWorkerTask(taskBase);
       if (task == null) {
         taskQueue.failTask(id, "Failed to instantiate task " + taskBase.name);
         return;

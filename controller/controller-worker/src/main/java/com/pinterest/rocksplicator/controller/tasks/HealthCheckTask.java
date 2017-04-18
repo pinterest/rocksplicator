@@ -20,7 +20,6 @@ import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.bean.SegmentBean;
 import com.pinterest.rocksplicator.controller.bean.ShardBean;
-import com.pinterest.rocksplicator.controller.config.ConfigParser;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
 import com.pinterest.rocksplicator.controller.util.ZKUtil;
 
@@ -46,7 +45,7 @@ import javax.inject.Inject;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-public class HealthCheckTask extends TaskBase<HealthCheckTask.Param> {
+public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
 
   public static final Logger LOG = LoggerFactory.getLogger(HealthCheckTask.class);
 
