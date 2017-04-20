@@ -19,6 +19,7 @@ package com.pinterest.rocksplicator.controller.mysql;
 import com.pinterest.rocksplicator.controller.Task;
 import com.pinterest.rocksplicator.controller.TaskBase;
 import com.pinterest.rocksplicator.controller.TaskQueue;
+import com.pinterest.rocksplicator.controller.bean.TaskState;
 import com.pinterest.rocksplicator.controller.mysql.entity.TagEntity;
 import com.pinterest.rocksplicator.controller.mysql.entity.TaskEntity;
 import org.apache.commons.lang3.time.DateUtils;
@@ -157,7 +158,7 @@ public class MySQLTaskQueue implements TaskQueue {
   private long enqueueTaskImpl(final TaskBase taskBase,
                                final String clusterName,
                                final int runDelaySeconds,
-                               final Task.TaskState state,
+                               final TaskState state,
                                final String claimedWorker,
                                boolean inTransaction) {
     if (!inTransaction)
@@ -176,7 +177,7 @@ public class MySQLTaskQueue implements TaskQueue {
         .setCluster(cluster)
         .setLastAliveAt(new Date())
         .setClaimedWorker(claimedWorker)
-        .setState(state.ordinal())
+        .setState(state.intValue())
         .setRunAfter(DateUtils.addSeconds(new Date(), runDelaySeconds));
     entityManager.persist(entity);
     entityManager.flush();
@@ -190,7 +191,7 @@ public class MySQLTaskQueue implements TaskQueue {
                              final String clusterName,
                              final int runDelaySeconds) {
     return enqueueTaskImpl(
-        taskBase, clusterName, runDelaySeconds, Task.TaskState.PENDING, null, false) != -1;
+        taskBase, clusterName, runDelaySeconds, TaskState.PENDING, null, false) != -1;
   }
 
   @Override
@@ -205,7 +206,7 @@ public class MySQLTaskQueue implements TaskQueue {
       return null;
     }
     TaskEntity claimedTask = resultList.get(0);
-    claimedTask.setState(Task.TaskState.RUNNING.ordinal());
+    claimedTask.setState(TaskState.RUNNING.intValue());
     claimedTask.setLastAliveAt(new Date());
     claimedTask.setClaimedWorker(worker);
 
@@ -218,7 +219,7 @@ public class MySQLTaskQueue implements TaskQueue {
 
   private String ackTask(final long id,
                          final String output,
-                         Task.TaskState ackState,
+                         TaskState ackState,
                          boolean unlockCluster,
                          boolean inTransaction) {
     if (!inTransaction)
@@ -233,7 +234,7 @@ public class MySQLTaskQueue implements TaskQueue {
     }
     TaskEntity taskEntity = resultList.get(0);
 
-    taskEntity.setState(ackState.ordinal());
+    taskEntity.setState(ackState.intValue());
     taskEntity.setOutput(output);
     entityManager.persist(taskEntity);
 
@@ -250,12 +251,12 @@ public class MySQLTaskQueue implements TaskQueue {
 
   @Override
   public boolean finishTask(final long id, final String output) {
-    return ackTask(id, output, Task.TaskState.DONE, true, false) != null;
+    return ackTask(id, output, TaskState.DONE, true, false) != null;
   }
 
   @Override
   public boolean failTask(final long id, final String reason) {
-    return ackTask(id, reason, Task.TaskState.FAILED, true, false) != null;
+    return ackTask(id, reason, TaskState.FAILED, true, false) != null;
   }
 
   @Override
@@ -265,12 +266,12 @@ public class MySQLTaskQueue implements TaskQueue {
         .createNamedQuery("task.findAllRunning")
         .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
     List<TaskEntity> zombieTasks = runningTasks.stream()
-        .filter(t -> t.getState() == Task.TaskState.RUNNING.ordinal() &&
+        .filter(t -> t.getState() == TaskState.RUNNING.intValue() &&
             DateUtils.addSeconds(t.getLastAliveAt(), zombieThresholdSeconds)
         .before(new Date())).collect(Collectors.toList());
     for (TaskEntity zombieTask : zombieTasks) {
       entityManager.lock(zombieTask.getCluster(), LockModeType.PESSIMISTIC_WRITE);
-      zombieTask.setState(Task.TaskState.PENDING.ordinal());
+      zombieTask.setState(TaskState.PENDING.intValue());
       zombieTask.getCluster().setLocks(0);
       entityManager.persist(zombieTask);
       entityManager.persist(zombieTask.getCluster());
@@ -300,12 +301,11 @@ public class MySQLTaskQueue implements TaskQueue {
                                               final TaskBase newTaskBase,
                                               final String worker) {
     entityManager.getTransaction().begin();
-    String clusterName = ackTask(id, output, Task.TaskState.DONE, false, true);
+    String clusterName = ackTask(id, output, TaskState.DONE, false, true);
     if (clusterName == null) {
       return -1;
     }
-    long newTaskId = enqueueTaskImpl(newTaskBase, clusterName, 0,
-        Task.TaskState.RUNNING, worker, true);
+    long newTaskId = enqueueTaskImpl(newTaskBase, clusterName, 0, TaskState.RUNNING, worker, true);
     entityManager.getTransaction().commit();
     return newTaskId;
   }
@@ -316,12 +316,12 @@ public class MySQLTaskQueue implements TaskQueue {
                                                  final TaskBase newTaskBase,
                                                  final int runDelaySeconds) {
     entityManager.getTransaction().begin();
-    String clusterName = ackTask(id, output, Task.TaskState.DONE, true, true);
+    String clusterName = ackTask(id, output, TaskState.DONE, true, true);
     if (clusterName == null) {
       return false;
     }
     long newTaskId = enqueueTaskImpl(newTaskBase, clusterName, runDelaySeconds,
-        Task.TaskState.PENDING, null, true);
+        TaskState.PENDING, null, true);
     if (newTaskId == -1) {
       return false;
     }

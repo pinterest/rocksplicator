@@ -27,13 +27,6 @@ import java.util.Date;
  */
 public class Task extends TaskBase {
 
-  public enum TaskState {
-    PENDING,
-    RUNNING,
-    DONE,
-    FAILED;
-  }
-
   public long id;
   public int state;
   public String name;
