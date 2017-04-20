@@ -27,10 +27,12 @@ import java.util.Date;
  */
 public class Task extends TaskBase {
 
-  public static int PENDING = 0;
-  public static int RUNNING = 1;
-  public static int DONE = 2;
-  public static int FAILED = 3;
+  public enum TaskState {
+    PENDING,
+    RUNNING,
+    DONE,
+    FAILED;
+  }
 
   public long id;
   public int state;

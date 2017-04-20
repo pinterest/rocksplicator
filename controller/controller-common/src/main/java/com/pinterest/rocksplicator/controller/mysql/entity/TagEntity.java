@@ -22,6 +22,8 @@ import javax.persistence.Id;
 import javax.persistence.NamedQueries;
 import javax.persistence.NamedQuery;
 import javax.persistence.Table;
+import javax.persistence.Temporal;
+import javax.persistence.TemporalType;
 import javax.validation.constraints.NotNull;
 import java.util.Date;
 
@@ -52,6 +54,7 @@ public class TagEntity {
   private int locks;
 
   @Column(name = "created_at")
+  @Temporal(TemporalType.TIMESTAMP)
   @NotNull
   private Date createdAt;
 
