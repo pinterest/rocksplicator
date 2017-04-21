@@ -35,10 +35,12 @@ public final class WorkerConfig {
   private static final String WORKER_POOL_SIZE_KEY = "worker_pool_size";
   private static final String DISPATCHER_POLL_INTERVAL_KEY = "dispatcher_poll_interval";
   private static final String ZK_PATH_KEY = "zk_path";
+  private static final String ZK_ENDPOINTS_KEY = "zk_endpoints";
   private static String HOST_NAME;
   private static PropertiesConfiguration configuration;
 
   private static final String DEFAULT_ZK_PATH = "/config/services/rocksdb/";
+  private static final String DEFAULT_ZK_ENDPOINTS = "observerzookeeper010:2181";
 
   static {
     String workerConfig = System.getProperty("worker_config", "controller.worker.properties");
@@ -72,6 +74,11 @@ public final class WorkerConfig {
   public static String getZKPath() {
     return configuration == null ? DEFAULT_ZK_PATH :
                                    configuration.getString(ZK_PATH_KEY, DEFAULT_ZK_PATH);
+  }
+
+  public static String getZKEndpoints() {
+    return configuration == null ? DEFAULT_ZK_ENDPOINTS :
+                                   configuration.getString(ZK_ENDPOINTS_KEY, DEFAULT_ZK_ENDPOINTS);
   }
 
 }

@@ -15,9 +15,20 @@
  */
 package com.pinterest.rocksplicator.controller;
 
+import com.pinterest.rocksplicator.controller.tasks.TaskFactory;
+import com.pinterest.rocksplicator.controller.tasks.TaskModule;
+import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
+import com.pinterest.rocksplicator.controller.util.ShutdownHook;
+
+import com.google.inject.Guice;
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.CuratorFrameworkFactory;
+import org.apache.curator.retry.RetryOneTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -41,11 +52,24 @@ import java.util.concurrent.TimeUnit;
 public class WorkerService {
 
   private static final Logger LOG = LoggerFactory.getLogger(WorkerService.class);
+  private static final ShutdownHook SHUTDOWN_HOOK = new ShutdownHook();
 
   public static void main(String[] args) {
+    Runtime.getRuntime().addShutdownHook(new Thread(SHUTDOWN_HOOK));
     try {
+      CuratorFramework zkClient = CuratorFrameworkFactory.newClient(
+          WorkerConfig.getZKEndpoints(), new RetryOneTime(3000));
+      zkClient.start();
+      SHUTDOWN_HOOK.register(zkClient::close);
+
+      AdminClientFactory adminClientFactory = new AdminClientFactory(30);
+      SHUTDOWN_HOOK.register(adminClientFactory::shutdown);
+
+      TaskFactory.setInjector(Guice.createInjector(
+          new TaskModule(zkClient, adminClientFactory)
+      ));
+
       int workerPoolSize = WorkerConfig.getWorkerPoolSize();
-      //TODO(angxu) initialize dependency injector and set it to TaskFactory
       Semaphore idleWorkersSemaphore = new Semaphore(workerPoolSize);
       ThreadPoolExecutor threadPoolExecutor =
           new ThreadPoolExecutor(workerPoolSize, workerPoolSize, 0,
@@ -55,6 +79,7 @@ public class WorkerService {
       TaskDispatcher dispatcher = new TaskDispatcher(
           WorkerConfig.getDispatcherPollIntervalSec(), idleWorkersSemaphore, workerPool, taskQueue);
       dispatcher.start();
+      SHUTDOWN_HOOK.register(dispatcher::stop);
     } catch (Exception e) {
       LOG.error("Cannot start the worker service", e);
       System.exit(1);

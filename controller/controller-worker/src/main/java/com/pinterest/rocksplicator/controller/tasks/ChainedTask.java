@@ -33,7 +33,7 @@ import java.util.Stack;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-final class ChainedTask extends AbstractTask {
+final class ChainedTask extends AbstractTask<ChainedTask.Param> {
 
   private static final Logger LOG = LoggerFactory.getLogger(ChainedTask.class);
 
