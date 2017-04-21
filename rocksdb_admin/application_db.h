@@ -103,10 +103,12 @@ class ApplicationDB {
 
   ~ApplicationDB();
 
- private:
-  const std::string db_name_;
+ protected:
+  // It will be used for inheritance of ApplicationDB
   std::shared_ptr<rocksdb::DB> db_;
 
+ private:
+  const std::string db_name_;
   const replicator::DBRole role_;
   std::unique_ptr<folly::SocketAddress> upstream_addr_;
   replicator::RocksDBReplicator::ReplicatedDB* replicated_db_;
