@@ -94,6 +94,13 @@ std::unique_ptr<rocksdb::DB> ApplicationDBManager::removeDB(
   return std::unique_ptr<rocksdb::DB>(ret->db_.get());
 }
 
+const std::unordered_map<std::string, std::shared_ptr<ApplicationDB>>
+ApplicationDBManager::getDBs() {
+  // return copy as a snapshot
+  folly::RWSpinLock::ReadHolder read_guard(dbs_lock_);
+  return dbs_;
+};
+
 ApplicationDBManager::~ApplicationDBManager() {
   auto itor = dbs_.begin();
   while (itor != dbs_.end()) {

@@ -73,6 +73,13 @@ class ApplicationDBManager {
   // Return non-null pointer on success
   std::unique_ptr<rocksdb::DB> removeDB(const std::string& db_name,
                                         std::string* error_message);
+
+  // Get all dbs it currently manages.
+  // Note: The method only return a snapshot so there is no guarantee the
+  // snapshot is always up to date.
+  const std::unordered_map<
+          std::string, std::shared_ptr<ApplicationDB>> getDBs();
+
   ~ApplicationDBManager();
 
  private:
