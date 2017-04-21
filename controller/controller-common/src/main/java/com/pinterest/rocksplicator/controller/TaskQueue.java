@@ -143,9 +143,10 @@ public interface TaskQueue {
 
   /**
    * Remove finished tasks.
+   * @param secondsAgo tasks finished seconds ago
    * @return the number of finished tasks which are removed by this call.
    */
-  default int removeFinishedTasks() {
+  default int removeFinishedTasks(final int secondsAgo) {
     return 0;
   }
 

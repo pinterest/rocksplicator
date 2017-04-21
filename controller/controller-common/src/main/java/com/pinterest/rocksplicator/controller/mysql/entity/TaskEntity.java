@@ -54,7 +54,14 @@ import java.util.Date;
                 query = "SELECT t FROM task t INNER JOIN t.cluster c WHERE t.state = 0 " +
                     "AND t.runAfter < CURRENT_TIMESTAMP AND c.locks = 0 ORDER BY t.priority ASC"),
     @NamedQuery(name = "task.findRunning",
-                query = "SELECT t FROM task t WHERE t.id = :id AND t.state = 1")
+                query = "SELECT t FROM task t WHERE t.id = :id AND t.state = 1"),
+    @NamedQuery(name = "task.findAllRunning",
+                query = "SELECT t FROM task t WHERE t.state = 1"),
+    @NamedQuery(name = "task.peekTasks",
+                query = "SELECT t FROM task t INNER JOIN t.cluster c WHERE t.state = :state AND " +
+                    "c.name = :name"),
+    @NamedQuery(name = "task.findFinished",
+                query = "SELECT t FROM task t WHERE t.state = 2")
 })
 public class TaskEntity {
 
@@ -100,6 +107,9 @@ public class TaskEntity {
   @Column(name = "output")
   private String output;
 
+  @Column(name = "claimed_worker")
+  private String claimedWorker;
+
   public TaskEntity() {
     this.createdAt = new Date();
   }
@@ -144,6 +154,11 @@ public class TaskEntity {
     return this;
   }
 
+  public TaskEntity setClaimedWorker(String claimedWorker) {
+    this.claimedWorker = claimedWorker;
+    return this;
+  }
+
   public String getName() {
     return name;
   }
@@ -179,4 +194,6 @@ public class TaskEntity {
   }
 
   public long getId() { return id; }
+
+  public String getClaimedWorker() { return claimedWorker; }
 }
