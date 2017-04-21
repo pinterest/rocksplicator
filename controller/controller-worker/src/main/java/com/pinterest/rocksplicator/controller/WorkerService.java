@@ -18,6 +18,7 @@ package com.pinterest.rocksplicator.controller;
 import com.pinterest.rocksplicator.controller.tasks.TaskFactory;
 import com.pinterest.rocksplicator.controller.tasks.TaskModule;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
+import com.pinterest.rocksplicator.controller.util.ShutdownHook;
 
 import com.google.inject.Guice;
 import org.apache.curator.framework.CuratorFramework;
@@ -82,33 +83,6 @@ public class WorkerService {
     } catch (Exception e) {
       LOG.error("Cannot start the worker service", e);
       System.exit(1);
-    }
-  }
-
-  private static class ShutdownHook implements Runnable {
-
-    private final Deque<Runnable> shutdownables = new ArrayDeque<>();
-
-    /**
-     * Register a new runnable to the ShutdownHook. The runnables will
-     * be executed in the reverse order as they were registered.
-     * @param r
-     */
-    public synchronized void register(Runnable r) {
-      shutdownables.offerLast(r);
-    }
-
-    @Override
-    public synchronized void run() {
-      while (!shutdownables.isEmpty()) {
-        Runnable r = shutdownables.pollLast();
-        try {
-          r.run();
-        } catch (RuntimeException e) {
-          LOG.error("Failed to execute shutdown hook.", e);
-          // continue
-        }
-      }
     }
   }
 }

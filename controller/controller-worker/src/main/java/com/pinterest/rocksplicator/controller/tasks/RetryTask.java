@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-final class RetryTask extends AbstractTask {
+final class RetryTask extends AbstractTask<RetryTask.Param> {
   private static final Logger LOG = LoggerFactory.getLogger(RetryTask.class);
 
   public RetryTask(Param param) {
