@@ -96,8 +96,8 @@ class DirectIOFile {
  */
 class DirectIOFileSink {
  public:
-  typedef char                                        char_type;
-  typedef boost::iostreams::bidirectional_device_tag  category;
+  using char_type = char;
+  using category = boost::iostreams::bidirectional_device_tag;
 
   DirectIOFileSink(const string& file_path)
       : file_(std::make_shared<DirectIOFile>(file_path)) {
