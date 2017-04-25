@@ -79,8 +79,8 @@ TEST(S3UtilTest, DirectIOTest) {
     char buf[4096];
     std::memset(buf, 'f', 4096);
     {
-      boost::iostreams::stream<common::DirectIOFileSink> os(file_path);
-      os.write(buf, 4096);
+      common::DirectIOWritableFile file(file_path);
+      file.write(buf, 4096);
     }
     fs::ifstream f_in;
     f_in.open(file_path, std::ios::in);
@@ -92,10 +92,11 @@ TEST(S3UtilTest, DirectIOTest) {
   {
     // write larger than page size
     char buf[4097];
-    std::memset(buf, 'g', 4097);
+    std::memset(buf, 'g', 4096);
+    buf[4096] = 'h';
     {
-      boost::iostreams::stream<common::DirectIOFileSink> os(file_path);
-      os.write(buf, 4097);
+      common::DirectIOWritableFile file(file_path);
+      file.write(buf, 4097);
     }
     fs::ifstream f_in;
     f_in.open(file_path, std::ios::in);
@@ -103,8 +104,6 @@ TEST(S3UtilTest, DirectIOTest) {
     ss << f_in.rdbuf();
     EXPECT_EQ(string(buf, 4097), ss.str());
   }
-
-  // fs::remove(fs::path(file_path));
   fs::remove(file_path);
 }
 

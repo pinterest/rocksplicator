@@ -69,14 +69,14 @@ class S3UtilResponse {
 /**
  * A writable file which uses direct I/O under the hood.
  */
-class DirectIOFile {
+class DirectIOWritableFile {
  public:
-  DirectIOFile(const string& file_path);
-  ~DirectIOFile();
+  DirectIOWritableFile(const string& file_path);
+  ~DirectIOWritableFile();
 
   // no copy or move
-  DirectIOFile(const DirectIOFile&) = delete;
-  DirectIOFile& operator=(const DirectIOFile&) = delete;
+  DirectIOWritableFile(const DirectIOWritableFile&) = delete;
+  DirectIOWritableFile& operator=(const DirectIOWritableFile&) = delete;
 
   std::streamsize write(const char* s, std::streamsize n);
 
@@ -91,7 +91,7 @@ class DirectIOFile {
 };
 
 /**
- * A wrapper class of DirectIOFile which can be used together with
+ * A wrapper class of DirectIOWritableFile which can be used together with
  * boost::iostreams::stream to implement i{o}stream.
  */
 class DirectIOFileSink {
@@ -100,11 +100,11 @@ class DirectIOFileSink {
   using category = boost::iostreams::bidirectional_device_tag;
 
   DirectIOFileSink(const string& file_path)
-      : file_(std::make_shared<DirectIOFile>(file_path)) {
+      : writable_file_(std::make_shared<DirectIOWritableFile>(file_path)) {
   }
 
   std::streamsize write(const char* s, std::streamsize n) {
-    return file_->write(s, n);
+    return writable_file_->write(s, n);
   }
 
   std::streamsize read(char* s, std::streamsize n) {
@@ -116,8 +116,8 @@ class DirectIOFileSink {
  private:
   // boost requires sink class to be copy construtible,
   // hince we use a shared_ptr to manage the underlying
-  // DirectIOFile.
-  std::shared_ptr<DirectIOFile> file_;
+  // DirectIOWritableFile.
+  std::shared_ptr<DirectIOWritableFile> writable_file_;
 };
 
 
@@ -169,11 +169,11 @@ class S3Util {
 
   // Download an S3 Object to a local file
   GetObjectResponse getObject(const string& key, const string& local_path,
-                              const bool direct_io=false);
+                              const bool direct_io = false);
   // Get object using s3client
   SdkGetObjectResponse sdkGetObject(const string& key,
-                                    const string& local_path="",
-                                    const bool direct_io=false);
+                                    const string& local_path = "",
+                                    const bool direct_io = false);
   // Return a list of objects under the prefix.
   ListObjectsResponse listObjects(const string& prefix);
   // Download all objects under a prefix. We only assume

@@ -19,10 +19,8 @@
 #include "common/s3util.h"
 
 #include <fcntl.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include <sys/types.h>
-
+#include <unistd.h>
 
 #include <aws/core/utils/ratelimiter/DefaultRateLimiter.h>
 #include <aws/s3/S3Client.h>
@@ -33,6 +31,7 @@
 #include <aws/s3/model/Object.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <vector>
 #include <string>
@@ -58,7 +57,7 @@ namespace common {
 // too slow
 const uint32_t kPageSize = getpagesize();
 
-DirectIOFile::DirectIOFile(const string& file_path)
+DirectIOWritableFile::DirectIOWritableFile(const string& file_path)
     : fd_(-1)
     , file_size_(0)
     , buffer_()
@@ -78,7 +77,7 @@ DirectIOFile::DirectIOFile(const string& file_path)
   }
 }
 
-DirectIOFile::~DirectIOFile() {
+DirectIOWritableFile::~DirectIOWritableFile() {
   if (buffer_ == nullptr || fd_ < 0) {
     return;
   }
@@ -94,7 +93,7 @@ DirectIOFile::~DirectIOFile() {
   close(fd_);
 }
 
-std::streamsize DirectIOFile::write(const char* s, std::streamsize n) {
+std::streamsize DirectIOWritableFile::write(const char* s, std::streamsize n) {
   if (buffer_ == nullptr || fd_ < 0) {
     return -1;
   }
@@ -104,9 +103,12 @@ std::streamsize DirectIOFile::write(const char* s, std::streamsize n) {
     std::memcpy((char*)buffer_ + offset_, s, bytes);
     offset_ += bytes;
     remaining -= bytes;
+    s += bytes;
     // flush when buffer is full
     if (offset_ == kPageSize) {
       if (::write(fd_, buffer_, kPageSize) != kPageSize) {
+        LOG(ERROR) << "Failed to write to DirectIOWritableFile, errno = "
+                   << errno;
         return -1;
       }
       // reset offset
