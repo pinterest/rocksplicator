@@ -608,6 +608,12 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   auto responses = s3Util->getObjects(request->s3_path, local_path);
   if (!responses.Error().empty() || responses.Body().size() == 0) {
     e.message = "Failed to list any object from " + request->s3_path;
+
+    if (!responses.Error().empty()) {
+      e.message += " AWS Error: " + responses.Error();
+    }
+
+    LOG(ERROR) << e.message;
     callback.release()->exceptionInThread(std::move(e));
     return;
   }
