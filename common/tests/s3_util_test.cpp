@@ -19,8 +19,13 @@
 #include <string>
 #include <tuple>
 
+#include "boost/filesystem.hpp"
+#include "boost/filesystem/fstream.hpp"
+#include "boost/iostreams/stream.hpp"
 #include "common/s3util.h"
 #include "gtest/gtest.h"
+
+namespace fs = boost::filesystem;
 
 using std::string;
 
@@ -49,6 +54,58 @@ TEST(S3UtilTest, ParseS3StringTest) {
   result = common::S3Util::parseFullS3Path(test_path);
   EXPECT_TRUE(std::get<0>(result) == "");
   EXPECT_TRUE(std::get<1>(result) == "");
+}
+
+TEST(S3UtilTest, DirectIOTest) {
+  const string file_path = "/tmp/s3DirectIO";
+
+  {
+    // write less than page size
+    {
+      boost::iostreams::stream<common::DirectIOFileSink> os(file_path);
+      os << "hello ";
+      os.write("world!", 6);
+    }
+
+    fs::ifstream f_in;
+    f_in.open(file_path, std::ios::in);
+    std::stringstream ss;
+    ss << f_in.rdbuf();
+    EXPECT_EQ("hello world!", ss.str());
+  }
+
+  {
+    // write equal to page size
+    char buf[4096];
+    std::memset(buf, 'f', 4096);
+    {
+      boost::iostreams::stream<common::DirectIOFileSink> os(file_path);
+      os.write(buf, 4096);
+    }
+    fs::ifstream f_in;
+    f_in.open(file_path, std::ios::in);
+    std::stringstream ss;
+    ss << f_in.rdbuf();
+    EXPECT_EQ(string(buf, 4096), ss.str());
+  }
+
+  {
+    // write larger than page size
+    char buf[4097];
+    std::memset(buf, 'g', 4097);
+    {
+      boost::iostreams::stream<common::DirectIOFileSink> os(file_path);
+      os.write(buf, 4097);
+    }
+    fs::ifstream f_in;
+    f_in.open(file_path, std::ios::in);
+    std::stringstream ss;
+    ss << f_in.rdbuf();
+    EXPECT_EQ(string(buf, 4097), ss.str());
+  }
+
+  // fs::remove(fs::path(file_path));
+  fs::remove(file_path);
 }
 
 
