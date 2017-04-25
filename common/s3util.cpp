@@ -18,6 +18,10 @@
 
 #include "common/s3util.h"
 
+#include <fcntl.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 #include <aws/core/utils/ratelimiter/DefaultRateLimiter.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/GetObjectRequest.h>
@@ -26,12 +30,16 @@
 #include <aws/s3/model/ListObjectsResult.h>
 #include <aws/s3/model/Object.h>
 
+#include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <vector>
 #include <string>
 #include <tuple>
 #include <fstream>
 #include "boost/algorithm/string.hpp"
+#include "boost/iostreams/stream.hpp"
+#include "glog/logging.h"
 
 using std::string;
 using std::vector;
@@ -41,11 +49,80 @@ using Aws::S3::Model::ListObjectsRequest;
 using Aws::S3::Model::HeadObjectRequest;
 using Aws::Utils::RateLimits::DefaultRateLimiter;
 
+
 namespace common {
 
+//TODO(angxu) currently page size is used as buffer size,
+// we might want to use a larger buffer size if write is
+// too slow
+const uint32_t kPageSize = getpagesize();
+
+DirectIOWritableFile::DirectIOWritableFile(const string& file_path)
+    : fd_(-1)
+    , file_size_(0)
+    , buffer_()
+    , offset_(0) {
+  if (posix_memalign(&buffer_, kPageSize, kPageSize) != 0) {
+    LOG(ERROR) << "Failed to allocate memaligned buffer, errno = " << errno;
+    return;
+  }
+
+  int flag = O_WRONLY | O_TRUNC | O_CREAT | O_DIRECT;
+  fd_ = open(file_path.c_str(), flag , S_IRUSR | S_IWUSR | S_IRGRP);
+  if (fd_ < 0) {
+    LOG(ERROR) << "Failed to open " << file_path << " with flag " << flag
+               << ", errno = " << errno;
+    free(buffer_);
+    buffer_ = nullptr;
+  }
+}
+
+DirectIOWritableFile::~DirectIOWritableFile() {
+  if (buffer_ == nullptr || fd_ < 0) {
+    return;
+  }
+
+  if (offset_ > 0) {
+    if (::write(fd_, buffer_, kPageSize) != kPageSize) {
+      LOG(ERROR) << "Failed to write last chunk, errno = " << errno;
+    } else {
+      ftruncate(fd_, file_size_);
+    }
+  }
+  free(buffer_);
+  close(fd_);
+}
+
+std::streamsize DirectIOWritableFile::write(const char* s, std::streamsize n) {
+  if (buffer_ == nullptr || fd_ < 0) {
+    return -1;
+  }
+  uint32_t remaining = static_cast<uint32_t>(n);
+  while (remaining > 0) {
+    uint32_t bytes = std::min((kPageSize - offset_), remaining);
+    std::memcpy((char*)buffer_ + offset_, s, bytes);
+    offset_ += bytes;
+    remaining -= bytes;
+    s += bytes;
+    // flush when buffer is full
+    if (offset_ == kPageSize) {
+      if (::write(fd_, buffer_, kPageSize) != kPageSize) {
+        LOG(ERROR) << "Failed to write to DirectIOWritableFile, errno = "
+                   << errno;
+        return -1;
+      }
+      // reset offset
+      offset_ = 0;
+    }
+  }
+  file_size_ += n;
+  return n;
+}
+
+
 GetObjectResponse S3Util::getObject(
-    const string& key, const string& local_path) {
-  auto getObjectResult = sdkGetObject(key, local_path);
+    const string& key, const string& local_path, const bool direct_io) {
+  auto getObjectResult = sdkGetObject(key, local_path, direct_io);
   string err_msg_prefix =
     "Failed to download from " + key + "to " + local_path + "error: ";
   if (getObjectResult.IsSuccess()) {
@@ -57,19 +134,28 @@ GetObjectResponse S3Util::getObject(
 }
 
 SdkGetObjectResponse S3Util::sdkGetObject(const string& key,
-                                          const string& local_path) {
+                                          const string& local_path,
+                                          const bool direct_io) {
   GetObjectRequest getObjectRequest;
   getObjectRequest.SetBucket(bucket_);
   getObjectRequest.SetKey(key);
   if (local_path != "") {
-    getObjectRequest.SetResponseStreamFactory(
-      [=]() {
-        // "T" is just a place holder for ALLOCATION_TAG.
-        return Aws::New<Aws::FStream>(
-                "T", local_path.c_str(),
-                std::ios_base::out | std::ios_base::in | std::ios_base::trunc);
-      }
-    );
+    if (direct_io) {
+      getObjectRequest.SetResponseStreamFactory(
+        [=]() {
+            return new boost::iostreams::stream<DirectIOFileSink>(local_path);
+        }
+      );
+    } else {
+      getObjectRequest.SetResponseStreamFactory(
+        [=]() {
+          // "T" is just a place holder for ALLOCATION_TAG.
+          return Aws::New<Aws::FStream>(
+                  "T", local_path.c_str(),
+                  std::ios_base::out | std::ios_base::in | std::ios_base::trunc);
+        }
+      );
+    }
   }
   auto getObjectResult = s3Client.GetObject(getObjectRequest);
   return getObjectResult;
@@ -96,7 +182,7 @@ ListObjectsResponse S3Util::listObjects(const string& prefix) {
 
 GetObjectsResponse S3Util::getObjects(
     const string& prefix, const string& local_directory,
-    const string& delimiter) {
+    const string& delimiter, const bool direct_io) {
   ListObjectsResponse list_result = listObjects(prefix);
   vector<S3UtilResponse<bool>> results;
   if (!list_result.Error().empty()) {
@@ -115,7 +201,7 @@ GetObjectsResponse S3Util::getObjects(
         continue;
       }
       GetObjectResponse download_response =
-        getObject(object_key, formatted_dir_path + object_name);
+        getObject(object_key, formatted_dir_path + object_name, direct_io);
       if (download_response.Body()) {
         results.push_back(GetObjectResponse(true, object_key));
       } else {

@@ -26,7 +26,9 @@
 #include <aws/core/http/HttpResponse.h>
 #include <aws/core/utils/memory/stl/AWSStringStream.h>
 #include <aws/core/utils/Outcome.h>
+#include <boost/iostreams/categories.hpp>
 
+#include <iosfwd>
 #include <map>
 #include <string>
 #include <tuple>
@@ -63,6 +65,61 @@ class S3UtilResponse {
   T body_;
   string error_;
 };
+
+/**
+ * A writable file which uses direct I/O under the hood.
+ */
+class DirectIOWritableFile {
+ public:
+  DirectIOWritableFile(const string& file_path);
+  ~DirectIOWritableFile();
+
+  // no copy or move
+  DirectIOWritableFile(const DirectIOWritableFile&) = delete;
+  DirectIOWritableFile& operator=(const DirectIOWritableFile&) = delete;
+
+  std::streamsize write(const char* s, std::streamsize n);
+
+ private:
+  // file descriptor
+  int fd_;
+  uint32_t file_size_;
+  // page size aligned buffer
+  void* buffer_;
+  // buffer offset
+  uint32_t offset_;
+};
+
+/**
+ * A wrapper class of DirectIOWritableFile which can be used together with
+ * boost::iostreams::stream to implement i{o}stream.
+ */
+class DirectIOFileSink {
+ public:
+  using char_type = char;
+  using category = boost::iostreams::bidirectional_device_tag;
+
+  DirectIOFileSink(const string& file_path)
+      : writable_file_(std::make_shared<DirectIOWritableFile>(file_path)) {
+  }
+
+  std::streamsize write(const char* s, std::streamsize n) {
+    return writable_file_->write(s, n);
+  }
+
+  std::streamsize read(char* s, std::streamsize n) {
+    // read is currently not implemented because we use this class
+    // as ResponseStream which is write only.
+    return -1;
+  }
+
+ private:
+  // boost requires sink class to be copy construtible,
+  // hince we use a shared_ptr to manage the underlying
+  // DirectIOWritableFile.
+  std::shared_ptr<DirectIOWritableFile> writable_file_;
+};
+
 
 using GetObjectResponse = S3UtilResponse<bool>;
 using SdkGetObjectResponse = Aws::S3::Model::GetObjectOutcome;
@@ -111,10 +168,12 @@ class S3Util {
   }
 
   // Download an S3 Object to a local file
-  GetObjectResponse getObject(const string& key, const string& local_path);
+  GetObjectResponse getObject(const string& key, const string& local_path,
+                              const bool direct_io = false);
   // Get object using s3client
   SdkGetObjectResponse sdkGetObject(const string& key,
-                                    const string& local_path="");
+                                    const string& local_path = "",
+                                    const bool direct_io = false);
   // Return a list of objects under the prefix.
   ListObjectsResponse listObjects(const string& prefix);
   // Download all objects under a prefix. We only assume
@@ -124,7 +183,8 @@ class S3Util {
   // If not true, the error message will be the error message.
   GetObjectsResponse getObjects(
       const string& prefix, const string& local_directory,
-      const string& delimiter = "/");
+      const string& delimiter = "/",
+      const bool direct_io = false);
   // Get the metadata dict of an object.
   // Now contains md5 and content-length of the s3 object
   GetObjectMetadataResponse getObjectMetadata(const string& key);
