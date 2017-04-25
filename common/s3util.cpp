@@ -68,7 +68,7 @@ DirectIOWritableFile::DirectIOWritableFile(const string& file_path)
   }
 
   int flag = O_WRONLY | O_TRUNC | O_CREAT | O_DIRECT;
-  fd_ = open(file_path.c_str(), flag , 640);
+  fd_ = open(file_path.c_str(), flag , S_IRUSR | S_IWUSR | S_IRGRP);
   if (fd_ < 0) {
     LOG(ERROR) << "Failed to open " << file_path << " with flag " << flag
                << ", errno = " << errno;
