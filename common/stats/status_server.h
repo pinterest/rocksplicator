@@ -60,7 +60,7 @@ class StatusServer {
    * (arrays can be passed in as delimited values) and returns a
    * std::string.
    */
-  static void StartStatusServer(EndPointToOPMap op_map = EndPointToOPMap());
+  static StatusServer* StartStatusServer(EndPointToOPMap op_map = EndPointToOPMap());
   // Instantiate a StatusServer or Die.
   static void StartStatusServerOrDie(
       EndPointToOPMap op_map = EndPointToOPMap());
