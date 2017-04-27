@@ -70,8 +70,9 @@ int ServeCallback(void* param, struct MHD_Connection* connection,
 }
 }  // namespace
 
-void StatusServer::StartStatusServer(EndPointToOPMap op_map) {
+StatusServer* StatusServer::StartStatusServer(EndPointToOPMap op_map) {
   static StatusServer server(FLAGS_http_status_port, std::move(op_map));
+  return &server;
 }
 
 void StatusServer::StartStatusServerOrDie(EndPointToOPMap op_map) {
