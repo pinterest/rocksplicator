@@ -49,6 +49,8 @@ using Aws::S3::Model::ListObjectsRequest;
 using Aws::S3::Model::HeadObjectRequest;
 using Aws::Utils::RateLimits::DefaultRateLimiter;
 
+DEFINE_int32(get_object_retry_count, 0,
+             "Number of retries for GetObject");
 
 namespace common {
 
@@ -119,18 +121,22 @@ std::streamsize DirectIOWritableFile::write(const char* s, std::streamsize n) {
   return n;
 }
 
-
 GetObjectResponse S3Util::getObject(
     const string& key, const string& local_path, const bool direct_io) {
-  auto getObjectResult = sdkGetObject(key, local_path, direct_io);
+  int attempts = 1 + FLAGS_get_object_retry_count;
   string err_msg_prefix =
-    "Failed to download from " + key + "to " + local_path + "error: ";
-  if (getObjectResult.IsSuccess()) {
-    return GetObjectResponse(true, "");
-  } else {
-    return GetObjectResponse(false,
-        std::move(err_msg_prefix + getObjectResult.GetError().GetMessage()));
+      "Failed to download from " + key + "to " + local_path + "error: ";
+
+  while (attempts > 0) {
+    --attempts;
+    auto getObjectResult = sdkGetObject(key, local_path, direct_io);
+    if (!getObjectResult.IsSuccess() && attempts == 0) {
+      return GetObjectResponse(
+          false, std::move(err_msg_prefix + getObjectResult.GetError().GetMessage()));
+    }
   }
+
+  return GetObjectResponse(true, "");
 }
 
 SdkGetObjectResponse S3Util::sdkGetObject(const string& key,
