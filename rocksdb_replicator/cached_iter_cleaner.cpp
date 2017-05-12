@@ -38,7 +38,7 @@ RocksDBReplicator::CachedIterCleaner::CachedIterCleaner()
       this->evb_.loopForever();
       LOG(INFO) << "Stopping idle iter cleanup thread ...";
     });
-
+  evb_.waitUntilRunning();
   scheduleCleanup();
 }
 
