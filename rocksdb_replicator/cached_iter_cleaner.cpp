@@ -29,6 +29,7 @@ namespace replicator {
 
 RocksDBReplicator::CachedIterCleaner::CachedIterCleaner()
     : dbs_(), dbs_mutex_(), thread_(), evb_() {
+  scheduleCleanup();
   thread_ = std::thread([this] {
       if (!folly::setThreadName("IterCleaner")) {
         LOG(ERROR) << "Failed to setThreadName() for CachedIterCleaner thread";
@@ -38,8 +39,6 @@ RocksDBReplicator::CachedIterCleaner::CachedIterCleaner()
       this->evb_.loopForever();
       LOG(INFO) << "Stopping idle iter cleanup thread ...";
     });
-  evb_.waitUntilRunning();
-  scheduleCleanup();
 }
 
 void RocksDBReplicator::CachedIterCleaner::scheduleCleanup() {
