@@ -703,8 +703,19 @@ TEST(ThriftRouterTest, ServerSetTest) {
   // Only pick good clients
   EXPECT_EQ(5, handlers[1]->nPings_.load() + handlers[2]->nPings_.load());
 
-  // Start server again
+  servers[1]->stop();
+  thrs[1]->join();
+  servers[2]->stop();
+  thrs[2]->join();
+  for (size_t i = 0; i < router.getHostsCount(); i ++) {
+    auto client = router.getClientFromServerset();
+    EXPECT_EQ(client, nullptr);
+  }
+
+  // Start servers again
   tie(handlers[0], servers[0], thrs[0]) = makeServer(8090);
+  tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
+  tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
 
   // stop all servers
   for (auto& s : servers) {

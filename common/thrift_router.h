@@ -338,14 +338,13 @@ class ThriftRouter {
 
     std::shared_ptr<ClientType> getClientFromServerset() {
       thread_local auto round_robin_counter = getRoundRobinSeed();
-      for (int i = 0; i < (*local_cluster_layout_)->all_hosts.size(); i ++){
+      auto serverset_size = (*hosts_).size();
+      for (int i = 0; i < serverset_size; i ++){
         // Keep searching until we get a good client
         folly::ScopeGuard round_robin_guard = folly::makeGuard([&] {
           round_robin_counter ++;
         });
-        auto index = round_robin_counter %
-                (*local_cluster_layout_)->all_hosts.size();
-        const Host* selected_host = (*hosts_).at(index);
+        auto selected_host = (*hosts_).at(round_robin_counter % serverset_size);
         if (!createOrFixClientFor(selected_host)) {
           continue;
         }
@@ -365,6 +364,8 @@ class ThriftRouter {
 
       // remove clients for non-existing servers
       const auto& hosts = (*local_cluster_layout_)->all_hosts;
+
+      // Update thread local host vector.
       (*hosts_).clear();
       for (const auto& host : hosts) {
         (*hosts_).emplace_back(&host);
