@@ -712,19 +712,6 @@ TEST(ThriftRouterTest, ServerSetTest) {
     EXPECT_EQ(client, nullptr);
   }
 
-  // Start servers again
-  tie(handlers[0], servers[0], thrs[0]) = makeServer(8090);
-  tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
-  tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
-
-  // stop all servers
-  for (auto& s : servers) {
-    s->stop();
-  }
-
-  for (auto& t : thrs) {
-    t->join();
-  }
 }
 
 int main(int argc, char** argv) {
