@@ -107,6 +107,10 @@ static const char* g_config_v3 =
   "   }"
   "}";
 
+static const char* g_serverset =
+  "127.0.0.1:8090\n"
+  "127.0.0.1:8091\n"
+  "127.0.0.1:8092";
 
 using ClusterLayout = ThriftRouter<DummyServiceAsyncClient>::ClusterLayout;
 using Role = ThriftRouter<DummyServiceAsyncClient>::Role;
@@ -658,6 +662,49 @@ TEST(ThriftRouterTest, HostOrderTest) {
   EXPECT_EQ(handlers[2]->nPings_.load(), 4);
 
   FLAGS_always_prefer_local_host = false;
+
+  // stop all servers
+  for (auto& s : servers) {
+    s->stop();
+  }
+
+  for (auto& t : thrs) {
+    t->join();
+  }
+}
+
+TEST(ThriftRouterTest, ServerSetTest) {
+  updateConfigFile(g_serverset);
+  shared_ptr<DummyServiceTestHandler> handlers[3];
+  shared_ptr<ThriftServer> servers[3];
+  unique_ptr<thread> thrs[3];
+
+  tie(handlers[0], servers[0], thrs[0]) = makeServer(8090);
+  tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
+  tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
+  sleep(1);
+  ThriftRouter<DummyServiceAsyncClient> router(
+    "", g_config_path, common::parseServerset);
+  for (size_t i = 0; i < router.getHostsCount(); i ++) {
+    auto client = router.getClientFromServerset();
+    EXPECT_NO_THROW(client->future_ping().get());
+  }
+  for (const auto& h: handlers) {
+    EXPECT_EQ(h->nPings_.load(), 1);
+  }
+
+  // stop servers[0]
+  servers[0]->stop();
+  thrs[0]->join();
+  for (size_t i = 0; i < router.getHostsCount(); i ++) {
+    auto client = router.getClientFromServerset();
+    EXPECT_NO_THROW(client->future_ping().get());
+  }
+  // Only pick good clients
+  EXPECT_EQ(5, handlers[1]->nPings_.load() + handlers[2]->nPings_.load());
+
+  // Start server again
+  tie(handlers[0], servers[0], thrs[0]) = makeServer(8090);
 
   // stop all servers
   for (auto& s : servers) {

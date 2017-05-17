@@ -22,6 +22,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <random>
 #include <set>
 #include <string>
 #include <vector>
@@ -32,6 +33,7 @@
 #include "common/availability_zone.h"
 #include "common/thrift_client_pool.h"
 #include "folly/RWSpinLock.h"
+#include "folly/ScopeGuard.h"
 #include "folly/SocketAddress.h"
 #include "folly/ThreadLocal.h"
 
@@ -53,7 +55,6 @@ struct Host {
   bool operator<(const Host& other) const {
     return addr < other.addr;
   }
-
   folly::SocketAddress addr;
   std::string az;  // availability zone
 };
@@ -126,6 +127,7 @@ class ThriftRouter {
 
   /*
    * Get clients pointing to the server(s) matching the request conditions.
+   * @note This function is valid when parser function is parseConfig().
    * @note It is encouraged and performance-wise OK to call getClientsFor() for
    *       every RPC.
    * @param segment   The requested segment
@@ -170,6 +172,7 @@ class ThriftRouter {
    * multiple shards. This allows us to get clients for multiple shards based on
    * a single config file snapshot (There might be config file changes between
    * two calls of getClientsFor()).
+   * @note This function is valid when parser function is parseConfig().
    * @note shard_to_clients is an in-out parameter
    *
    * Trying to fill clients for as many shards as possible.
@@ -186,6 +189,16 @@ class ThriftRouter {
     updateClusterLayout();
     return local_client_map_.getClientsFor(segment, role, quantity,
                                            shard_to_clients);
+  }
+
+  /*
+   * Select a valid client from serverset file or a shard config file.
+   * The selection is done in round robin manner per thread.
+   * Return nullptr if there is no available host.
+   */
+  std::shared_ptr<ClientType> getClientFromServerset() {
+    updateClusterLayout();
+    return local_client_map_.getClientFromServerset();
   }
 
   uint32_t getShardNumberFor(const std::string& segment) {
@@ -205,6 +218,15 @@ class ThriftRouter {
     }
 
     return itor->second.shard_to_hosts.size();
+  }
+
+  uint32_t getHostsCount() {
+    std::shared_ptr<const ClusterLayout> layout;
+    {
+      folly::RWSpinLock::ReadHolder read_guard(layout_rwlock_);
+      layout = cluster_layout_;
+    }
+    return layout->all_hosts.size();
   }
 
   // no copy or move
@@ -307,6 +329,32 @@ class ThriftRouter {
       return ret;
     }
 
+    uint32_t getRoundRobinSeed() {
+      thread_local std::default_random_engine random_engine;
+      std::uniform_int_distribution<uint32_t> uniform_dist(
+          0, sysconf(_SC_NPROCESSORS_ONLN) - 1);
+      return uniform_dist(random_engine);
+    }
+
+    std::shared_ptr<ClientType> getClientFromServerset() {
+      thread_local auto round_robin_counter = getRoundRobinSeed();
+      for (int i = 0; i < (*local_cluster_layout_)->all_hosts.size(); i ++){
+        // Keep searching until we get a good client
+        folly::ScopeGuard round_robin_guard = folly::makeGuard([&] {
+          round_robin_counter ++;
+        });
+        auto index = round_robin_counter %
+                (*local_cluster_layout_)->all_hosts.size();
+        const Host* selected_host = (*hosts_).at(index);
+        if (!createOrFixClientFor(selected_host)) {
+          continue;
+        }
+        return (*clients_)[selected_host->addr].client;
+      }
+      LOG(ERROR) << "No endpoint for serverset is healthy";
+      return nullptr;
+    }
+
     void updateClusterLayout(std::shared_ptr<const ClusterLayout> layout) {
       if (layout == *local_cluster_layout_ || layout == nullptr) {
         return;
@@ -317,6 +365,11 @@ class ThriftRouter {
 
       // remove clients for non-existing servers
       const auto& hosts = (*local_cluster_layout_)->all_hosts;
+      (*hosts_).clear();
+      for (const auto& host : hosts) {
+        (*hosts_).emplace_back(&host);
+      }
+
       Host host;
       for (auto itor = clients_->begin(); itor != clients_->end();) {
         host.addr = itor->first;
@@ -410,28 +463,33 @@ class ThriftRouter {
       return socket->good();
     }
 
+    bool createOrFixClientFor(const Host* host) {
+      auto itor = clients_->find(host->addr);
+      if (itor != clients_->end() &&
+          is_client_good(itor->second.client.get())) {
+          // has the client and it is good
+        return true;
+      }
+
+      if (itor != clients_->end() &&
+          itor->second.create_time +
+          FLAGS_min_client_reconnect_interval_seconds > now()) {
+        // has a bad client and it is too soon to reconnect
+        return false;
+      }
+
+      // either don't have the client or we need to fix the bad client
+      auto& cs = (*clients_)[host->addr];
+      cs.client = client_pool_.getClient(host->addr,
+                                         FLAGS_client_connect_timeout_millis,
+                                         &cs.is_good);
+      cs.create_time = now();
+      return true;
+    }
+
     void createOrFixClientsFor(const std::set<const Host*>& hosts) {
       for (auto host : hosts) {
-        auto itor = clients_->find(host->addr);
-        if (itor != clients_->end() &&
-            is_client_good(itor->second.client.get())) {
-            // has the client and it is good
-          continue;
-        }
-
-        if (itor != clients_->end() &&
-            itor->second.create_time +
-            FLAGS_min_client_reconnect_interval_seconds > now()) {
-          // has a bad client and it is too soon to reconnect
-          continue;
-        }
-
-        // either don't have the client or we need to fix the bad client
-        auto& cs = (*clients_)[host->addr];
-        cs.client = client_pool_.getClient(host->addr,
-                                           FLAGS_client_connect_timeout_millis,
-                                           &cs.is_good);
-        cs.create_time = now();
+        createOrFixClientFor(host);
       }
     }
 
@@ -457,6 +515,7 @@ class ThriftRouter {
 
     const std::string local_az_;
     ThriftClientPool<ClientType> client_pool_;
+    folly::ThreadLocal<std::vector<const Host*>> hosts_;
     folly::ThreadLocal<std::shared_ptr<const ClusterLayout>>
       local_cluster_layout_;
     folly::ThreadLocal<std::unordered_map<folly::SocketAddress,
@@ -504,5 +563,16 @@ class ThriftRouter {
   "}";
  */
 std::unique_ptr<const detail::ClusterLayout> parseConfig(std::string content);
+
+/*
+ * Parse a serverset file.
+ * A serverset file is composed with lines of endpoints of stateless service.
+  "10.1.224.217:9090
+   10.1.232.108:9091
+   10.2.132.214:9090"
+   The result will be ClusterLayout but only all_hosts is filled.
+ */
+std::unique_ptr<const detail::ClusterLayout>
+parseServerset(std::string content);
 
 }  // namespace common
