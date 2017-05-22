@@ -95,6 +95,13 @@ StatusServer::StatusServer(uint16_t port, EndPointToOPMap op_map)
     return ret;
   });
 
+  // dump_heap
+  op_map_.emplace("/dump_heap",
+                  [] (const std::vector<std::pair<std::string, std::string>>*) {
+                    auto ret = mallctl("prof.dump", nullptr, nullptr, nullptr, 0);
+                    return strerror(ret);
+                  });
+
   if (!this->Serve()) {
     LOG(INFO) << "Failed to start status server at " << port;
     LOG(INFO) << strerror(errno);
