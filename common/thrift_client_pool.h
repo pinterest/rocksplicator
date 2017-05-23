@@ -233,7 +233,7 @@ class ThriftClientPool {
   };
 
  public:
-  // Create a new pool of thread pool with backward_caompatibility speicified.
+  // Create a new pool of thread pool with protocol type speicified.
   // Size is sysconf(_SC_NPROCESSORS_ONLN)
   explicit ThriftClientPool(const bool binary_protocol) {
     ThriftClientPool(static_cast<uint16_t>(sysconf(_SC_NPROCESSORS_ONLN)),
