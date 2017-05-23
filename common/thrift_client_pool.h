@@ -70,8 +70,13 @@ namespace common {
  * const std::vector<folly::EventBase*> evbs = ...;
  * ThriftClientPool<T> pool(evbs);
  * auto client = pool.getClient();
+ *
+ * // Example usage 4, Create a client using TBinaryProtocol instead of
+ * // default THeaderProtocol.
+ * ThriftClientPool<T, true> pool(8);
+ *
  */
-template <typename T>
+template <typename T, bool USE_BINARY_PROTOCOL = false>
 class ThriftClientPool {
  private:
   struct ClientStatusCallback
@@ -233,29 +238,19 @@ class ThriftClientPool {
   };
 
  public:
-  // Create a new pool of thread pool with protocol type speicified and use
-  // default pool size.
-  explicit ThriftClientPool(const bool binary_protocol) {
-    ThriftClientPool(static_cast<uint16_t>(sysconf(_SC_NPROCESSORS_ONLN)),
-                     binary_protocol);
-  }
 
   // Create a new pool of n_io_threads IO threads. The threads are owned by the
   // pool.
   explicit ThriftClientPool(const uint16_t n_io_threads =
-      static_cast<uint16_t>(sysconf(_SC_NPROCESSORS_ONLN)),
-      const bool binary_protocol = false)
-        : event_loops_(n_io_threads)
-        , binary_protocol_(binary_protocol) {
+      static_cast<uint16_t>(sysconf(_SC_NPROCESSORS_ONLN)))
+        : event_loops_(n_io_threads) {
     CHECK_GT(n_io_threads, 0);
   }
 
   // Create a new pool by using the evbs, which are supposed to be driven by
   // some other threads. It's users' responsibility to ensure that evbs and
   // the threads driving them outlive the pool object.
-  explicit ThriftClientPool(const std::vector<folly::EventBase*>& evbs,
-    const bool binary_protocol = false)
-      : binary_protocol_(binary_protocol) {
+  explicit ThriftClientPool(const std::vector<folly::EventBase*>& evbs) {
     CHECK(!evbs.empty());
     event_loops_.reserve(evbs.size());
     for (const auto& evb : evbs) {
@@ -311,7 +306,7 @@ class ThriftClientPool {
         [this, &client, &event_loop = event_loops_[idx], &addr, &is_good,
          connect_timeout_ms] () mutable {
           auto channel = event_loop.getChannelFor(addr, connect_timeout_ms,
-                                                  binary_protocol_,
+                                                  USE_BINARY_PROTOCOL,
                                                   is_good);
 
           event_loop.cleanupStaleChannels(addr);
@@ -351,10 +346,8 @@ class ThriftClientPool {
   // The evb to be used for the next new client
   static std::atomic<uint32_t> nextEvbIdx_;
 
-  // true to use TBinaryProtocol, false to use THeaderProtocol (default)
-  bool binary_protocol_;
 };
 
-template <typename T>
-std::atomic<uint32_t> ThriftClientPool<T>::nextEvbIdx_ { 0 };
+template <typename T, bool USE_BINARY_PROTOCOL>
+std::atomic<uint32_t> ThriftClientPool<T, USE_BINARY_PROTOCOL>::nextEvbIdx_ {0};
 }  // namespace common
