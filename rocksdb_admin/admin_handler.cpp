@@ -567,11 +567,11 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   // we couldn't afford to create a new client for every SST file downloading
   // request, which is not even on any critical code path. Otherwise, we will
   // see latency spike when uploading data to production clusters.
-  folly::RWSpinLock::UpgradedHolder upgraded_guard(s3_util_lock_);
+  RWSpinLock::UpgradedHolder upgraded_guard(s3_util_lock_);
   if (should_new_s3_client(s3_util_, request.get())) {
     // Request with different ratelimit or bucket has to wait for old
     // requests to drain.
-    folly::RWSpinLock::WriteHolder write_guard(s3_util_lock_);
+    RWSpinLock::WriteHolder write_guard(s3_util_lock_);
     // Double check to achieve compare-exchange-like operation.
     // The reason not using atomic_compare_exchange_* is to save
     // expensive S3Util creation if multiple requests arrive.
