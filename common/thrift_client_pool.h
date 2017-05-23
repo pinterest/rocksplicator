@@ -343,7 +343,6 @@ class ThriftClientPool {
 
   // The evb to be used for the next new client
   static std::atomic<uint32_t> nextEvbIdx_;
-
 };
 
 template <typename T, bool USE_BINARY_PROTOCOL>
