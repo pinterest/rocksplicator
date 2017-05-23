@@ -29,8 +29,10 @@
 #include "folly/futures/Promise.h"
 #include "folly/io/async/EventBase.h"
 #include "folly/SocketAddress.h"
+#include "thrift/lib/cpp/transport/THeader.h"
 #include "thrift/lib/cpp/async/TAsyncSocket.h"
 #include "thrift/lib/cpp2/async/HeaderClientChannel.h"
+#include "thrift/lib/cpp2/protocol/BinaryProtocol.h"
 
 DECLARE_int32(channel_cleanup_min_interval_seconds);
 
@@ -147,6 +149,7 @@ class ThriftClientPool {
     std::shared_ptr<apache::thrift::HeaderClientChannel>
     getChannelFor(const folly::SocketAddress& addr,
                   const uint32_t connect_timeout_ms,
+                  const bool binary_protocol,
                   const std::atomic<bool>** is_good) {
       std::shared_ptr<apache::thrift::HeaderClientChannel> channel;
       auto itor = channels_.find(addr);
@@ -166,6 +169,10 @@ class ThriftClientPool {
         channel = apache::thrift::HeaderClientChannel::newChannel(socket);
         if (FLAGS_channel_send_timeout_ms > 0) {
           channel->setTimeout(FLAGS_channel_send_timeout_ms);
+        }
+        if (binary_protocol) {
+          channel->setProtocolId(apache::thrift::protocol::T_BINARY_PROTOCOL);
+          channel->setClientType(THRIFT_FRAMED_DEPRECATED);
         }
 
         if (is_good) {
@@ -226,19 +233,29 @@ class ThriftClientPool {
   };
 
  public:
+  // Create a new pool of thread pool with backward_caompatibility speicified.
+  // Size is sysconf(_SC_NPROCESSORS_ONLN)
+  explicit ThriftClientPool(const bool binary_protocol) {
+    ThriftClientPool(static_cast<uint16_t>(sysconf(_SC_NPROCESSORS_ONLN)),
+                     binary_protocol);
+  }
+
   // Create a new pool of n_io_threads IO threads. The threads are owned by the
   // pool.
-  explicit ThriftClientPool(
-      const uint16_t n_io_threads =
-      static_cast<uint16_t>(sysconf(_SC_NPROCESSORS_ONLN)))
-        : event_loops_(n_io_threads) {
+  explicit ThriftClientPool(const uint16_t n_io_threads =
+      static_cast<uint16_t>(sysconf(_SC_NPROCESSORS_ONLN)),
+      const bool binary_protocol = false)
+        : event_loops_(n_io_threads)
+        , binary_protocol_(binary_protocol) {
     CHECK_GT(n_io_threads, 0);
   }
 
   // Create a new pool by using the evbs, which are supposed to be driven by
   // some other threads. It's users' responsibility to ensure that evbs and
   // the threads driving them outlive the pool object.
-  explicit ThriftClientPool(const std::vector<folly::EventBase*>& evbs) {
+  explicit ThriftClientPool(const std::vector<folly::EventBase*>& evbs,
+    const bool binary_protocol = false)
+      : binary_protocol_(binary_protocol) {
     CHECK(!evbs.empty());
     event_loops_.reserve(evbs.size());
     for (const auto& evb : evbs) {
@@ -291,9 +308,10 @@ class ThriftClientPool {
     Deleter deleter(event_loops_[idx].evb_);
     std::unique_ptr<T, Deleter> client(nullptr, deleter);
     event_loops_[idx].evb_->runInEventBaseThreadAndWait(
-        [&client, &event_loop = event_loops_[idx], &addr, &is_good,
+        [this, &client, &event_loop = event_loops_[idx], &addr, &is_good,
          connect_timeout_ms] () mutable {
           auto channel = event_loop.getChannelFor(addr, connect_timeout_ms,
+                                                  binary_protocol_,
                                                   is_good);
 
           event_loop.cleanupStaleChannels(addr);
@@ -332,6 +350,9 @@ class ThriftClientPool {
 
   // The evb to be used for the next new client
   static std::atomic<uint32_t> nextEvbIdx_;
+
+  // true to use TBinaryProtol, false to use THeaderProtocol (default)
+  bool binary_protocol_;
 };
 
 template <typename T>

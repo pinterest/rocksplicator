@@ -36,7 +36,7 @@ namespace replicator {
 
 RocksDBReplicator::RocksDBReplicator()
     : executor_(common::getGlobalCPUExecutor())
-    , client_pool_(FLAGS_num_replicator_io_threads)
+    , client_pool_(FLAGS_num_replicator_io_threads, false)
     , db_map_()
     , server_("disabled", false)
     , thread_()

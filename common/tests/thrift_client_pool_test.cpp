@@ -227,10 +227,10 @@ TEST(ThriftClientTest, Basics) {
     pool_default_shared_1->shareIOThreads<DummyServiceAsyncClient>();
   testBasics(pool_default_shared_2.get());
 
-  ThriftClientPool<DummyServiceAsyncClient> pool_1(1);
+  ThriftClientPool<DummyServiceAsyncClient> pool_1(1, false);
   testBasics(&pool_1);
 
-  ThriftClientPool<DummyServiceAsyncClient> pool_100(100);
+  ThriftClientPool<DummyServiceAsyncClient> pool_100(100, false);
   testBasics(&pool_100);
 }
 
@@ -274,12 +274,12 @@ TEST(ThriftClientTest, Stress) {
   tie(handler, server, thr) = makeServer(gPort, 0);
   sleep(1);
 
-  ThriftClientPool<DummyServiceAsyncClient> pool_1(1);
+  ThriftClientPool<DummyServiceAsyncClient> pool_1(1, false);
   stressTest(100, 1000, 1, &pool_1);
   stressTest(100, 1000, 100, &pool_1);
   stressTest(100, 1000, 500, &pool_1);
 
-  ThriftClientPool<DummyServiceAsyncClient> pool_100(100);
+  ThriftClientPool<DummyServiceAsyncClient> pool_100(100, false);
   stressTest(100, 1000, 1, &pool_100);
   stressTest(100, 1000, 100, &pool_100);
   stressTest(100, 1000, 500, &pool_100);
