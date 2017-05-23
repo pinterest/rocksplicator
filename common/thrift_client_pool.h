@@ -30,7 +30,9 @@
 #include "folly/io/async/EventBase.h"
 #include "folly/SocketAddress.h"
 #include "thrift/lib/cpp/async/TAsyncSocket.h"
+#include "thrift/lib/cpp/transport/THeader.h"
 #include "thrift/lib/cpp2/async/HeaderClientChannel.h"
+#include "thrift/lib/cpp2/protocol/BinaryProtocol.h"
 
 DECLARE_int32(channel_cleanup_min_interval_seconds);
 
@@ -68,8 +70,13 @@ namespace common {
  * const std::vector<folly::EventBase*> evbs = ...;
  * ThriftClientPool<T> pool(evbs);
  * auto client = pool.getClient();
+ *
+ * // Example usage 4, Create a client using TBinaryProtocol instead of
+ * // default THeaderProtocol.
+ * ThriftClientPool<T, true> pool(8);
+ *
  */
-template <typename T>
+template <typename T, bool USE_BINARY_PROTOCOL = false>
 class ThriftClientPool {
  private:
   struct ClientStatusCallback
@@ -166,6 +173,10 @@ class ThriftClientPool {
         channel = apache::thrift::HeaderClientChannel::newChannel(socket);
         if (FLAGS_channel_send_timeout_ms > 0) {
           channel->setTimeout(FLAGS_channel_send_timeout_ms);
+        }
+        if (USE_BINARY_PROTOCOL) {
+          channel->setProtocolId(apache::thrift::protocol::T_BINARY_PROTOCOL);
+          channel->setClientType(THRIFT_FRAMED_DEPRECATED);
         }
 
         if (is_good) {
@@ -334,6 +345,6 @@ class ThriftClientPool {
   static std::atomic<uint32_t> nextEvbIdx_;
 };
 
-template <typename T>
-std::atomic<uint32_t> ThriftClientPool<T>::nextEvbIdx_ { 0 };
+template <typename T, bool USE_BINARY_PROTOCOL>
+std::atomic<uint32_t> ThriftClientPool<T, USE_BINARY_PROTOCOL>::nextEvbIdx_ {0};
 }  // namespace common
