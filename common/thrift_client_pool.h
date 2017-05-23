@@ -351,7 +351,7 @@ class ThriftClientPool {
   // The evb to be used for the next new client
   static std::atomic<uint32_t> nextEvbIdx_;
 
-  // true to use TBinaryProtol, false to use THeaderProtocol (default)
+  // true to use TBinaryProtocol, false to use THeaderProtocol (default)
   bool binary_protocol_;
 };
 
