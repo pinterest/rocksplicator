@@ -154,7 +154,6 @@ class ThriftClientPool {
     std::shared_ptr<apache::thrift::HeaderClientChannel>
     getChannelFor(const folly::SocketAddress& addr,
                   const uint32_t connect_timeout_ms,
-                  const bool binary_protocol,
                   const std::atomic<bool>** is_good) {
       std::shared_ptr<apache::thrift::HeaderClientChannel> channel;
       auto itor = channels_.find(addr);
@@ -175,7 +174,7 @@ class ThriftClientPool {
         if (FLAGS_channel_send_timeout_ms > 0) {
           channel->setTimeout(FLAGS_channel_send_timeout_ms);
         }
-        if (binary_protocol) {
+        if (USE_BINARY_PROTOCOL) {
           channel->setProtocolId(apache::thrift::protocol::T_BINARY_PROTOCOL);
           channel->setClientType(THRIFT_FRAMED_DEPRECATED);
         }
@@ -238,10 +237,10 @@ class ThriftClientPool {
   };
 
  public:
-
   // Create a new pool of n_io_threads IO threads. The threads are owned by the
   // pool.
-  explicit ThriftClientPool(const uint16_t n_io_threads =
+  explicit ThriftClientPool(
+      const uint16_t n_io_threads =
       static_cast<uint16_t>(sysconf(_SC_NPROCESSORS_ONLN)))
         : event_loops_(n_io_threads) {
     CHECK_GT(n_io_threads, 0);
@@ -306,7 +305,6 @@ class ThriftClientPool {
         [&client, &event_loop = event_loops_[idx], &addr, &is_good,
          connect_timeout_ms] () mutable {
           auto channel = event_loop.getChannelFor(addr, connect_timeout_ms,
-                                                  USE_BINARY_PROTOCOL,
                                                   is_good);
 
           event_loop.cleanupStaleChannels(addr);
