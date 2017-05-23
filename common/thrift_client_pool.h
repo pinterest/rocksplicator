@@ -303,7 +303,7 @@ class ThriftClientPool {
     Deleter deleter(event_loops_[idx].evb_);
     std::unique_ptr<T, Deleter> client(nullptr, deleter);
     event_loops_[idx].evb_->runInEventBaseThreadAndWait(
-        [this, &client, &event_loop = event_loops_[idx], &addr, &is_good,
+        [&client, &event_loop = event_loops_[idx], &addr, &is_good,
          connect_timeout_ms] () mutable {
           auto channel = event_loop.getChannelFor(addr, connect_timeout_ms,
                                                   USE_BINARY_PROTOCOL,
