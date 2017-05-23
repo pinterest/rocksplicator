@@ -154,11 +154,12 @@ class S3Util {
 
   // Don't recommend using this directly. Using BuildS3Util instead.
   // If you must, make sure to call Aws::InitAPI(options); before constructor
-  S3Util(const string& bucket,
+  explicit S3Util(const string& bucket,
          const ClientConfiguration& client_config,
-         const SDKOptions& options) :
-    bucket_(std::move(bucket)), s3Client(client_config), options_(options) {
-
+         const SDKOptions& options,
+         const uint32_t read_ratelimit_mb) :
+    bucket_(std::move(bucket)), s3Client(client_config), options_(options),
+    read_ratelimit_mb_(read_ratelimit_mb) {
     Aws::StringStream ss;
     ss << Aws::Http::SchemeMapper::ToString(client_config.scheme) << "://";
 
@@ -210,6 +211,13 @@ class S3Util {
       const uint32_t connect_timeout_ms = 60000,
       const uint32_t request_timeout_ms = 60000);
 
+  const string& getBucket() const {
+    return bucket_;
+  }
+
+  const uint32_t getRateLimit() const {
+    return read_ratelimit_mb_;
+  }
 
  private:
   const string bucket_;
@@ -218,5 +226,6 @@ class S3Util {
   CutomizedS3Client s3Client;
   SDKOptions options_;
   std::string uri_;
+  const uint32_t read_ratelimit_mb_;
 };
 }  // namespace common

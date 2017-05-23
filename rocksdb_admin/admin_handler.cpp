@@ -19,6 +19,7 @@
 
 #include "rocksdb_admin/admin_handler.h"
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
@@ -26,7 +27,6 @@
 #include "boost/filesystem.hpp"
 #include "common/network_util.h"
 #include "common/rocksdb_glogger/rocksdb_glogger.h"
-#include "common/s3util.h"
 #include "common/thrift_router.h"
 #include "folly/FileUtil.h"
 #include "folly/ScopeGuard.h"
@@ -553,6 +553,12 @@ void AdminHandler::async_tm_clearDB(
   callback->result(ClearDBResponse());
 }
 
+inline bool should_new_s3_client(
+  shared_ptr<common::S3Util> s3_util, AddS3SstFilesToDBRequest* request) {
+  return s3_util == nullptr || s3_util->getBucket() != request->s3_bucket ||
+      s3_util->getRateLimit() != request->s3_download_limit_mb;
+}
+
 void AdminHandler::async_tm_addS3SstFilesToDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       AddS3SstFilesToDBResponse>>> callback,
@@ -561,29 +567,25 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   // we couldn't afford to create a new client for every SST file downloading
   // request, which is not even on any critical code path. Otherwise, we will
   // see latency spike when uploading data to production clusters.
-  static const uint32_t s3_download_limit_mb = request->s3_download_limit_mb;
-  static const std::string s3_bucket = request->s3_bucket;
-  static auto s3Util = common::S3Util::BuildS3Util(
-    s3_download_limit_mb, s3_bucket);
+  folly::RWSpinLock::UpgradedHolder upgraded_guard(s3_util_lock_);
+  if (should_new_s3_client(s3_util_, request.get())) {
+    // Request with different ratelimit or bucket has to wait for old
+    // requests to drain.
+    folly::RWSpinLock::WriteHolder write_guard(s3_util_lock_);
+    // Double check to achieve compare-exchange-like operation.
+    // The reason not using atomic_compare_exchange_* is to save
+    // expensive S3Util creation if multiple requests arrive.
+    if (should_new_s3_client(s3_util_, request.get())) {
+      LOG(INFO) << "Request with different bucket "
+          << request->s3_bucket << ". Or different rate limit: "
+          << request->s3_download_limit_mb;
+      s3_util_ = common::S3Util::BuildS3Util(request->s3_download_limit_mb,
+                                             request->s3_bucket);
+    }
+  }
 
   admin::AdminException e;
   e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
-
-  if (s3_download_limit_mb != request->s3_download_limit_mb ||
-      s3_bucket != request->s3_bucket) {
-    // TODO(bol) currently we use the parameters in the first request recieved.
-    // Fixing me by upgrading to new s3 sdk and changing the S3Util interface.
-    std::string err_msg = "Inconsistent download limit: "
-      + folly::to<std::string>(request->s3_download_limit_mb)
-      + " and s3 bucket: " + request->s3_bucket + " received. "
-      + folly::to<std::string>(s3_download_limit_mb)
-      + " and " + s3_bucket + " required.";
-
-    e.message = request->db_name + " " + err_msg;
-    callback.release()->exceptionInThread(std::move(e));
-    LOG(ERROR) << err_msg;
-    return;
-  }
 
   db_admin_lock_.Lock(request->db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
