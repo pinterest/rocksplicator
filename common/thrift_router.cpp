@@ -18,9 +18,11 @@
 
 #include "common/thrift_router.h"
 
+#include <boost/algorithm/string.hpp>
 #include <string>
 #include <utility>
 #include <vector>
+
 #include "common/jsoncpp/include/json/json.h"
 
 DEFINE_bool(always_prefer_local_host, false,
@@ -117,7 +119,6 @@ std::unique_ptr<const detail::ClusterLayout> parseConfig(std::string content) {
         LOG(ERROR) << "Invalid host port az " << host_port_az;
         return nullptr;
       }
-
       const detail::Host* pHost = &*(cl->all_hosts.insert(host).first);
       const auto& shard_list = segment_value[host_port_az];
       // for each shard
@@ -142,6 +143,26 @@ std::unique_ptr<const detail::ClusterLayout> parseConfig(std::string content) {
     }
   }
 
+  return std::unique_ptr<const detail::ClusterLayout>(std::move(cl));
+}
+
+std::unique_ptr<const detail::ClusterLayout>
+parseServerset(std::string content) {
+  std::vector<std::string> endpoints;
+  boost::split(endpoints, content, boost::is_any_of("\n"));
+  if (endpoints.empty()) {
+    LOG(ERROR) << "Empty serverset";
+    return nullptr;
+  }
+  auto cl = std::make_unique<detail::ClusterLayout>();
+  for (const std::string& endpoint: endpoints) {
+    detail::Host host;
+    if (!parseHost(endpoint, &host)) {
+      LOG(ERROR) << "Invalid host port string" << endpoint;
+      return nullptr;
+    }
+    cl->all_hosts.insert(host);
+  }
   return std::unique_ptr<const detail::ClusterLayout>(std::move(cl));
 }
 
