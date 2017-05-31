@@ -570,7 +570,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   if (s3_util_ == nullptr || should_new_s3_client(*s3_util_, request.get())) {
     // Request with different ratelimit or bucket has to wait for old
     // requests to drain.
-    RWSpinLock::WriteHolder write_guard(s3_util_lock_);
+    s3_util_lock_.unlock_upgrade_and_lock();
     // Double check to achieve compare-exchange-like operation.
     // The reason not using atomic_compare_exchange_* is to save
     // expensive S3Util creation if multiple requests arrive.
@@ -581,6 +581,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
       s3_util_ = common::S3Util::BuildS3Util(request->s3_download_limit_mb,
                                              request->s3_bucket);
     }
+    s3_util_lock_.unlock_and_lock_upgrade();
   }
 
   admin::AdminException e;
