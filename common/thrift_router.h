@@ -77,7 +77,7 @@ struct ClusterLayout {
  * It returns thrift client objects based on the requested conditions.
  * All interfaces of ThriftRouter are thread safe.
  */
-template <typename ClientType, typename ClientPoolType = ThriftClientPool<ClientType>>
+template <typename ClientType, bool USE_BINARY_PROTOCOL = false>
 class ThriftRouter {
  public:
   using Role = detail::Role;
@@ -456,7 +456,7 @@ class ThriftRouter {
     };
 
     const std::string local_az_;
-    ClientPoolType client_pool_;
+    ThriftClientPool<ClientType, USE_BINARY_PROTOCOL> client_pool_;
     folly::ThreadLocal<std::shared_ptr<const ClusterLayout>>
       local_cluster_layout_;
     folly::ThreadLocal<std::unordered_map<folly::SocketAddress,
