@@ -19,7 +19,6 @@
 
 #include "rocksdb_admin/admin_handler.h"
 
-#include <atomic>
 #include <memory>
 #include <string>
 #include <vector>
@@ -554,9 +553,9 @@ void AdminHandler::async_tm_clearDB(
 }
 
 inline bool should_new_s3_client(
-  shared_ptr<common::S3Util> s3_util, AddS3SstFilesToDBRequest* request) {
-  return s3_util == nullptr || s3_util->getBucket() != request->s3_bucket ||
-      s3_util->getRateLimit() != request->s3_download_limit_mb;
+  const common::S3Util& s3_util, AddS3SstFilesToDBRequest* request) {
+  return s3_util.getBucket() != request->s3_bucket ||
+         s3_util.getRateLimit() != request->s3_download_limit_mb;
 }
 
 void AdminHandler::async_tm_addS3SstFilesToDB(
@@ -568,14 +567,14 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   // request, which is not even on any critical code path. Otherwise, we will
   // see latency spike when uploading data to production clusters.
   RWSpinLock::UpgradedHolder upgraded_guard(s3_util_lock_);
-  if (should_new_s3_client(s3_util_, request.get())) {
+  if (s3_util_ == nullptr || should_new_s3_client(*s3_util_, request.get())) {
     // Request with different ratelimit or bucket has to wait for old
     // requests to drain.
     RWSpinLock::WriteHolder write_guard(s3_util_lock_);
     // Double check to achieve compare-exchange-like operation.
     // The reason not using atomic_compare_exchange_* is to save
     // expensive S3Util creation if multiple requests arrive.
-    if (should_new_s3_client(s3_util_, request.get())) {
+    if (should_new_s3_client(*s3_util_, request.get())) {
       LOG(INFO) << "Request with different bucket "
           << request->s3_bucket << ". Or different rate limit: "
           << request->s3_download_limit_mb;
