@@ -20,11 +20,11 @@
 
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 
 #include "common/object_lock.h"
 #include "common/s3util.h"
-#include "folly/RWSpinLock.h"
 #include "rocksdb_admin/application_db_manager.h"
 #ifdef PINTEREST_INTERNAL
 // NEVER SET THIS UNLESS PINTEREST INTERNAL USAGE.
@@ -37,7 +37,6 @@ namespace admin {
 
 using RocksDBOptionsGeneratorType =
   std::function<rocksdb::Options(const std::string&)>;
-using folly::RWSpinLock;
 
 class AdminHandler : virtual public AdminSvIf {
  public:
@@ -115,7 +114,7 @@ class AdminHandler : virtual public AdminSvIf {
   // S3 util used for download
   std::shared_ptr<common::S3Util> s3_util_;
   // Lock for protecting the s3 util
-  mutable RWSpinLock s3_util_lock_;
+  mutable std::mutex s3_util_lock_;
 };
 
 }  // namespace admin

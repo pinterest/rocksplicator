@@ -19,8 +19,10 @@
 
 #include "rocksdb_admin/admin_handler.h"
 
+#include <chrono>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "boost/filesystem.hpp"
@@ -60,6 +62,7 @@ DEFINE_bool(s3_direct_io, false, "Whether to enable direct I/O for s3 client");
 namespace {
 
 const int kMB = 1024 * 1024;
+const int kS3UtilRecheckSec = 5;
 
 std::unique_ptr<rocksdb::DB> GetRocksdb(const std::string& dir,
                                         const rocksdb::Options& options) {
@@ -566,22 +569,21 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   // we couldn't afford to create a new client for every SST file downloading
   // request, which is not even on any critical code path. Otherwise, we will
   // see latency spike when uploading data to production clusters.
-  RWSpinLock::UpgradedHolder upgraded_guard(s3_util_lock_);
-  if (s3_util_ == nullptr || should_new_s3_client(*s3_util_, request.get())) {
-    // Request with different ratelimit or bucket has to wait for old
-    // requests to drain.
-    s3_util_lock_.unlock_upgrade_and_lock();
-    // Double check to achieve compare-exchange-like operation.
-    // The reason not using atomic_compare_exchange_* is to save
-    // expensive S3Util creation if multiple requests arrive.
-    if (should_new_s3_client(*s3_util_, request.get())) {
-      LOG(INFO) << "Request with different bucket "
-          << request->s3_bucket << ". Or different rate limit: "
-          << request->s3_download_limit_mb;
+  std::shared_ptr<common::S3Util> local_s3_util;
+  {
+    std::lock_guard<std::mutex> guard(s3_util_lock_);
+    if (s3_util_ == nullptr || should_new_s3_client(*s3_util_, request.get())) {
+      // Request with different ratelimit or bucket has to wait for old
+      // requests to drain.
+      while (s3_util_ != nullptr && s3_util_.use_count() > 1) {
+        LOG(INFO) << "There are other downloads happening, wait "
+                  << kS3UtilRecheckSec << " seconds";
+        std::this_thread::sleep_for(std::chrono::seconds(kS3UtilRecheckSec));
+      }
       s3_util_ = common::S3Util::BuildS3Util(request->s3_download_limit_mb,
                                              request->s3_bucket);
     }
-    s3_util_lock_.unlock_and_lock_upgrade();
+    local_s3_util = s3_util_;
   }
 
   admin::AdminException e;
