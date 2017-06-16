@@ -1,12 +1,26 @@
-sudo: required
+matrix:
+  include:
+    - language: cpp
+      sudo: required
+      services:
+        - docker
+      before_install:
+        - docker pull cdonaghy/rocksplicator-build
+      script:
+        - docker run -v $(pwd):/rocksplicator -v $HOME/docker-root:/root cdonaghy/rocksplicator-build /bin/sh -c "cd /rocksplicator; mkdir -p build; cd build; cmake .. ; make -j ; env CTEST_OUTPUT_ON_FAILURE=1 make test"
 
-language: cpp
-
-services:
-  - docker
-
-before_install:
-- docker pull cdonaghy/rocksplicator-build
-
-script:
-- docker run -v $(pwd):/rocksplicator -v $HOME/docker-root:/root cdonaghy/rocksplicator-build /bin/sh -c "cd /rocksplicator; mkdir -p build; cd build; cmake .. ; make -j ; env CTEST_OUTPUT_ON_FAILURE=1 make test"
+    - language: java
+      sudo: required
+      dist: trusty
+      jdk: oraclejdk8
+      cache:
+        directories:
+          - $HOME/.m2
+      before_install:
+        - sudo apt-get update -qq
+        - sudo apt-get install -q -y --force-yes libboost-dev libboost-test-dev libboost-program-options-dev libevent-dev automake libtool flex bison pkg-config g++ libssl-dev
+        - wget http://archive.apache.org/dist/thrift/0.9.1/thrift-0.9.1.tar.gz
+        - tar xfz thrift-0.9.1.tar.gz
+        - cd thrift-0.9.1 && ./configure --with-cpp=no --with-c_glib=no --with-java=yes --with-python=no --with-ruby=no --with-erlang=no --with-go=no --with-nodejs=no --with-php=no && sudo make install
+      script:
+        - cd ../controller; mvn "-DfailIfNoTests=false" test
