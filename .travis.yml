@@ -12,9 +12,10 @@ matrix:
     - language: java
       dist: trusty
       jdk:
-        - oraclejdk8
+      - oraclejdk8
       cache:
         directories:
           - $HOME/.m2
       script:
+        - jdk_switcher use oraclejdk8
         - cd controller; mvn "-DfailIfNoTests=false" test
