@@ -10,8 +10,8 @@ matrix:
         - docker run -v $(pwd):/rocksplicator -v $HOME/docker-root:/root cdonaghy/rocksplicator-build /bin/sh -c "cd /rocksplicator; mkdir -p build; cd build; cmake .. ; make -j ; env CTEST_OUTPUT_ON_FAILURE=1 make test"
 
     - language: java
+      sudo: required
       dist: trusty
-      sudo: false
       jdk: oraclejdk8
       cache:
         directories:
