@@ -17,8 +17,11 @@
 package com.pinterest.rocksplicator.controller.bean;
 
 import org.hibernate.validator.constraints.NotEmpty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import javax.validation.constraints.Max;
@@ -28,6 +31,8 @@ import javax.validation.constraints.Min;
  * @author Ang Xu (angxu@pinterest.com)
  */
 public class HostBean {
+
+  private static final Logger LOG = LoggerFactory.getLogger(HostBean.class);
 
   @NotEmpty
   /** host ip */
@@ -79,5 +84,32 @@ public class HostBean {
   public HostBean setShards(List<ShardBean> shards) {
     this.shards = Collections.unmodifiableList(shards);
     return this;
+  }
+
+  @Override
+  public String toString() {
+    return ip + ":" + port + ":" + availabilityZone;
+  }
+
+  public static HostBean fromUrlParam(String queryParam) {
+    // assuming the string is in the format like 127-0-0-1-9090-us-east-1a or
+    // 127-0-0-1-9090
+    try {
+      String[] parts = queryParam.split("-", 6);
+      if (parts.length < 5 || parts.length > 6) {
+        return null;
+      }
+      String ip = String.join(".", Arrays.copyOfRange(parts, 0, 4));
+      String zone = "";
+      if (parts.length == 6) {
+        zone = parts[5];
+      }
+      HostBean hostBean =
+          new HostBean().setIp(ip).setPort(Integer.valueOf(parts[4])).setAvailabilityZone(zone);
+      return hostBean;
+    } catch (Exception e) {
+      LOG.error("Invalid query param for creating host bean: " + queryParam, e);
+      return null;
+    }
   }
 }

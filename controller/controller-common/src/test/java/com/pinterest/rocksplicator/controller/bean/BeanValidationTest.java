@@ -66,6 +66,16 @@ public class BeanValidationTest {
     };
   }
 
+  @DataProvider(name = "hostUrlQueryData")
+  public Object[][] createHostUrlQuerydata() {
+    return new Object[][] {
+        {"127-1-2-3-9090-us-east-1a", true, "127.1.2.3", 9090, "us-east-1a"},
+        {"127-1-2-3-9090", true, "127.1.2.3", 9090, ""},
+        {"127-1-2-3-us-east-1a", false, "", 0, ""},
+        {"127-1-9090-us-east-1a", false, "", 0, ""}
+    };
+  }
+
   @Test(dataProvider = "hostData")
   public void testHostBean(String ip, int port, String az, String errorMsg) {
     HostBean host = new HostBean().setIp(ip).setPort(port).setAvailabilityZone(az);
@@ -96,4 +106,15 @@ public class BeanValidationTest {
     Assert.assertEquals(errorMsg, constraintViolations.iterator().next().getMessage());
   }
 
+  @Test(dataProvider = "hostUrlQueryData")
+  public void testParsingHostUrl(
+      String queryString, boolean result, String ip, int port, String zone) {
+    HostBean hostBean = HostBean.fromUrlParam(queryString);
+    Assert.assertEquals(result, hostBean != null);
+    if (result) {
+      Assert.assertEquals(ip, hostBean.getIp());
+      Assert.assertEquals(port, hostBean.getPort());
+      Assert.assertEquals(zone, hostBean.getAvailabilityZone());
+    }
+  }
 }

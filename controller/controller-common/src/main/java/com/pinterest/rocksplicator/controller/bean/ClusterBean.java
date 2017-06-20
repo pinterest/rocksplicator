@@ -53,4 +53,9 @@ public class ClusterBean {
     return this;
   }
 
+  @Override
+  public String toString() {
+    return name;
+  }
+
 }
