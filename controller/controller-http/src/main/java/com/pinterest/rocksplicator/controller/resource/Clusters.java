@@ -136,18 +136,19 @@ public class Clusters {
    * @param newHostOp   (optional) new host to add, in the format of ip:port
    */
   @POST
-  @Path("/replaceHost/{clusterName : [a-zA-Z0-9\\-_]+}")
+  @Path("/replaceHost/{clusterName : [a-zA-Z0-9\\\\-_]+}")
   public void replaceHost(@PathParam("clusterName") String clusterName,
-                          @NotEmpty @QueryParam("oldHost") HostBean oldHost,
-                          @QueryParam("newHost") Optional<HostBean> newHostOp) {
+                          @NotEmpty @QueryParam("oldHost") String oldHostString,
+                          @QueryParam("newHost") Optional<String> newHostOp) {
 
     //TODO(angxu) support adding random new host later
     if (!newHostOp.isPresent()) {
       throw new UnsupportedOperationException("method not implemented.");
     }
 
-    HostBean newHost = newHostOp.get();
     try {
+      HostBean newHost = HostBean.fromUrlParam(newHostOp.get());
+      HostBean oldHost = HostBean.fromUrlParam(oldHostString);
       TaskBase task = new RemoveHostTask(oldHost)
           .andThen(new PromoteTask())
           .andThen(

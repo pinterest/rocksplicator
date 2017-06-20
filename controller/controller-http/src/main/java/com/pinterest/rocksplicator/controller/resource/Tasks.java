@@ -68,7 +68,7 @@ public class Tasks {
   @GET
   @Produces(MediaType.APPLICATION_JSON)
   public List<Task> findTasks(@QueryParam("clusterName") Optional<String> clusterName,
-                                      @QueryParam("state") Optional<TaskState> state) {
+                              @QueryParam("state") Optional<TaskState> state) {
     if (!clusterName.isPresent() && !state.isPresent()) {
       throw new WebApplicationException("Either clusterName or state must be present.",
           HttpStatus.BAD_REQUEST_400);
