@@ -12,6 +12,7 @@ matrix:
     - language: java
       sudo: required
       dist: trusty
+      group: edge
       jdk: oraclejdk8
       cache:
         directories:
