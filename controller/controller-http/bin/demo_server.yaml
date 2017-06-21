@@ -3,4 +3,8 @@ server:
     - type: http
       port: 8080
 
-zkEndpoints: observerzookeeper010:2181
+zkHostsFile: bin/zookeeper_hosts.conf
+zkCluster: default
+
+jdbcUrl: jdbc:mysql://localhost:3306/controller
+mysqlUser: root

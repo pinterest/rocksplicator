@@ -16,9 +16,11 @@
 
 package com.pinterest.rocksplicator.controller;
 
+import com.pinterest.rocksplicator.controller.mysql.MySQLTaskQueue;
 import com.pinterest.rocksplicator.controller.resource.Clusters;
 import com.pinterest.rocksplicator.controller.resource.Tasks;
 
+import com.pinterest.rocksplicator.controller.util.ZookeeperConfigParser;
 import io.dropwizard.Application;
 import io.dropwizard.lifecycle.Managed;
 import io.dropwizard.setup.Environment;
@@ -41,10 +43,12 @@ public class ControllerService extends Application<ControllerConfiguration> {
   @Override
   public void run(ControllerConfiguration configuration,
                   Environment environment) throws Exception {
-    //TODO(angxu) initialize taskQueue in the right way after implementation is ready
-    TaskQueue taskQueue = new TaskQueue(){};
+    TaskQueue taskQueue = new MySQLTaskQueue(configuration.getJdbcUrl(), configuration
+        .getMysqlUser(), configuration.getMysqlPassword());
     CuratorFramework zkClient = CuratorFrameworkFactory.newClient(
-        configuration.getZkEndpoints(), new RetryOneTime(3000));
+        ZookeeperConfigParser.parseEndpoints(
+            configuration.getZkHostsFile(), configuration.getZkCluster()),
+        new RetryOneTime(3000));
 
     environment.lifecycle().manage(new Managed() {
       @Override

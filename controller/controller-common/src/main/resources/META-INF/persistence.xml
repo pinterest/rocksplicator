@@ -4,15 +4,9 @@
                            xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/persistence
              http://xmlns.jcp.org/xml/ns/persistence/persistence_2_1.xsd"
                            version="2.1">
-<persistence-unit name="controller-test" transaction-type="RESOURCE_LOCAL">
+<persistence-unit name="controller" transaction-type="RESOURCE_LOCAL">
     <provider>org.eclipse.persistence.jpa.PersistenceProvider</provider>
     <class>com.pinterest.rocksplicator.controller.mysql.entity.TagEntity</class>
     <class>com.pinterest.rocksplicator.controller.mysql.entity.TaskEntity</class>
-    <properties>
-        <property name="javax.persistence.jdbc.driver" value="com.mysql.jdbc.Driver"/>
-        <property name="javax.persistence.jdbc.url" value="jdbc:mysql://localhost:3306/controller"/>
-        <property name="javax.persistence.jdbc.user" value="root"/>
-        <property name="javax.persistence.jdbc.password" value=""/>
-    </properties>
 </persistence-unit>
 </persistence>
