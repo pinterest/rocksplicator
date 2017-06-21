@@ -39,10 +39,8 @@ public class ZookeeperConfigParser {
   public static String parseEndpoints(String zkHostsFile, String zkCluster) {
     Yaml yaml = new Yaml();
     try {
-      String cluster;
-      if (Strings.isNullOrEmpty(zkCluster)) {
-        cluster = "default";
-      } else {
+      String cluster = "default";
+      if (!Strings.isNullOrEmpty(zkCluster)) {
         cluster = zkCluster;
       }
       String content = Files.toString(new File(zkHostsFile), Charsets.US_ASCII);
