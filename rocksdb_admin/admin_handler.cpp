@@ -514,7 +514,7 @@ void AdminHandler::async_tm_clearDB(
   }
   LOG(INFO) << "Done clearing DB: " << request->db_name;
 
-  if (need_to_reopen) {
+  if (request->reopen_db && need_to_reopen) {
     LOG(INFO) << "Open DB: " << request->db_name;
     admin::AdminException e;
     e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
