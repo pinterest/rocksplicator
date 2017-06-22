@@ -49,20 +49,21 @@ using Aws::S3::Model::ListObjectsRequest;
 using Aws::S3::Model::HeadObjectRequest;
 using Aws::Utils::RateLimits::DefaultRateLimiter;
 
+DEFINE_int32(direct_io_buffer_n_pages, 1,
+             "Number of pages we need to set to direct io buffer");
+
 
 namespace common {
 
-//TODO(angxu) currently page size is used as buffer size,
-// we might want to use a larger buffer size if write is
-// too slow
 const uint32_t kPageSize = getpagesize();
 
 DirectIOWritableFile::DirectIOWritableFile(const string& file_path)
     : fd_(-1)
     , file_size_(0)
     , buffer_()
-    , offset_(0) {
-  if (posix_memalign(&buffer_, kPageSize, kPageSize) != 0) {
+    , offset_(0)
+    , buffer_size_(FLAGS_direct_io_buffer_n_pages * kPageSize){
+  if (posix_memalign(&buffer_, kPageSize, buffer_size_) != 0) {
     LOG(ERROR) << "Failed to allocate memaligned buffer, errno = " << errno;
     return;
   }
@@ -83,7 +84,7 @@ DirectIOWritableFile::~DirectIOWritableFile() {
   }
 
   if (offset_ > 0) {
-    if (::write(fd_, buffer_, kPageSize) != kPageSize) {
+    if (::write(fd_, buffer_, buffer_size_) != buffer_size_) {
       LOG(ERROR) << "Failed to write last chunk, errno = " << errno;
     } else {
       ftruncate(fd_, file_size_);
@@ -99,14 +100,14 @@ std::streamsize DirectIOWritableFile::write(const char* s, std::streamsize n) {
   }
   uint32_t remaining = static_cast<uint32_t>(n);
   while (remaining > 0) {
-    uint32_t bytes = std::min((kPageSize - offset_), remaining);
+    uint32_t bytes = std::min((buffer_size_ - offset_), remaining);
     std::memcpy((char*)buffer_ + offset_, s, bytes);
     offset_ += bytes;
     remaining -= bytes;
     s += bytes;
     // flush when buffer is full
-    if (offset_ == kPageSize) {
-      if (::write(fd_, buffer_, kPageSize) != kPageSize) {
+    if (offset_ == buffer_size_) {
+      if (::write(fd_, buffer_, buffer_size_) != buffer_size_) {
         LOG(ERROR) << "Failed to write to DirectIOWritableFile, errno = "
                    << errno;
         return -1;
