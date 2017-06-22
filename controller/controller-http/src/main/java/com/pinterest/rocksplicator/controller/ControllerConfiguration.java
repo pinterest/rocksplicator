@@ -26,19 +26,30 @@ import org.hibernate.validator.constraints.NotEmpty;
 public class ControllerConfiguration extends Configuration {
 
   @NotEmpty
-  private String zkEndpoints;
+  private String zkHostsFile;
+
+  @NotEmpty
+  private String zkCluster;
 
   @NotEmpty
   private String zkPath = "/config/services/rocksdb/";
 
+  @NotEmpty
+  private String jdbcUrl;
+
+  @NotEmpty
+  private String mysqlUser;
+
+  private String mysqlPassword = "";
+
   @JsonProperty
-  public String getZkEndpoints() {
-    return zkEndpoints;
+  public String getZkHostsFile() {
+    return zkHostsFile;
   }
 
   @JsonProperty
-  public void setZkEndpoints(String zkEndpoints) {
-    this.zkEndpoints = zkEndpoints;
+  public void setZkHostsFile(String zkHostsFile) {
+    this.zkHostsFile = zkHostsFile;
   }
 
   @JsonProperty
@@ -50,4 +61,44 @@ public class ControllerConfiguration extends Configuration {
   public void setZkPath(String zkPath) {
     this.zkPath = zkPath;
   }
+
+  @JsonProperty
+  public String getZkCluster() {
+    return zkCluster;
+  }
+
+  @JsonProperty
+  public void setZkCluster(String zkCluster) {
+    this.zkCluster = zkCluster;
+  }
+
+  @JsonProperty
+  public String getJdbcUrl() {
+    return jdbcUrl;
+  }
+
+  @JsonProperty
+  public void setJdbcUrl(String jdbcUrl) {
+    this.jdbcUrl = jdbcUrl;
+  }
+
+  @JsonProperty
+  public String getMysqlUser() {
+    return mysqlUser;
+  }
+
+  @JsonProperty
+  public void setMysqlUser(String mysqlUser) {
+    this.mysqlUser = mysqlUser;
+  }
+
+  @JsonProperty
+  public String getMysqlPassword() {
+    return mysqlPassword;
+  }
+
+  public void setMysqlPassword(String mysqlPassword) {
+    this.mysqlPassword = mysqlPassword;
+  }
+
 }

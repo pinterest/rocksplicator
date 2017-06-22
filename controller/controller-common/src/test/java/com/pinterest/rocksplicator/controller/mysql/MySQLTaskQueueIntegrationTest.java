@@ -24,25 +24,18 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import javax.persistence.EntityManager;
-import javax.persistence.EntityManagerFactory;
-import javax.persistence.Persistence;
 import java.util.Date;
 import java.util.Set;
 
 public class MySQLTaskQueueIntegrationTest {
 
   private static final String TEST_CLUSTER_NAME = "integ_test";
-  private EntityManager entityManager;
   private MySQLTaskQueue queue;
 
   @BeforeMethod
   protected void checkMySQLRunning() {
     try {
-      EntityManagerFactory entityManagerFactory =
-          Persistence.createEntityManagerFactory("controller-test");
-      this.entityManager = entityManagerFactory.createEntityManager();
-      this.queue = new MySQLTaskQueue(entityManager);
+      this.queue = new MySQLTaskQueue("jdbc:mysql://localhost:3306/controller", "root", "");
     } catch (Exception e) {
       throw new SkipException("MySQL is not running correctly");
     }

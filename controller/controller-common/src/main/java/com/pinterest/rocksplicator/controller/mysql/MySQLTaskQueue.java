@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.mysql;
 
+import com.google.common.collect.ImmutableMap;
 import com.pinterest.rocksplicator.controller.Task;
 import com.pinterest.rocksplicator.controller.TaskBase;
 import com.pinterest.rocksplicator.controller.TaskQueue;
@@ -27,7 +28,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.persistence.EntityManager;
+import javax.persistence.EntityManagerFactory;
 import javax.persistence.LockModeType;
+import javax.persistence.Persistence;
 import javax.persistence.Query;
 import java.util.Date;
 import java.util.HashSet;
@@ -40,15 +43,33 @@ import java.util.stream.Collectors;
  */
 public class MySQLTaskQueue implements TaskQueue {
 
+  private static final Logger LOG = LoggerFactory.getLogger(MySQLTaskQueue.class);
+
   class MySQLTaskQueueException extends Exception {
     public MySQLTaskQueueException() { super(); }
   }
 
   private EntityManager entityManager;
-  private static final Logger LOG = LoggerFactory.getLogger(MySQLTaskQueue.class);
 
-  public MySQLTaskQueue(EntityManager entityManager) {
-    this.entityManager = entityManager;
+  private class JDBC_CONFIGS {
+    static final String PERSISTENCE_UNIT_NAME = "controller";
+    static final String DRIVER_PROPERTY = "javax.persistence.jdbc.driver";
+    static final String JDBC_DRIVER = "com.mysql.jdbc.Driver";
+    static final String URL_PROPERTY = "javax.persistence.jdbc.url";
+    static final String USER_PROPERTY = "javax.persistence.jdbc.user";
+    static final String PASSWORD_PROPERTY = "javax.persistence.jdbc.password";
+  }
+
+  public MySQLTaskQueue(String jdbcUrl, String dbUser, String dbPassword) {
+    EntityManagerFactory entityManagerFactory = Persistence.createEntityManagerFactory(
+        JDBC_CONFIGS.PERSISTENCE_UNIT_NAME, new ImmutableMap.Builder<String, String>()
+            .put(JDBC_CONFIGS.DRIVER_PROPERTY, JDBC_CONFIGS.JDBC_DRIVER)
+            .put(JDBC_CONFIGS.URL_PROPERTY, jdbcUrl)
+            .put(JDBC_CONFIGS.USER_PROPERTY, dbUser)
+            .put(JDBC_CONFIGS.PASSWORD_PROPERTY, dbPassword)
+            .build()
+    );
+    this.entityManager = entityManagerFactory.createEntityManager();
   }
 
   static Task convertTaskEntityToTask(TaskEntity taskEntity) {
@@ -65,6 +86,7 @@ public class MySQLTaskQueue implements TaskQueue {
         .setBody(taskEntity.getBody())
         .setClaimedWorker(taskEntity.getClaimedWorker());
   }
+
 
   @Override
   public boolean createCluster(final String clusterName) {
