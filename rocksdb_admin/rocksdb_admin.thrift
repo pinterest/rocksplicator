@@ -93,6 +93,7 @@ struct GetSequenceNumberResponse {
 
 struct ClearDBRequest {
   1: required string db_name,
+  2: optional bool reopen_db = true,
 }
 
 struct ClearDBResponse {
