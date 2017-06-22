@@ -104,6 +104,39 @@ TEST(S3UtilTest, DirectIOTest) {
     ss << f_in.rdbuf();
     EXPECT_EQ(string(buf, 4097), ss.str());
   }
+
+  {
+    // multi page size buffer, write equal to buffer size
+    FLAGS_direct_io_buffer_n_pages = 2;
+    char buf[4096 * 2];
+    std::memset(buf, 'f', 4096 * 2);
+    {
+      common::DirectIOWritableFile file(file_path);
+      file.write(buf, 4096 * 2);
+    }
+    fs::ifstream f_in;
+    f_in.open(file_path, std::ios::in);
+    std::stringstream ss;
+    ss << f_in.rdbuf();
+    EXPECT_EQ(string(buf, 4096 * 2), ss.str());
+  }
+
+  {
+    // multi page size buffer, write larger than buffer size
+    FLAGS_direct_io_buffer_n_pages = 2;
+    char buf[4096 * 2 + 1];
+    std::memset(buf, 'f', 4096 * 2);
+    buf[4096 * 2] = 'k';
+    {
+      common::DirectIOWritableFile file(file_path);
+      file.write(buf, 4096 * 2 + 1);
+    }
+    fs::ifstream f_in;
+    f_in.open(file_path, std::ios::in);
+    std::stringstream ss;
+    ss << f_in.rdbuf();
+    EXPECT_EQ(string(buf, 4096 * 2 + 1), ss.str());
+  }
   fs::remove(file_path);
 }
 

@@ -34,6 +34,8 @@
 #include <tuple>
 #include <vector>
 
+#include "gflags/gflags.h"
+
 using std::map;
 using std::string;
 using std::vector;
@@ -45,6 +47,9 @@ using Aws::Client::XmlOutcome;
 using Aws::Http::HttpMethod;
 using Aws::S3::S3Client;
 using Aws::S3::S3Endpoint::ForRegion;
+
+
+DECLARE_int32(direct_io_buffer_n_pages);
 
 namespace common {
 
@@ -88,6 +93,8 @@ class DirectIOWritableFile {
   void* buffer_;
   // buffer offset
   uint32_t offset_;
+  // buffer size
+  uint32_t buffer_size_;
 };
 
 /**
