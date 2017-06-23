@@ -92,14 +92,21 @@ class FastReadMap {
    * Remove key from the map.
    * Return false if key is not found in the map.
    */
-  bool remove(const K& key) {
+  bool remove(const K& key, V* value = nullptr) {
     std::lock_guard<std::mutex> g(write_lock_);
 
     auto new_map = std::make_shared<std::unordered_map<K, V>>(*map_);
-    if (new_map->erase(key) == 0) {
+    auto itor = new_map->find(key);
+    if (itor == new_map->end()) {
       // the key is not in the map
       return false;
     }
+
+    if (value) {
+      *value = std::move(itor->second);
+    }
+
+    new_map->erase(itor);
 
     {
       folly::RWSpinLock::WriteHolder write_guard(map_rwlock_);

@@ -87,7 +87,24 @@ ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
 }
 
 ReturnCode RocksDBReplicator::removeDB(const std::string& db_name) {
-  return db_map_.remove(db_name) ? ReturnCode::OK : ReturnCode::DB_NOT_FOUND;
+  std::shared_ptr<RocksDBReplicator::ReplicatedDB> db;
+  auto exist = db_map_.remove(db_name, &db);
+  if (!exist) {
+    return ReturnCode::DB_NOT_FOUND;
+  }
+
+  std::weak_ptr<RocksDBReplicator::ReplicatedDB> weak_db(db);
+  db.reset();
+
+  while (!weak_db.expired()) {
+    static const int kRemoveDBRefWaitMilliSec = 200;
+    LOG(INFO) << db_name << " is still holding by others, wait "
+      << kRemoveDBRefWaitMilliSec << " milliseconds";
+    std::this_thread::sleep_for(
+      std::chrono::milliseconds(kRemoveDBRefWaitMilliSec));
+  }
+
+  return ReturnCode::OK;
 }
 
 ReturnCode RocksDBReplicator::write(const std::string& db_name,
