@@ -98,7 +98,9 @@ ApplicationDBManager::~ApplicationDBManager() {
   auto itor = dbs_.begin();
   while (itor != dbs_.end()) {
     waitOnApplicationDBRef(itor->second);
-    std::unique_ptr<rocksdb::DB>(itor->second->db_.get());
+    // we want to first remove the ApplicationDB and then release the RocksDB
+    // it contains.
+    auto tmp = std::unique_ptr<rocksdb::DB>(itor->second->db_.get());
     itor = dbs_.erase(itor);
   }
 }
