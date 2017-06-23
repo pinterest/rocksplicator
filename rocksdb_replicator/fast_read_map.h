@@ -96,8 +96,8 @@ class FastReadMap {
     std::lock_guard<std::mutex> g(write_lock_);
 
     auto new_map = std::make_shared<std::unordered_map<K, V>>(*map_);
-    auto itor = new_map.find(key);
-    if (itor == new_map.end()) {
+    auto itor = new_map->find(key);
+    if (itor == new_map->end()) {
       // the key is not in the map
       return false;
     }
@@ -106,7 +106,7 @@ class FastReadMap {
       *value = std::move(itor->second);
     }
 
-    new_map.erease(itor);
+    new_map->erase(itor);
 
     {
       folly::RWSpinLock::WriteHolder write_guard(map_rwlock_);
