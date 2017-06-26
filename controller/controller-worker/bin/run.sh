@@ -46,26 +46,24 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 ROOT_DIR="$(dirname ${DIR})"
 TARGET_DIR="${ROOT_DIR}/target"
 CP=${ROOT_DIR}/*:${ROOT_DIR}/lib/*:${TARGET_DIR}/classes:${TARGET_DIR}/lib/*
-CONFIG_FILE=${ROOT_DIR}/bin/demo_server.yaml
 PID_FILE=${HOME}/rocksplicator-controller-worker.pid
 ACTION="run"
 
-LOG_PROPERTIES=log4j.properties
-WORKER_CONFIG=controller.worker.properties
+LOG_PROPERTIES=${ROOT_DIR}/config/log4j.properties
+WORKER_CONFIG=${ROOT_DIR}/config/controller.worker.properties
 
 WORKER_OPTS="-server -Xmx1024m -Xms1024m \
 -verbosegc -Xloggc:/tmp/gc.log -XX:ErrorFile=/tmp/jvm_error.log \
 -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -XX:+PrintClassHistogram \
 -XX:+HeapDumpOnOutOfMemoryError -XX:+UseConcMarkSweepGC -XX:+UseParNewGC \
--XX:ConcGCThreads=7 -XX:ParallelGCThreads=7 \
--Dlog4j.configuration=${LOG_PROPERTIES} -Dworker_config=${WORKER_CONFIG}"
+-XX:ConcGCThreads=7 -XX:ParallelGCThreads=7"
 JAVA_CMD="java"
 if [ "x$JAVA_HOME" != "x" ]; then JAVA_CMD=${JAVA_HOME}/bin/java; fi
 
 display_usage() {
 	echo -e "Usage: $0 [OPTIONS] [run|start|stop|restart]"
 	echo -e "\nOPTIONS:"
-	echo -e "  -c/--config     Config file, default is ${CONFIG_FILE}"
+	echo -e "  -c/--config     Config file, default is ${WORKER_CONFIG}"
 	echo -e "  -i/--pid        PID file, default is ${PID_FILE}"
 	echo -e "  -p/--class-path Class path, default is ${CP}"
 	echo -e "  -o/--worker-opts  JVM and other options, default is ${WORKER_OPTS}"
@@ -77,12 +75,11 @@ display_usage() {
 }
 
 function server_start {
-    echo "Starting Rocksplicator Controller ..."
+    echo "Starting Rocksplicator Controller Worker..."
 
     OPTS="${WORKER_OPTS} \
-    -cp ${CP} \
-    com.pinterest.rocksplicator.controller.WorkerService \
-    server ${CONFIG_FILE}"
+    -cp ${CP} -Dlog4j.configuration=${LOG_PROPERTIES} -Dworker_config=${WORKER_CONFIG} \
+    com.pinterest.rocksplicator.controller.WorkerService"
 
     if [ "$1" == "FOREGROUND" ]
     then

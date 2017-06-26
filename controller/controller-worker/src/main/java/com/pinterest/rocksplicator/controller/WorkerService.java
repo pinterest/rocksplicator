@@ -15,6 +15,7 @@
  */
 package com.pinterest.rocksplicator.controller;
 
+import com.pinterest.rocksplicator.controller.mysql.MySQLTaskQueue;
 import com.pinterest.rocksplicator.controller.tasks.TaskFactory;
 import com.pinterest.rocksplicator.controller.tasks.TaskModule;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
@@ -55,15 +56,13 @@ public class WorkerService {
   private static final ShutdownHook SHUTDOWN_HOOK = new ShutdownHook();
 
   public static void main(String[] args) {
-    Runtime.getRuntime().addShutdownHook(new Thread(SHUTDOWN_HOOK));
     try {
+      Runtime.getRuntime().addShutdownHook(new Thread(SHUTDOWN_HOOK));
       CuratorFramework zkClient = CuratorFrameworkFactory.newClient(
           WorkerConfig.getZKEndpoints(), new RetryOneTime(3000));
       zkClient.start();
-      SHUTDOWN_HOOK.register(zkClient::close);
 
       AdminClientFactory adminClientFactory = new AdminClientFactory(30);
-      SHUTDOWN_HOOK.register(adminClientFactory::shutdown);
 
       TaskFactory.setInjector(Guice.createInjector(
           new TaskModule(zkClient, adminClientFactory)
@@ -74,12 +73,15 @@ public class WorkerService {
       ThreadPoolExecutor threadPoolExecutor =
           new ThreadPoolExecutor(workerPoolSize, workerPoolSize, 0,
               TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
-      TaskQueue taskQueue = new TaskQueue(){};
+      TaskQueue taskQueue = new MySQLTaskQueue(WorkerConfig.getJdbcUrl(),
+          WorkerConfig.getMySqlUser(), WorkerConfig.getMySqlPassword());
       WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, taskQueue);
       TaskDispatcher dispatcher = new TaskDispatcher(
           WorkerConfig.getDispatcherPollIntervalSec(), idleWorkersSemaphore, workerPool, taskQueue);
       dispatcher.start();
       SHUTDOWN_HOOK.register(dispatcher::stop);
+      SHUTDOWN_HOOK.register(adminClientFactory::shutdown);
+      SHUTDOWN_HOOK.register(zkClient::close);
     } catch (Exception e) {
       LOG.error("Cannot start the worker service", e);
       System.exit(1);

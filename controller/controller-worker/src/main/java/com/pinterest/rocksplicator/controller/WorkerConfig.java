@@ -17,10 +17,12 @@
 
 package com.pinterest.rocksplicator.controller;
 
+import com.pinterest.rocksplicator.controller.util.ZookeeperConfigParser;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileInputStream;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
@@ -32,21 +34,32 @@ import java.net.UnknownHostException;
 public final class WorkerConfig {
 
   private static final Logger LOG = LoggerFactory.getLogger(WorkerService.class);
+
   private static final String WORKER_POOL_SIZE_KEY = "worker_pool_size";
   private static final String DISPATCHER_POLL_INTERVAL_KEY = "dispatcher_poll_interval";
   private static final String ZK_PATH_KEY = "zk_path";
-  private static final String ZK_ENDPOINTS_KEY = "zk_endpoints";
-  private static String HOST_NAME;
-  private static PropertiesConfiguration configuration;
+  private static final String ZK_HOSTS_FILE_PATH_KEY = "zk_hosts_file";
+  private static final String ZK_CLUSTER_KEY = "zk_cluster";
+  private static final String JDBC_URL_KEY = "jdbc_url";
+  private static final String MYSQL_USER_KEY = "mysql_user";
+  private static final String MYSQL_PASSWORD_KEY = "mysql_password";
 
   private static final String DEFAULT_ZK_PATH = "/config/services/rocksdb/";
   private static final String DEFAULT_ZK_ENDPOINTS = "observerzookeeper010:2181";
+  private static final String DEFAULT_ZK_HOSTS_FILE_PATH = "bin/zookeeper_hosts.conf";
+  private static final String DEFAULT_ZK_CLUSTER = "default";
+  private static final String DEFAULT_JDBC_URL = "jdbc:mysql://localhost:3306/controller";
+  private static final String DEFAULT_MYSQL_USER = "root";
+  private static final String DEFAULT_MYSQL_PASSWORD = "";
+
+  private static String HOST_NAME;
+  private static PropertiesConfiguration configuration;
 
   static {
-    String workerConfig = System.getProperty("worker_config", "controller.worker.properties");
+    String workerConfig = System.getProperty("worker_config");
     configuration = new PropertiesConfiguration();
     try {
-      configuration.load(ClassLoader.getSystemResourceAsStream(workerConfig));
+      configuration.load(new FileInputStream(workerConfig));
     } catch (Exception e) {
       LOG.error("Cannot load worker configuration", e);
       configuration = null;
@@ -77,8 +90,29 @@ public final class WorkerConfig {
   }
 
   public static String getZKEndpoints() {
-    return configuration == null ? DEFAULT_ZK_ENDPOINTS :
-                                   configuration.getString(ZK_ENDPOINTS_KEY, DEFAULT_ZK_ENDPOINTS);
+    if (configuration == null) {
+      return DEFAULT_ZK_ENDPOINTS;
+    }
+    String zkHostFilePath =
+        configuration.getString(ZK_HOSTS_FILE_PATH_KEY, DEFAULT_ZK_HOSTS_FILE_PATH);
+    String zkCluster = configuration.getString(ZK_CLUSTER_KEY, DEFAULT_ZK_CLUSTER);
+    return ZookeeperConfigParser.parseEndpoints(zkHostFilePath, zkCluster);
+  }
+
+  public static String getJdbcUrl() {
+    return configuration == null ? DEFAULT_JDBC_URL :
+                                   configuration.getString(JDBC_URL_KEY, DEFAULT_JDBC_URL);
+  }
+
+  public static String getMySqlUser() {
+    return configuration == null ? DEFAULT_MYSQL_USER :
+                                   configuration.getString(MYSQL_USER_KEY, DEFAULT_MYSQL_USER);
+  }
+
+  public static String getMySqlPassword() {
+    return configuration == null ? DEFAULT_MYSQL_PASSWORD :
+                                   configuration.getString(MYSQL_PASSWORD_KEY,
+                                                           DEFAULT_MYSQL_PASSWORD);
   }
 
 }
