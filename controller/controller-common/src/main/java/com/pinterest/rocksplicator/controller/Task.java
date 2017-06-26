@@ -29,7 +29,6 @@ public class Task extends TaskBase {
 
   public long id;
   public int state;
-  public String name;
   public String clusterName;
   public Date createdAt;
   public Date runAfter;
@@ -96,6 +95,21 @@ public class Task extends TaskBase {
     super.name = t.name;
     super.body = t.body;
     super.priority = t.priority;
+  }
+
+  @Override
+  public String toString() {
+    return "Task{" +
+        "id=" + id +
+        ", state=" + state +
+        ", name='" + name + '\'' +
+        ", clusterName='" + clusterName + '\'' +
+        ", createdAt=" + createdAt +
+        ", runAfter=" + runAfter +
+        ", lastAliveAt=" + lastAliveAt +
+        ", claimedWorker='" + claimedWorker + '\'' +
+        ", output='" + output + '\'' +
+        '}';
   }
 
   public Task() {}

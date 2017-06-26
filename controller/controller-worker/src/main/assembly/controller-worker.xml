@@ -9,11 +9,14 @@
         <fileSet>
             <directory>bin</directory>
             <outputDirectory>bin</outputDirectory>
-            <includes><include>run.sh</include></includes>
+            <includes><include>**/*</include></includes>
         </fileSet>
         <fileSet>
-            <directory>src/main/config</directory>
-            <outputDirectory>resources</outputDirectory>
+            <directory>config</directory>
+            <outputDirectory>config</outputDirectory>
+            <includes>
+                <include>*.properties</include>
+            </includes>
         </fileSet>
         <fileSet>
             <directory>target</directory>
@@ -26,7 +29,7 @@
     <!-- use this section if you want to package dependencies -->
     <dependencySets>
         <dependencySet>
-            <outputDirectory>${basedir}/lib</outputDirectory>
+            <outputDirectory>lib</outputDirectory>
             <useStrictFiltering>true</useStrictFiltering>
             <useProjectArtifact>false</useProjectArtifact>
             <scope>runtime</scope>

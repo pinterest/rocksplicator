@@ -24,6 +24,7 @@ import com.pinterest.rocksplicator.controller.config.ConfigParser;
 import com.pinterest.rocksplicator.controller.tasks.AddHostTask;
 import com.pinterest.rocksplicator.controller.tasks.HealthCheckTask;
 import com.pinterest.rocksplicator.controller.tasks.LoadSSTTask;
+import com.pinterest.rocksplicator.controller.tasks.LoggingTask;
 import com.pinterest.rocksplicator.controller.tasks.PromoteTask;
 import com.pinterest.rocksplicator.controller.tasks.RebalanceTask;
 import com.pinterest.rocksplicator.controller.tasks.RemoveHostTask;
@@ -121,8 +122,9 @@ public class Clusters {
    */
   @POST
   @Path("/initialize/{clusterName : [a-zA-Z0-9\\-_]+}")
-  public void initialize(@PathParam("clusterName") String clusterName) {
-    throw new UnsupportedOperationException("method not implemented.");
+  public boolean initialize(@PathParam("clusterName") String clusterName) {
+    // Create directly, we dont
+    return taskQueue.createCluster(clusterName);
   }
 
   /**
@@ -224,6 +226,25 @@ public class Clusters {
   public boolean unlock(@PathParam("clusterName") String clusterName) {
     return taskQueue.unlockCluster(clusterName);
   }
+
+  /**
+   * Send a LoggingTask to worker.
+   * @param clusterName
+   * @return
+   * @throws Exception
+   */
+  @POST
+  @Path("/logging/{clusterName : [a-zA-Z0-9\\\\-_]+}")
+  public void sendLogTask(@PathParam("clusterName") String clusterName,
+                          @NotEmpty @QueryParam("message") String message) {
+    try {
+      TaskBase task = new LoggingTask(message).getEntity();
+      taskQueue.enqueueTask(task, clusterName, 0);
+    } catch (JsonProcessingException e) {
+      throw new WebApplicationException(e);
+    }
+  }
+
 
   private ClusterBean checkExistenceAndGetClusterBean(String clusterName) throws Exception {
     if (zkClient.checkExists().forPath(zkPath + clusterName) == null) {

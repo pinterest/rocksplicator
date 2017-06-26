@@ -44,9 +44,10 @@ public class ShutdownHook implements Runnable {
     while (!shutdownables.isEmpty()) {
       Runnable r = shutdownables.pollLast();
       try {
+        LOG.info("Running shutdown hook: ", r.toString());
         r.run();
       } catch (RuntimeException e) {
-        LOG.error("Failed to execute shutdown hook.", e);
+        LOG.error("Failed to execute shutdown hook " + r.toString(), e);
         // continue
       }
     }

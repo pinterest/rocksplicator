@@ -63,6 +63,7 @@ public interface TaskQueue {
   /**
    * Ack the task queue that the task has finished.
    * It will also atomically unlock the cluster the task associated with.
+   * Note: It's task implementation's responsibility to call finishTask in process() body.
    * @param id which task to finish
    * @param output output of this task
    * @return false on error

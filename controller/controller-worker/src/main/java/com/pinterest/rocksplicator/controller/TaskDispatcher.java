@@ -81,6 +81,7 @@ public final class TaskDispatcher {
               failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore, null);
               break;
             } else {
+              LOG.info("Dequeued task: " + dequeuedTask.toString());
               if (!workerPool.assignTask(dequeuedTask)) {
                 failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore, "Failed to assign to worker");
                 break;
