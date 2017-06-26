@@ -71,21 +71,17 @@ public final class TaskDispatcher {
     final Runnable dispatcher = new Runnable() {
       public void run() {
         try {
-          while (true) {
-            LOG.info("Pulling tasks from DB queue, available workers: "
-                + idleWorkersSemaphore.availablePermits());
-            idleWorkersSemaphore.acquire();
-            Task dequeuedTask = taskQueue.dequeueTask(WorkerConfig.getHostName());
-            if (dequeuedTask == null) {
-              LOG.info("No outstanding pending tasks to be dequeued");
-              failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore, null);
-              break;
-            } else {
-              LOG.info("Dequeued task: " + dequeuedTask.toString());
-              if (!workerPool.assignTask(dequeuedTask)) {
-                failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore, "Failed to assign to worker");
-                break;
-              }
+          LOG.info("Pulling tasks from DB queue, available workers: "
+              + idleWorkersSemaphore.availablePermits());
+          idleWorkersSemaphore.acquire();
+          Task dequeuedTask = taskQueue.dequeueTask(WorkerConfig.getHostName());
+          if (dequeuedTask == null) {
+            LOG.info("No outstanding pending tasks to be dequeued");
+            failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore, null);
+          } else {
+            LOG.info("Dequeued task: " + dequeuedTask.toString());
+            if (!workerPool.assignTask(dequeuedTask)) {
+              failTaskAndReleaseSemaphore(dequeuedTask, idleWorkersSemaphore, "Failed to assign to worker");
             }
           }
         } catch (Exception e) {
