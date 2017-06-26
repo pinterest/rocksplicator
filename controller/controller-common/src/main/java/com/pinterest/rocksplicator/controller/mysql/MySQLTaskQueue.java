@@ -61,12 +61,16 @@ public class MySQLTaskQueue implements TaskQueue {
     static final String PASSWORD_PROPERTY = "javax.persistence.jdbc.password";
   }
 
-  void beginTransaction() {
+  EntityManager getEntityManager() {
     if (entityManager.get() == null) {
       entityManager.set(entityManagerFactory.createEntityManager());
     }
-    if (!entityManager.get().getTransaction().isActive()) {
-      entityManager.get().getTransaction().begin();
+    return entityManager.get();
+  }
+
+  void beginTransaction() {
+    if (!getEntityManager().getTransaction().isActive()) {
+      getEntityManager().getTransaction().begin();
     }
   }
 
@@ -101,22 +105,22 @@ public class MySQLTaskQueue implements TaskQueue {
 
   @Override
   public boolean createCluster(final String clusterName) {
-    TagEntity cluster = entityManager.get().find(TagEntity.class, clusterName);
+    TagEntity cluster = getEntityManager().find(TagEntity.class, clusterName);
     if (cluster != null) {
       LOG.error("Cluster {} is already existed", clusterName);
       return false;
     }
     TagEntity newCluster = new TagEntity().setName(clusterName);
     beginTransaction();
-    entityManager.get().persist(newCluster);
-    entityManager.get().getTransaction().commit();
+    getEntityManager().persist(newCluster);
+    getEntityManager().getTransaction().commit();
     return true;
   }
 
   @Override
   public boolean lockCluster(final String clusterName) {
     beginTransaction();
-    TagEntity cluster = entityManager.get().find(
+    TagEntity cluster = getEntityManager().find(
         TagEntity.class, clusterName, LockModeType.PESSIMISTIC_WRITE);
     try {
       if (cluster == null) {
@@ -128,28 +132,28 @@ public class MySQLTaskQueue implements TaskQueue {
         throw new MySQLTaskQueueException();
       }
     } catch (MySQLTaskQueueException e) {
-      entityManager.get().getTransaction().rollback();
+      getEntityManager().getTransaction().rollback();
       return false;
     }
     cluster.setLocks(1);
-    entityManager.get().persist(cluster);
-    entityManager.get().getTransaction().commit();
+    getEntityManager().persist(cluster);
+    getEntityManager().getTransaction().commit();
     return true;
   }
 
   @Override
   public boolean unlockCluster(final String clusterName) {
     beginTransaction();
-    TagEntity cluster = entityManager.get().find(
+    TagEntity cluster = getEntityManager().find(
         TagEntity.class, clusterName, LockModeType.PESSIMISTIC_WRITE);
     if (cluster == null) {
       LOG.error("Cluster {} hasn't been created", clusterName);
-      entityManager.get().getTransaction().rollback();
+      getEntityManager().getTransaction().rollback();
       return false;
     }
     cluster.setLocks(0);
-    entityManager.get().persist(cluster);
-    entityManager.get().getTransaction().commit();
+    getEntityManager().persist(cluster);
+    getEntityManager().getTransaction().commit();
     return true;
   }
 
@@ -157,7 +161,7 @@ public class MySQLTaskQueue implements TaskQueue {
   @Override
   public boolean removeCluster(final String clusterName) {
     beginTransaction();
-    TagEntity cluster = entityManager.get().find(
+    TagEntity cluster = getEntityManager().find(
         TagEntity.class, clusterName, LockModeType.PESSIMISTIC_WRITE);
     try {
       if (cluster == null) {
@@ -169,17 +173,17 @@ public class MySQLTaskQueue implements TaskQueue {
         throw new MySQLTaskQueueException();
       }
     } catch (MySQLTaskQueueException e) {
-      entityManager.get().getTransaction().rollback();
+      getEntityManager().getTransaction().rollback();
       return false;
     }
-    entityManager.get().remove(cluster);
-    entityManager.get().getTransaction().commit();
+    getEntityManager().remove(cluster);
+    getEntityManager().getTransaction().commit();
     return true;
   }
 
   @Override
   public Set<String> getAllClusters() {
-    Query query = entityManager.get().createNamedQuery("tag.findAll");
+    Query query = getEntityManager().createNamedQuery("tag.findAll");
     List<String> result = query.getResultList();
     Set<String> clusterNames = new HashSet<>();
     result.stream().forEach(name -> {
@@ -193,11 +197,11 @@ public class MySQLTaskQueue implements TaskQueue {
                                      final int runDelaySeconds,
                                      final TaskState state,
                                      final String claimedWorker) {
-    TagEntity cluster = entityManager.get().find(
+    TagEntity cluster = getEntityManager().find(
         TagEntity.class, clusterName, LockModeType.PESSIMISTIC_WRITE);
     if (cluster == null) {
       LOG.error("Cluster {} is not created", clusterName);
-      entityManager.get().getTransaction().rollback();
+      getEntityManager().getTransaction().rollback();
       return null;
     }
     TaskEntity entity = new TaskEntity()
@@ -209,8 +213,8 @@ public class MySQLTaskQueue implements TaskQueue {
         .setClaimedWorker(claimedWorker)
         .setState(state.intValue())
         .setRunAfter(DateUtils.addSeconds(new Date(), runDelaySeconds));
-    entityManager.get().persist(entity);
-    entityManager.get().flush();
+    getEntityManager().persist(entity);
+    getEntityManager().flush();
     return entity;
   }
 
@@ -224,19 +228,19 @@ public class MySQLTaskQueue implements TaskQueue {
     if (taskEntity == null) {
       return false;
     }
-    entityManager.get().getTransaction().commit();
+    getEntityManager().getTransaction().commit();
     return true;
   }
 
   @Override
   public Task dequeueTask(final String worker) {
     beginTransaction();
-    Query query = entityManager.get().createNamedQuery("task.peekDequeue").setMaxResults(1);
+    Query query = getEntityManager().createNamedQuery("task.peekDequeue").setMaxResults(1);
     query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
     List<TaskEntity> resultList = query.getResultList();
     if (resultList.isEmpty()) {
       LOG.info("No pending task to be dequeud");
-      entityManager.get().getTransaction().rollback();
+      getEntityManager().getTransaction().rollback();
       return null;
     }
     TaskEntity claimedTask = resultList.get(0);
@@ -244,10 +248,10 @@ public class MySQLTaskQueue implements TaskQueue {
     claimedTask.setLastAliveAt(new Date());
     claimedTask.setClaimedWorker(worker);
 
-    entityManager.get().persist(claimedTask);
+    getEntityManager().persist(claimedTask);
     claimedTask.getCluster().setLocks(1);
-    entityManager.get().persist(claimedTask.getCluster());
-    entityManager.get().getTransaction().commit();
+    getEntityManager().persist(claimedTask.getCluster());
+    getEntityManager().getTransaction().commit();
     return convertTaskEntityToTask(claimedTask);
   }
 
@@ -255,24 +259,24 @@ public class MySQLTaskQueue implements TaskQueue {
                          final String output,
                          TaskState ackState,
                          boolean unlockCluster) {
-    Query query = entityManager.get().createNamedQuery("task.findRunning").setParameter("id", id);
+    Query query = getEntityManager().createNamedQuery("task.findRunning").setParameter("id", id);
     query.setLockMode(LockModeType.PESSIMISTIC_WRITE);
     List<TaskEntity> resultList = query.getResultList();
     if (resultList.isEmpty()) {
       LOG.info("No matching task to ack: {}", id);
-      entityManager.get().getTransaction().rollback();
+      getEntityManager().getTransaction().rollback();
       return null;
     }
     TaskEntity taskEntity = resultList.get(0);
 
     taskEntity.setState(ackState.intValue());
     taskEntity.setOutput(output);
-    entityManager.get().persist(taskEntity);
+    getEntityManager().persist(taskEntity);
     TagEntity cluster = taskEntity.getCluster();
     if (unlockCluster) {
-      entityManager.get().lock(cluster, LockModeType.PESSIMISTIC_WRITE);
+      getEntityManager().lock(cluster, LockModeType.PESSIMISTIC_WRITE);
       cluster.setLocks(0);
-      entityManager.get().persist(cluster);
+      getEntityManager().persist(cluster);
     }
     return cluster.getName();
   }
@@ -281,7 +285,7 @@ public class MySQLTaskQueue implements TaskQueue {
   public boolean finishTask(final long id, final String output) {
     beginTransaction();
     String clusterName = ackTask(id, output, TaskState.DONE, true);
-    entityManager.get().getTransaction().commit();
+    getEntityManager().getTransaction().commit();
     return clusterName != null;
   }
 
@@ -289,14 +293,14 @@ public class MySQLTaskQueue implements TaskQueue {
   public boolean failTask(final long id, final String reason) {
     beginTransaction();
     String clusterName = ackTask(id, reason, TaskState.FAILED, true);
-    entityManager.get().getTransaction().commit();
+    getEntityManager().getTransaction().commit();
     return clusterName != null;
   }
 
   @Override
   public int resetZombieTasks(final int zombieThresholdSeconds) {
     beginTransaction();
-    List<TaskEntity> runningTasks = entityManager.get()
+    List<TaskEntity> runningTasks = getEntityManager()
         .createNamedQuery("task.findAllRunning")
         .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
     List<TaskEntity> zombieTasks = runningTasks.stream()
@@ -304,28 +308,28 @@ public class MySQLTaskQueue implements TaskQueue {
             DateUtils.addSeconds(t.getLastAliveAt(), zombieThresholdSeconds)
         .before(new Date())).collect(Collectors.toList());
     for (TaskEntity zombieTask : zombieTasks) {
-      entityManager.get().lock(zombieTask.getCluster(), LockModeType.PESSIMISTIC_WRITE);
+      getEntityManager().lock(zombieTask.getCluster(), LockModeType.PESSIMISTIC_WRITE);
       zombieTask.setState(TaskState.PENDING.intValue());
       zombieTask.getCluster().setLocks(0);
-      entityManager.get().persist(zombieTask);
-      entityManager.get().persist(zombieTask.getCluster());
+      getEntityManager().persist(zombieTask);
+      getEntityManager().persist(zombieTask.getCluster());
     }
-    entityManager.get().getTransaction().commit();
+    getEntityManager().getTransaction().commit();
     return zombieTasks.size();
   }
 
   @Override
   public boolean keepTaskAlive(final long id) {
     beginTransaction();
-    TaskEntity taskEntity = entityManager.get().find(TaskEntity.class, id);
+    TaskEntity taskEntity = getEntityManager().find(TaskEntity.class, id);
     if (taskEntity == null) {
       LOG.error("Cannot find task {}.", id);
-      entityManager.get().getTransaction().rollback();
+      getEntityManager().getTransaction().rollback();
       return false;
     }
     taskEntity.setLastAliveAt(new Date());
-    entityManager.get().persist(taskEntity);
-    entityManager.get().getTransaction().commit();
+    getEntityManager().persist(taskEntity);
+    getEntityManager().getTransaction().commit();
     return true;
   }
 
@@ -340,7 +344,7 @@ public class MySQLTaskQueue implements TaskQueue {
       return -1;
     }
     TaskEntity entity = enqueueTaskImpl(newTaskBase, clusterName, 0, TaskState.RUNNING, worker);
-    entityManager.get().getTransaction().commit();
+    getEntityManager().getTransaction().commit();
     return entity.getId();
   }
 
@@ -359,13 +363,13 @@ public class MySQLTaskQueue implements TaskQueue {
     if (entity == null) {
       return false;
     }
-    entityManager.get().getTransaction().commit();
+    getEntityManager().getTransaction().commit();
     return true;
   }
 
   @Override
   public List<Task> peekTasks(final String clusterName, final Integer state) {
-    Query query = entityManager.get()
+    Query query = getEntityManager()
         .createNamedQuery("task.peekTasks")
         .setParameter("state", state).setParameter("name", clusterName);
     List<TaskEntity> result = query.getResultList();
@@ -375,7 +379,7 @@ public class MySQLTaskQueue implements TaskQueue {
 
   @Override
   public Task findTask(long id) {
-    TaskEntity taskEntity = entityManager.get().find(TaskEntity.class, id);
+    TaskEntity taskEntity = getEntityManager().find(TaskEntity.class, id);
     if (taskEntity == null) {
       LOG.error("Cannot find task {}.", id);
       return null;
@@ -386,13 +390,13 @@ public class MySQLTaskQueue implements TaskQueue {
   @Override
   public int removeFinishedTasks(final int secondsAgo) {
     beginTransaction();
-    List<TaskEntity> finishedTasks = entityManager.get()
+    List<TaskEntity> finishedTasks = getEntityManager()
         .createNamedQuery("task.findFinished")
         .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
     List<TaskEntity> removingTasks = finishedTasks.stream().filter(t -> DateUtils.addSeconds(t
         .getCreatedAt(), secondsAgo).before(new Date())).collect(Collectors.toList());
-    removingTasks.stream().forEach(t -> entityManager.get().remove(t));
-    entityManager.get().getTransaction().commit();
+    removingTasks.stream().forEach(t -> getEntityManager().remove(t));
+    getEntityManager().getTransaction().commit();
     return removingTasks.size();
   }
 }

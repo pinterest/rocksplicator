@@ -27,6 +27,11 @@ import org.testng.annotations.Test;
 import java.util.Date;
 import java.util.Set;
 
+/**
+ * To run the test, we need to create a DB called "controller_test" and run create_schemas.sh
+ * against "controller_test":
+ * sh tools/create_schemas.sh -d controller_test.
+ */
 public class MySQLTaskQueueIntegrationTest {
 
   private static final String TEST_CLUSTER_NAME = "integ_test";
@@ -35,7 +40,7 @@ public class MySQLTaskQueueIntegrationTest {
   @BeforeMethod
   protected void checkMySQLRunning() {
     try {
-      this.queue = new MySQLTaskQueue("jdbc:mysql://localhost:3306/controller", "root", "");
+      this.queue = new MySQLTaskQueue("jdbc:mysql://localhost:3306/controller_test", "root", "");
     } catch (Exception e) {
       throw new SkipException("MySQL is not running correctly");
     }
