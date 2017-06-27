@@ -68,6 +68,15 @@ struct CloseDBResponse {
   # for future use
 }
 
+struct CheckDBRequest {
+  # check to ensure this db exists
+  1: required string db_name,
+}
+
+struct CheckDBResponse {
+  # for future use
+}
+
 struct ChangeDBRoleAndUpstreamRequest {
   # the db to change
   1: required string db_name,
@@ -142,6 +151,13 @@ BackupDBResponse backupDB(1:BackupDBRequest request)
  * from upstream_ip_port thereafter
  */
 RestoreDBResponse restoreDB(1:RestoreDBRequest request)
+  throws (1:AdminException e)
+
+/*
+ * Check if a DB exists on a host
+ */
+
+CheckDBResponse checkDB(1: CheckDBRequest request)
   throws (1:AdminException e)
 
 /*
