@@ -73,7 +73,7 @@ public final class WorkerConfig {
   }
 
   public static long getDispatcherPollIntervalSec() {
-    return configuration == null ? 60 : configuration.getLong(DISPATCHER_POLL_INTERVAL_KEY);
+    return configuration == null ? 10 : configuration.getLong(DISPATCHER_POLL_INTERVAL_KEY);
   }
 
   public static int getWorkerPoolSize() {
