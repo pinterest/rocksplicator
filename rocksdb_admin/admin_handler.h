@@ -57,6 +57,11 @@ class AdminHandler : virtual public AdminSvIf {
         RestoreDBResponse>>> callback,
       std::unique_ptr<RestoreDBRequest> request) override;
 
+  void async_tm_checkDB(
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+          CheckDBResponse>>> callback,
+  std::unique_ptr<CheckDBRequest> request) override;
+
   void async_tm_closeDB(
       std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
         CloseDBResponse>>> callback,

@@ -393,6 +393,19 @@ void AdminHandler::async_tm_restoreDB(
   callback->result(RestoreDBResponse());
 }
 
+void AdminHandler::async_tm_checkDB(
+    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+      CheckDBResponse>>> callback,
+    std::unique_ptr<CheckDBRequest> request) {
+  AdminException e;
+  auto db = getDB(request->db_name, &e);
+  if (db == nullptr) {
+    callback.release()->exceptionInThread(std::move(e));
+    return;
+  }
+  callback->result(CheckDBResponse());
+}
+
 void AdminHandler::async_tm_closeDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       CloseDBResponse>>> callback,
