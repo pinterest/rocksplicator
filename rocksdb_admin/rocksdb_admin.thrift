@@ -156,7 +156,6 @@ RestoreDBResponse restoreDB(1:RestoreDBRequest request)
 /*
  * Check if a DB exists on a host
  */
-
 CheckDBResponse checkDB(1: CheckDBRequest request)
   throws (1:AdminException e)
 
