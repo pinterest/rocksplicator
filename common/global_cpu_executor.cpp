@@ -23,10 +23,14 @@
 
 #include "wangle/concurrent/CPUThreadPoolExecutor.h"
 
+DEFINE_int32(global_worker_threads, sysconf(_SC_NPROCESSORS_ONLN),
+             "The number of threads for global CPU executor.");
+
 namespace {
 
-long GetThreadsCount() {
-  static const auto n_threads = sysconf(_SC_NPROCESSORS_ONLN);
+uint16_t GetThreadsCount() {
+  static const auto n_threads =
+    static_cast<uint16_t>(FLAGS_global_worker_threads);
   LOG(INFO) << "Running global CPU thread pool with "
             << n_threads << " threads";
   return n_threads;
@@ -43,7 +47,6 @@ int GetQueueSize() {
 
 
 namespace common {
-
 
 wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor() {
   static wangle::CPUThreadPoolExecutor g_executor(

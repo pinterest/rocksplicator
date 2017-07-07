@@ -26,3 +26,6 @@ DEFINE_int32(channel_max_checking_size, 500,
 
 DEFINE_int32(channel_send_timeout_ms, 0,
              "The send timeout for channels");
+
+DEFINE_int32(thrift_client_pool_threads, sysconf(_SC_NPROCESSORS_ONLN),
+             "The number of threads driving evbs in thrift client pool.");

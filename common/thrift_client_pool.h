@@ -40,6 +40,8 @@ DECLARE_int32(channel_max_checking_size);
 
 DECLARE_int32(channel_send_timeout_ms);
 
+DECLARE_int32(thrift_client_pool_threads);
+
 namespace common {
 
 /*
@@ -241,7 +243,7 @@ class ThriftClientPool {
   // pool.
   explicit ThriftClientPool(
       const uint16_t n_io_threads =
-      static_cast<uint16_t>(sysconf(_SC_NPROCESSORS_ONLN)))
+      static_cast<uint16_t>(FLAGS_thrift_client_pool_threads))
         : event_loops_(n_io_threads) {
     CHECK_GT(n_io_threads, 0);
   }
