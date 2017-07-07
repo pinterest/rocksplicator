@@ -43,19 +43,22 @@ int GetQueueSize() {
   return queue_sz;
 }
 
+wangle::CPUThreadPoolExecutor* g_executor = nullptr;
+
 }  // namespace
 
 
 namespace common {
 
 wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor() {
-  static wangle::CPUThreadPoolExecutor g_executor(
-    GetThreadsCount(),
-    std::make_unique<
-      wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
-      wangle::QueueBehaviorIfFull::BLOCK>>(GetQueueSize()));
-
-  return &g_executor;
+  if (g_executor == nullptr) {
+    g_executor = new wangle::CPUThreadPoolExecutor(
+      GetThreadsCount(),
+      std::make_unique<
+        wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
+        wangle::QueueBehaviorIfFull::BLOCK>>(GetQueueSize()));
+  }
+  return g_executor;
 }
 
 }  // namespace common
