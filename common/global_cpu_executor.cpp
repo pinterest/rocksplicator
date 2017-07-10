@@ -29,8 +29,11 @@ DEFINE_int32(global_worker_threads, sysconf(_SC_NPROCESSORS_ONLN),
 namespace {
 
 uint16_t GetThreadsCount() {
+  auto worker_thread_count =
+    FLAGS_global_worker_threads == 0?
+    sysconf(_SC_NPROCESSORS_ONLN) : FLAGS_global_worker_threads;
   static const auto n_threads =
-    static_cast<uint16_t>(FLAGS_global_worker_threads);
+    static_cast<uint16_t>(worker_thread_count);
   LOG(INFO) << "Running global CPU thread pool with "
             << n_threads << " threads";
   return n_threads;
@@ -43,22 +46,19 @@ int GetQueueSize() {
   return queue_sz;
 }
 
-wangle::CPUThreadPoolExecutor* g_executor = nullptr;
-
 }  // namespace
 
 
 namespace common {
 
 wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor() {
-  if (g_executor == nullptr) {
-    g_executor = new wangle::CPUThreadPoolExecutor(
-      GetThreadsCount(),
-      std::make_unique<
-        wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
-        wangle::QueueBehaviorIfFull::BLOCK>>(GetQueueSize()));
-  }
-  return g_executor;
+  static wangle::CPUThreadPoolExecutor g_executor(
+    GetThreadsCount(),
+    std::make_unique<
+      wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
+      wangle::QueueBehaviorIfFull::BLOCK>>(GetQueueSize()));
+
+  return &g_executor;
 }
 
 }  // namespace common
