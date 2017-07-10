@@ -29,7 +29,7 @@ namespace common {
 /*
  * Return the global CPUThreadPoolExecutor.
  * NOTE: do not call this function before main(). Otherwise, it will cause
- * global variable initialization race between function static executor and
+ * global variable initialization race between static executor and
  * GFlag of thread count. In case that happens, we will fallback to use the
  * number of cores as the thread pool size.
  */
