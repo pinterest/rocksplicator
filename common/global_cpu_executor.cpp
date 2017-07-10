@@ -30,7 +30,7 @@ namespace {
 
 uint16_t GetThreadsCount() {
   auto worker_thread_count =
-    FLAGS_global_worker_threads == 0?
+    FLAGS_global_worker_threads == 0 ?
     sysconf(_SC_NPROCESSORS_ONLN) : FLAGS_global_worker_threads;
   static const auto n_threads =
     static_cast<uint16_t>(worker_thread_count);
