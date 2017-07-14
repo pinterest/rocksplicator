@@ -119,7 +119,7 @@
                         </goals>
                         <configuration>
                             <descriptors>
-                                <descriptor>src/main/assembly/controller-worker.xml</descriptor>
+                                <descriptor>src/assembly/controller-worker.xml</descriptor>
                             </descriptors>
                         </configuration>
                     </execution>
