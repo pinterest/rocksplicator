@@ -374,11 +374,11 @@ public class MySQLTaskQueue implements TaskQueue {
       query = getEntityManager()
         .createNamedQuery("task.peekTasksFromClusterWithState")
         .setParameter("state", state).setParameter("name", clusterName);
-    }else if (clusterName == null) {
+    }else if (state != null) {
       query = getEntityManager()
         .createNamedQuery("task.peekTasksWithState")
         .setParameter("state", state);
-    }else if (state == null) {
+    }else if (clusterName != null) {
       query = getEntityManager()
         .createNamedQuery("task.peekTasksFromCluster")
         .setParameter("name", clusterName);
