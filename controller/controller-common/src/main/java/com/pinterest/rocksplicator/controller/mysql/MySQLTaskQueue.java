@@ -370,22 +370,19 @@ public class MySQLTaskQueue implements TaskQueue {
   @Override
   public List<Task> peekTasks(final String clusterName, final Integer state) {
     Query query;
-    if (clusterName != null && state != null){
+    if (clusterName != null && state != null) {
       query = getEntityManager()
         .createNamedQuery("task.peekTasksFromClusterWithState")
         .setParameter("state", state).setParameter("name", clusterName);
-    }
-    else if (clusterName == null){
+    }else if (clusterName == null) {
       query = getEntityManager()
         .createNamedQuery("task.peekTasksWithState")
         .setParameter("state", state);
-    }
-    else if (state == null){
+    }else if (state == null) {
       query = getEntityManager()
         .createNamedQuery("task.peekTasksFromCluster")
         .setParameter("name", clusterName);
-    }
-    else{
+    }else{
       query = getEntityManager()
         .createNamedQuery("task.peekAllTasks");
     }
