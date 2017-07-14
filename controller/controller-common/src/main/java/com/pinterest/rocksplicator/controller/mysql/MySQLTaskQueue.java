@@ -369,9 +369,26 @@ public class MySQLTaskQueue implements TaskQueue {
 
   @Override
   public List<Task> peekTasks(final String clusterName, final Integer state) {
-    Query query = getEntityManager()
-        .createNamedQuery("task.peekTasks")
+    Query query;
+    if (clusterName != null && state != null){
+      query = getEntityManager()
+        .createNamedQuery("task.peekTasksFromClusterWithState")
         .setParameter("state", state).setParameter("name", clusterName);
+    }
+    else if (clusterName == null){
+      query = getEntityManager()
+        .createNamedQuery("task.peekTasksWithState")
+        .setParameter("state", state);
+    }
+    else if (state == null){
+      query = getEntityManager()
+        .createNamedQuery("task.peekTasksFromCluster")
+        .setParameter("name", clusterName);
+    }
+    else{
+      query = getEntityManager()
+        .createNamedQuery("task.peekAllTasks");
+    }
     List<TaskEntity> result = query.getResultList();
     return result.stream().map(
         MySQLTaskQueue::convertTaskEntityToTask).collect(Collectors.toList());
