@@ -19,6 +19,7 @@ package com.pinterest.rocksplicator.controller.tasks;
 import com.pinterest.rocksplicator.controller.Task;
 import com.pinterest.rocksplicator.controller.TaskBase;
 import com.pinterest.rocksplicator.controller.TaskQueue;
+import com.pinterest.rocksplicator.controller.util.Result;
 
 import java.util.List;
 import java.util.Set;
@@ -90,7 +91,7 @@ class LocalAckTaskQueue implements TaskQueue {
 
   /** methods below simply delegates calls to {@code taskQueue} **/
   @Override
-  public boolean createCluster(final String clusterName) {
+  public Result createCluster(final String clusterName) {
     return taskQueue.createCluster(clusterName);
   }
 
@@ -123,12 +124,12 @@ class LocalAckTaskQueue implements TaskQueue {
   }
 
   @Override
-  public boolean lockCluster(final String cluster) {
+  public Result<Boolean> lockCluster(final String cluster) {
     return taskQueue.lockCluster(cluster);
   }
 
   @Override
-  public boolean unlockCluster(final String cluster) {
+  public Result<Boolean> unlockCluster(final String cluster) {
     return taskQueue.unlockCluster(cluster);
   }
 
@@ -153,18 +154,18 @@ class LocalAckTaskQueue implements TaskQueue {
   }
 
   @Override
-  public List<Task> peekTasks(final String clusterName,
+  public Result<List<Task>> peekTasks(final String clusterName,
                                       final Integer state) {
     return taskQueue.peekTasks(clusterName, state);
   }
 
   @Override
-  public Task findTask(long id) {
+  public Result<Task> findTask(long id) {
     return taskQueue.findTask(id);
   }
 
   @Override
-  public Set<String> getAllClusters() {
+  public Result<Set<String>> getAllClusters() {
     return taskQueue.getAllClusters();
   }
 }

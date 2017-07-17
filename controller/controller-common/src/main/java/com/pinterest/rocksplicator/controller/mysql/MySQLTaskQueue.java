@@ -23,7 +23,9 @@ import com.pinterest.rocksplicator.controller.TaskQueue;
 import com.pinterest.rocksplicator.controller.bean.TaskState;
 import com.pinterest.rocksplicator.controller.mysql.entity.TagEntity;
 import com.pinterest.rocksplicator.controller.mysql.entity.TaskEntity;
+import com.pinterest.rocksplicator.controller.util.Result;
 import org.apache.commons.lang3.time.DateUtils;
+import org.eclipse.jetty.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -104,57 +106,62 @@ public class MySQLTaskQueue implements TaskQueue {
 
 
   @Override
-  public boolean createCluster(final String clusterName) {
+  public Result createCluster(final String clusterName) {
     TagEntity cluster = getEntityManager().find(TagEntity.class, clusterName);
     if (cluster != null) {
-      LOG.error("Cluster {} is already existed", clusterName);
-      return false;
+      String message = String.format("Cluster %s already exists", clusterName);
+      LOG.error(message);
+      return new Result<Boolean>(HttpStatus.BAD_REQUEST_400, message, false);
     }
     TagEntity newCluster = new TagEntity().setName(clusterName);
     beginTransaction();
     getEntityManager().persist(newCluster);
     getEntityManager().getTransaction().commit();
-    return true;
+    return new Result<Boolean>(HttpStatus.OK_200, true);
   }
 
   @Override
-  public boolean lockCluster(final String clusterName) {
+  public Result<Boolean> lockCluster(final String clusterName) {
+    String message = "";
     beginTransaction();
     TagEntity cluster = getEntityManager().find(
         TagEntity.class, clusterName, LockModeType.PESSIMISTIC_WRITE);
     try {
       if (cluster == null) {
-        LOG.error("Cluster {} hasn't been created", clusterName);
+        message = String.format("Cluster %s hasn't been created", clusterName);
+        LOG.error(message);
         throw new MySQLTaskQueueException();
       }
       if (cluster.getLocks() == 1) {
-        LOG.error("Cluster {} is already locked, cannot double lock", clusterName);
+        message = String.format("Cluster %s is already locked, cannot double lock", clusterName);
+        LOG.error(message);
         throw new MySQLTaskQueueException();
       }
     } catch (MySQLTaskQueueException e) {
       getEntityManager().getTransaction().rollback();
-      return false;
+      return new Result<Boolean>(HttpStatus.BAD_REQUEST_400, message, false);
     }
     cluster.setLocks(1);
     getEntityManager().persist(cluster);
     getEntityManager().getTransaction().commit();
-    return true;
+    return new Result<Boolean>(HttpStatus.OK_200, message, true);
   }
 
   @Override
-  public boolean unlockCluster(final String clusterName) {
+  public Result<Boolean> unlockCluster(final String clusterName) {
     beginTransaction();
     TagEntity cluster = getEntityManager().find(
         TagEntity.class, clusterName, LockModeType.PESSIMISTIC_WRITE);
     if (cluster == null) {
-      LOG.error("Cluster {} hasn't been created", clusterName);
+      String message = String.format("Cluster %s hasn't been created", clusterName);
+      LOG.error(message);
       getEntityManager().getTransaction().rollback();
-      return false;
+      return new Result<Boolean>(HttpStatus.BAD_REQUEST_400, message, false);
     }
     cluster.setLocks(0);
     getEntityManager().persist(cluster);
     getEntityManager().getTransaction().commit();
-    return true;
+    return new Result<Boolean>(HttpStatus.OK_200, true);
   }
 
 
@@ -182,14 +189,14 @@ public class MySQLTaskQueue implements TaskQueue {
   }
 
   @Override
-  public Set<String> getAllClusters() {
+  public Result<Set<String>> getAllClusters() {
     Query query = getEntityManager().createNamedQuery("tag.findAll");
     List<String> result = query.getResultList();
     Set<String> clusterNames = new HashSet<>();
     result.stream().forEach(name -> {
       clusterNames.add(name);
     });
-    return clusterNames;
+    return new Result<Set<String>>(HttpStatus.OK_200, clusterNames);
   }
 
   private TaskEntity enqueueTaskImpl(final TaskBase taskBase,
@@ -368,7 +375,7 @@ public class MySQLTaskQueue implements TaskQueue {
   }
 
   @Override
-  public List<Task> peekTasks(final String clusterName, final Integer state) {
+  public Result<List<Task>> peekTasks(final String clusterName, final Integer state) {
     Query query;
     if (clusterName != null && state != null) {
       query = getEntityManager()
@@ -386,19 +393,20 @@ public class MySQLTaskQueue implements TaskQueue {
       query = getEntityManager()
         .createNamedQuery("task.peekAllTasks");
     }
-    List<TaskEntity> result = query.getResultList();
-    return result.stream().map(
-        MySQLTaskQueue::convertTaskEntityToTask).collect(Collectors.toList());
+    List<TaskEntity> queryResult = query.getResultList();
+    List<Task> result = queryResult.stream().map(MySQLTaskQueue::convertTaskEntityToTask).collect(Collectors.toList());
+    return new Result<List<Task>>(HttpStatus.OK_200, result);
   }
 
   @Override
-  public Task findTask(long id) {
+  public Result<Task> findTask(long id) {
     TaskEntity taskEntity = getEntityManager().find(TaskEntity.class, id);
     if (taskEntity == null) {
-      LOG.error("Cannot find task {}.", id);
-      return null;
+      String message = String.format("Cannot find task %s ", id);
+      LOG.error(message);
+      return new Result<Task>(HttpStatus.NOT_FOUND_404, message, null);
     }
-    return convertTaskEntityToTask(taskEntity);
+    return new Result<Task>(HttpStatus.OK_200, convertTaskEntityToTask(taskEntity));
   }
 
   @Override

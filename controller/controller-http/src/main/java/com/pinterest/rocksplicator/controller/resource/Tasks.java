@@ -19,6 +19,7 @@ package com.pinterest.rocksplicator.controller.resource;
 import com.pinterest.rocksplicator.controller.Task;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 import com.pinterest.rocksplicator.controller.bean.TaskState;
+import com.pinterest.rocksplicator.controller.util.Result;
 
 import org.eclipse.jetty.http.HttpStatus;
 
@@ -31,6 +32,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
 /**
  * @author Ang Xu (angxu@pinterest.com)
@@ -53,8 +55,9 @@ public class Tasks {
   @GET
   @Path("/{id : [0-9]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public Task get(@PathParam("id") Long id) {
-    return taskQueue.findTask(id);
+  public Response get(@PathParam("id") Long id) {
+    Result<Task> result = taskQueue.findTask(id);
+    return Response.status(result.getStatusCode()).entity(result).build();
   }
 
   /**
@@ -67,10 +70,11 @@ public class Tasks {
    */
   @GET
   @Produces(MediaType.APPLICATION_JSON)
-  public List<Task> findTasks(@QueryParam("clusterName") Optional<String> clusterName,
+  public Response findTasks(@QueryParam("clusterName") Optional<String> clusterName,
                               @QueryParam("state") Optional<TaskState> state) {
-    return taskQueue.peekTasks(clusterName.orElse(null),
-                               state.map(TaskState::intValue).orElse(null));
+    Result<List<Task>> result = taskQueue.peekTasks(clusterName.orElse(null),
+                                                    state.map(TaskState::intValue).orElse(null));
+    return Response.status(result.getStatusCode()).entity(result).build();
   }
 
 }

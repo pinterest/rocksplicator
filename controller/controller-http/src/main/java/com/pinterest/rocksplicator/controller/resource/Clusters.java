@@ -28,6 +28,7 @@ import com.pinterest.rocksplicator.controller.tasks.LoggingTask;
 import com.pinterest.rocksplicator.controller.tasks.PromoteTask;
 import com.pinterest.rocksplicator.controller.tasks.RebalanceTask;
 import com.pinterest.rocksplicator.controller.tasks.RemoveHostTask;
+import com.pinterest.rocksplicator.controller.util.Result;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.curator.framework.CuratorFramework;
@@ -48,6 +49,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
 /**
  * @author Ang Xu (angxu@pinterest.com)
@@ -77,18 +79,20 @@ public class Clusters {
   @GET
   @Path("/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public ClusterBean get(@PathParam("clusterName") String clusterName) {
+  public Response get(@PathParam("clusterName") String clusterName) {
     final ClusterBean clusterBean;
+    Result<ClusterBean> result = new Result<ClusterBean>();
     try {
-      clusterBean = checkExistenceAndGetClusterBean(clusterName);
+      result = checkExistenceAndGetClusterBean(clusterName);
+      clusterBean = result.getData();
     } catch (Exception e) {
-      LOG.error("Failed to read from zookeeper.", e);
-      throw new WebApplicationException(e);
+      String message = "Failed to read from zookeeper";
+      LOG.error(message, e);
+      result.setMessage(message);
+      result.setStatusCode(HttpStatus.INTERNAL_SERVER_ERROR_500);
+      result.setData(null);
     }
-    if (clusterBean == null) {
-      throw new WebApplicationException(HttpStatus.NOT_FOUND_404);
-    }
-    return clusterBean;
+    return Response.status(result.getStatusCode()).entity(result).build();
   }
 
   /**
@@ -97,21 +101,26 @@ public class Clusters {
    * @return a list of {@link ClusterBean}
    */
   @GET
-  public List<ClusterBean> getAll() {
-    final Set<String> clusters = taskQueue.getAllClusters();
+  public Response getAll() {
+    final Set<String> clusters = taskQueue.getAllClusters().getData();
     final List<ClusterBean> clusterBeans = new ArrayList<>(clusters.size());
     try {
       for (String cluster : clusters) {
-        ClusterBean clusterBean = checkExistenceAndGetClusterBean(cluster);
+        ClusterBean clusterBean = checkExistenceAndGetClusterBean(cluster).getData();
         if (clusterBean != null) {
           clusterBeans.add(clusterBean);
         }
+        // TODO(evening): add list<String> error message for the null clusterBeans
       }
     } catch (Exception e) {
-      LOG.error("Failed to read from zookeeper.", e);
-      throw new WebApplicationException(e);
+      String message = String.format("Failed to read from zookeeper: %s", e);
+      LOG.error(message);
+      Result<List<ClusterBean>> result = new Result<List<ClusterBean>>(
+        HttpStatus.INTERNAL_SERVER_ERROR_500, message, clusterBeans);
+      return Response.status(result.getStatusCode()).entity(result).build();
     }
-    return clusterBeans;
+    Result<List<ClusterBean>> result = new Result<List<ClusterBean>>(HttpStatus.OK_200, clusterBeans);
+    return Response.status(result.getStatusCode()).entity(result).build();
   }
 
   /**
@@ -121,10 +130,12 @@ public class Clusters {
    * @param clusterName name of the cluster
    */
   @POST
+  @Produces(MediaType.APPLICATION_JSON)
   @Path("/initialize/{clusterName : [a-zA-Z0-9\\-_]+}")
-  public boolean initialize(@PathParam("clusterName") String clusterName) {
+  public Response initialize(@PathParam("clusterName") String clusterName) {
     // Create directly, we dont
-    return taskQueue.createCluster(clusterName);
+    Result<Boolean> result = taskQueue.createCluster(clusterName);
+    return Response.status(result.getStatusCode()).entity(result).build();
   }
 
   /**
@@ -144,6 +155,7 @@ public class Clusters {
                           @QueryParam("newHost") Optional<String> newHostOp) {
 
     //TODO(angxu) support adding random new host later
+    //TODO(evening) migrate to Response return type
     if (!newHostOp.isPresent()) {
       throw new UnsupportedOperationException("method not implemented.");
     }
@@ -192,6 +204,7 @@ public class Clusters {
                        @NotEmpty @QueryParam("s3Prefix") String s3Prefix,
                        @QueryParam("concurrency") Optional<Integer> concurrency,
                        @QueryParam("rateLimit") Optional<Integer> rateLimit) {
+    //TODO(evening) migrate to Response return type
     try {
       TaskBase task = new LoadSSTTask(segmentName, s3Bucket, s3Prefix,
           concurrency.orElse(20), rateLimit.orElse(64)).getEntity();
@@ -210,9 +223,11 @@ public class Clusters {
    * @return true if the given cluster is locked, false otherwise
    */
   @POST
+  @Produces(MediaType.APPLICATION_JSON)
   @Path("/lock/{clusterName : [a-zA-Z0-9\\-_]+}")
-  public boolean lock(@PathParam("clusterName") String clusterName) {
-    return taskQueue.lockCluster(clusterName);
+  public Response lock(@PathParam("clusterName") String clusterName) {
+    Result<Boolean> result = taskQueue.lockCluster(clusterName);
+    return Response.status(result.getStatusCode()).entity(result).build();
   }
 
   /**
@@ -222,9 +237,11 @@ public class Clusters {
    * @return true if the given cluster is unlocked, false otherwise
    */
   @POST
+  @Produces(MediaType.APPLICATION_JSON)
   @Path("/unlock/{clusterName : [a-zA-Z0-9\\-_]+}")
-  public boolean unlock(@PathParam("clusterName") String clusterName) {
-    return taskQueue.unlockCluster(clusterName);
+  public Response unlock(@PathParam("clusterName") String clusterName) {
+    Result<Boolean> result = taskQueue.unlockCluster(clusterName);
+    return Response.status(result.getStatusCode()).entity(result).build();
   }
 
   /**
@@ -237,6 +254,7 @@ public class Clusters {
   @Path("/logging/{clusterName : [a-zA-Z0-9\\\\-_]+}")
   public void sendLogTask(@PathParam("clusterName") String clusterName,
                           @NotEmpty @QueryParam("message") String message) {
+    //TODO(evening) migrate to Response return type
     try {
       TaskBase task = new LoggingTask(message).getEntity();
       taskQueue.enqueueTask(task, clusterName, 0);
@@ -246,16 +264,20 @@ public class Clusters {
   }
 
 
-  private ClusterBean checkExistenceAndGetClusterBean(String clusterName) throws Exception {
+  private Result<ClusterBean> checkExistenceAndGetClusterBean(String clusterName) throws Exception {
+    String message = "";
     if (zkClient.checkExists().forPath(zkPath + clusterName) == null) {
-      LOG.error("Znode {} doesn't exist.", zkPath + clusterName);
-      return null;
+      message = String.format("Znode %s doesn't exist", zkPath + clusterName);
+      LOG.error(message);
+      return new Result<ClusterBean>(HttpStatus.NOT_FOUND_404, message, null);
     }
     byte[] data = zkClient.getData().forPath(zkPath + clusterName);
     ClusterBean clusterBean = ConfigParser.parseClusterConfig(clusterName, data);
     if (clusterBean == null) {
-      LOG.error("Failed to parse config for cluster {}.", clusterName);
+      message = String.format("Failed to parse config for cluster %s", clusterName);
+      LOG.error(message);
+      return new Result<ClusterBean>(HttpStatus.BAD_REQUEST_400, message, null);
     }
-    return clusterBean;
+    return new Result<ClusterBean>(HttpStatus.OK_200, message, clusterBean);
   }
 }
