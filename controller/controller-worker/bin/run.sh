@@ -49,7 +49,7 @@ CP=${ROOT_DIR}/*:${ROOT_DIR}/lib/*:${TARGET_DIR}/classes:${TARGET_DIR}/lib/*
 PID_FILE=${HOME}/rocksplicator-controller-worker.pid
 ACTION="run"
 
-LOG_PROPERTIES=${ROOT_DIR}/config/log4j.properties
+LOG_PROPERTIES=${ROOT_DIR}/config/logback.xml
 WORKER_CONFIG=${ROOT_DIR}/config/controller.worker.properties
 
 WORKER_OPTS="-server -Xmx1024m -Xms1024m \
@@ -78,7 +78,7 @@ function server_start {
     echo "Starting Rocksplicator Controller Worker..."
 
     OPTS="${WORKER_OPTS} \
-    -cp ${CP} -Dlog4j.configuration=${LOG_PROPERTIES} -Dworker_config=${WORKER_CONFIG} \
+    -cp ${CP} -Dlogback.configurationFile=${LOG_PROPERTIES} -Dworker_config=${WORKER_CONFIG} \
     com.pinterest.rocksplicator.controller.WorkerService"
 
     if [ "$1" == "FOREGROUND" ]
