@@ -16,6 +16,8 @@
 
 package com.pinterest.rocksplicator.controller;
 
+import com.pinterest.rocksplicator.controller.util.Result;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -31,8 +33,8 @@ public interface TaskQueue {
    * @param clusterName
    * @return false on error
    */
-  default boolean createCluster(final String clusterName) {
-    return true;
+  default Result<Boolean> createCluster(final String clusterName) {
+    return new Result<Boolean>(true);
   }
 
   /**
@@ -119,8 +121,8 @@ public interface TaskQueue {
    * @param cluster which cluster to lock
    * @return false on error
    */
-  default boolean lockCluster(final String cluster) {
-    return true;
+  default Result<Boolean> lockCluster(final String cluster) {
+    return new Result<Boolean>(true);
   }
 
   /**
@@ -128,8 +130,8 @@ public interface TaskQueue {
    * @param cluster which cluster to unlock
    * @return false on error
    */
-  default boolean unlockCluster(final String cluster) {
-    return true;
+  default Result<Boolean> unlockCluster(final String cluster) {
+    return new Result<Boolean>(true);
   }
 
   /**
@@ -139,6 +141,7 @@ public interface TaskQueue {
    * @return false on error
    */
   default boolean removeCluster(final String cluster) {
+    //TODO(evening) migrate to Result return type and add http endpoint
     return true;
   }
 
@@ -148,6 +151,7 @@ public interface TaskQueue {
    * @return the number of finished tasks which are removed by this call.
    */
   default int removeFinishedTasks(final int secondsAgo) {
+    //TODO(evening) migrate to Result return type and add http endpoint
     return 0;
   }
 
@@ -157,6 +161,7 @@ public interface TaskQueue {
    * @return the number of zombie tasks which are rest by this call
    */
   default int resetZombieTasks(final int zombieThresholdSeconds) {
+    //TODO(evening) migrate to Result return type and add http endpoint
     return 0;
   }
 
@@ -166,6 +171,7 @@ public interface TaskQueue {
    * @return false on error
    */
   default boolean keepTaskAlive(final long id) {
+    //TODO(evening) migrate to Result return type and add http endpoint
     return true;
   }
 
@@ -177,9 +183,9 @@ public interface TaskQueue {
    * @param state peek tasks in this state only
    * @return the list of tasks found
    */
-  default List<Task> peekTasks(final String clusterName,
+  default Result<List<Task>> peekTasks(final String clusterName,
                               final Integer state) {
-    return new ArrayList<>();
+    return new Result<List<Task>>(new ArrayList<>());
   }
 
   /**
@@ -187,15 +193,15 @@ public interface TaskQueue {
    * @param id id of the task
    * @return task or null
    */
-  default Task findTask(long id) {
-    return new Task(new TaskBase());
+  default Result<Task> findTask(long id) {
+    return new Result<Task>(new Task(new TaskBase()));
   }
 
   /**
    * Return all clusters managed by this task queue.
    * @return a set of cluster names
    */
-  default Set<String> getAllClusters() {
-    return Collections.emptySet();
+  default Result<Set<String>> getAllClusters() {
+    return new Result<Set<String>>(Collections.emptySet());
   }
 }

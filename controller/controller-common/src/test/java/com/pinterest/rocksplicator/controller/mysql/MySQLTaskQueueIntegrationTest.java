@@ -54,13 +54,13 @@ public class MySQLTaskQueueIntegrationTest {
 
   @Test
   public void testClusterTable() throws MySQLTaskQueue.MySQLTaskQueueException {
-    Set<String> clusters = queue.getAllClusters();
+    Set<String> clusters = queue.getAllClusters().getData();
     Assert.assertEquals(1, clusters.size());
     Assert.assertTrue(clusters.contains(TEST_CLUSTER_NAME));
-    Assert.assertTrue(queue.lockCluster(TEST_CLUSTER_NAME));
-    Assert.assertFalse(queue.lockCluster(TEST_CLUSTER_NAME));
+    Assert.assertTrue(queue.lockCluster(TEST_CLUSTER_NAME).getData());
+    Assert.assertFalse(queue.lockCluster(TEST_CLUSTER_NAME).getData());
     Assert.assertFalse(queue.removeCluster(TEST_CLUSTER_NAME));
-    Assert.assertTrue(queue.unlockCluster(TEST_CLUSTER_NAME));
+    Assert.assertTrue(queue.unlockCluster(TEST_CLUSTER_NAME).getData());
     Assert.assertTrue(queue.removeCluster(TEST_CLUSTER_NAME));
     Assert.assertFalse(queue.removeCluster(TEST_CLUSTER_NAME));
   }
@@ -128,12 +128,12 @@ public class MySQLTaskQueueIntegrationTest {
     Thread.sleep(2000);
     Task task = queue.dequeueTask("worker");
     Assert.assertEquals(task.name, "test-task-zombie");
-    Assert.assertFalse(queue.lockCluster(TEST_CLUSTER_NAME));
+    Assert.assertFalse(queue.lockCluster(TEST_CLUSTER_NAME).getData());
     // make the task zombie
     Thread.sleep(2000);
     Assert.assertEquals(queue.resetZombieTasks(1), 1);
-    Assert.assertTrue(queue.lockCluster(TEST_CLUSTER_NAME));
-    Assert.assertTrue(queue.unlockCluster(TEST_CLUSTER_NAME));
+    Assert.assertTrue(queue.lockCluster(TEST_CLUSTER_NAME).getData());
+    Assert.assertTrue(queue.unlockCluster(TEST_CLUSTER_NAME).getData());
     Task task2 = queue.dequeueTask("worker");
     Assert.assertEquals(task2.name, "test-task-zombie");
     Thread.sleep(1000);
@@ -151,7 +151,7 @@ public class MySQLTaskQueueIntegrationTest {
     Thread.sleep(2000);
     Date dateAlive = new Date();
     Assert.assertTrue(queue.keepTaskAlive(task.id));
-    Task taskUpdated = queue.findTask(task.id);
+    Task taskUpdated = queue.findTask(task.id).getData();
     Assert.assertEquals(dateAlive.toString(), taskUpdated.lastAliveAt.toString());
     queue.finishTask(taskUpdated.id, "");
   }
@@ -163,16 +163,16 @@ public class MySQLTaskQueueIntegrationTest {
             TEST_CLUSTER_NAME, 0));
     Thread.sleep(2000);
     Task task = queue.dequeueTask("worker");
-    Assert.assertFalse(queue.lockCluster(TEST_CLUSTER_NAME));
+    Assert.assertFalse(queue.lockCluster(TEST_CLUSTER_NAME).getData());
     TaskBase newTask = createTaskBase("new-running-task", 0, "body");
     Assert.assertTrue(
         queue.finishTaskAndEnqueueRunningTask(task.id, "output", newTask, "worker") > 0);
-    Assert.assertFalse(queue.lockCluster(TEST_CLUSTER_NAME));
-    task = queue.peekTasks(TEST_CLUSTER_NAME, 2).get(0);
+    Assert.assertFalse(queue.lockCluster(TEST_CLUSTER_NAME).getData());
+    task = queue.peekTasks(TEST_CLUSTER_NAME, 2).getData().get(0);
     Assert.assertEquals(task.name, "test-task-to-dequeue");
-    task = queue.peekTasks(TEST_CLUSTER_NAME, 1).get(0);
+    task = queue.peekTasks(TEST_CLUSTER_NAME, 1).getData().get(0);
     Assert.assertEquals(task.name, "new-running-task");
-    Assert.assertTrue(queue.peekTasks(TEST_CLUSTER_NAME, 0).isEmpty());
+    Assert.assertTrue(queue.peekTasks(TEST_CLUSTER_NAME, 0).getData().isEmpty());
     queue.finishTask(task.id, "done");
   }
 
@@ -183,15 +183,15 @@ public class MySQLTaskQueueIntegrationTest {
             TEST_CLUSTER_NAME, 0));
     Thread.sleep(2000);
     Task task = queue.dequeueTask("worker");
-    Assert.assertFalse(queue.lockCluster(TEST_CLUSTER_NAME));
+    Assert.assertFalse(queue.lockCluster(TEST_CLUSTER_NAME).getData());
     TaskBase newTask = createTaskBase("new-pending-task", 0, "body");
     Assert.assertTrue(queue.finishTaskAndEnqueuePendingTask(task.id, "output", newTask, 0));
-    Assert.assertTrue(queue.lockCluster(TEST_CLUSTER_NAME));
+    Assert.assertTrue(queue.lockCluster(TEST_CLUSTER_NAME).getData());
     Assert.assertEquals(queue.dequeueTask("worker"), null);
-    Assert.assertTrue(queue.unlockCluster(TEST_CLUSTER_NAME));
-    task = queue.peekTasks(TEST_CLUSTER_NAME, 2).get(0);
+    Assert.assertTrue(queue.unlockCluster(TEST_CLUSTER_NAME).getData());
+    task = queue.peekTasks(TEST_CLUSTER_NAME, 2).getData().get(0);
     Assert.assertEquals(task.name, "test-task-to-dequeue");
-    task = queue.peekTasks(TEST_CLUSTER_NAME, 0).get(0);
+    task = queue.peekTasks(TEST_CLUSTER_NAME, 0).getData().get(0);
     Assert.assertEquals(task.name, "new-pending-task");
   }
 
