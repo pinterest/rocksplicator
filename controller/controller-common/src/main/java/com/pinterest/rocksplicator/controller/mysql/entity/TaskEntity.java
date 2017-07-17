@@ -55,19 +55,15 @@ import java.util.Date;
                     "AND t.runAfter < CURRENT_TIMESTAMP AND c.locks = 0 ORDER BY t.priority ASC"),
     @NamedQuery(name = "task.findRunning",
                 query = "SELECT t FROM task t WHERE t.id = :id AND t.state = 1"),
-    @NamedQuery(name = "task.findAllRunning",
-                query = "SELECT t FROM task t WHERE t.state = 1"),
     @NamedQuery(name = "task.peekAllTasks",
                 query = "SELECT t FROM task t INNER JOIN t.cluster c"),
     @NamedQuery(name = "task.peekTasksFromCluster",
                 query = "SELECT t FROM task t INNER JOIN t.cluster c WHERE c.name = :name"),
     @NamedQuery(name = "task.peekTasksWithState",
-                query = "SELECT t FROM task t INNER JOIN t.cluster c WHERE t.state = :state"),
+                query = "SELECT t FROM task t WHERE t.state = :state"),
     @NamedQuery(name = "task.peekTasksFromClusterWithState",
                 query = "SELECT t FROM task t INNER JOIN t.cluster c WHERE t.state = :state AND " +
                     "c.name = :name"),
-    @NamedQuery(name = "task.findFinished",
-                query = "SELECT t FROM task t WHERE t.state = 2")
 })
 public class TaskEntity {
 
