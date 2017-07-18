@@ -246,6 +246,30 @@ public class Clusters {
   }
 
 
+  /**
+   * Send a healthcehck task to a cluster.
+   * @param clusterName
+   * @param intervalSeconds If not specified, it's a one-off task, otherwise the task is repeatable.
+   * @param replicas If not specified, use default number of 3.
+   */
+  @POST
+  @Path("/healthcheck/{clusterName : [a-zA-Z0-9\\\\-_]+}")
+  public void healthcheck(@PathParam("clusterName") String clusterName,
+                          @QueryParam("interval") Optional<Integer> intervalSeconds,
+                          @QueryParam("replica") Optional<Integer> replicas) {
+    try {
+      HealthCheckTask.Param param = new HealthCheckTask.Param()
+          .setIntervalSeconds(intervalSeconds.orElse(0))
+          .setNumReplicas(replicas.orElse(3));
+      TaskBase healthCheckTask = new HealthCheckTask(param).getEntity();
+      taskQueue.enqueueTask(healthCheckTask, clusterName, 0);
+    } catch (JsonProcessingException e) {
+      throw new WebApplicationException(e);
+    }
+  }
+
+
+
   private ClusterBean checkExistenceAndGetClusterBean(String clusterName) throws Exception {
     if (zkClient.checkExists().forPath(zkPath + clusterName) == null) {
       LOG.error("Znode {} doesn't exist.", zkPath + clusterName);
@@ -258,4 +282,5 @@ public class Clusters {
     }
     return clusterBean;
   }
+
 }

@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
+import com.pinterest.rocksplicator.controller.TaskBase;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.bean.SegmentBean;
@@ -60,7 +61,7 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
    * Construct a new HealthCheckTask with number of replicas equals to 3
    */
   public HealthCheckTask() {
-    this(new Param().setNumReplicas(3));
+    this(new Param().setNumReplicas(3).setIntervalSeconds(0));
   }
 
   public HealthCheckTask(Param param) {
@@ -70,7 +71,6 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
   @Override
   public void process(Context ctx) throws Exception {
     final String clusterName = ctx.getCluster();
-
     try {
       ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, clusterName);
       if (clusterBean == null) {
@@ -99,17 +99,33 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
       }
 
       if (!badHosts.isEmpty()) {
-        ctx.getTaskQueue().failTask(ctx.getId(),
-            String.format("Unable to ping hosts: %s", badHosts));
+        String errorMessage = String.format("Unable to ping hosts: %s", badHosts);
+        if (getParameter().getIntervalSeconds() > 0) {
+          ctx.getTaskQueue().failTaskAndEnqueuePendingTask(
+              ctx.getId(), errorMessage, this.getEntity(), getParameter().getIntervalSeconds());
+        } else {
+          ctx.getTaskQueue().failTask(ctx.getId(),errorMessage);
+        }
         return;
       }
 
       LOG.info("All hosts are good");
-      ctx.getTaskQueue().finishTask(ctx.getId(),
-          String.format("Cluster %s is healthy", clusterName));
+      String output = String.format("Cluster %s is healthy", clusterName);
+      if (getParameter().getIntervalSeconds() > 0) {
+        ctx.getTaskQueue().finishTaskAndEnqueuePendingTask(
+            ctx.getId(), output, this.getEntity(), getParameter().getIntervalSeconds());
+      } else {
+        ctx.getTaskQueue().finishTask(ctx.getId(), output);
+      }
     } catch (Exception ex) {
-      ctx.getTaskQueue().failTask(ctx.getId(),
-          String.format("Cluster %s is unhealthy, reason = %s", clusterName, ex.getMessage()));
+      String errorMessage =
+          String.format("Cluster %s is unhealthy, reason = %s", clusterName, ex.getMessage());
+      if (getParameter().getIntervalSeconds() > 0) {
+        ctx.getTaskQueue().failTaskAndEnqueuePendingTask(
+            ctx.getId(), errorMessage, this.getEntity(), getParameter().getIntervalSeconds());
+      } else {
+        ctx.getTaskQueue().failTask(ctx.getId(), errorMessage);
+      }
     }
   }
 
@@ -151,12 +167,22 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
     @JsonProperty
     private int numReplicas;
 
+    @JsonProperty
+    private int intervalSeconds = 0;
+
     public int getNumReplicas() {
       return numReplicas;
     }
 
     public Param setNumReplicas(int numReplicas) {
       this.numReplicas = numReplicas;
+      return this;
+    }
+
+    public int getIntervalSeconds() { return intervalSeconds; }
+
+    public Param setIntervalSeconds(int intervalSeconds) {
+      this.intervalSeconds = intervalSeconds;
       return this;
     }
   }
