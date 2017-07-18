@@ -92,9 +92,9 @@ public interface TaskQueue {
    * @return false on error
    */
   default boolean failTaskAndEnqueuePendingTask(final long id,
-                                                  final String output,
-                                                  final TaskBase taskBase,
-                                                  final int runDelaySeconds) {
+                                                final String output,
+                                                final TaskBase taskBase,
+                                                final int runDelaySeconds) {
     return true;
   }
 
