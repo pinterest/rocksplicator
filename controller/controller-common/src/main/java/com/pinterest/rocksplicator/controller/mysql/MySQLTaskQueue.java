@@ -301,7 +301,8 @@ public class MySQLTaskQueue implements TaskQueue {
   public int resetZombieTasks(final int zombieThresholdSeconds) {
     beginTransaction();
     List<TaskEntity> runningTasks = getEntityManager()
-        .createNamedQuery("task.findAllRunning")
+        .createNamedQuery("task.peekTasksWithState")
+        .setParameter("state", TaskState.RUNNING.intValue())
         .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
     List<TaskEntity> zombieTasks = runningTasks.stream()
         .filter(t -> t.getState() == TaskState.RUNNING.intValue() &&
@@ -405,7 +406,8 @@ public class MySQLTaskQueue implements TaskQueue {
   public int removeFinishedTasks(final int secondsAgo) {
     beginTransaction();
     List<TaskEntity> finishedTasks = getEntityManager()
-        .createNamedQuery("task.findFinished")
+        .createNamedQuery("task.peekTasksWithState")
+        .setParameter("state", TaskState.DONE.intValue())
         .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
     List<TaskEntity> removingTasks = finishedTasks.stream().filter(t -> DateUtils.addSeconds(t
         .getCreatedAt(), secondsAgo).before(new Date())).collect(Collectors.toList());
