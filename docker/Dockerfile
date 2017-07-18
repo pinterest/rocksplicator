@@ -38,6 +38,8 @@ RUN apt-get -q -y update && \
       flex \
       g++-5 \
       gcc-5 \
+      g++-4.7 \
+      gcc-4.7 \
       gdb \
       git \
       hadoop \
@@ -73,7 +75,7 @@ RUN apt-get -q -y update && \
       libssl-dev \
       libsvn-dev \
       libtool \
-      linux-tools-3.13.0-63-generic \
+      linux-tools-generic-lts-trusty \
       make \
       scons \
       sparsehash \
@@ -124,16 +126,16 @@ RUN cd /opt && \
 
 # jemalloc
 RUN cd /opt && \
-    wget https://github.com/jemalloc/jemalloc/archive/3.6.0.tar.gz && \
-    tar -zxvf 3.6.0.tar.gz && \
-    (cd jemalloc-3.6.0 && \
+    wget https://github.com/jemalloc/jemalloc/archive/4.5.0.tar.gz && \
+    tar -zxvf 4.5.0.tar.gz && \
+    (cd jemalloc-4.5.0 && \
       autoconf && \
       ./configure --enable-prof && \
       make && \
 # the unusual (make install; exit 0) is to ignore error for missing html doc
       (make install; exit 0) && \
       ldconfig) && \
-    rm -rf 3.6.0.tar.gz jemalloc-3.6.0
+    rm -rf 4.5.0.tar.gz jemalloc-4.5.0
 
 # microhttpd
 RUN cd /opt && \
@@ -230,10 +232,11 @@ RUN cd /opt && \
 
 # rocksdb
 RUN cd /opt/ && \
-    wget https://github.com/facebook/rocksdb/archive/rocksdb-4.11.2.zip && \
-    unzip rocksdb-4.11.2.zip && \
-    (cd rocksdb-rocksdb-4.11.2 && \
-      sed -i -- 's/std::rindex/rindex/g' ./util/env_hdfs.cc && \
+    wget https://github.com/facebook/rocksdb/archive/rocksdb-5.4.7.zip && \
+    unzip rocksdb-5.4.7.zip && \
+    (cd rocksdb-rocksdb-5.4.7 && \
+      sed -i -- 's/std::rindex/rindex/g' ./env/env_hdfs.cc && \
+      sed -i -- '/"util\/string_util.h"/a #include "util\/logging.h"' ./env/env_hdfs.cc && \
       export CLASSPATH= && \
       for f in `find /usr/lib/hadoop-hdfs | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \
       for f in `find /usr/lib/hadoop | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \

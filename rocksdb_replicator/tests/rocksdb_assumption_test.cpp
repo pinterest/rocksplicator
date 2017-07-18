@@ -39,7 +39,6 @@ using rocksdb::DB;
 using rocksdb::DestroyDB;
 using rocksdb::Env;
 using rocksdb::EnvOptions;
-using rocksdb::ImmutableCFOptions;
 using rocksdb::Logger;
 using rocksdb::Options;
 using rocksdb::ReadOptions;
