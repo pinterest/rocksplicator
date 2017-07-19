@@ -331,17 +331,24 @@ public class Clusters {
    */
   @POST
   @Path("/healthcheck/{clusterName : [a-zA-Z0-9\\-_]+}")
-  public void healthcheck(@PathParam("clusterName") String clusterName,
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response healthcheck(@PathParam("clusterName") String clusterName,
                           @QueryParam("interval") Optional<Integer> intervalSeconds,
                           @QueryParam("replica") Optional<Integer> replicas) {
+    Result<Boolean> result = new Result<Boolean>(false);
     try {
       HealthCheckTask.Param param = new HealthCheckTask.Param()
           .setIntervalSeconds(intervalSeconds.orElse(0))
           .setNumReplicas(replicas.orElse(3));
       TaskBase healthCheckTask = new HealthCheckTask(param).getEntity();
       taskQueue.enqueueTask(healthCheckTask, clusterName, 0);
+      return Response.status(HttpStatus.OK_200)
+                     .entity(result.setData(true))
+                     .build();
     } catch (JsonProcessingException e) {
-      throw new WebApplicationException(e);
+      return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500)
+                     .entity(result.setMessage(String.format("JsonProcessingException: %s", e)))
+                     .build();
     }
   }
 
