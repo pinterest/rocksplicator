@@ -29,8 +29,8 @@ public class Result<T> {
   private String message;
   private T data;
 
-  public Result(){
-  	this.message = "";
+  public Result() {
+    this.message = "";
     this.data = null;
   }
 
