@@ -149,10 +149,10 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
               segment.getNumShards(), shardCount.size()));
     }
 
-    Map<Integer, Integer> badShards = new HashMap<>();
+    Map<String, Integer> badShards = new HashMap<>();
     for (Map.Entry<Integer, Integer> entry : shardCount.entrySet()) {
       if (entry.getValue() != numReplicas) {
-        badShards.put(entry.getKey(), entry.getValue());
+        badShards.put(segment.getName() + entry.getKey(), entry.getValue());
       }
     }
 
