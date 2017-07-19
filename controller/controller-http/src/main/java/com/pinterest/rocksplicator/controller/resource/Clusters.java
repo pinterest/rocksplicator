@@ -138,7 +138,7 @@ public class Clusters {
    * @param newHostOp   (optional) new host to add, in the format of ip:port
    */
   @POST
-  @Path("/replaceHost/{clusterName : [a-zA-Z0-9\\\\-_]+}")
+  @Path("/replaceHost/{clusterName : [a-zA-Z0-9\\-_]+}")
   public void replaceHost(@PathParam("clusterName") String clusterName,
                           @NotEmpty @QueryParam("oldHost") String oldHostString,
                           @QueryParam("newHost") Optional<String> newHostOp) {
@@ -234,7 +234,7 @@ public class Clusters {
    * @throws Exception
    */
   @POST
-  @Path("/logging/{clusterName : [a-zA-Z0-9\\\\-_]+}")
+  @Path("/logging/{clusterName : [a-zA-Z0-9\\-_]+}")
   public void sendLogTask(@PathParam("clusterName") String clusterName,
                           @NotEmpty @QueryParam("message") String message) {
     try {
@@ -253,7 +253,7 @@ public class Clusters {
    * @param replicas If not specified, use default number of 3.
    */
   @POST
-  @Path("/healthcheck/{clusterName : [a-zA-Z0-9\\\\-_]+}")
+  @Path("/healthcheck/{clusterName : [a-zA-Z0-9\\-_]+}")
   public void healthcheck(@PathParam("clusterName") String clusterName,
                           @QueryParam("interval") Optional<Integer> intervalSeconds,
                           @QueryParam("replica") Optional<Integer> replicas) {
