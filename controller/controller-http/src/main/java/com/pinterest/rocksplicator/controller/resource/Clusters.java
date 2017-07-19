@@ -87,15 +87,19 @@ public class Clusters {
     } catch (Exception e) {
       String message = String.format("Failed to read from zookeeper: %s", e);
       LOG.error(message);
-      result.setMessage(message);
-      return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500).entity(result).build();
+      return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500)
+                     .entity(result.setMessage(message))
+                     .build();
     }
     if (clusterBean == null) {
-      result.setMessage(String.format("Znode %s does not exist or failed to parse config", clusterName));
-      return Response.status(HttpStatus.BAD_REQUEST_400).entity(result).build();
+      String message = String.format("Znode %s does not exist or failed to parse config", clusterName);
+      return Response.status(HttpStatus.BAD_REQUEST_400)
+                     .entity(result.setMessage(message))
+                     .build();
     }
-    result.setData(clusterBean);
-    return Response.status(HttpStatus.OK_200).entity(result).build();
+    return Response.status(HttpStatus.OK_200)
+                   .entity(result.setData(clusterBean))
+                   .build();
   }
 
   /**
@@ -119,9 +123,9 @@ public class Clusters {
     } catch (Exception e) {
       String message = String.format("Failed to read from zookeeper: %s", e);
       LOG.error(message);
-      result.setMessage(message);
-      result.setData(null);
-      return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500).entity(result).build();
+      return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500)
+                     .entity(result.setMessage(message).setData(null))
+                     .build();
     }
     return Response.status(HttpStatus.OK_200).entity(result).build();
   }
@@ -140,12 +144,14 @@ public class Clusters {
     boolean created = taskQueue.createCluster(clusterName);
     Result<Boolean> result = new Result<Boolean>();
     if (created) {
-      result.setData(true);
-      return Response.status(HttpStatus.OK_200).entity(result).build();
+      return Response.status(HttpStatus.OK_200)
+                     .entity(result.setData(true))
+                     .build();
     }else {
-      result.setData(false);
-      result.setMessage(String.format("Cluster %s is already existed", clusterName));
-      return Response.status(HttpStatus.BAD_REQUEST_400).entity(result).build();
+      String message = String.format("Cluster %s is already existed", clusterName);
+      return Response.status(HttpStatus.BAD_REQUEST_400)
+                     .entity(result.setData(false).setMessage(message))
+                     .build();
     }
   }
 
@@ -169,8 +175,9 @@ public class Clusters {
     //TODO(angxu) support adding random new host later
     Result<Boolean> result = new Result<Boolean>(false);
     if (!newHostOp.isPresent()) {
-      result.setMessage("method not implemented");
-      return Response.status(HttpStatus.BAD_REQUEST_400).entity(result).build();
+      return Response.status(HttpStatus.BAD_REQUEST_400)
+                     .entity(result.setMessage("method not implemented"))
+                     .build();
     }
 
     try {
@@ -194,11 +201,14 @@ public class Clusters {
           .getEntity();
 
       taskQueue.enqueueTask(task, clusterName, 0);
-      result.setData(true);
-      return Response.status(HttpStatus.OK_200).entity(result).build();
+      return Response.status(HttpStatus.OK_200)
+                     .entity(result.setData(true))
+                     .build();
     } catch (JsonProcessingException e) {
-      result.setMessage(String.format("JsonProcessingException: %s", e));
-      return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500).entity(result).build();
+      String message = String.format("JsonProcessingException: %s", e);
+      return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500)
+                     .entity(result.setMessage(message))
+                     .build();
     }
   }
 
@@ -226,11 +236,14 @@ public class Clusters {
       TaskBase task = new LoadSSTTask(segmentName, s3Bucket, s3Prefix,
           concurrency.orElse(20), rateLimit.orElse(64)).getEntity();
       taskQueue.enqueueTask(task, clusterName, 0);
-      result.setData(true);
-      return Response.status(HttpStatus.OK_200).entity(result).build();
+      return Response.status(HttpStatus.OK_200)
+                     .entity(result.setData(true))
+                     .build();
     } catch (JsonProcessingException e) {
-      result.setMessage(String.format("JsonProcessingException: %s", e));
-      return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500).entity(result).build();
+      String message = String.format("JsonProcessingException: %s", e);
+      return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500)
+                     .entity(result.setMessage(message))
+                     .build();
     }
   }
 
@@ -249,11 +262,14 @@ public class Clusters {
     boolean locked = taskQueue.lockCluster(clusterName);
     Result<Boolean> result = new Result<Boolean>(false);
     if (locked) {
-      result.setData(true);
-      return Response.status(HttpStatus.OK_200).entity(result).build();
+      return Response.status(HttpStatus.OK_200)
+                     .entity(result.setData(true))
+                     .build();
     }else {
-      result.setMessage(String.format("Cluster %s is already locked, cannot double lock", clusterName));
-      return Response.status(HttpStatus.BAD_REQUEST_400).entity(result).build();
+      String message = String.format("Cluster %s is already locked, cannot double lock", clusterName);
+      return Response.status(HttpStatus.BAD_REQUEST_400)
+                     .entity(result.setMessage(message))
+                     .build();
     }
   }
 
@@ -270,11 +286,14 @@ public class Clusters {
     boolean unlocked = taskQueue.unlockCluster(clusterName);
     Result<Boolean> result = new Result<Boolean>(false);
     if (unlocked) {
-      result.setData(true);
-      return Response.status(HttpStatus.OK_200).entity(result).build();
+      return Response.status(HttpStatus.OK_200)
+                     .entity(result.setData(true))
+                     .build();
     }else {
-      result.setMessage(String.format("Cluster %s is not created yet", clusterName));
-      return Response.status(HttpStatus.BAD_REQUEST_400).entity(result).build();
+      String message = String.format("Cluster %s is not created yet", clusterName);
+      return Response.status(HttpStatus.BAD_REQUEST_400)
+                     .entity(result.setMessage(message))
+                     .build();
     }
   }
 
@@ -293,11 +312,13 @@ public class Clusters {
     try {
       TaskBase task = new LoggingTask(message).getEntity();
       taskQueue.enqueueTask(task, clusterName, 0);
-      result.setData(true);
-      return Response.status(HttpStatus.OK_200).entity(result).build();
+      return Response.status(HttpStatus.OK_200)
+                     .entity(result.setData(true))
+                     .build();
     } catch (JsonProcessingException e) {
-      result.setMessage(String.format("JsonProcessingException: %s", e));
-      return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500).entity(result).build();
+      return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500)
+                     .entity(result.setMessage(String.format("JsonProcessingException: %s", e)))
+                     .build();
     }
   }
 

@@ -59,8 +59,10 @@ public class Tasks {
     Task task = taskQueue.findTask(id);
     Result<Task> result = new Result<Task>(task);
     if (task == null) {
-      result.setMessage(String.format("Task %s cannot be found", id));
-      return Response.status(HttpStatus.BAD_REQUEST_400).entity(result).build();
+      String message = String.format("Task %s cannot be found", id);
+      return Response.status(HttpStatus.BAD_REQUEST_400)
+                     .entity(result.setMessage(message))
+                     .build();
     }else {
       return Response.status(HttpStatus.OK_200).entity(result).build();
     }
