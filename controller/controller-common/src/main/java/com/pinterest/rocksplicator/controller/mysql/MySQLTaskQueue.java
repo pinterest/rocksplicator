@@ -349,13 +349,13 @@ public class MySQLTaskQueue implements TaskQueue {
     return entity.getId();
   }
 
-  @Override
-  public boolean finishTaskAndEnqueuePendingTask(final long id,
-                                                 final String output,
-                                                 final TaskBase newTaskBase,
-                                                 final int runDelaySeconds) {
+  private boolean ackTaskAndEnqueuePendingTask(final long id,
+                                               final String output,
+                                               final TaskBase newTaskBase,
+                                               final int runDelaySeconds,
+                                               TaskState ackState) {
     beginTransaction();
-    String clusterName = ackTask(id, output, TaskState.DONE, true);
+    String clusterName = ackTask(id, output, ackState, true);
     if (clusterName == null) {
       return false;
     }
@@ -366,6 +366,23 @@ public class MySQLTaskQueue implements TaskQueue {
     }
     getEntityManager().getTransaction().commit();
     return true;
+  }
+
+
+  @Override
+  public boolean finishTaskAndEnqueuePendingTask(final long id,
+                                                 final String output,
+                                                 final TaskBase newTaskBase,
+                                                 final int runDelaySeconds) {
+    return ackTaskAndEnqueuePendingTask(id, output, newTaskBase, runDelaySeconds, TaskState.DONE);
+  }
+
+  @Override
+  public boolean failTaskAndEnqueuePendingTask(final long id,
+                                               final String output,
+                                               final TaskBase newTaskBase,
+                                               final int runDelaySeconds) {
+    return ackTaskAndEnqueuePendingTask(id, output, newTaskBase, runDelaySeconds, TaskState.FAILED);
   }
 
   @Override

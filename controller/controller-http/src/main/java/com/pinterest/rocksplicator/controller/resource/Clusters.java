@@ -138,7 +138,7 @@ public class Clusters {
    * @param newHostOp   (optional) new host to add, in the format of ip:port
    */
   @POST
-  @Path("/replaceHost/{clusterName : [a-zA-Z0-9\\\\-_]+}")
+  @Path("/replaceHost/{clusterName : [a-zA-Z0-9\\-_]+}")
   public void replaceHost(@PathParam("clusterName") String clusterName,
                           @NotEmpty @QueryParam("oldHost") String oldHostString,
                           @QueryParam("newHost") Optional<String> newHostOp) {
@@ -234,7 +234,7 @@ public class Clusters {
    * @throws Exception
    */
   @POST
-  @Path("/logging/{clusterName : [a-zA-Z0-9\\\\-_]+}")
+  @Path("/logging/{clusterName : [a-zA-Z0-9\\-_]+}")
   public void sendLogTask(@PathParam("clusterName") String clusterName,
                           @NotEmpty @QueryParam("message") String message) {
     try {
@@ -244,6 +244,30 @@ public class Clusters {
       throw new WebApplicationException(e);
     }
   }
+
+
+  /**
+   * Send a healthcehck task to a cluster.
+   * @param clusterName
+   * @param intervalSeconds If not specified, it's a one-off task, otherwise the task is repeatable.
+   * @param replicas If not specified, use default number of 3.
+   */
+  @POST
+  @Path("/healthcheck/{clusterName : [a-zA-Z0-9\\-_]+}")
+  public void healthcheck(@PathParam("clusterName") String clusterName,
+                          @QueryParam("interval") Optional<Integer> intervalSeconds,
+                          @QueryParam("replica") Optional<Integer> replicas) {
+    try {
+      HealthCheckTask.Param param = new HealthCheckTask.Param()
+          .setIntervalSeconds(intervalSeconds.orElse(0))
+          .setNumReplicas(replicas.orElse(3));
+      TaskBase healthCheckTask = new HealthCheckTask(param).getEntity();
+      taskQueue.enqueueTask(healthCheckTask, clusterName, 0);
+    } catch (JsonProcessingException e) {
+      throw new WebApplicationException(e);
+    }
+  }
+
 
 
   private ClusterBean checkExistenceAndGetClusterBean(String clusterName) throws Exception {
@@ -258,4 +282,5 @@ public class Clusters {
     }
     return clusterBean;
   }
+
 }

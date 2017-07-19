@@ -16,6 +16,7 @@
             <outputDirectory>config</outputDirectory>
             <includes>
                 <include>*.properties</include>
+                <include>*.xml</include>
             </includes>
         </fileSet>
         <fileSet>

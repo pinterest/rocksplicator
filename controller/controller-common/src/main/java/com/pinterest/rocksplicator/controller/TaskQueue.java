@@ -84,6 +84,21 @@ public interface TaskQueue {
   }
 
   /**
+   * Atomically ack the task queue that the task has failed, and enqueue a new task.
+   * @param id which task to finish
+   * @param output output of the finished task
+   * @param taskBase the task entity of the task to enqueue
+   * @param runDelaySeconds the run delay seconds for the task to enqueue
+   * @return false on error
+   */
+  default boolean failTaskAndEnqueuePendingTask(final long id,
+                                                final String output,
+                                                final TaskBase taskBase,
+                                                final int runDelaySeconds) {
+    return true;
+  }
+
+  /**
    * Atomically finish a task, and enqueue a new task associated with the same cluster as task(id).
    * The newly enqueued task if of priority 0 and in running state.
    * @param id which task to finish
