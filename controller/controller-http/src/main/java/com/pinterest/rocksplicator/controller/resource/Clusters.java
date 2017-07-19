@@ -141,6 +141,19 @@ public class Clusters {
   }
 
   /**
+   * Remove a given cluster. This may include removing designated tag
+   * in DB and/or writing shard config to zookeeper.
+   *
+   * @param clusterName name of the cluster
+   */
+  @POST
+  @Path("/remove/{clusterName : [a-zA-Z0-9\\-_]+}")
+  @Produces(MediaType.APPLICATION_JSON)
+  public boolean remove(@PathParam("clusterName") String clusterName) {
+    return taskQueue.removeCluster(clusterName);
+  }
+
+  /**
    * Replaces a host in a given cluster with a new one. If new host is provided
    * in the query parameter, that host will be used to replace the old one.
    * Otherwise, controller will randomly pick one for the user.
