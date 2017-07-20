@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.resource;
 
+import com.google.common.collect.ImmutableMap;
 import com.pinterest.rocksplicator.controller.Task;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 import com.pinterest.rocksplicator.controller.bean.TaskState;
@@ -30,7 +31,6 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
@@ -56,12 +56,11 @@ public class Tasks {
   @Path("/{id : [0-9]+}")
   @Produces(MediaType.APPLICATION_JSON)
   public Response get(@PathParam("id") Long id) {
-    Task task = taskQueue.findTask(id);
-    Result<Task> result = new Result<Task>(task);
-    if (task == null) {
+    Task result = taskQueue.findTask(id);
+    if (result == null) {
       String message = String.format("Task %s cannot be found", id);
-      return Response.status(HttpStatus.BAD_REQUEST_400)
-                     .entity(result.setMessage(message))
+      return Response.status(HttpStatus.NOT_FOUND_404)
+                     .entity(ImmutableMap.of("message", message))
                      .build();
     }else {
       return Response.status(HttpStatus.OK_200).entity(result).build();
@@ -80,9 +79,8 @@ public class Tasks {
   @Produces(MediaType.APPLICATION_JSON)
   public Response findTasks(@QueryParam("clusterName") Optional<String> clusterName,
                               @QueryParam("state") Optional<TaskState> state) {
-    List<Task> queryResult = taskQueue.peekTasks(clusterName.orElse(null),
+    List<Task> result = taskQueue.peekTasks(clusterName.orElse(null),
                                             state.map(TaskState::intValue).orElse(null));
-    Result<List<Task>> result = new Result<List<Task>>(queryResult);
     return Response.status(HttpStatus.OK_200).entity(result).build();
   }
 

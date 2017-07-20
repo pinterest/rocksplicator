@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.resource;
 
+import com.google.common.collect.ImmutableMap;
 import com.pinterest.rocksplicator.controller.TaskBase;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
@@ -47,7 +48,6 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
@@ -81,24 +81,23 @@ public class Clusters {
   @Produces(MediaType.APPLICATION_JSON)
   public Response get(@PathParam("clusterName") String clusterName) {
     final ClusterBean clusterBean;
-    Result<ClusterBean> result = new Result<ClusterBean>(null);
     try {
       clusterBean = checkExistenceAndGetClusterBean(clusterName);
     } catch (Exception e) {
       String message = String.format("Failed to read from zookeeper: %s", e);
       LOG.error(message);
       return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500)
-                     .entity(result.setMessage(message))
+                     .entity(ImmutableMap.of("message", message))
                      .build();
     }
     if (clusterBean == null) {
       String message = String.format("Znode %s does not exist or failed to parse config", clusterName);
       return Response.status(HttpStatus.BAD_REQUEST_400)
-                     .entity(result.setMessage(message))
+                     .entity(ImmutableMap.of("message", message))
                      .build();
     }
     return Response.status(HttpStatus.OK_200)
-                   .entity(result.setData(clusterBean))
+                   .entity(clusterBean)
                    .build();
   }
 
@@ -112,7 +111,6 @@ public class Clusters {
   public Response getAll() {
     final Set<String> clusters = taskQueue.getAllClusters();
     final List<ClusterBean> clusterBeans = new ArrayList<>(clusters.size());
-    Result<List<ClusterBean>> result = new Result<List<ClusterBean>>(clusterBeans);
     try {
       for (String cluster : clusters) {
         ClusterBean clusterBean = checkExistenceAndGetClusterBean(cluster);
@@ -124,10 +122,10 @@ public class Clusters {
       String message = String.format("Failed to read from zookeeper: %s", e);
       LOG.error(message);
       return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500)
-                     .entity(result.setMessage(message).setData(null))
+                     .entity(ImmutableMap.of("message", message))
                      .build();
     }
-    return Response.status(HttpStatus.OK_200).entity(result).build();
+    return Response.status(HttpStatus.OK_200).entity(clusterBeans).build();
   }
 
   /**
@@ -142,15 +140,14 @@ public class Clusters {
   public Response initialize(@PathParam("clusterName") String clusterName) {
     // Create directly, we dont
     boolean created = taskQueue.createCluster(clusterName);
-    Result<Boolean> result = new Result<Boolean>();
     if (created) {
       return Response.status(HttpStatus.OK_200)
-                     .entity(result.setData(true))
+                     .entity(ImmutableMap.of("data", true))
                      .build();
     }else {
       String message = String.format("Cluster %s is already existed", clusterName);
       return Response.status(HttpStatus.BAD_REQUEST_400)
-                     .entity(result.setData(false).setMessage(message))
+                     .entity(ImmutableMap.of("message", message))
                      .build();
     }
   }
@@ -173,10 +170,9 @@ public class Clusters {
                           @QueryParam("newHost") Optional<String> newHostOp) {
 
     //TODO(angxu) support adding random new host later
-    Result<Boolean> result = new Result<Boolean>(false);
     if (!newHostOp.isPresent()) {
       return Response.status(HttpStatus.BAD_REQUEST_400)
-                     .entity(result.setMessage("method not implemented"))
+                     .entity(ImmutableMap.of("message", "method not implemented"))
                      .build();
     }
 
@@ -202,12 +198,12 @@ public class Clusters {
 
       taskQueue.enqueueTask(task, clusterName, 0);
       return Response.status(HttpStatus.OK_200)
-                     .entity(result.setData(true))
+                     .entity(ImmutableMap.of("data", true))
                      .build();
     } catch (JsonProcessingException e) {
       String message = String.format("JsonProcessingException: %s", e);
       return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500)
-                     .entity(result.setMessage(message))
+                     .entity(ImmutableMap.of("message", message))
                      .build();
     }
   }
@@ -231,18 +227,17 @@ public class Clusters {
                        @NotEmpty @QueryParam("s3Prefix") String s3Prefix,
                        @QueryParam("concurrency") Optional<Integer> concurrency,
                        @QueryParam("rateLimit") Optional<Integer> rateLimit) {
-    Result<Boolean> result = new Result<Boolean>(false);
     try {
       TaskBase task = new LoadSSTTask(segmentName, s3Bucket, s3Prefix,
           concurrency.orElse(20), rateLimit.orElse(64)).getEntity();
       taskQueue.enqueueTask(task, clusterName, 0);
       return Response.status(HttpStatus.OK_200)
-                     .entity(result.setData(true))
+                     .entity(ImmutableMap.of("data", true))
                      .build();
     } catch (JsonProcessingException e) {
       String message = String.format("JsonProcessingException: %s", e);
       return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500)
-                     .entity(result.setMessage(message))
+                     .entity(ImmutableMap.of("message", message))
                      .build();
     }
   }
@@ -260,15 +255,14 @@ public class Clusters {
   @Produces(MediaType.APPLICATION_JSON)
   public Response lock(@PathParam("clusterName") String clusterName) {
     boolean locked = taskQueue.lockCluster(clusterName);
-    Result<Boolean> result = new Result<Boolean>(false);
     if (locked) {
       return Response.status(HttpStatus.OK_200)
-                     .entity(result.setData(true))
+                     .entity(ImmutableMap.of("data", true))
                      .build();
     }else {
       String message = String.format("Cluster %s is already locked, cannot double lock", clusterName);
       return Response.status(HttpStatus.BAD_REQUEST_400)
-                     .entity(result.setMessage(message))
+                     .entity(ImmutableMap.of("message", message))
                      .build();
     }
   }
@@ -284,15 +278,14 @@ public class Clusters {
   @Produces(MediaType.APPLICATION_JSON)
   public Response unlock(@PathParam("clusterName") String clusterName) {
     boolean unlocked = taskQueue.unlockCluster(clusterName);
-    Result<Boolean> result = new Result<Boolean>(false);
     if (unlocked) {
       return Response.status(HttpStatus.OK_200)
-                     .entity(result.setData(true))
+                     .entity(ImmutableMap.of("data", true))
                      .build();
     }else {
       String message = String.format("Cluster %s is not created yet", clusterName);
       return Response.status(HttpStatus.BAD_REQUEST_400)
-                     .entity(result.setMessage(message))
+                     .entity(ImmutableMap.of("message", message))
                      .build();
     }
   }
@@ -308,16 +301,15 @@ public class Clusters {
   @Produces(MediaType.APPLICATION_JSON)
   public Response sendLogTask(@PathParam("clusterName") String clusterName,
                           @NotEmpty @QueryParam("message") String message) {
-    Result<Boolean> result = new Result<Boolean>(false);
     try {
       TaskBase task = new LoggingTask(message).getEntity();
       taskQueue.enqueueTask(task, clusterName, 0);
       return Response.status(HttpStatus.OK_200)
-                     .entity(result.setData(true))
+                     .entity(ImmutableMap.of("data", true))
                      .build();
     } catch (JsonProcessingException e) {
       return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500)
-                     .entity(result.setMessage(String.format("JsonProcessingException: %s", e)))
+                     .entity(ImmutableMap.of("message", e))
                      .build();
     }
   }
@@ -335,7 +327,6 @@ public class Clusters {
   public Response healthcheck(@PathParam("clusterName") String clusterName,
                           @QueryParam("interval") Optional<Integer> intervalSeconds,
                           @QueryParam("replica") Optional<Integer> replicas) {
-    Result<Boolean> result = new Result<Boolean>(false);
     try {
       HealthCheckTask.Param param = new HealthCheckTask.Param()
           .setIntervalSeconds(intervalSeconds.orElse(0))
@@ -343,11 +334,11 @@ public class Clusters {
       TaskBase healthCheckTask = new HealthCheckTask(param).getEntity();
       taskQueue.enqueueTask(healthCheckTask, clusterName, 0);
       return Response.status(HttpStatus.OK_200)
-                     .entity(result.setData(true))
+                     .entity(ImmutableMap.of("data", true))
                      .build();
     } catch (JsonProcessingException e) {
       return Response.status(HttpStatus.INTERNAL_SERVER_ERROR_500)
-                     .entity(result.setMessage(String.format("JsonProcessingException: %s", e)))
+                     .entity(ImmutableMap.of("message", e))
                      .build();
     }
   }
