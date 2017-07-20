@@ -130,7 +130,7 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
       } else {
         ctx.getTaskQueue().failTask(ctx.getId(), errorMessage);
       }
-      emailSender.sendEmail("Healthcheck Failed for" + clusterName, errorMessage);
+      emailSender.sendEmail("Healthcheck Failed for " + clusterName, errorMessage);
     }
   }
 

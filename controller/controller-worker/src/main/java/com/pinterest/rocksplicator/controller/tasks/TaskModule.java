@@ -45,5 +45,6 @@ public class TaskModule extends AbstractModule {
   protected void configure() {
     bind(CuratorFramework.class).toInstance(zkClient);
     bind(AdminClientFactory.class).toInstance(adminClientFactory);
+    bind(EmailSender.class).toInstance(emailSender);
   }
 }
