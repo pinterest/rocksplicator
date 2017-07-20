@@ -91,7 +91,7 @@ public class Clusters {
     }
     if (clusterBean == null) {
       String message = String.format("Znode %s does not exist or failed to parse config", clusterName);
-      return Response.status(HttpStatus.BAD_REQUEST_400)
+      return Response.status(HttpStatus.NOT_FOUND_404)
                      .entity(ImmutableMap.of("message", message))
                      .build();
     }
