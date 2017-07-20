@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableMap;
 import com.pinterest.rocksplicator.controller.Task;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 import com.pinterest.rocksplicator.controller.bean.TaskState;
-import com.pinterest.rocksplicator.controller.util.Result;
 
 import org.eclipse.jetty.http.HttpStatus;
 

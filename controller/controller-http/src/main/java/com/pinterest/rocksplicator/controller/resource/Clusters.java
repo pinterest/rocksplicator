@@ -29,7 +29,6 @@ import com.pinterest.rocksplicator.controller.tasks.LoggingTask;
 import com.pinterest.rocksplicator.controller.tasks.PromoteTask;
 import com.pinterest.rocksplicator.controller.tasks.RebalanceTask;
 import com.pinterest.rocksplicator.controller.tasks.RemoveHostTask;
-import com.pinterest.rocksplicator.controller.util.Result;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import org.apache.curator.framework.CuratorFramework;
