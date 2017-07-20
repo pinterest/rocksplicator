@@ -556,7 +556,7 @@ void AdminHandler::async_tm_clearDB(
 }
 
 inline bool should_new_s3_client(
-  const common::S3Util& s3_util, AddS3SstFilesToDBRequest* request) {
+    const common::S3Util& s3_util, AddS3SstFilesToDBRequest* request) {
   return s3_util.getBucket() != request->s3_bucket ||
          s3_util.getRateLimit() != request->s3_download_limit_mb;
 }
