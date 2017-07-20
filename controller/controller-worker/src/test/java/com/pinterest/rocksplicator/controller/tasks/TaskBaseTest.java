@@ -22,6 +22,7 @@ import static org.mockito.Mockito.when;
 import com.pinterest.rocksdb_admin.thrift.Admin;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
+import com.pinterest.rocksplicator.controller.util.EmailSender;
 import com.pinterest.rocksplicator.controller.util.ZKUtil;
 
 import com.google.inject.Guice;
@@ -55,6 +56,7 @@ public abstract class TaskBaseTest {
 
   protected TestingServer zkServer;
   protected CuratorFramework zkClient;
+  protected EmailSender emailSender;
   protected Injector injector;
 
   @Mock protected Admin.Client client;
@@ -73,8 +75,9 @@ public abstract class TaskBaseTest {
 
     zkClient.createContainers(ZKUtil.getClusterConfigZKPath(CLUSTER));
     zkClient.setData().forPath(ZKUtil.getClusterConfigZKPath(CLUSTER), CONFIG.getBytes());
+    emailSender = new EmailSender("", "");
 
-    TaskModule module = new TaskModule(zkClient, clientFactory);
+    TaskModule module = new TaskModule(zkClient, clientFactory, emailSender);
     injector = Guice.createInjector(module);
 
     // mock client factory

@@ -21,6 +21,7 @@ import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.bean.SegmentBean;
 import com.pinterest.rocksplicator.controller.bean.ShardBean;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
+import com.pinterest.rocksplicator.controller.util.EmailSender;
 import com.pinterest.rocksplicator.controller.util.ZKUtil;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -55,6 +56,9 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
 
   @Inject
   private AdminClientFactory clientFactory;
+
+  @Inject
+  private EmailSender emailSender;
 
   /**
    * Construct a new HealthCheckTask with number of replicas equals to 3
@@ -105,6 +109,7 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
         } else {
           ctx.getTaskQueue().failTask(ctx.getId(),errorMessage);
         }
+        emailSender.sendEmail("Healthcheck Failed for " + clusterName, errorMessage);
         return;
       }
 
@@ -125,6 +130,7 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
       } else {
         ctx.getTaskQueue().failTask(ctx.getId(), errorMessage);
       }
+      emailSender.sendEmail("Healthcheck Failed for" + clusterName, errorMessage);
     }
   }
 

@@ -17,6 +17,7 @@
 package com.pinterest.rocksplicator.controller.tasks;
 
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
+import com.pinterest.rocksplicator.controller.util.EmailSender;
 
 import com.google.inject.AbstractModule;
 import org.apache.curator.framework.CuratorFramework;
@@ -30,11 +31,14 @@ public class TaskModule extends AbstractModule {
 
   private final CuratorFramework zkClient;
   private final AdminClientFactory adminClientFactory;
+  private final EmailSender emailSender;
 
   public TaskModule(CuratorFramework zkClient,
-                    AdminClientFactory adminClientFactory) {
+                    AdminClientFactory adminClientFactory,
+                    EmailSender emailSender) {
     this.zkClient = zkClient;
     this.adminClientFactory = adminClientFactory;
+    this.emailSender = emailSender;
   }
 
   @Override
