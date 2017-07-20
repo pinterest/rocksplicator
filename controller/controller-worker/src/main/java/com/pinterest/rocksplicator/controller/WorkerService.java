@@ -19,6 +19,7 @@ import com.pinterest.rocksplicator.controller.mysql.MySQLTaskQueue;
 import com.pinterest.rocksplicator.controller.tasks.TaskFactory;
 import com.pinterest.rocksplicator.controller.tasks.TaskModule;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
+import com.pinterest.rocksplicator.controller.util.EmailSender;
 import com.pinterest.rocksplicator.controller.util.ShutdownHook;
 
 import com.google.inject.Guice;
@@ -28,8 +29,6 @@ import org.apache.curator.retry.RetryOneTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -63,9 +62,10 @@ public class WorkerService {
       zkClient.start();
 
       AdminClientFactory adminClientFactory = new AdminClientFactory(30);
-
+      EmailSender emailSender = new EmailSender(WorkerConfig.getSenderEmailAddress(),
+          WorkerConfig.getReceiverEmailAddress());
       TaskFactory.setInjector(Guice.createInjector(
-          new TaskModule(zkClient, adminClientFactory)
+          new TaskModule(zkClient, adminClientFactory, emailSender)
       ));
 
       int workerPoolSize = WorkerConfig.getWorkerPoolSize();

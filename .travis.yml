@@ -26,4 +26,4 @@ matrix:
         - tar xfz thrift-0.9.1.tar.gz
         - cd thrift-0.9.1 && ./configure --with-cpp=no --with-c_glib=no --with-java=yes --with-python=no --with-ruby=no --with-erlang=no --with-go=no --with-nodejs=no --with-php=no && sudo make install
       script:
-        - cd ../controller; mvn clean package -DskipTests
+        - cd ../controller; mvn clean package -DskipTests # if you want to test:  mvn "-DfailIfNoTests=false" test

@@ -43,6 +43,8 @@ public final class WorkerConfig {
   private static final String JDBC_URL_KEY = "jdbc_url";
   private static final String MYSQL_USER_KEY = "mysql_user";
   private static final String MYSQL_PASSWORD_KEY = "mysql_password";
+  private static final String SENDER_EMAIL_ADDRESS_KEY = "sender_email";
+  private static final String RECEIVER_EMAIL_ADDRESS_KEY = "receiver_email";
 
   private static final String DEFAULT_ZK_PATH = "/config/services/rocksdb/";
   private static final String DEFAULT_ZK_ENDPOINTS = "observerzookeeper010:2181";
@@ -51,6 +53,9 @@ public final class WorkerConfig {
   private static final String DEFAULT_JDBC_URL = "jdbc:mysql://localhost:3306/controller";
   private static final String DEFAULT_MYSQL_USER = "root";
   private static final String DEFAULT_MYSQL_PASSWORD = "";
+  private static final String DEFAULT_SENDER_EMAIL_ADDRESS = "";
+  private static final String DEFAULT_RECEIVER_EMAIL_ADDRESS = "";
+
 
   private static String HOST_NAME;
   private static PropertiesConfiguration configuration;
@@ -115,4 +120,15 @@ public final class WorkerConfig {
                                                            DEFAULT_MYSQL_PASSWORD);
   }
 
+  public static String getSenderEmailAddress() {
+    return configuration == null ? DEFAULT_SENDER_EMAIL_ADDRESS :
+                                   configuration.getString(SENDER_EMAIL_ADDRESS_KEY,
+                                                           DEFAULT_SENDER_EMAIL_ADDRESS);
+  }
+
+  public static String getReceiverEmailAddress() {
+    return configuration == null ? DEFAULT_RECEIVER_EMAIL_ADDRESS :
+                                   configuration.getString(RECEIVER_EMAIL_ADDRESS_KEY,
+                                                           DEFAULT_RECEIVER_EMAIL_ADDRESS);
+  }
 }
