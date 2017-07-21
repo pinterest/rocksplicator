@@ -169,6 +169,7 @@ class Stats {
                     std::chrono::seconds time_epoch_seconds);
 
   Stats();
+  ~Stats();
 
   LocalStats* GetLocalStats();
 
@@ -191,6 +192,9 @@ class Stats {
   static std::atomic<uint32_t> nSecondsPerMin_;
   static std::atomic<const std::vector<std::string>*> counter_names_;
   static std::atomic<const std::vector<std::string>*> metric_names_;
+
+  std::thread flush_thread_;
+  std::atomic<bool> should_stop_;
 };
 
 }  // namespace common
