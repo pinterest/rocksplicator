@@ -232,8 +232,7 @@ public class Clusters {
   @Path("/lock/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
   public Response lock(@PathParam("clusterName") String clusterName) {
-    boolean locked = taskQueue.lockCluster(clusterName);
-    if (locked) {
+    if (taskQueue.lockCluster(clusterName)) {
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } else {
       String message = String.format("Cluster %s is already locked, cannot double lock", clusterName);
