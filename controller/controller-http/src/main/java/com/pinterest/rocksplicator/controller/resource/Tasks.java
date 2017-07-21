@@ -60,7 +60,7 @@ public class Tasks {
     if (result == null) {
       String message = String.format("Task %s cannot be found", id);
       return Utils.buildResponse(HttpStatus.NOT_FOUND_404, ImmutableMap.of("message", message));
-    }else {
+    } else {
       return Utils.buildResponse(HttpStatus.OK_200, result);
     }
   }
