@@ -16,11 +16,12 @@
 
 package com.pinterest.rocksplicator.controller.resource;
 
-import com.google.common.collect.ImmutableMap;
 import com.pinterest.rocksplicator.controller.Task;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 import com.pinterest.rocksplicator.controller.bean.TaskState;
+import com.pinterest.rocksplicator.controller.Utils;
 
+import com.google.common.collect.ImmutableMap;
 import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.List;
@@ -58,11 +59,9 @@ public class Tasks {
     Task result = taskQueue.findTask(id);
     if (result == null) {
       String message = String.format("Task %s cannot be found", id);
-      return Response.status(HttpStatus.NOT_FOUND_404)
-                     .entity(ImmutableMap.of("message", message))
-                     .build();
+      return Utils.buildResponse(HttpStatus.NOT_FOUND_404, ImmutableMap.of("message", message));
     }else {
-      return Response.status(HttpStatus.OK_200).entity(result).build();
+      return Utils.buildResponse(HttpStatus.OK_200, result);
     }
   }
 
@@ -80,7 +79,7 @@ public class Tasks {
                               @QueryParam("state") Optional<TaskState> state) {
     List<Task> result = taskQueue.peekTasks(clusterName.orElse(null),
                                             state.map(TaskState::intValue).orElse(null));
-    return Response.status(HttpStatus.OK_200).entity(result).build();
+    return Utils.buildResponse(HttpStatus.OK_200, result);
   }
 
 }
