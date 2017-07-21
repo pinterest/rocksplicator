@@ -302,7 +302,8 @@ void Stats::init(const std::vector<string>* counter_names,
   metric_names_.store(metric_names);
 }
 
-Stats::Stats() : flush_interval_(kFlushIntervalMS) {
+Stats::Stats() : flush_interval_(kFlushIntervalMS)
+               , should_stop_(false) {
   auto num_metrics = GetArraySize(metric_names_.load());
   if (num_metrics > 0) {
     for (uint32_t i = 0; i < num_metrics; ++i) {
@@ -320,8 +321,8 @@ Stats::Stats() : flush_interval_(kFlushIntervalMS) {
   }
 
     // Start flush thread.
-  thread flush_thread([this] {
-    while (true) {
+  flush_thread_ = thread([this] {
+    while (!should_stop_) {
       sleep_for(this->flush_interval_);
       // Note that this object blocks creation of new thread local objects until
       // it is destroyed.
@@ -331,7 +332,11 @@ Stats::Stats() : flush_interval_(kFlushIntervalMS) {
       }
     }
   });
-  flush_thread.detach();
+}
+
+Stats::~Stats() {
+  should_stop_.store(true);
+  flush_thread_.join();
 }
 
 void Stats::Incr(const uint32_t counter, uint64_t value) {
