@@ -28,8 +28,10 @@ import com.pinterest.rocksplicator.controller.tasks.LoggingTask;
 import com.pinterest.rocksplicator.controller.tasks.PromoteTask;
 import com.pinterest.rocksplicator.controller.tasks.RebalanceTask;
 import com.pinterest.rocksplicator.controller.tasks.RemoveHostTask;
+import com.pinterest.rocksplicator.controller.Utils;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.google.common.collect.ImmutableMap;
 import org.apache.curator.framework.CuratorFramework;
 import org.eclipse.jetty.http.HttpStatus;
 import org.hibernate.validator.constraints.NotEmpty;
@@ -46,8 +48,8 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
-import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
 /**
  * @author Ang Xu (angxu@pinterest.com)
@@ -77,18 +79,20 @@ public class Clusters {
   @GET
   @Path("/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public ClusterBean get(@PathParam("clusterName") String clusterName) {
+  public Response get(@PathParam("clusterName") String clusterName) {
     final ClusterBean clusterBean;
     try {
       clusterBean = checkExistenceAndGetClusterBean(clusterName);
     } catch (Exception e) {
-      LOG.error("Failed to read from zookeeper.", e);
-      throw new WebApplicationException(e);
+      String message = String.format("Failed to read from zookeeper: %s", e);
+      LOG.error(message);
+      return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500, ImmutableMap.of("message", message));
     }
     if (clusterBean == null) {
-      throw new WebApplicationException(HttpStatus.NOT_FOUND_404);
+      String message = String.format("Znode %s does not exist or failed to parse config", clusterName);
+      return Utils.buildResponse(HttpStatus.NOT_FOUND_404, ImmutableMap.of("message", message));
     }
-    return clusterBean;
+    return Utils.buildResponse(HttpStatus.OK_200, clusterBean);
   }
 
   /**
@@ -97,7 +101,8 @@ public class Clusters {
    * @return a list of {@link ClusterBean}
    */
   @GET
-  public List<ClusterBean> getAll() {
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response getAll() {
     final Set<String> clusters = taskQueue.getAllClusters();
     final List<ClusterBean> clusterBeans = new ArrayList<>(clusters.size());
     try {
@@ -108,10 +113,12 @@ public class Clusters {
         }
       }
     } catch (Exception e) {
-      LOG.error("Failed to read from zookeeper.", e);
-      throw new WebApplicationException(e);
+      String message = String.format("Failed to read from zookeeper: %s", e);
+      LOG.error(message);
+      return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500, ImmutableMap.of("message", message));
+
     }
-    return clusterBeans;
+    return Utils.buildResponse(HttpStatus.OK_200, clusterBeans);
   }
 
   /**
@@ -122,9 +129,15 @@ public class Clusters {
    */
   @POST
   @Path("/initialize/{clusterName : [a-zA-Z0-9\\-_]+}")
-  public boolean initialize(@PathParam("clusterName") String clusterName) {
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response initialize(@PathParam("clusterName") String clusterName) {
     // Create directly, we dont
-    return taskQueue.createCluster(clusterName);
+    if (taskQueue.createCluster(clusterName)) {
+      return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
+    } else {
+      String message = String.format("Cluster %s is already existed", clusterName);
+      return Utils.buildResponse(HttpStatus.BAD_REQUEST_400, ImmutableMap.of("message", message));
+    }
   }
 
   /**
@@ -139,13 +152,14 @@ public class Clusters {
    */
   @POST
   @Path("/replaceHost/{clusterName : [a-zA-Z0-9\\-_]+}")
-  public void replaceHost(@PathParam("clusterName") String clusterName,
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response replaceHost(@PathParam("clusterName") String clusterName,
                           @NotEmpty @QueryParam("oldHost") String oldHostString,
                           @QueryParam("newHost") Optional<String> newHostOp) {
 
     //TODO(angxu) support adding random new host later
     if (!newHostOp.isPresent()) {
-      throw new UnsupportedOperationException("method not implemented.");
+      return Utils.buildResponse(HttpStatus.BAD_REQUEST_400, ImmutableMap.of("message", "New host is not specified"));
     }
 
     try {
@@ -169,8 +183,10 @@ public class Clusters {
           .getEntity();
 
       taskQueue.enqueueTask(task, clusterName, 0);
+      return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } catch (JsonProcessingException e) {
-      throw new WebApplicationException(e);
+      String message = "Cannot serialize parameters";
+      return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500, ImmutableMap.of("message", message));
     }
   }
 
@@ -186,7 +202,8 @@ public class Clusters {
    */
   @POST
   @Path("/loadData/{clusterName : [a-zA-Z0-9\\-_]+}")
-  public void loadData(@PathParam("clusterName") String clusterName,
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response loadData(@PathParam("clusterName") String clusterName,
                        @NotEmpty @QueryParam("segmentName") String segmentName,
                        @NotEmpty @QueryParam("s3Bucket") String s3Bucket,
                        @NotEmpty @QueryParam("s3Prefix") String s3Prefix,
@@ -196,8 +213,10 @@ public class Clusters {
       TaskBase task = new LoadSSTTask(segmentName, s3Bucket, s3Prefix,
           concurrency.orElse(20), rateLimit.orElse(64)).getEntity();
       taskQueue.enqueueTask(task, clusterName, 0);
+      return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } catch (JsonProcessingException e) {
-      throw new WebApplicationException(e);
+      String message = "Cannot serialize parameters";
+      return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500, ImmutableMap.of("message", message));
     }
   }
 
@@ -211,8 +230,14 @@ public class Clusters {
    */
   @POST
   @Path("/lock/{clusterName : [a-zA-Z0-9\\-_]+}")
-  public boolean lock(@PathParam("clusterName") String clusterName) {
-    return taskQueue.lockCluster(clusterName);
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response lock(@PathParam("clusterName") String clusterName) {
+    if (taskQueue.lockCluster(clusterName)) {
+      return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
+    } else {
+      String message = String.format("Cluster %s is already locked, cannot double lock", clusterName);
+      return Utils.buildResponse(HttpStatus.BAD_REQUEST_400, ImmutableMap.of("message", message));
+    }
   }
 
   /**
@@ -223,8 +248,14 @@ public class Clusters {
    */
   @POST
   @Path("/unlock/{clusterName : [a-zA-Z0-9\\-_]+}")
-  public boolean unlock(@PathParam("clusterName") String clusterName) {
-    return taskQueue.unlockCluster(clusterName);
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response unlock(@PathParam("clusterName") String clusterName) {
+    if (taskQueue.unlockCluster(clusterName)) {
+      return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
+    } else {
+      String message = String.format("Cluster %s is not created yet", clusterName);
+      return Utils.buildResponse(HttpStatus.BAD_REQUEST_400, ImmutableMap.of("message", message));
+    }
   }
 
   /**
@@ -235,13 +266,16 @@ public class Clusters {
    */
   @POST
   @Path("/logging/{clusterName : [a-zA-Z0-9\\-_]+}")
-  public void sendLogTask(@PathParam("clusterName") String clusterName,
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response sendLogTask(@PathParam("clusterName") String clusterName,
                           @NotEmpty @QueryParam("message") String message) {
     try {
       TaskBase task = new LoggingTask(message).getEntity();
       taskQueue.enqueueTask(task, clusterName, 0);
+      return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));                     
     } catch (JsonProcessingException e) {
-      throw new WebApplicationException(e);
+      String errorMessage = "Cannot serialize parameters";
+      return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500, ImmutableMap.of("message", errorMessage));
     }
   }
 
@@ -254,7 +288,8 @@ public class Clusters {
    */
   @POST
   @Path("/healthcheck/{clusterName : [a-zA-Z0-9\\-_]+}")
-  public void healthcheck(@PathParam("clusterName") String clusterName,
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response healthcheck(@PathParam("clusterName") String clusterName,
                           @QueryParam("interval") Optional<Integer> intervalSeconds,
                           @QueryParam("replica") Optional<Integer> replicas) {
     try {
@@ -263,8 +298,10 @@ public class Clusters {
           .setNumReplicas(replicas.orElse(3));
       TaskBase healthCheckTask = new HealthCheckTask(param).getEntity();
       taskQueue.enqueueTask(healthCheckTask, clusterName, 0);
+      return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } catch (JsonProcessingException e) {
-      throw new WebApplicationException(e);
+      String message = "Cannot serialize parameters";
+      return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500, ImmutableMap.of("message", message));
     }
   }
 
