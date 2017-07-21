@@ -16,7 +16,6 @@
 
 package com.pinterest.rocksplicator.controller;
 
-import org.eclipse.jetty.http.HttpStatus;
 import javax.ws.rs.core.Response;
 
 /**
