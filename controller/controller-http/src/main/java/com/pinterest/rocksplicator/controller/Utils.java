@@ -25,6 +25,6 @@ public class Utils {
 
   public static Response buildResponse(int status, Object body) {
 	return Response.status(status).entity(body).build();
-	}
-
+  }
+  
 }
