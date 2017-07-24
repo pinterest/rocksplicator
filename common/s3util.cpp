@@ -176,13 +176,13 @@ ListObjectsResponse S3Util::listObjects(const string& prefix,
     if (!delimiter.empty()) {
       Aws::Vector<Aws::S3::Model::CommonPrefix> contents =
         listObjectResult.GetResult().GetCommonPrefixes();
-      for (auto object : contents) {
+      for (const auto& object : contents) {
         objects.push_back(object.GetPrefix());
       }
     } else {
       Aws::Vector<Aws::S3::Model::Object> contents =
         listObjectResult.GetResult().GetContents();
-      for (auto object : contents) {
+      for (const auto& object : contents) {
         objects.push_back(object.GetKey());
       }
     }
