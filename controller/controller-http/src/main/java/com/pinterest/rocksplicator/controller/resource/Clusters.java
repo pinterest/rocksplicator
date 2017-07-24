@@ -141,16 +141,20 @@ public class Clusters {
   }
 
   /**
-   * Remove a given cluster. This may include removing designated tag
-   * in DB and/or writing shard config to zookeeper.
+   * Remove tag in DB and shard config in zookeeper.
    *
    * @param clusterName name of the cluster
    */
   @POST
   @Path("/remove/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public boolean remove(@PathParam("clusterName") String clusterName) {
-    return taskQueue.removeCluster(clusterName);
+  public Response remove(@PathParam("clusterName") String clusterName) {
+    if (taskQueue.removeCluster(clusterName)) {
+      return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
+    } else {
+      String message = String.format("Cluster %s is already locked, cannot remove", clusterName);
+      return Utils.buildResponse(HttpStatus.BAD_REQUEST_400, ImmutableMap.of("message", message));
+    }
   }
 
   /**
