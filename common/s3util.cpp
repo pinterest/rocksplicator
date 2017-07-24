@@ -175,7 +175,7 @@ ListObjectsResponse S3Util::listObjects(const string& prefix,
   if (listObjectResult.IsSuccess()) {
     if (!delimiter.empty()) {
       Aws::Vector<Aws::S3::Model::CommonPrefix> contents =
-      listObjectResult.GetResult().GetCommonPrefixes();
+        listObjectResult.GetResult().GetCommonPrefixes();
       for (auto object : contents) {
         objects.push_back(object.GetPrefix());
       }
