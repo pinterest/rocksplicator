@@ -169,7 +169,7 @@ ListObjectsResponse S3Util::listObjects(const string& prefix,
   listObjectRequest.SetBucket(bucket_);
   listObjectRequest.SetPrefix(prefix);
   if (!delimiter.empty()) {
-    listObjectRequest.SetDelimiter("/");
+    listObjectRequest.SetDelimiter(delimiter);
   }
   auto listObjectResult = s3Client.ListObjects(listObjectRequest);
   if (listObjectResult.IsSuccess()) {
