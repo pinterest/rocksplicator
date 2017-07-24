@@ -141,6 +141,23 @@ public class Clusters {
   }
 
   /**
+   * Remove tag in DB and shard config in zookeeper.
+   *
+   * @param clusterName name of the cluster
+   */
+  @POST
+  @Path("/remove/{clusterName : [a-zA-Z0-9\\-_]+}")
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response remove(@PathParam("clusterName") String clusterName) {
+    if (taskQueue.removeCluster(clusterName)) {
+      return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
+    } else {
+      String message = String.format("Cluster %s is already locked, cannot remove", clusterName);
+      return Utils.buildResponse(HttpStatus.BAD_REQUEST_400, ImmutableMap.of("message", message));
+    }
+  }
+
+  /**
    * Replaces a host in a given cluster with a new one. If new host is provided
    * in the query parameter, that host will be used to replace the old one.
    * Otherwise, controller will randomly pick one for the user.
