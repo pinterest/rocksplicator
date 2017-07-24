@@ -182,7 +182,10 @@ class S3Util {
                                     const string& local_path = "",
                                     const bool direct_io = false);
   // Return a list of objects under the prefix.
-  ListObjectsResponse listObjects(const string& prefix);
+  // If delimiter is not empty, it will return all keys between Prefix
+  // and the next occurrence of the string specified by delimiter.
+  ListObjectsResponse listObjects(const string& prefix,
+                                  const string& delimiter = "");
   // Download all objects under a prefix. We only assume
   // For each object downloading,
   // if the download is successful, the error message will be
