@@ -162,17 +162,29 @@ SdkGetObjectResponse S3Util::sdkGetObject(const string& key,
   return getObjectResult;
 }
 
-ListObjectsResponse S3Util::listObjects(const string& prefix) {
+ListObjectsResponse S3Util::listObjects(const string& prefix,
+                                        const string& delimiter) {
   vector<string> objects;
   ListObjectsRequest listObjectRequest;
   listObjectRequest.SetBucket(bucket_);
   listObjectRequest.SetPrefix(prefix);
+  if (!delimiter.empty()) {
+    listObjectRequest.SetDelimiter("/");
+  }
   auto listObjectResult = s3Client.ListObjects(listObjectRequest);
   if (listObjectResult.IsSuccess()) {
-    Aws::Vector<Aws::S3::Model::Object> contents =
-      listObjectResult.GetResult().GetContents();
-    for (auto object : contents) {
-      objects.push_back(object.GetKey());
+    if (!delimiter.empty()) {
+      Aws::Vector<Aws::S3::Model::CommonPrefix> contents =
+      listObjectResult.GetResult().GetCommonPrefixes();
+      for (auto object : contents) {
+        objects.push_back(object.GetPrefix());
+      }
+    } else {
+      Aws::Vector<Aws::S3::Model::Object> contents =
+        listObjectResult.GetResult().GetContents();
+      for (auto object : contents) {
+        objects.push_back(object.GetKey());
+      }
     }
     return ListObjectsResponse(objects, "");
   } else {
