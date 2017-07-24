@@ -110,23 +110,23 @@ public class RecurTask extends AbstractTask<RecurTask.Param>{
   @Override
   public void process(Context ctx) throws Exception {
     long id = ctx.getId();
-    final TaskQueue taskQueue = ctx.getTaskQueue();
+    final TaskQueue remoteTaskQueue = ctx.getTaskQueue();
 
     AbstractTask task = TaskFactory.getWorkerTask(getParameter().getTask());
     Throwable t = null;
-    LocalAckTaskQueue lq = new LocalAckTaskQueue(taskQueue);
+    LocalAckTaskQueue localAckTaskQueue = new LocalAckTaskQueue(remoteTaskQueue);
     try {
-      ctx = new Context(id, ctx.getCluster(), lq, ctx.getWorker());
+      ctx = new Context(id, ctx.getCluster(), localAckTaskQueue, ctx.getWorker());
       task.process(ctx);
     } catch (Throwable th) {
       t = th;
     }
 
-    LocalAckTaskQueue.State state = lq.getState();
+    LocalAckTaskQueue.State state = localAckTaskQueue.getState();
     if (t != null || state.state == LocalAckTaskQueue.State.StateName.FAILED) {
-      ackTask(new FailureAcker(ctx.getTaskQueue()), ctx, t == null ? state.output : t.getMessage());
+      ackTask(new FailureAcker(remoteTaskQueue), ctx, t == null ? state.output : t.getMessage());
     } else if (state.state == LocalAckTaskQueue.State.StateName.DONE) {
-      ackTask(new SuccessAcker(ctx.getTaskQueue()), ctx, state.output);
+      ackTask(new SuccessAcker(remoteTaskQueue), ctx, state.output);
     }
   }
 
