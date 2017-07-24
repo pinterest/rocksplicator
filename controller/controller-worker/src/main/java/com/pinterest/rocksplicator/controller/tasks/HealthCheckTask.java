@@ -47,7 +47,7 @@ import javax.inject.Inject;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
+public class HealthCheckTask extends AbstractRecurringTask<HealthCheckTask.Param> {
 
   public static final Logger LOG = LoggerFactory.getLogger(HealthCheckTask.class);
 
@@ -63,22 +63,23 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
   /**
    * Construct a new HealthCheckTask with number of replicas equals to 3
    */
-  public HealthCheckTask() {
-    this(new Param().setNumReplicas(3).setIntervalSeconds(0));
-  }
+  public HealthCheckTask() { this(new HealthCheckTask.Param().setNumReplicas(3)); }
 
+  public HealthCheckTask(Param param, int intervalSeconds) {
+    super(param, intervalSeconds);
+  }
   public HealthCheckTask(Param param) {
     super(param);
   }
 
+
   @Override
-  public void process(Context ctx) throws Exception {
+  public void innerProcess(Context ctx) throws Exception {
     final String clusterName = ctx.getCluster();
     try {
       ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, clusterName);
       if (clusterBean == null) {
-        ctx.getTaskQueue().failTask(ctx.getId(), "Failed to read cluster config from zookeeper.");
-        return;
+        throw new Exception("Failed to read cluster " + clusterName + " config from zookeeper");
       }
 
       Set<InetSocketAddress> hosts = new HashSet<>();
@@ -102,35 +103,17 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
       }
 
       if (!badHosts.isEmpty()) {
-        String errorMessage = String.format("Unable to ping hosts: %s", badHosts);
-        if (getParameter().getIntervalSeconds() > 0) {
-          ctx.getTaskQueue().failTaskAndEnqueuePendingTask(
-              ctx.getId(), errorMessage, this.getEntity(), getParameter().getIntervalSeconds());
-        } else {
-          ctx.getTaskQueue().failTask(ctx.getId(),errorMessage);
-        }
-        emailSender.sendEmail("Healthcheck Failed for " + clusterName, errorMessage);
-        return;
+        throw new Exception(String.format("Unable to ping hosts: %s", badHosts));
       }
 
       LOG.info("All hosts are good");
       String output = String.format("Cluster %s is healthy", clusterName);
-      if (getParameter().getIntervalSeconds() > 0) {
-        ctx.getTaskQueue().finishTaskAndEnqueuePendingTask(
-            ctx.getId(), output, this.getEntity(), getParameter().getIntervalSeconds());
-      } else {
-        ctx.getTaskQueue().finishTask(ctx.getId(), output);
-      }
+      ctx.setOutput(output);
     } catch (Exception ex) {
       String errorMessage =
           String.format("Cluster %s is unhealthy, reason = %s", clusterName, ex.getMessage());
-      if (getParameter().getIntervalSeconds() > 0) {
-        ctx.getTaskQueue().failTaskAndEnqueuePendingTask(
-            ctx.getId(), errorMessage, this.getEntity(), getParameter().getIntervalSeconds());
-      } else {
-        ctx.getTaskQueue().failTask(ctx.getId(), errorMessage);
-      }
       emailSender.sendEmail("Healthcheck Failed for " + clusterName, errorMessage);
+      throw new Exception(errorMessage);
     }
   }
 
@@ -172,22 +155,12 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
     @JsonProperty
     private int numReplicas;
 
-    @JsonProperty
-    private int intervalSeconds = 0;
-
     public int getNumReplicas() {
       return numReplicas;
     }
 
     public Param setNumReplicas(int numReplicas) {
       this.numReplicas = numReplicas;
-      return this;
-    }
-
-    public int getIntervalSeconds() { return intervalSeconds; }
-
-    public Param setIntervalSeconds(int intervalSeconds) {
-      this.intervalSeconds = intervalSeconds;
       return this;
     }
   }

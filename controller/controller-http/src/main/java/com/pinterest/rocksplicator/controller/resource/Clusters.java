@@ -259,9 +259,8 @@ public class Clusters {
                           @QueryParam("replica") Optional<Integer> replicas) {
     try {
       HealthCheckTask.Param param = new HealthCheckTask.Param()
-          .setIntervalSeconds(intervalSeconds.orElse(0))
           .setNumReplicas(replicas.orElse(3));
-      TaskBase healthCheckTask = new HealthCheckTask(param).getEntity();
+      TaskBase healthCheckTask = new HealthCheckTask(param, intervalSeconds.orElse(0)).getEntity();
       taskQueue.enqueueTask(healthCheckTask, clusterName, 0);
     } catch (JsonProcessingException e) {
       throw new WebApplicationException(e);

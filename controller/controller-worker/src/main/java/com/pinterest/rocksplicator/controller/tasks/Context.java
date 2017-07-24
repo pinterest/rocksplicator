@@ -30,12 +30,17 @@ public class Context {
   private String cluster;
   private String worker;
   private TaskQueue taskQueue;
+  private String output;
 
   public Context(long id, String cluster, TaskQueue taskQueue, String worker) {
     this.id = id;
     this.cluster = cluster;
     this.worker = worker;
     this.taskQueue = taskQueue;
+  }
+
+  public void setOutput(String output) {
+    this.output = output;
   }
 
   public long getId() {
@@ -53,5 +58,7 @@ public class Context {
   public TaskQueue getTaskQueue() {
     return taskQueue;
   }
+
+  public String getOutput() { return output; }
 
 }
