@@ -104,7 +104,7 @@ public abstract class AbstractTask<PARAM extends Parameter> {
    * @return a retry task
    * @throws JsonProcessingException
    */
-  public AbstractTask retry(int maxRetry) throws JsonProcessingException {
+  public AbstractTask retry(int maxRetry) throws Exception {
     return new RetryTask(
         new RetryTask.Param()
             .setTask(this.getEntity())
