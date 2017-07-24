@@ -111,4 +111,18 @@ public abstract class AbstractTask<PARAM extends Parameter> {
             .setMaxRetry(maxRetry)
     );
   }
+
+  /**
+   * Return a recurring task that once finished, it can pushes another same task to the queue
+   * and wait to be executed later by the worker.
+   * @param intervalSeconds seconds that next task can be pulled.
+   * @return a recur task
+   * @throws JsonProcessingException
+   */
+  public AbstractTask recur(int intervalSeconds) throws JsonProcessingException {
+    return new RecurTask(
+        new RecurTask.Param()
+            .setIntervalSeconds(intervalSeconds)
+            .setTask(this.getEntity()));
+  }
 }

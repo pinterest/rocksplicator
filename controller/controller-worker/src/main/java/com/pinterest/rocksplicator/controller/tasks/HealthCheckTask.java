@@ -47,7 +47,7 @@ import javax.inject.Inject;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-public class HealthCheckTask extends AbstractRecurringTask<HealthCheckTask.Param> {
+public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
 
   public static final Logger LOG = LoggerFactory.getLogger(HealthCheckTask.class);
 
@@ -63,23 +63,20 @@ public class HealthCheckTask extends AbstractRecurringTask<HealthCheckTask.Param
   /**
    * Construct a new HealthCheckTask with number of replicas equals to 3
    */
-  public HealthCheckTask() { this(new HealthCheckTask.Param().setNumReplicas(3)); }
+  public HealthCheckTask() { this(new Param().setNumReplicas(3));}
 
-  public HealthCheckTask(Param param, int intervalSeconds) {
-    super(param, intervalSeconds);
-  }
   public HealthCheckTask(Param param) {
     super(param);
   }
 
-
   @Override
-  public void innerProcess(Context ctx) throws Exception {
+  public void process(Context ctx) throws Exception {
     final String clusterName = ctx.getCluster();
     try {
       ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, clusterName);
       if (clusterBean == null) {
-        throw new Exception("Failed to read cluster " + clusterName + " config from zookeeper");
+        ctx.getTaskQueue().failTask(ctx.getId(), "Failed to read cluster config from zookeeper.");
+        return;
       }
 
       Set<InetSocketAddress> hosts = new HashSet<>();
@@ -103,17 +100,20 @@ public class HealthCheckTask extends AbstractRecurringTask<HealthCheckTask.Param
       }
 
       if (!badHosts.isEmpty()) {
-        throw new Exception(String.format("Unable to ping hosts: %s", badHosts));
+        String errorMessage = String.format("Unable to ping hosts: %s", badHosts);
+        ctx.getTaskQueue().failTask(ctx.getId(),errorMessage);
+        emailSender.sendEmail("Healthcheck Failed for " + clusterName, errorMessage);
+        return;
       }
 
       LOG.info("All hosts are good");
       String output = String.format("Cluster %s is healthy", clusterName);
-      ctx.setOutput(output);
+      ctx.getTaskQueue().finishTask(ctx.getId(), output);
     } catch (Exception ex) {
       String errorMessage =
           String.format("Cluster %s is unhealthy, reason = %s", clusterName, ex.getMessage());
+      ctx.getTaskQueue().failTask(ctx.getId(), errorMessage);
       emailSender.sendEmail("Healthcheck Failed for " + clusterName, errorMessage);
-      throw new Exception(errorMessage);
     }
   }
 

@@ -260,7 +260,9 @@ public class Clusters {
     try {
       HealthCheckTask.Param param = new HealthCheckTask.Param()
           .setNumReplicas(replicas.orElse(3));
-      TaskBase healthCheckTask = new HealthCheckTask(param, intervalSeconds.orElse(0)).getEntity();
+      TaskBase healthCheckTask = new HealthCheckTask(param)
+          .recur(intervalSeconds.orElse(0))
+          .getEntity();
       taskQueue.enqueueTask(healthCheckTask, clusterName, 0);
     } catch (JsonProcessingException e) {
       throw new WebApplicationException(e);
