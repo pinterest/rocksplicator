@@ -95,11 +95,7 @@ final class RetryTask extends AbstractTask<RetryTask.Param> {
       return task;
     }
 
-    public RetryTask.Param setTask(TaskBase task) throws Exception {
-      // We don't allow RetryTask wraps a RecurringTask.
-      if (TaskFactory.getWorkerTask(task) instanceof RecurTask) {
-        throw new Exception("Cannot local retry RecurTask");
-      }
+    public RetryTask.Param setTask(TaskBase task) {
       this.task = task;
       return this;
     }

@@ -130,6 +130,10 @@ public class RecurTask extends AbstractTask<RecurTask.Param>{
     }
   }
 
+  @Override
+  public AbstractTask retry(int maxRetry) throws Exception {
+    throw new UnsupportedOperationException("We can't retry a recurring task");
+  }
 
   public static class Param extends Parameter {
     @JsonProperty
