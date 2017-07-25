@@ -131,6 +131,15 @@ struct SetDBOptionsResponse {
   # for future use
 }
 
+struct CompactDBRequest {
+  # the db instance name to compact
+  1: required string db_name,
+}
+
+struct CompactDBResponse {
+  # for future use
+}
+
 service Admin {
 
 /*
@@ -196,5 +205,11 @@ AddS3SstFilesToDBResponse addS3SstFilesToDB(1:AddS3SstFilesToDBRequest request)
  * The option map in request will be passed down to Rocksdb::DB::SetOptions().
  */
 SetDBOptionsResponse setDBOptions(1:SetDBOptionsRequest request)
+  throws (1:AdminException e)
+
+/*
+ * Run Compaction for a DB instance
+ */
+CompactDBResponse compactDB(1:CompactDBRequest request)
   throws (1:AdminException e)
 }

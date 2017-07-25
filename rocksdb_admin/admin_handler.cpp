@@ -706,4 +706,26 @@ void AdminHandler::async_tm_setDBOptions(
   callback->result(SetDBOptionsResponse());
 }
 
+void AdminHandler::async_tm_compactDB(
+    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+      CompactDBResponse>>> callback,
+    std::unique_ptr<CompactDBRequest> request) {
+  ::admin::AdminException e;
+  auto db = getDB(request->db_name, &e);
+  if (db == nullptr) {
+    callback.release()->exceptionInThread(std::move(e));
+    return;
+  }
+
+  auto status = db->CompactRange(
+      rocksdb::CompactRangeOptions(), nullptr, nullptr);
+  if (!status.ok()) {
+    e.message = status.ToString();
+    e.errorCode = AdminErrorCode::DB_ERROR;
+    callback.release()->exceptionInThread(std::move(e));
+    return;
+  }
+  callback.release()->result(CompactDBResponse());
+}
+
 }  // namespace admin
