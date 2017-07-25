@@ -66,7 +66,7 @@ public class HealthCheckTask extends AbstractTask<Parameter> {
   }
 
   @Override
-  public void process(Context ctx) throws Exception {
+  public void process(Context ctx) {
     final String clusterName = ctx.getCluster();
     try {
       ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, clusterName);
