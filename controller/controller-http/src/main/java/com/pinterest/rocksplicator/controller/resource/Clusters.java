@@ -320,6 +320,13 @@ public class Clusters {
     }
   }
 
+  /**
+   * Send a configcheck task to a cluster.
+   * @param clusterName
+   * @param intervalSeconds if not specified, it's a one-off task, otherwise the task is repeatable.
+   * @param numReplicas the number of replicas per shard. If not speicfied, use default of 3.
+   * @return
+   */
   @POST
   @Path("/configcheck/{clusterName: [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
