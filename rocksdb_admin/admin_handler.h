@@ -93,6 +93,10 @@ class AdminHandler : virtual public AdminSvIf {
         SetDBOptionsResponse>>> callback,
       std::unique_ptr<SetDBOptionsRequest> request) override;
 
+  void async_tm_compactDB(
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+        CompactDBResponse>>> callback,
+      std::unique_ptr<CompactDBRequest> request) override;
 
   std::shared_ptr<ApplicationDB> getDB(const std::string& db_name,
                                        AdminException* ex);
