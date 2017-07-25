@@ -22,6 +22,7 @@ import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.config.ConfigParser;
 import com.pinterest.rocksplicator.controller.tasks.AddHostTask;
+import com.pinterest.rocksplicator.controller.tasks.ConfigCheckTask;
 import com.pinterest.rocksplicator.controller.tasks.HealthCheckTask;
 import com.pinterest.rocksplicator.controller.tasks.LoadSSTTask;
 import com.pinterest.rocksplicator.controller.tasks.LoggingTask;
@@ -301,28 +302,42 @@ public class Clusters {
    * Send a healthcehck task to a cluster.
    * @param clusterName
    * @param intervalSeconds If not specified, it's a one-off task, otherwise the task is repeatable.
-   * @param replicas If not specified, use default number of 3.
    */
   @POST
   @Path("/healthcheck/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
   public Response healthcheck(@PathParam("clusterName") String clusterName,
-                          @QueryParam("interval") Optional<Integer> intervalSeconds,
-                          @QueryParam("replica") Optional<Integer> replicas) {
+                              @QueryParam("interval") Optional<Integer> intervalSeconds) {
     try {
-      HealthCheckTask.Param param = new HealthCheckTask.Param()
-          .setNumReplicas(replicas.orElse(3));
-      TaskBase healthCheckTask = new HealthCheckTask(param)
-          .recur(intervalSeconds.orElse(0))
-          .getEntity();
+      TaskBase healthCheckTask = new HealthCheckTask()
+          .recur(intervalSeconds.orElse(0)).getEntity();
       taskQueue.enqueueTask(healthCheckTask, clusterName, 0);
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } catch (JsonProcessingException e) {
       String message = "Cannot serialize parameters";
-      return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500, ImmutableMap.of("message", message));
+      return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500,
+          ImmutableMap.of("message", message));
     }
   }
 
+  @POST
+  @Path("/configcheck/{clusterName: [a-zA-Z0-9\\-_]+}")
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response configCheck(@PathParam("clusterName") String clusterName,
+                              @QueryParam("interval") Optional<Integer> intervalSeconds,
+                              @QueryParam("replicas") Optional<Integer> numReplicas) {
+    try {
+      ConfigCheckTask.Param param = new ConfigCheckTask.Param().setNumReplicas(numReplicas.orElse(3));
+      TaskBase configCheckTask =
+          new ConfigCheckTask(param).recur(intervalSeconds.orElse(0)).getEntity();
+      taskQueue.enqueueTask(configCheckTask, clusterName, 0);
+      return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
+    } catch (JsonProcessingException e) {
+      String message = "Cannot serialize parameters: " + e.getMessage();
+      return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500,
+          ImmutableMap.of("message", message));
+    }
+  }
 
 
   private ClusterBean checkExistenceAndGetClusterBean(String clusterName) throws Exception {

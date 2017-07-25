@@ -19,21 +19,17 @@ package com.pinterest.rocksplicator.controller.tasks;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.bean.SegmentBean;
-import com.pinterest.rocksplicator.controller.bean.ShardBean;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
 import com.pinterest.rocksplicator.controller.util.EmailSender;
 import com.pinterest.rocksplicator.controller.util.ZKUtil;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import javax.inject.Inject;
@@ -47,7 +43,7 @@ import javax.inject.Inject;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
+public class HealthCheckTask extends AbstractTask<Parameter> {
 
   public static final Logger LOG = LoggerFactory.getLogger(HealthCheckTask.class);
 
@@ -63,9 +59,9 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
   /**
    * Construct a new HealthCheckTask with number of replicas equals to 3
    */
-  public HealthCheckTask() { this(new Param().setNumReplicas(3));}
+  public HealthCheckTask() { this(new Parameter());}
 
-  public HealthCheckTask(Param param) {
+  public HealthCheckTask(Parameter param) {
     super(param);
   }
 
@@ -84,8 +80,6 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
         for (HostBean hostBean : segmentBean.getHosts()) {
           hosts.add(new InetSocketAddress(hostBean.getIp(), hostBean.getPort()));
         }
-        // check segment replica
-        checkSegment(segmentBean, getParameter().getNumReplicas());
       }
 
       // ping all hosts
@@ -114,54 +108,6 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
           String.format("Cluster %s is unhealthy, reason = %s", clusterName, ex.getMessage());
       ctx.getTaskQueue().failTask(ctx.getId(), errorMessage);
       emailSender.sendEmail("Healthcheck Failed for " + clusterName, errorMessage);
-    }
-  }
-
-
-  /**
-   * Count the number of replicas for each shard within a segment.
-   * Throws exception if the number doesn't match the expected one.
-   */
-  private void checkSegment(SegmentBean segment, int numReplicas) throws Exception {
-    Map<Integer, Integer> shardCount = new HashMap<>();
-
-    for (HostBean hostBean : segment.getHosts()) {
-      for (ShardBean shardBean : hostBean.getShards()) {
-        int cnt = shardCount.getOrDefault(shardBean.getId(), 0);
-        shardCount.put(shardBean.getId(), cnt + 1);
-      }
-    }
-
-    if (shardCount.size() != segment.getNumShards()) {
-      throw new Exception(
-          String.format("Incorrect number of shards. Expected %d but actually %d.",
-              segment.getNumShards(), shardCount.size()));
-    }
-
-    Map<String, Integer> badShards = new HashMap<>();
-    for (Map.Entry<Integer, Integer> entry : shardCount.entrySet()) {
-      if (entry.getValue() != numReplicas) {
-        badShards.put(segment.getName() + entry.getKey(), entry.getValue());
-      }
-    }
-
-    if (!badShards.isEmpty()) {
-      throw new Exception("Incorrect number of replicas. Bad shards: " + badShards.toString());
-    }
-  }
-
-  public static class Param extends Parameter {
-
-    @JsonProperty
-    private int numReplicas;
-
-    public int getNumReplicas() {
-      return numReplicas;
-    }
-
-    public Param setNumReplicas(int numReplicas) {
-      this.numReplicas = numReplicas;
-      return this;
     }
   }
 }
