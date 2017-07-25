@@ -31,9 +31,7 @@ public class HealthCheckTaskTest extends TaskBaseTest {
 
   @Test
   public void testSuccessful() throws Exception {
-    HealthCheckTask t = new HealthCheckTask(
-        new HealthCheckTask.Param().setNumReplicas(3)
-    );
+    HealthCheckTask t = new HealthCheckTask();
     injector.injectMembers(t);
 
     FIFOTaskQueue taskQueue = new FIFOTaskQueue(10);
@@ -47,9 +45,7 @@ public class HealthCheckTaskTest extends TaskBaseTest {
   public void testFail() throws Exception {
     doThrow(new TException()).when(client).ping();
 
-    HealthCheckTask t = new HealthCheckTask(
-        new HealthCheckTask.Param().setNumReplicas(3)
-    );
+    HealthCheckTask t = new HealthCheckTask();
     injector.injectMembers(t);
 
     FIFOTaskQueue taskQueue = new FIFOTaskQueue(10);

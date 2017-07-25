@@ -23,11 +23,29 @@ import org.testng.annotations.Test;
 /**
  * @author Shu Zhang
  */
+
+class DummyTask extends AbstractTask<Parameter> {
+
+  public DummyTask() {
+    this(new Parameter());
+  }
+
+  public DummyTask(Parameter param) {
+    super(param);
+  }
+
+  @Override
+  public void process(Context ctx) throws Exception {
+    ctx.getTaskQueue().finishTask(ctx.getId(), "Successful");
+  }
+
+}
+
 public class RecurTaskTest extends TaskBaseTest {
 
   @Test
   public void testOneOffSuccess() throws Exception {
-    DummyTask successfulTask = new DummyTask("Body");
+    DummyTask successfulTask = new DummyTask();
     RecurTask recurTask = new RecurTask(new RecurTask.Param().setTask(
         successfulTask.getEntity()).setIntervalSeconds(0));
     injector.injectMembers(recurTask);
@@ -40,7 +58,7 @@ public class RecurTaskTest extends TaskBaseTest {
 
   @Test
   public void testRecurSuccess() throws Exception {
-    DummyTask successfulTask = new DummyTask("Body");
+    DummyTask successfulTask = new DummyTask();
     RecurTask recurTask = new RecurTask(new RecurTask.Param().setTask(
         successfulTask.getEntity()).setIntervalSeconds(10));
     injector.injectMembers(recurTask);
@@ -76,6 +94,4 @@ public class RecurTaskTest extends TaskBaseTest {
     Assert.assertEquals(taskQueue.getResult(123), "Failed");
     Assert.assertEquals(taskQueue.getBlockingQueue().size(), 1);
   }
-
-  
 }
