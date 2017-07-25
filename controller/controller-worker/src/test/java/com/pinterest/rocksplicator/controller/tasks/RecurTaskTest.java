@@ -16,10 +16,66 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
+import com.pinterest.rocksplicator.controller.FIFOTaskQueue;
+import org.testng.Assert;
+import org.testng.annotations.Test;
+
 /**
  * @author Shu Zhang
  */
 public class RecurTaskTest extends TaskBaseTest {
+
+  @Test
+  public void testOneOffSuccess() throws Exception {
+    DummyTask successfulTask = new DummyTask("Body");
+    RecurTask recurTask = new RecurTask(new RecurTask.Param().setTask(
+        successfulTask.getEntity()).setIntervalSeconds(0));
+    injector.injectMembers(recurTask);
+    FIFOTaskQueue taskQueue = new FIFOTaskQueue(10);
+    Context ctx = new Context(123, CLUSTER, taskQueue, null);
+    recurTask.process(ctx);
+    Assert.assertEquals(taskQueue.getResult(123), "Successful");
+    Assert.assertEquals(taskQueue.getBlockingQueue().size(), 0);
+  }
+
+  @Test
+  public void testRecurSuccess() throws Exception {
+    DummyTask successfulTask = new DummyTask("Body");
+    RecurTask recurTask = new RecurTask(new RecurTask.Param().setTask(
+        successfulTask.getEntity()).setIntervalSeconds(10));
+    injector.injectMembers(recurTask);
+    FIFOTaskQueue taskQueue = new FIFOTaskQueue(10);
+    Context ctx = new Context(123, CLUSTER, taskQueue, null);
+    recurTask.process(ctx);
+    Assert.assertEquals(taskQueue.getResult(123), "Successful");
+    Assert.assertEquals(taskQueue.getBlockingQueue().size(), 1);
+  }
+
+  @Test
+  public void testOneOffFailure() throws Exception {
+    ThrowingTask throwingTask = new ThrowingTask("Failed");
+    RecurTask recurTask = new RecurTask(new RecurTask.Param().setTask(
+        throwingTask.getEntity()).setIntervalSeconds(0));
+    injector.injectMembers(recurTask);
+    FIFOTaskQueue taskQueue = new FIFOTaskQueue(10);
+    Context ctx = new Context(123, CLUSTER, taskQueue, null);
+    recurTask.process(ctx);
+    Assert.assertEquals(taskQueue.getResult(123), "Failed");
+    Assert.assertEquals(taskQueue.getBlockingQueue().size(), 0);
+  }
+
+  @Test
+  public void testRecurFailure() throws Exception {
+    ThrowingTask throwingTask = new ThrowingTask("Failed");
+    RecurTask recurTask = new RecurTask(new RecurTask.Param().setTask(
+        throwingTask.getEntity()).setIntervalSeconds(10));
+    injector.injectMembers(recurTask);
+    FIFOTaskQueue taskQueue = new FIFOTaskQueue(10);
+    Context ctx = new Context(123, CLUSTER, taskQueue, null);
+    recurTask.process(ctx);
+    Assert.assertEquals(taskQueue.getResult(123), "Failed");
+    Assert.assertEquals(taskQueue.getBlockingQueue().size(), 1);
+  }
 
   
 }
