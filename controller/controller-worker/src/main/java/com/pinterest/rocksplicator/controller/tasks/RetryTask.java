@@ -23,6 +23,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static com.pinterest.rocksplicator.controller.tasks.TaskFactory.*;
+
 /**
  * This task provides retry functionality for an arbitrary {@link AbstractTask}.
  * It will keep retrying the given task until 1) the task succeeds or 2) the maxRetry
@@ -47,7 +49,7 @@ final class RetryTask extends AbstractTask<RetryTask.Param> {
     long id = ctx.getId();
     final TaskQueue taskQueue = ctx.getTaskQueue();
 
-    AbstractTask task = TaskFactory.getWorkerTask(getParameter().getTask());
+    AbstractTask task = getWorkerTask(getParameter().getTask());
     int retry = 0;
     while (retry < getParameter().getMaxRetry()) {
       Throwable t = null;

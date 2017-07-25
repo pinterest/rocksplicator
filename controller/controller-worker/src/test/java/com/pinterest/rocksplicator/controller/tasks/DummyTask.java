@@ -16,41 +16,34 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
-import com.pinterest.rocksplicator.controller.TaskQueue;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
+public class DummyTask extends AbstractTask<DummyTask.Param> {
 
-/**
- * Runtime context needed to drive {@link AbstractTask}
- *
- * @author Ang Xu (angxu@pinterest.com)
- */
-public class Context {
-
-  private long id;
-  private String cluster;
-  private String worker;
-  private TaskQueue taskQueue;
-
-  public Context(long id, String cluster, TaskQueue taskQueue, String worker) {
-    this.id = id;
-    this.cluster = cluster;
-    this.worker = worker;
-    this.taskQueue = taskQueue;
+  public DummyTask(String body) {
+    this(new Param().setBody(body));
   }
 
-  public long getId() {
-    return id;
+  public DummyTask(DummyTask.Param param) {
+    super(param);
   }
 
-  public String getCluster() {
-    return cluster;
+  @Override
+  public void process(Context ctx) throws Exception {
+    ctx.getTaskQueue().finishTask(ctx.getId(), "Successful");
   }
 
-  public String getWorker() {
-    return worker;
-  }
+  public static class Param extends Parameter {
+    @JsonProperty
+    private String body;
 
-  public TaskQueue getTaskQueue() {
-    return taskQueue;
+    public String getBody() {
+      return body;
+    }
+
+    public Param setBody(String body) {
+      this.body = body;
+      return this;
+    }
   }
 }

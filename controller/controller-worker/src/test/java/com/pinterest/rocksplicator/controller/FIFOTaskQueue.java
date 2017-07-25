@@ -42,6 +42,8 @@ public class FIFOTaskQueue implements TaskQueue {
     return result.get(id);
   }
 
+  public BlockingQueue<Task> getBlockingQueue() { return taskQueue; }
+
   @Override
   public boolean enqueueTask(final TaskBase task,
                       final String clusterName,
@@ -85,6 +87,24 @@ public class FIFOTaskQueue implements TaskQueue {
                                               final String worker) {
     result.putIfAbsent(id, output);
     return currentId.getAndIncrement();
+  }
+
+  @Override
+  public boolean finishTaskAndEnqueuePendingTask(final long id,
+                                                 final String output,
+                                                 final TaskBase taskBase,
+                                                 final int runDelaySeconds) {
+    result.putIfAbsent(id, output);
+    return enqueueTask(taskBase, "", runDelaySeconds);
+  }
+
+  @Override
+  public boolean failTaskAndEnqueuePendingTask(final long id,
+                                               final String output,
+                                               final TaskBase taskBase,
+                                               final int runDelaySeconds) {
+    result.putIfAbsent(id, output);
+    return enqueueTask(taskBase, "", runDelaySeconds);
   }
 
 }
