@@ -103,9 +103,9 @@ public class Clusters {
    */
   @GET
   @Produces(MediaType.APPLICATION_JSON)
-  public Response getAll(@QueryParam("verbose") Optional<String> verbose) {
+  public Response getAll(@QueryParam("verbose") boolean verbose) {
     final Set<String> clusters = taskQueue.getAllClusters();
-    if (!verbose.isPresent()) {
+    if (!verbose) {
       return Utils.buildResponse(HttpStatus.OK_200, clusters);
     }
     final List<ClusterBean> clusterBeans = new ArrayList<>(clusters.size());
