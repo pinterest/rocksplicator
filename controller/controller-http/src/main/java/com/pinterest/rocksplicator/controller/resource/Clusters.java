@@ -103,8 +103,11 @@ public class Clusters {
    */
   @GET
   @Produces(MediaType.APPLICATION_JSON)
-  public Response getAll() {
+  public Response getAll(@QueryParam("verbose") Optional<Boolean> verbose) {
     final Set<String> clusters = taskQueue.getAllClusters();
+    if (!verbose.isPresent() || verbose.get().equals(Boolean.FALSE)) {
+      return Utils.buildResponse(HttpStatus.OK_200, clusters);
+    }
     final List<ClusterBean> clusterBeans = new ArrayList<>(clusters.size());
     try {
       for (String cluster : clusters) {
