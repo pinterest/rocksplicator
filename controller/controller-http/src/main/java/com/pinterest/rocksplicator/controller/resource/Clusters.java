@@ -305,14 +305,20 @@ public class Clusters {
    * Send a healthcehck task to a cluster.
    * @param clusterName
    * @param intervalSeconds If not specified, it's a one-off task, otherwise the task is repeatable.
+   * @param zkPrefix if not specified, use DEFAULT_ZK_PATH in WorkerConfig.
    */
   @POST
   @Path("/healthcheck/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
   public Response healthcheck(@PathParam("clusterName") String clusterName,
-                              @QueryParam("interval") Optional<Integer> intervalSeconds) {
+                              @QueryParam("interval") Optional<Integer> intervalSeconds,
+                              @QueryParam("zkPrefix") Optional<String> zkPrefix) {
     try {
-      TaskBase healthCheckTask = new HealthCheckTask()
+      HealthCheckTask.Param param = new HealthCheckTask.Param();
+      if (zkPrefix.isPresent()) {
+        param.setZkPrefix(zkPrefix.get());
+      }
+      TaskBase healthCheckTask = new HealthCheckTask(param)
           .recur(intervalSeconds.orElse(0)).getEntity();
       taskQueue.enqueueTask(healthCheckTask, clusterName, 0);
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
@@ -328,6 +334,7 @@ public class Clusters {
    * @param clusterName
    * @param intervalSeconds if not specified, it's a one-off task, otherwise the task is repeatable.
    * @param numReplicas the number of replicas per shard. If not speicfied, use default of 3.
+   * @param zkPrefix if not specified, use DEFAULT_ZK_PATH in WorkerConfig.
    * @return
    */
   @POST
@@ -335,7 +342,8 @@ public class Clusters {
   @Produces(MediaType.APPLICATION_JSON)
   public Response configCheck(@PathParam("clusterName") String clusterName,
                               @QueryParam("interval") Optional<Integer> intervalSeconds,
-                              @QueryParam("replicas") Optional<Integer> numReplicas) {
+                              @QueryParam("replicas") Optional<Integer> numReplicas,
+                              @QueryParam("zkPrefix") Optional<String> zkPrefix) {
     try {
       ConfigCheckTask.Param param = new ConfigCheckTask.Param().setNumReplicas(numReplicas.orElse(3));
       TaskBase configCheckTask =

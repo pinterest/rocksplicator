@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
+import com.pinterest.rocksplicator.controller.WorkerConfig;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.bean.SegmentBean;
@@ -23,6 +24,7 @@ import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
 import com.pinterest.rocksplicator.controller.util.EmailSender;
 import com.pinterest.rocksplicator.controller.util.ZKUtil;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
@@ -43,7 +45,7 @@ import javax.inject.Inject;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-public class HealthCheckTask extends AbstractTask<Parameter> {
+public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
 
   public static final Logger LOG = LoggerFactory.getLogger(HealthCheckTask.class);
 
@@ -59,9 +61,9 @@ public class HealthCheckTask extends AbstractTask<Parameter> {
   /**
    * Construct a new HealthCheckTask with number of replicas equals to 3
    */
-  public HealthCheckTask() { this(new Parameter());}
+  public HealthCheckTask() { this(new HealthCheckTask.Param());}
 
-  public HealthCheckTask(Parameter param) {
+  public HealthCheckTask(HealthCheckTask.Param param) {
     super(param);
   }
 
@@ -108,6 +110,18 @@ public class HealthCheckTask extends AbstractTask<Parameter> {
           String.format("Cluster %s is unhealthy, reason = %s", clusterName, ex.getMessage());
       ctx.getTaskQueue().failTask(ctx.getId(), errorMessage);
       emailSender.sendEmail("Healthcheck Failed for " + clusterName, errorMessage);
+    }
+  }
+
+  public static class Param extends Parameter {
+    @JsonProperty
+    private String zkPrefix = WorkerConfig.getZKPath();
+
+    public String getZkPrefix() { return zkPrefix; }
+
+    public Param setZkPrefix(String zkPrefix) {
+      this.zkPrefix= zkPrefix;
+      return this;
     }
   }
 }
