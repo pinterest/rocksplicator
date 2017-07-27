@@ -57,7 +57,7 @@ public final class ZKUtil {
    * @param zkClient zookeeper client to use
    * @param zkPrefix the customized zk prefix
    * @param clusterName
-   * @return
+   * @return serialized cluster config, or null if there is an error
    */
   public static ClusterBean getClusterConfig(
       CuratorFramework zkClient, String zkPrefix, String clusterName) throws Exception {

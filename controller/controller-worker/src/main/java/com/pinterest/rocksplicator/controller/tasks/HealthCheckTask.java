@@ -16,13 +16,14 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
-import com.pinterest.rocksplicator.controller.WorkerConfig;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.bean.SegmentBean;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
 import com.pinterest.rocksplicator.controller.util.EmailSender;
 import com.pinterest.rocksplicator.controller.util.ZKUtil;
+import com.pinterest.rocksplicator.controller.WorkerConfig;
+
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.curator.framework.CuratorFramework;
