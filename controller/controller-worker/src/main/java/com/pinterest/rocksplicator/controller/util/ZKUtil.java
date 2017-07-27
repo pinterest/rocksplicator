@@ -52,6 +52,29 @@ public final class ZKUtil {
   }
 
   /**
+   * Get config for a given cluster from zookeeper if the zk prefix is different from default.
+   *
+   * @param zkClient zookeeper client to use
+   * @param zkPrefix the customized zk prefix
+   * @param clusterName
+   * @return serialized cluster config, or null if there is an error
+   */
+  public static ClusterBean getClusterConfig(
+      CuratorFramework zkClient, String zkPrefix, String clusterName) throws Exception {
+    String zkPath;
+    if (zkPrefix.endsWith("/")) {
+      zkPath = zkPrefix + clusterName;
+    } else {
+      zkPath = zkPrefix + "/" + clusterName;
+    }
+    if (zkClient.checkExists().forPath(zkPath) == null) {
+      return null;
+    }
+    byte[] data = zkClient.getData().forPath(zkPath);
+    return ConfigParser.parseClusterConfig(clusterName, data);
+  }
+
+  /**
    * Update config in zookeeper for a given cluster.
    *
    * @param zkClient zookeeper client to use
