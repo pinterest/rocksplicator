@@ -71,7 +71,8 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
   public void process(Context ctx) {
     final String clusterName = ctx.getCluster();
     try {
-      ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, clusterName);
+      ClusterBean clusterBean = ZKUtil.getClusterConfig(
+          zkClient, getParameter().getZkPrefix(), clusterName);
       if (clusterBean == null) {
         ctx.getTaskQueue().failTask(ctx.getId(), "Failed to read cluster config from zookeeper.");
         return;

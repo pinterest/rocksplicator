@@ -334,7 +334,6 @@ public class Clusters {
    * @param clusterName
    * @param intervalSeconds if not specified, it's a one-off task, otherwise the task is repeatable.
    * @param numReplicas the number of replicas per shard. If not speicfied, use default of 3.
-   * @param zkPrefix if not specified, use DEFAULT_ZK_PATH in WorkerConfig.
    * @return
    */
   @POST
@@ -342,8 +341,7 @@ public class Clusters {
   @Produces(MediaType.APPLICATION_JSON)
   public Response configCheck(@PathParam("clusterName") String clusterName,
                               @QueryParam("interval") Optional<Integer> intervalSeconds,
-                              @QueryParam("replicas") Optional<Integer> numReplicas,
-                              @QueryParam("zkPrefix") Optional<String> zkPrefix) {
+                              @QueryParam("replicas") Optional<Integer> numReplicas) {
     try {
       ConfigCheckTask.Param param = new ConfigCheckTask.Param().setNumReplicas(numReplicas.orElse(3));
       TaskBase configCheckTask =
