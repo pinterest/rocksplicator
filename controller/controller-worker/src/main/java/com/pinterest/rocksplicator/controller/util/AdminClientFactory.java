@@ -92,6 +92,7 @@ public class AdminClientFactory {
     @Override
     public TTransport load(InetSocketAddress key) throws Exception {
       TSocket sock = new TSocket(key.getHostName(), key.getPort());
+      sock.setConnectTimeout(5000);
       sock.open();
       return sock;
     }
