@@ -29,6 +29,7 @@
 #include <microhttpd.h>
 
 #include <memory>
+#include <set>
 #include <string>
 #include "common/stats/stats.h"
 
@@ -70,28 +71,39 @@ int ServeCallback(void* param, struct MHD_Connection* connection,
 }
 }  // namespace
 
-StatusServer* StatusServer::StartStatusServer(EndPointToOPMap op_map) {
-  static StatusServer server(FLAGS_http_status_port, std::move(op_map));
+StatusServer* StatusServer::StartStatusServer(
+    EndPointToOPMap op_map, std::set<std::string> extra_stats_endpoints) {
+  static StatusServer server(FLAGS_http_status_port, std::move(op_map),
+                             std::move(extra_stats_endpoints));
   return &server;
 }
 
-void StatusServer::StartStatusServerOrDie(EndPointToOPMap op_map) {
-  static StatusServer server(FLAGS_http_status_port, std::move(op_map));
+void StatusServer::StartStatusServerOrDie(
+    EndPointToOPMap op_map, std::set<std::string> extra_stats_endpoints) {
+  static StatusServer server(FLAGS_http_status_port, std::move(op_map),
+                             std::move(extra_stats_endpoints));
   CHECK(server.Serving());
 }
 
-StatusServer::StatusServer(uint16_t port, EndPointToOPMap op_map)
-    : port_(port), d_(nullptr), op_map_(std::move(op_map)) {
+StatusServer::StatusServer(uint16_t port, EndPointToOPMap op_map,
+                           std::set<std::string> extra_stats_endpoints)
+    : port_(port), d_(nullptr), op_map_(std::move(op_map)),
+      extra_stats_endpoints_(std::move(extra_stats_endpoints)) {
 
+  extra_stats_endpoints_.emplace("/rocksdb_info.txt");
+  // prevent infinite recursion...
+  extra_stats_endpoints_.erase("/stats.txt");
   // Text
   op_map_.emplace("/stats.txt", [this]
       (const std::vector<std::pair<std::string, std::string>>* ) {
     std::string ret = common::Stats::get()->DumpStatsAsText();
-    auto itor = op_map_.find("/rocksdb_info.txt");
-    if (itor != op_map_.end()) {
-      ret += itor->second(nullptr);
-    }
 
+    for (const auto& endpoint_name : extra_stats_endpoints_) {
+      auto itor = op_map_.find(endpoint_name);
+      if (itor != op_map_.end()) {
+        ret += itor->second(nullptr);
+      }
+    }
     return ret;
   });
 
