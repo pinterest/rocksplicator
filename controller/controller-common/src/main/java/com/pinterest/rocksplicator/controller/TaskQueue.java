@@ -207,6 +207,15 @@ public interface TaskQueue {
   }
 
   /**
+   * Remove a task by its id.
+   * @param id id of the task
+   * @return false on error
+   */
+  default boolean removeTask(long id) {
+    return true;
+  }
+
+  /**
    * Return all clusters managed by this task queue.
    * @return a set of cluster names
    */

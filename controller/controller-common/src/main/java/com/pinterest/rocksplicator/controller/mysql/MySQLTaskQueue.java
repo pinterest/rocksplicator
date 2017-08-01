@@ -420,6 +420,24 @@ public class MySQLTaskQueue implements TaskQueue {
   }
 
   @Override
+  public boolean removeTask(final long id) {
+    beginTransaction();
+    TaskEntity task = getEntityManager().find(TaskEntity.class, id, LockModeType.PESSIMISTIC_WRITE);
+    try {
+      if (task == null) {
+        LOG.error("Cannot find task {}.", id);
+        throw new MySQLTaskQueueException();
+      }
+    } catch (MySQLTaskQueueException e) {
+      getEntityManager().getTransaction().rollback();
+      return false;
+    }
+    getEntityManager().remove(task);
+    getEntityManager().getTransaction().commit();
+    return true;
+  }
+ 
+  @Override
   public int removeFinishedTasks(final int secondsAgo) {
     beginTransaction();
     List<TaskEntity> finishedTasks = getEntityManager()

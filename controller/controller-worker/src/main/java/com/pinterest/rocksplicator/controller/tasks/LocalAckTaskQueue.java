@@ -162,6 +162,11 @@ class LocalAckTaskQueue implements TaskQueue {
   public Task findTask(long id) {
     return taskQueue.findTask(id);
   }
+  
+  @Override
+  public boolean removeTask(long id) {
+    return taskQueue.removeTask(id);
+  }
 
   @Override
   public Set<String> getAllClusters() {

@@ -26,6 +26,7 @@ import org.eclipse.jetty.http.HttpStatus;
 
 import java.util.List;
 import java.util.Optional;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
@@ -80,6 +81,24 @@ public class Tasks {
     List<Task> result = taskQueue.peekTasks(clusterName.orElse(null),
                                             state.map(TaskState::intValue).orElse(null));
     return Utils.buildResponse(HttpStatus.OK_200, result);
+  }
+
+  /**
+   * Remove a task by its id
+   *
+   * @param id id of the task being removed
+   * @return Response object
+   */
+  @DELETE
+  @Path("/{id : [0-9]+}")
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response removeTask(@PathParam("id") Long id) {
+    if (taskQueue.removeTask(id)) {
+      return Utils.buildResponse(HttpStatus.OK_200, true);
+    } else {
+      String message = String.format("Cannot find task with id %s", id);
+      return Utils.buildResponse(HttpStatus.NOT_FOUND_404, ImmutableMap.of("message", message));
+    }
   }
 
 }
