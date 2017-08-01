@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -59,11 +60,21 @@ class StatusServer {
    * the function in the form of a vector of [key, value] pairs
    * (arrays can be passed in as delimited values) and returns a
    * std::string.
+   * @param extra_stats_endpoints For endpoints in this list, their string
+   * result will be appended to the regular stats.txt endpoint result. Note:
+   * These endpoints' format need to confirm to the existing stats.txt format,
+   * so that the same stats collector can consume it. They will be listed in
+   * the counter section.
+   * Metrics format(there should be 2 empty space at the beginning of each line):
+   *   metrics_name1: metrics_value1
+   *   metrics_name2 tag_name2=tag_value12 metrics_value2
    */
-  static StatusServer* StartStatusServer(EndPointToOPMap op_map = EndPointToOPMap());
+  static StatusServer* StartStatusServer(EndPointToOPMap op_map = EndPointToOPMap(),
+                                         std::set<std::string> extra_stats_endpoints = {});
   // Instantiate a StatusServer or Die.
   static void StartStatusServerOrDie(
-      EndPointToOPMap op_map = EndPointToOPMap());
+      EndPointToOPMap op_map = EndPointToOPMap(),
+      std::set<std::string> extra_stats_endpoints = {});
 
   /*!
    * \brief Executes the function corresponding to the given end_point.
@@ -80,7 +91,8 @@ class StatusServer {
   bool Serving();
 
  private:
-  StatusServer(uint16_t port, EndPointToOPMap op_map);
+  StatusServer(uint16_t port, EndPointToOPMap op_map,
+               std::set<std::string> extra_stats_endpoints);
 
   // Start the server and return true if the serve starts successfully.
   bool Serve();
@@ -90,5 +102,6 @@ class StatusServer {
   MHD_Daemon* d_;
 
   EndPointToOPMap op_map_;
+  std::set<std::string> extra_stats_endpoints_;
 };
 }  // namespace common
