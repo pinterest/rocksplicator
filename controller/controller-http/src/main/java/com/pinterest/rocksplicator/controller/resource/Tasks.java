@@ -27,7 +27,7 @@ import org.eclipse.jetty.http.HttpStatus;
 import java.util.List;
 import java.util.Optional;
 import javax.ws.rs.GET;
-import javax.ws.rs.POST;
+import javax.ws.rs.DELETE;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
@@ -89,8 +89,8 @@ public class Tasks {
    * @param id id of the task being removed
    * @return Response object
    */
-  @POST
-  @Path("/remove/{id : [0-9]+}")
+  @DELETE
+  @Path("/{id : [0-9]+}")
   @Produces(MediaType.APPLICATION_JSON)
   public Response removeTask(@PathParam("id") Long id) {
     if (taskQueue.removeTask(id)) {
