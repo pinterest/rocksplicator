@@ -56,6 +56,8 @@ DEFINE_bool(compact_db_after_load_sst, false,
 
 DECLARE_int32(rocksdb_replicator_port);
 
+DEFINE_bool(s3_direct_io, false, "Whether to enable direct I/O for s3 client");
+
 namespace {
 
 const int kMB = 1024 * 1024;
@@ -618,7 +620,8 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     return;
   }
 
-  auto responses = s3Util->getObjects(request->s3_path, local_path);
+  auto responses = s3Util->getObjects(request->s3_path,
+                                      local_path, FLAGS_s3_direct_io);
   if (!responses.Error().empty() || responses.Body().size() == 0) {
     e.message = "Failed to list any object from " + request->s3_path;
 
