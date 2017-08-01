@@ -155,9 +155,9 @@ class S3Util {
   // Don't recommend using this directly. Using BuildS3Util instead.
   // If you must, make sure to call Aws::InitAPI(options); before constructor
   explicit S3Util(const string& bucket,
-         const ClientConfiguration& client_config,
-         const SDKOptions& options,
-         const uint32_t read_ratelimit_mb) :
+                  const ClientConfiguration& client_config,
+                  const SDKOptions& options,
+                  const uint32_t read_ratelimit_mb) :
     bucket_(std::move(bucket)), s3Client(client_config), options_(options),
     read_ratelimit_mb_(read_ratelimit_mb) {
     Aws::StringStream ss;
