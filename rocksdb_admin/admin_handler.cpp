@@ -621,7 +621,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   }
 
   auto responses = s3Util->getObjects(request->s3_path,
-                                      local_path, FLAGS_s3_direct_io);
+                                      local_path, "/", FLAGS_s3_direct_io);
   if (!responses.Error().empty() || responses.Body().size() == 0) {
     e.message = "Failed to list any object from " + request->s3_path;
 
