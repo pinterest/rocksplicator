@@ -286,7 +286,8 @@ shared_ptr<S3Util> S3Util::BuildS3Util(
           read_ratelimit_mb * 1024 * 1024);
   SDKOptions options;
   Aws::InitAPI(options);
-  return std::make_shared<S3Util>(bucket, aws_config, options);
+  return std::make_shared<S3Util>(
+          bucket, aws_config, options, read_ratelimit_mb);
 }
 
 }  // namespace common

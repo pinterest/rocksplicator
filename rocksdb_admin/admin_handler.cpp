@@ -19,14 +19,15 @@
 
 #include "rocksdb_admin/admin_handler.h"
 
+#include <chrono>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "boost/filesystem.hpp"
 #include "common/network_util.h"
 #include "common/rocksdb_glogger/rocksdb_glogger.h"
-#include "common/s3util.h"
 #include "common/thrift_router.h"
 #include "folly/FileUtil.h"
 #include "folly/ScopeGuard.h"
@@ -61,6 +62,7 @@ DEFINE_bool(s3_direct_io, false, "Whether to enable direct I/O for s3 client");
 namespace {
 
 const int kMB = 1024 * 1024;
+const int kS3UtilRecheckSec = 5;
 
 std::unique_ptr<rocksdb::DB> GetRocksdb(const std::string& dir,
                                         const rocksdb::Options& options) {
@@ -553,6 +555,12 @@ void AdminHandler::async_tm_clearDB(
   callback->result(ClearDBResponse());
 }
 
+inline bool should_new_s3_client(
+    const common::S3Util& s3_util, AddS3SstFilesToDBRequest* request) {
+  return s3_util.getBucket() != request->s3_bucket ||
+         s3_util.getRateLimit() != request->s3_download_limit_mb;
+}
+
 void AdminHandler::async_tm_addS3SstFilesToDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       AddS3SstFilesToDBResponse>>> callback,
@@ -561,29 +569,25 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   // we couldn't afford to create a new client for every SST file downloading
   // request, which is not even on any critical code path. Otherwise, we will
   // see latency spike when uploading data to production clusters.
-  static const uint32_t s3_download_limit_mb = request->s3_download_limit_mb;
-  static const std::string s3_bucket = request->s3_bucket;
-  static auto s3Util = common::S3Util::BuildS3Util(
-    s3_download_limit_mb, s3_bucket);
+  std::shared_ptr<common::S3Util> local_s3_util;
+  {
+    std::lock_guard<std::mutex> guard(s3_util_lock_);
+    if (s3_util_ == nullptr || should_new_s3_client(*s3_util_, request.get())) {
+      // Request with different ratelimit or bucket has to wait for old
+      // requests to drain.
+      while (s3_util_ != nullptr && s3_util_.use_count() > 1) {
+        LOG(INFO) << "There are other downloads happening, wait "
+                  << kS3UtilRecheckSec << " seconds";
+        std::this_thread::sleep_for(std::chrono::seconds(kS3UtilRecheckSec));
+      }
+      s3_util_ = common::S3Util::BuildS3Util(request->s3_download_limit_mb,
+                                             request->s3_bucket);
+    }
+    local_s3_util = s3_util_;
+  }
 
   admin::AdminException e;
   e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
-
-  if (s3_download_limit_mb != request->s3_download_limit_mb ||
-      s3_bucket != request->s3_bucket) {
-    // TODO(bol) currently we use the parameters in the first request recieved.
-    // Fixing me by upgrading to new s3 sdk and changing the S3Util interface.
-    std::string err_msg = "Inconsistent download limit: "
-      + folly::to<std::string>(request->s3_download_limit_mb)
-      + " and s3 bucket: " + request->s3_bucket + " received. "
-      + folly::to<std::string>(s3_download_limit_mb)
-      + " and " + s3_bucket + " required.";
-
-    e.message = request->db_name + " " + err_msg;
-    callback.release()->exceptionInThread(std::move(e));
-    LOG(ERROR) << err_msg;
-    return;
-  }
 
   db_admin_lock_.Lock(request->db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
@@ -620,7 +624,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     return;
   }
 
-  auto responses = s3Util->getObjects(request->s3_path,
+  auto responses = local_s3_util->getObjects(request->s3_path,
                                       local_path, "/", FLAGS_s3_direct_io);
   if (!responses.Error().empty() || responses.Body().size() == 0) {
     e.message = "Failed to list any object from " + request->s3_path;
