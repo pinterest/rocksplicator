@@ -158,6 +158,9 @@ TEST(ThriftRouterTest, Basics) {
   EXPECT_EQ(router.getShardNumberFor("user_pins"), 0);
   EXPECT_EQ(router.getShardNumberFor("interest_pins"), 0);
   EXPECT_EQ(router.getShardNumberFor("unknown"), 0);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 0);
+  EXPECT_EQ(router.getHostNumberFor("interest_pins", 1), 0);
+  EXPECT_EQ(router.getHostNumberFor("unknown", 0), 0);
 
   std::vector<shared_ptr<DummyServiceAsyncClient>> v;
   EXPECT_EQ(
@@ -177,6 +180,14 @@ TEST(ThriftRouterTest, Basics) {
   EXPECT_EQ(router.getShardNumberFor("user_pins"), 3);
   EXPECT_EQ(router.getShardNumberFor("interest_pins"), 2);
   EXPECT_EQ(router.getShardNumberFor("unknown"), 0);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 1);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 1);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 2), 3);
+  EXPECT_EQ(router.getShardNumberFor("interest_pins"), 2);
+  EXPECT_EQ(router.getHostNumberFor("interest_pins", 0), 1);
+  EXPECT_EQ(router.getHostNumberFor("interest_pins", 1), 1);
+  EXPECT_EQ(router.getShardNumberFor("unknown"), 0);
+  EXPECT_EQ(router.getHostNumberFor("unknown", 1), 0);
 
   EXPECT_EQ(
     router.getClientsFor("user_pins", Role::ANY, Quantity::ALL, 2, &v),
@@ -279,6 +290,9 @@ TEST(ThriftRouterTest, Basics) {
   EXPECT_EQ(router.getShardNumberFor("user_pins"), 3);
   EXPECT_EQ(router.getShardNumberFor("interest_pins"), 2);
   EXPECT_EQ(router.getShardNumberFor("unknown"), 0);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 2);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 2);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 2), 3);
 
   EXPECT_EQ(
     router.getClientsFor("user_pins", Role::SLAVE, Quantity::ALL, 1, &v),
@@ -425,6 +439,9 @@ TEST(ThriftRouterTest, LocalAzTest) {
   sleep(1);
   
   EXPECT_EQ(router.getShardNumberFor("user_pins"), 3);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 3);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 3);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 2), 3);
 
   EXPECT_EQ(
     router.getClientsFor("user_pins", Role::ANY, Quantity::ALL, 2, &v),
@@ -476,6 +493,9 @@ TEST(ThriftRouterTest, ForeignAzTest) {
   sleep(1);
   
   EXPECT_EQ(router.getShardNumberFor("user_pins"), 3);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 3);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 3);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 2), 3);
 
   EXPECT_EQ(
     router.getClientsFor("user_pins", Role::ANY, Quantity::ALL, 2, &v),

@@ -189,11 +189,7 @@ class ThriftRouter {
   }
 
   uint32_t getShardNumberFor(const std::string& segment) {
-    std::shared_ptr<const ClusterLayout> layout;
-    {
-      folly::RWSpinLock::ReadHolder read_guard(layout_rwlock_);
-      layout = cluster_layout_;
-    }
+    const auto layout = getClusterLayout();
 
     if (UNLIKELY(layout == nullptr)) {
       return 0;
@@ -207,18 +203,41 @@ class ThriftRouter {
     return itor->second.shard_to_hosts.size();
   }
 
+  /*
+   * This function is AZ unaware. It returns the total number of hosts
+   * within the segment and shard.
+   */
+  uint32_t getHostNumberFor(const std::string& segment, const ShardID shard) {
+    const auto layout = getClusterLayout();
+
+    if (UNLIKELY(layout == nullptr)) {
+      return 0;
+    }
+
+    auto itor = layout->segments.find(segment);
+    if (itor == layout->segments.end()) {
+      return 0;
+    }
+
+    if (UNLIKELY(shard >= itor->second.shard_to_hosts.size())) {
+      return 0;
+    }
+
+    return itor->second.shard_to_hosts[shard].size();
+  }
+
   // no copy or move
   ThriftRouter(const ThriftRouter&) = delete;
   ThriftRouter& operator=(const ThriftRouter&) = delete;
 
  private:
+  std::shared_ptr<const ClusterLayout> getClusterLayout() {
+    folly::RWSpinLock::ReadHolder read_guard(layout_rwlock_);
+    return cluster_layout_;
+  }
+
   void updateClusterLayout() {
-    std::shared_ptr<const ClusterLayout> layout;
-    {
-      folly::RWSpinLock::ReadHolder read_guard(layout_rwlock_);
-      layout = cluster_layout_;
-    }
-    local_client_map_.updateClusterLayout(std::move(layout));
+    local_client_map_.updateClusterLayout(getClusterLayout());
   }
 
   class ThreadLocalClientMap {
