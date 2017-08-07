@@ -162,14 +162,17 @@ SdkGetObjectResponse S3Util::sdkGetObject(const string& key,
   return getObjectResult;
 }
 
-ListObjectsResponse S3Util::listObjects(const string& prefix,
-                                        const string& delimiter) {
-  vector<string> objects;
+void S3Util::listObjectsHelper(const string& prefix, const string& delimiter,
+                               const string& marker, vector<string>* objects,
+                               string* next_marker, string* error_message) {
   ListObjectsRequest listObjectRequest;
   listObjectRequest.SetBucket(bucket_);
   listObjectRequest.SetPrefix(prefix);
   if (!delimiter.empty()) {
     listObjectRequest.SetDelimiter(delimiter);
+  }
+  if (!marker.empty()) {
+    listObjectRequest.SetMarker(marker);
   }
   auto listObjectResult = s3Client.ListObjects(listObjectRequest);
   if (listObjectResult.IsSuccess()) {
@@ -177,20 +180,52 @@ ListObjectsResponse S3Util::listObjects(const string& prefix,
       Aws::Vector<Aws::S3::Model::CommonPrefix> contents =
         listObjectResult.GetResult().GetCommonPrefixes();
       for (const auto& object : contents) {
-        objects.push_back(object.GetPrefix());
+        objects->push_back(object.GetPrefix());
       }
     } else {
       Aws::Vector<Aws::S3::Model::Object> contents =
         listObjectResult.GetResult().GetContents();
       for (const auto& object : contents) {
-        objects.push_back(object.GetKey());
+        objects->push_back(object.GetKey());
       }
     }
-    return ListObjectsResponse(objects, "");
+
+    if (listObjectResult.GetResult().GetIsTruncated() &&
+            next_marker != nullptr) {
+      if (listObjectResult.GetResult().GetNextMarker().empty()) {
+        // if the response is truncated but NextMarker is not set,
+        // last object of response can be used as marker.
+        *next_marker = objects->back();
+      } else {
+        *next_marker = listObjectResult.GetResult().GetNextMarker();
+      }
+    }
   } else {
-    return ListObjectsResponse(
-        objects, listObjectResult.GetError().GetMessage());
+    if (error_message != nullptr) {
+      *error_message = listObjectResult.GetError().GetMessage();
+    }
   }
+}
+
+
+ListObjectsResponse S3Util::listObjects(const string& prefix,
+                                        const string& delimiter) {
+  vector<string> objects;
+  string error_message;
+  listObjectsHelper(prefix, delimiter, "", &objects, nullptr, &error_message);
+  return ListObjectsResponse(objects, error_message);
+}
+
+ListObjectsResponseV2 S3Util::listObjectsV2(const string& prefix,
+                                            const string& delimiter,
+                                            const string& marker) {
+  vector<string> objects;
+  string error_message;
+  string next_marker;
+  listObjectsHelper(prefix, delimiter, marker, &objects,
+                    &next_marker, &error_message);
+  return ListObjectsResponseV2(
+          ListObjectsResponseV2Body(objects, next_marker), error_message);
 }
 
 GetObjectsResponse S3Util::getObjects(

@@ -127,10 +127,25 @@ class DirectIOFileSink {
   std::shared_ptr<DirectIOWritableFile> writable_file_;
 };
 
+/**
+ * A wrapper class based on Aws::ListObjectsResult which provides
+ * richer information we need:
+ * 1. NextMarker (non-empty if ListObjectsResult::m_isTruncated == true)
+ * 2. List of retrieved object names.
+ */
+class ListObjectsResponseV2Body {
+ public:
+  ListObjectsResponseV2Body(
+    const vector<string>& _objects, const string& _next_marker):
+      objects(_objects), next_marker(_next_marker) {}
+  vector<string> objects;
+  string next_marker;
+};
 
 using GetObjectResponse = S3UtilResponse<bool>;
 using SdkGetObjectResponse = Aws::S3::Model::GetObjectOutcome;
 using ListObjectsResponse = S3UtilResponse<vector<string>>;
+using ListObjectsResponseV2 = S3UtilResponse<ListObjectsResponseV2Body>;
 using GetObjectsResponse = S3UtilResponse<vector<GetObjectResponse>>;
 using GetObjectMetadataResponse = S3UtilResponse<map<string, string>>;
 
@@ -185,8 +200,19 @@ class S3Util {
   // Return a list of objects under the prefix.
   // If delimiter is not empty, it will return all keys between Prefix
   // and the next occurrence of the string specified by delimiter.
+  // NOTE: this API doesn't provide continuation support.
   ListObjectsResponse listObjects(const string& prefix,
                                   const string& delimiter = "");
+
+  // Return a list of objects under the prefix.
+  // If delimiter is not empty, it will return all keys between Prefix
+  // and the next occurrence of the string specified by delimiter.
+  // next_marker can be used for continuation (if the objects are more than
+  // s3 default max 1000). If set to empty, we will not use continuation.
+  ListObjectsResponseV2 listObjectsV2(const string& prefix,
+                                      const string& delimiter = "",
+                                      const string& marker = "");
+
   // Download all objects under a prefix. We only assume
   // For each object downloading,
   // if the download is successful, the error message will be
@@ -220,6 +246,10 @@ class S3Util {
   }
 
  private:
+  void listObjectsHelper(const string& prefix, const string& delimiter,
+                         const string& marker, vector<string>* objects,
+                         string* next_marker, string* error_message);
+
   const string bucket_;
   // S3Client is thread safe:
   // https://github.com/aws/aws-sdk-cpp/issues/166
