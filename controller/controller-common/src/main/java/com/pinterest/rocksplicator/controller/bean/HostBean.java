@@ -43,6 +43,7 @@ public class HostBean {
   /** host port */
   private int port;
 
+  @NotEmpty
   /** availability zone */
   private String availabilityZone;
 
