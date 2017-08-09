@@ -17,6 +17,7 @@
 package com.pinterest.rocksplicator.controller.bean;
 
 
+import com.pinterest.rocksplicator.controller.Cluster;
 import org.hibernate.validator.constraints.NotEmpty;
 
 import java.util.ArrayList;
@@ -29,19 +30,18 @@ import java.util.List;
 public class ClusterBean {
 
   @NotEmpty
-  /** name of the cluster */
-  private String name;
+  private Cluster cluster;
 
   /** list of segments in this cluster */
   private List<SegmentBean> segments = Collections.emptyList();
 
-  public String getName() {
-    return name;
+  public ClusterBean setCluster(Cluster cluster) {
+    this.cluster = cluster;
+    return this;
   }
 
-  public ClusterBean setName(String name) {
-    this.name = name;
-    return this;
+  public Cluster getCluster() {
+    return cluster;
   }
 
   public List<SegmentBean> getSegments() {
@@ -55,7 +55,7 @@ public class ClusterBean {
 
   @Override
   public String toString() {
-    return name;
+    return cluster.toString();
   }
 
 }

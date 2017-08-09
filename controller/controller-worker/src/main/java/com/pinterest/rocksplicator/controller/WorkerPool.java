@@ -40,7 +40,7 @@ public final class WorkerPool {
   // TODO: graceful shutdown.
   private static final Logger LOG = LoggerFactory.getLogger(WorkerPool.class);
   private final Semaphore idleWorkersSemaphore;
-  private final ConcurrentHashMap<String, Future> runningTasks;
+  private final ConcurrentHashMap<Cluster, Future> runningTasks;
   private final ExecutorService executorService;
   private final TaskQueue taskQueue;
 
@@ -67,7 +67,7 @@ public final class WorkerPool {
 
     Future<?> future = executorService.submit(() -> {
       try {
-        final Context ctx = new Context(task.id, task.clusterName, taskQueue,
+        final Context ctx = new Context(task.id, task.cluster, taskQueue,
             WorkerConfig.getHostName() + ":" + Thread.currentThread().getName());
         baseTask.process(ctx);
         LOG.info("Finished processing task {}.", task.name);
@@ -77,12 +77,12 @@ public final class WorkerPool {
         // completed by itself. Therefore, the result of this operation is ignored.
         taskQueue.failTask(task.id, t.getMessage());
       } finally {
-        runningTasks.remove(task.clusterName);
+        runningTasks.remove(task.cluster);
         idleWorkersSemaphore.release();
       }
     });
 
-    runningTasks.put(task.clusterName, future);
+    runningTasks.put(task.cluster, future);
     return true;
   }
 

@@ -22,10 +22,7 @@ import com.pinterest.rocksplicator.controller.bean.SegmentBean;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
 import com.pinterest.rocksplicator.controller.util.EmailSender;
 import com.pinterest.rocksplicator.controller.util.ZKUtil;
-import com.pinterest.rocksplicator.controller.WorkerConfig;
 
-
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.thrift.TException;
 import org.slf4j.Logger;
@@ -46,7 +43,7 @@ import javax.inject.Inject;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
+public class HealthCheckTask extends AbstractTask<Parameter> {
 
   public static final Logger LOG = LoggerFactory.getLogger(HealthCheckTask.class);
 
@@ -62,18 +59,16 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
   /**
    * Construct a new HealthCheckTask with number of replicas equals to 3
    */
-  public HealthCheckTask() { this(new HealthCheckTask.Param());}
+  public HealthCheckTask() { this(new Parameter());}
 
-  public HealthCheckTask(HealthCheckTask.Param param) {
+  public HealthCheckTask(Parameter param) {
     super(param);
   }
 
   @Override
   public void process(Context ctx) {
-    final String clusterName = ctx.getCluster();
     try {
-      ClusterBean clusterBean = ZKUtil.getClusterConfig(
-          zkClient, getParameter().getZkPrefix(), clusterName);
+      ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, ctx.getCluster());
       if (clusterBean == null) {
         ctx.getTaskQueue().failTask(ctx.getId(), "Failed to read cluster config from zookeeper.");
         return;
@@ -100,30 +95,18 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
       if (!badHosts.isEmpty()) {
         String errorMessage = String.format("Unable to ping hosts: %s", badHosts);
         ctx.getTaskQueue().failTask(ctx.getId(),errorMessage);
-        emailSender.sendEmail("Healthcheck Failed for " + clusterName, errorMessage);
+        emailSender.sendEmail("Healthcheck Failed for " + ctx.getCluster(), errorMessage);
         return;
       }
 
       LOG.info("All hosts are good");
-      String output = String.format("Cluster %s is healthy", clusterName);
+      String output = String.format("Cluster %s is healthy", ctx.getCluster());
       ctx.getTaskQueue().finishTask(ctx.getId(), output);
     } catch (Exception ex) {
       String errorMessage =
-          String.format("Cluster %s is unhealthy, reason = %s", clusterName, ex.getMessage());
+          String.format("Cluster %s is unhealthy, reason = %s", ctx.getCluster(), ex.getMessage());
       ctx.getTaskQueue().failTask(ctx.getId(), errorMessage);
-      emailSender.sendEmail("Healthcheck Failed for " + clusterName, errorMessage);
-    }
-  }
-
-  public static class Param extends Parameter {
-    @JsonProperty
-    private String zkPrefix = WorkerConfig.getZKPath();
-
-    public String getZkPrefix() { return zkPrefix; }
-
-    public Param setZkPrefix(String zkPrefix) {
-      this.zkPrefix= zkPrefix;
-      return this;
+      emailSender.sendEmail("Healthcheck Failed for " + ctx.getCluster(), errorMessage);
     }
   }
 }

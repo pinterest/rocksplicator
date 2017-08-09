@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.resource;
 
+import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.TaskBase;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
@@ -59,16 +60,18 @@ import javax.ws.rs.core.Response;
 public class Clusters {
   private static final Logger LOG = LoggerFactory.getLogger(Clusters.class);
 
-  private final String zkPath;
+  private static final String ZK_PREFIX = "/config/services/";
   private final CuratorFramework zkClient;
   private final TaskQueue taskQueue;
 
-  public Clusters(String zkPath,
-                  CuratorFramework zkClient,
+  public Clusters(CuratorFramework zkClient,
                   TaskQueue taskQueue) {
-    this.zkPath = zkPath;
     this.zkClient = zkClient;
     this.taskQueue = taskQueue;
+  }
+
+  private String getClusterZKPath(final String namespace, final String clusterName) {
+    return ZK_PREFIX + namespace + "/" + clusterName;
   }
 
   /**
@@ -78,12 +81,13 @@ public class Clusters {
    * @return            ClusterBean
    */
   @GET
-  @Path("/{clusterName : [a-zA-Z0-9\\-_]+}")
+  @Path("/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public Response get(@PathParam("clusterName") String clusterName) {
+  public Response get(@PathParam("namespace") String namespace,
+                      @PathParam("clusterName") String clusterName) {
     final ClusterBean clusterBean;
     try {
-      clusterBean = checkExistenceAndGetClusterBean(clusterName);
+      clusterBean = checkExistenceAndGetClusterBean(namespace, clusterName);
     } catch (Exception e) {
       String message = String.format("Failed to read from zookeeper: %s", e);
       LOG.error(message);
@@ -104,14 +108,14 @@ public class Clusters {
   @GET
   @Produces(MediaType.APPLICATION_JSON)
   public Response getAll(@QueryParam("verbose") Optional<Boolean> verbose) {
-    final Set<String> clusters = taskQueue.getAllClusters();
+    final Set<Cluster> clusters = taskQueue.getAllClusters();
     if (!verbose.isPresent() || verbose.get().equals(Boolean.FALSE)) {
       return Utils.buildResponse(HttpStatus.OK_200, clusters);
     }
     final List<ClusterBean> clusterBeans = new ArrayList<>(clusters.size());
     try {
-      for (String cluster : clusters) {
-        ClusterBean clusterBean = checkExistenceAndGetClusterBean(cluster);
+      for (Cluster cluster : clusters) {
+        ClusterBean clusterBean = checkExistenceAndGetClusterBean(cluster.namespace, cluster.name);
         if (clusterBean != null) {
           clusterBeans.add(clusterBean);
         }
@@ -132,11 +136,13 @@ public class Clusters {
    * @param clusterName name of the cluster
    */
   @POST
-  @Path("/initialize/{clusterName : [a-zA-Z0-9\\-_]+}")
+  @Path("/initialize/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public Response initialize(@PathParam("clusterName") String clusterName) {
+  public Response initialize(@PathParam("namespace") String namespace,
+                             @PathParam("clusterName") String clusterName,
+                             @QueryParam("zkPrefix") Optional<String> zkPrefix) {
     // Create directly, we dont
-    if (taskQueue.createCluster(clusterName)) {
+    if (taskQueue.createCluster(new Cluster(namespace, clusterName))) {
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } else {
       String message = String.format("Cluster %s is already existed", clusterName);
@@ -150,10 +156,11 @@ public class Clusters {
    * @param clusterName name of the cluster
    */
   @POST
-  @Path("/remove/{clusterName : [a-zA-Z0-9\\-_]+}")
+  @Path("/remove/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public Response remove(@PathParam("clusterName") String clusterName) {
-    if (taskQueue.removeCluster(clusterName)) {
+  public Response remove(@PathParam("namespace") String namespace,
+                         @PathParam("clusterName") String clusterName) {
+    if (taskQueue.removeCluster(new Cluster(namespace, clusterName))) {
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } else {
       String message = String.format("Cluster %s is already locked, cannot remove", clusterName);
@@ -172,11 +179,12 @@ public class Clusters {
    * @param newHostOp   (optional) new host to add, in the format of ip:port
    */
   @POST
-  @Path("/replaceHost/{clusterName : [a-zA-Z0-9\\-_]+}")
+  @Path("/replaceHost/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public Response replaceHost(@PathParam("clusterName") String clusterName,
-                          @NotEmpty @QueryParam("oldHost") String oldHostString,
-                          @QueryParam("newHost") Optional<String> newHostOp) {
+  public Response replaceHost(@PathParam("namespace") String namespace,
+                              @PathParam("clusterName") String clusterName,
+                              @NotEmpty @QueryParam("oldHost") String oldHostString,
+                              @QueryParam("newHost") Optional<String> newHostOp) {
 
     //TODO(angxu) support adding random new host later
     if (!newHostOp.isPresent()) {
@@ -203,7 +211,7 @@ public class Clusters {
           //TODO(angxu) Add .retry(maxRetry) if necessary
           .getEntity();
 
-      taskQueue.enqueueTask(task, clusterName, 0);
+      taskQueue.enqueueTask(task, new Cluster(namespace, clusterName), 0);
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } catch (JsonProcessingException e) {
       String message = "Cannot serialize parameters";
@@ -222,9 +230,10 @@ public class Clusters {
    * @param rateLimit   s3 download size limit in mb
    */
   @POST
-  @Path("/loadData/{clusterName : [a-zA-Z0-9\\-_]+}")
+  @Path("/loadData/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public Response loadData(@PathParam("clusterName") String clusterName,
+  public Response loadData(@PathParam("namespace") String namespace,
+                       @PathParam("clusterName") String clusterName,
                        @NotEmpty @QueryParam("segmentName") String segmentName,
                        @NotEmpty @QueryParam("s3Bucket") String s3Bucket,
                        @NotEmpty @QueryParam("s3Prefix") String s3Prefix,
@@ -233,7 +242,7 @@ public class Clusters {
     try {
       TaskBase task = new LoadSSTTask(segmentName, s3Bucket, s3Prefix,
           concurrency.orElse(20), rateLimit.orElse(64)).getEntity();
-      taskQueue.enqueueTask(task, clusterName, 0);
+      taskQueue.enqueueTask(task, new Cluster(namespace, clusterName), 0);
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } catch (JsonProcessingException e) {
       String message = "Cannot serialize parameters";
@@ -250,10 +259,11 @@ public class Clusters {
    * @return true if the given cluster is locked, false otherwise
    */
   @POST
-  @Path("/lock/{clusterName : [a-zA-Z0-9\\-_]+}")
+  @Path("/lock/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public Response lock(@PathParam("clusterName") String clusterName) {
-    if (taskQueue.lockCluster(clusterName)) {
+  public Response lock(@PathParam("namespace") String namespace,
+                       @PathParam("clusterName") String clusterName) {
+    if (taskQueue.lockCluster(new Cluster(namespace, clusterName))) {
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } else {
       String message = String.format("Cluster %s is already locked, cannot double lock", clusterName);
@@ -268,10 +278,11 @@ public class Clusters {
    * @return true if the given cluster is unlocked, false otherwise
    */
   @POST
-  @Path("/unlock/{clusterName : [a-zA-Z0-9\\-_]+}")
+  @Path("/unlock/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public Response unlock(@PathParam("clusterName") String clusterName) {
-    if (taskQueue.unlockCluster(clusterName)) {
+  public Response unlock(@PathParam("namespace") String namespace,
+                         @PathParam("clusterName") String clusterName) {
+    if (taskQueue.unlockCluster(new Cluster(namespace, clusterName))) {
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } else {
       String message = String.format("Cluster %s is not created yet", clusterName);
@@ -286,13 +297,14 @@ public class Clusters {
    * @throws Exception
    */
   @POST
-  @Path("/logging/{clusterName : [a-zA-Z0-9\\-_]+}")
+  @Path("/logging/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public Response sendLogTask(@PathParam("clusterName") String clusterName,
-                          @NotEmpty @QueryParam("message") String message) {
+  public Response sendLogTask(@PathParam("namespace") String namespace,
+                              @PathParam("clusterName") String clusterName,
+                              @NotEmpty @QueryParam("message") String message) {
     try {
       TaskBase task = new LoggingTask(message).getEntity();
-      taskQueue.enqueueTask(task, clusterName, 0);
+      taskQueue.enqueueTask(task, new Cluster(namespace, clusterName), 0);
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));                     
     } catch (JsonProcessingException e) {
       String errorMessage = "Cannot serialize parameters";
@@ -308,9 +320,10 @@ public class Clusters {
    * @param zkPrefix if not specified, use DEFAULT_ZK_PATH in WorkerConfig.
    */
   @POST
-  @Path("/healthcheck/{clusterName : [a-zA-Z0-9\\-_]+}")
+  @Path("/healthcheck/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public Response healthcheck(@PathParam("clusterName") String clusterName,
+  public Response healthcheck(@PathParam("namespace") String namespace,
+                              @PathParam("clusterName") String clusterName,
                               @QueryParam("interval") Optional<Integer> intervalSeconds,
                               @QueryParam("zkPrefix") Optional<String> zkPrefix) {
     try {
@@ -320,7 +333,7 @@ public class Clusters {
       }
       TaskBase healthCheckTask = new HealthCheckTask(param)
           .recur(intervalSeconds.orElse(0)).getEntity();
-      taskQueue.enqueueTask(healthCheckTask, clusterName, 0);
+      taskQueue.enqueueTask(healthCheckTask, new Cluster(namespace, clusterName), 0);
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } catch (JsonProcessingException e) {
       String message = "Cannot serialize parameters";
@@ -337,16 +350,17 @@ public class Clusters {
    * @return
    */
   @POST
-  @Path("/configcheck/{clusterName: [a-zA-Z0-9\\-_]+}")
+  @Path("/configcheck/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName: [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
-  public Response configCheck(@PathParam("clusterName") String clusterName,
+  public Response configCheck(@PathParam("namespace") String namespace,
+                              @PathParam("clusterName") String clusterName,
                               @QueryParam("interval") Optional<Integer> intervalSeconds,
                               @QueryParam("replicas") Optional<Integer> numReplicas) {
     try {
       ConfigCheckTask.Param param = new ConfigCheckTask.Param().setNumReplicas(numReplicas.orElse(3));
       TaskBase configCheckTask =
           new ConfigCheckTask(param).recur(intervalSeconds.orElse(0)).getEntity();
-      taskQueue.enqueueTask(configCheckTask, clusterName, 0);
+      taskQueue.enqueueTask(configCheckTask, new Cluster(namespace, clusterName), 0);
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } catch (JsonProcessingException e) {
       String message = "Cannot serialize parameters: " + e.getMessage();
@@ -356,15 +370,16 @@ public class Clusters {
   }
 
 
-  private ClusterBean checkExistenceAndGetClusterBean(String clusterName) throws Exception {
-    if (zkClient.checkExists().forPath(zkPath + clusterName) == null) {
-      LOG.error("Znode {} doesn't exist.", zkPath + clusterName);
+  private ClusterBean checkExistenceAndGetClusterBean(
+      String namespace, String clusterName) throws Exception {
+    if (zkClient.checkExists().forPath(getClusterZKPath(namespace, clusterName)) == null) {
+      LOG.error("Znode {} doesn't exist.", getClusterZKPath(namespace, clusterName));
       return null;
     }
-    byte[] data = zkClient.getData().forPath(zkPath + clusterName);
-    ClusterBean clusterBean = ConfigParser.parseClusterConfig(clusterName, data);
+    byte[] data = zkClient.getData().forPath(getClusterZKPath(namespace, clusterName));
+    ClusterBean clusterBean = ConfigParser.parseClusterConfig(new Cluster(namespace, clusterName), data);
     if (clusterBean == null) {
-      LOG.error("Failed to parse config for cluster {}.", clusterName);
+      LOG.error("Failed to parse config for cluster {}/{}.", namespace, clusterName);
     }
     return clusterBean;
   }

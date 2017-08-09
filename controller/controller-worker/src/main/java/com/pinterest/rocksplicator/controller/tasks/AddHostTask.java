@@ -86,7 +86,8 @@ public class AddHostTask extends AbstractTask<AddHostTask.Param> {
 
   @Override
   public void process(Context ctx) throws Exception {
-    final String clusterName = ctx.getCluster();
+    // TODO(shu): unify the HDFS naming.
+    final String clusterName = ctx.getCluster().getNamespace() + "/" + ctx.getCluster().getName();
     final String hdfsDir = getParameter().getHdfsDir();
     final HostBean hostToAdd = getParameter().getHostToAdd();
     final int rateLimitMbs = getParameter().getRateLimitMbs();
@@ -101,7 +102,7 @@ public class AddHostTask extends AbstractTask<AddHostTask.Param> {
       return;
     }
 
-    ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, clusterName);
+    ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, ctx.getCluster());
     if (clusterBean == null) {
       ctx.getTaskQueue().failTask(ctx.getId(), "Failed to read cluster config from zookeeper.");
       return;

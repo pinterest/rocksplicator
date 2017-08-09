@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
+import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 
 
@@ -27,11 +28,11 @@ import com.pinterest.rocksplicator.controller.TaskQueue;
 public class Context {
 
   private long id;
-  private String cluster;
+  private Cluster cluster;
   private String worker;
   private TaskQueue taskQueue;
 
-  public Context(long id, String cluster, TaskQueue taskQueue, String worker) {
+  public Context(long id, Cluster cluster, TaskQueue taskQueue, String worker) {
     this.id = id;
     this.cluster = cluster;
     this.worker = worker;
@@ -42,7 +43,7 @@ public class Context {
     return id;
   }
 
-  public String getCluster() {
+  public Cluster getCluster() {
     return cluster;
   }
 

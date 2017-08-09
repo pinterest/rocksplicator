@@ -32,7 +32,7 @@ public class ControllerConfiguration extends Configuration {
   private String zkCluster;
 
   @NotEmpty
-  private String zkPath = "/config/services/rocksdb/";
+  private String defaultNamespace = "rocksdb";
 
   @NotEmpty
   private String jdbcUrl;
@@ -53,13 +53,13 @@ public class ControllerConfiguration extends Configuration {
   }
 
   @JsonProperty
-  public String getZkPath() {
-    return zkPath;
+  public String getDefaultNamespace() {
+    return defaultNamespace;
   }
 
   @JsonProperty
-  public void setZkPath(String zkPath) {
-    this.zkPath = zkPath;
+  public void setDefaultNamespace(String defaultNamespace) {
+    this.defaultNamespace = defaultNamespace;
   }
 
   @JsonProperty
