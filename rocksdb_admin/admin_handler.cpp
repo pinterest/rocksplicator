@@ -249,6 +249,73 @@ std::unique_ptr<rocksdb::DB> AdminHandler::removeDB(
   return db;
 }
 
+void AdminHandler::async_tm_addDB(
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+          AddDBResponse>>> callback,
+      std::unique_ptr<AddDBRequest> request) {
+  AdminException e;
+  // validate the request
+  auto db = getDB(request->db_name, &e);
+  if (db && !request->overwrite) {
+    e.errorCode = AdminErrorCode::DB_EXIST;
+    e.message = "Db already exists";
+    callback.release()->exceptionInThread(std::move(e));
+    return;
+  }
+
+  if (request->db_role == "SLAVE" &&
+      !request->__isset.upstream_ip) {
+    e.errorCode = AdminErrorCode::INVALID_UPSTREAM;
+    e.message = "upstream ip not set.";
+    callback.release()->exceptionInThread(std::move(e));
+    return;
+  }
+
+  // Get the upstream for the db to be added
+  auto upstream_addr = std::make_unique<folly::SocketAddress>();
+  if (!SetAddressOrException(request->upstream_ip,
+                             FLAGS_rocksdb_replicator_port,
+                             upstream_addr.get(),
+                             &callback)) {
+    return;
+  }
+
+  // Open the actual rocksdb instance
+  rocksdb::DB* rocksdb_db;
+  auto segment = admin::DbNameToSegment(request->db_name);
+  auto db_path = FLAGS_rocksdb_dir + request->db_name;
+  auto status = rocksdb::DB::Open(rocksdb_options_(segment), db_path, &rocksdb_db);
+  if (!OKOrSetException(status,
+                        AdminErrorCode::DB_ERROR,
+                        &callback)) {
+    return;
+  }
+
+  replicator::DBRole db_role;
+  if (request->db_role == "MASTER") {
+    db_role = replicator::DBRole::MASTER;
+  } else if (request->db_role == "SLAVE") {
+    db_role = replicator::DBRole::SLAVE;
+  } else{
+    e.errorCode = AdminErrorCode::INVALID_DB_ROLE;
+    e.message = std::move(request->db_role);
+    callback.release()->exceptionInThread(std::move(e));
+    return;
+  }
+
+  // add the db to db_manager
+  std::string err_msg;
+  if (!db_manager_->addDB(request->db_name,
+                          std::unique_ptr<rocksdb::DB>(rocksdb_db),
+                          db_role, std::move(upstream_addr), &err_msg)) {
+    e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+    e.message = std::move(err_msg);
+    callback.release()->exceptionInThread(std::move(e));
+    return;
+  }
+  callback->result(AddDBResponse());
+}
+
 void AdminHandler::async_tm_ping(
     std::unique_ptr<apache::thrift::HandlerCallback<void>> callback) {
     callback->done();

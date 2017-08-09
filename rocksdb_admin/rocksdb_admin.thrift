@@ -30,6 +30,18 @@ exception AdminException {
   2: required AdminErrorCode errorCode,
 }
 
+struct AddDBRequest {
+  # the db to add. If it is not a master, you must provide upstream info
+  1: required string db_name,
+  2: optional string db_role = "SLAVE",
+  3: optional string upstream_ip,
+  4: optional bool overwrite = false,
+}
+
+struct AddDBResponse {
+  # for future use
+}
+
 struct BackupDBRequest {
   # the db to backup
   1: required string db_name,
@@ -146,6 +158,13 @@ service Admin {
  * Ping the server for liveness.
  */
 void ping()
+
+/*
+ * Add the DB to the host, throw exception if it already exists
+ * and overwrite is false.
+ */
+AddDBResponse addDB(1: AddDBRequest request)
+  throws (1:AdminException e)
 
 /*
  * Create a backup on hdfs for the specified db.
