@@ -1,6 +1,8 @@
 {
-  "name": "angular-material-dashboard",
-  "version": "1.3.0",
+  "name": "controller-board",
+  "repository": "https://github.com/pinterest/rocksplicator",
+  "license": "MIT",
+  "version": "1.0.0",
   "dependencies": {},
   "devDependencies": {
     "browser-sync": "~1.7.1",
