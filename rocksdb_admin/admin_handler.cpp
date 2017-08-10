@@ -596,6 +596,31 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   std::unique_ptr<folly::SocketAddress> upstream_addr;
   {
     auto db = getDB(request->db_name, nullptr);
+    if (db == nullptr && request->create_db) {
+      rocksdb::DB* rocksdb_db;
+      auto segment = admin::DbNameToSegment(request->db_name);
+      auto db_path = FLAGS_rocksdb_dir + request->db_name;
+      auto status = rocksdb::DB::Open(rocksdb_options_(segment), db_path, &rocksdb_db);
+
+      if (!OKOrSetException(status,
+                            AdminErrorCode::DB_ERROR,
+                            &callback)) {
+        return;
+      }
+
+      std::string err_msg;
+      if (!db_manager_->addDB(request->db_name,
+                              std::unique_ptr<rocksdb::DB>(rocksdb_db),
+                              replicator::DBRole::SLAVE,
+                              std::move(upstream_addr), &err_msg)) {
+        e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+        e.message = std::move(err_msg);
+        callback.release()->exceptionInThread(std::move(e));
+        return;
+      }
+      db = getDB(request->db_name, nullptr);
+    }
+
     if (db == nullptr) {
       e.message = request->db_name + " not exists.";
       callback.release()->exceptionInThread(std::move(e));
