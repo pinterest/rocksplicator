@@ -4,7 +4,6 @@
         .module('app')
         .controller('TaskController', [
             'taskService',
-            '$scope',
             TaskController
         ]);
 
@@ -20,6 +19,7 @@
             .then(function(result) {
                 vm.statusCode = result.status;
                 vm.allTasks = result.data;
+                // todo: remove fake tasks below
                 vm.allTasks.push({
                     "name": "com.pinterest.rocksplicator.controller.tasks.HealthCheckTask",
                     "priority": 1,
@@ -31,7 +31,7 @@
                     "runAfter": 1500529716000,
                     "lastAliveAt": 1501533308000,
                     "claimedWorker": "evening-MBP13-SX0PK",
-                    "output": null
+                    "output": "im just a output"
                 });
                 vm.allTasks.push({
                     "name": "com.pinterest.rocksplicator.controller.tasks.HealthCheckTask",
@@ -57,28 +57,27 @@
 
 
         vm.getDate = function(data){
-          return new Date(data).toString().split(' ').splice(1,4).join(' ');
-        }
+            return new Date(data).toString().split(' ').splice(1,4).join(' ');
+        };
 
         vm.getStateProgressBarValue = function (state) {
-          if (state === 0){
-            return 1;
-          }
-          else if (state === 1){
-            return 60;
-          }
-          else if (state === 2){
-            return 0;
-          }
-          else {
-            return 0;
-          }
+            var stateToProgressValueDict = {
+                0 : 1,
+                1 : 60,
+                2 : 0
+            };
 
-        }
+            if (state in stateToProgressValueDict) {
+                return stateToProgressValueDict[state];
+            }
+            else {
+                return 0;
+            }
+        };
 
         vm.toggleShowDetail = function(index){
           vm.showDetail[index] = !vm.showDetail[index];
-        }
+        };
 
         vm.getStateText = function(state){
             switch (state) {
@@ -91,9 +90,6 @@
                 case 3:
                     return 'FAILED';
             }
-        }
+        };
     }
-
-
-
 })();

@@ -42,7 +42,7 @@
                           clusterConfigService.setRunningHosts(hosts.data);
                           clusterConfigService.processConfig();
                           vm.statusCode = hosts.status;
-                          $state.go(".shard", { "clustersName": vm.clusterSelected});
+                          $state.go('.shard', { 'clustersName': vm.clusterSelected});
                           vm.hideCluster = true;
                           vm.loadComplete = true;
                       },function(error){
