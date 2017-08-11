@@ -39,7 +39,7 @@
                 <md-tab-body>
                     <md-content layout="column" layout-padding>
                         <md-input-container class="search-bar">
-                            <input ng-model="query" placeholder="Search For a Cluster Here">
+                            <input ng-model="hostquery" placeholder="Search For a Cluster Here">
                             <md-icon class="material-icons">search</md-icon>
                         </md-input-container>
                     </md-content>
@@ -54,7 +54,7 @@
                         </tr>
                         </thead>
                         <tbody md-body>
-                        <tr md-row ng-repeat="host in vm.hostsInConfig | filter : query track by $index">
+                        <tr md-row ng-repeat="host in vm.hostsInConfig | filter : hostquery track by $index">
                             <td md-cell>{{$index+1}}</td>
                             <td md-cell>{{host.name}}</td>
                             <td md-cell>{{host.ip}}</td>
