@@ -11,7 +11,7 @@
   function ClusterConfigController(clusterConfigService, $state) {
       var vm = this;
       vm.clusterTable = [];
-      vm.clusterSelected = "UNKNOWN";
+      vm.clusterSelected = '';
       vm.hideCluster = false;
       vm.loadComplete = false;
       vm.statusCode = -1;
