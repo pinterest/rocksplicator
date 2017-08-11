@@ -3,13 +3,12 @@
   angular
        .module('app')
        .controller('MainController', [
-          'navService', '$mdSidenav', '$mdBottomSheet', '$log', '$q', '$state', '$mdToast',
+          'navService', '$mdSidenav', '$mdBottomSheet', '$q', '$state', '$mdToast',
           MainController
        ]);
 
-  function MainController(navService, $mdSidenav, $mdBottomSheet, $log, $q, $state, $mdToast) {
+  function MainController(navService, $mdSidenav, $mdBottomSheet, $q, $state, $mdToast) {
     var vm = this;
-
     vm.menuItems = [];
     vm.selectItem = selectItem;
     vm.toggleItemsList = toggleItemsList;

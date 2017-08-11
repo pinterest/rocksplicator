@@ -6,12 +6,10 @@
             'taskService',
             '$scope',
             TaskController
-
         ]);
 
     function TaskController(taskService) {
         var vm = this;
-
         vm.allTasks = [];
         vm.showDetail = [];
         vm.loadComplete = false;
@@ -91,7 +89,7 @@
                 case 2:
                     return 'FINISHED';
                 case 3:
-                    return 'ABORTED';
+                    return 'FAILED';
             }
         }
     }
