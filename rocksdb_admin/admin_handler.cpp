@@ -580,6 +580,9 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
                   << kS3UtilRecheckSec << " seconds";
         std::this_thread::sleep_for(std::chrono::seconds(kS3UtilRecheckSec));
       }
+      // Invoke destructor explicitly to make sure Aws::InitAPI()
+      // and Aps::ShutdownApi() appear in pairs.
+      s3_util_ = nullptr;
       s3_util_ = common::S3Util::BuildS3Util(request->s3_download_limit_mb,
                                              request->s3_bucket);
     }
