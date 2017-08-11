@@ -28,7 +28,7 @@
             hostNotInConfig = [];
         }
 
-        function populateConfigVariables() {
+        function processConfigHelper() {
             rawClusterConfig.segments.forEach(function(segment) {
                 // initialize segment list
 
@@ -117,7 +117,7 @@
             },
 
             processConfig : function () {
-                populateConfigVariables();
+                processConfigHelper();
             },
 
             getClusterName : function () {
