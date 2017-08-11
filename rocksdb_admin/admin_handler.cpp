@@ -253,20 +253,15 @@ void AdminHandler::async_tm_addDB(
       std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
           AddDBResponse>>> callback,
       std::unique_ptr<AddDBRequest> request) {
+  db_admin_lock_.Lock(request->db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
+
   AdminException e;
   // validate the request
   auto db = getDB(request->db_name, &e);
-  if (db && !request->overwrite) {
+  if (db) {
     e.errorCode = AdminErrorCode::DB_EXIST;
     e.message = "Db already exists";
-    callback.release()->exceptionInThread(std::move(e));
-    return;
-  }
-
-  if (request->db_role == "SLAVE" &&
-      !request->__isset.upstream_ip) {
-    e.errorCode = AdminErrorCode::INVALID_UPSTREAM;
-    e.message = "upstream ip not set.";
     callback.release()->exceptionInThread(std::move(e));
     return;
   }
@@ -291,23 +286,24 @@ void AdminHandler::async_tm_addDB(
     return;
   }
 
-  replicator::DBRole db_role;
-  if (request->db_role == "MASTER") {
-    db_role = replicator::DBRole::MASTER;
-  } else if (request->db_role == "SLAVE") {
-    db_role = replicator::DBRole::SLAVE;
-  } else{
-    e.errorCode = AdminErrorCode::INVALID_DB_ROLE;
-    e.message = std::move(request->db_role);
-    callback.release()->exceptionInThread(std::move(e));
-    return;
+  if (request->overwrite) {
+    LOG(INFO) << "Clearing DB: " << request->db_name;
+    status = rocksdb::DestroyDB(db_path, rocksdb_options_(segment));
+    if (!OKOrSetException(status,
+                          AdminErrorCode::DB_ADMIN_ERROR,
+                          &callback)) {
+      LOG(ERROR) << "Failed to clear DB " << request->db_name << " "
+                 << status.ToString();
+      return;
+    }
   }
 
   // add the db to db_manager
   std::string err_msg;
   if (!db_manager_->addDB(request->db_name,
                           std::unique_ptr<rocksdb::DB>(rocksdb_db),
-                          db_role, std::move(upstream_addr), &err_msg)) {
+                          replicator::DBRole::SLAVE, std::move(upstream_addr),
+                          &err_msg)) {
     e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
     e.message = std::move(err_msg);
     callback.release()->exceptionInThread(std::move(e));

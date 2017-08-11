@@ -31,11 +31,12 @@ exception AdminException {
 }
 
 struct AddDBRequest {
-  # the db to add. If it is not a master, you must provide upstream info
+  # the db to add. the db is added as slave, so upstream_ip must be provided
+  # if the db exists already, a DB_EXIST error is thrown
   1: required string db_name,
-  2: optional string db_role = "SLAVE",
-  3: optional string upstream_ip,
-  4: optional bool overwrite = false,
+  2: required string upstream_ip,
+  # if overwrite is true, then we will clear any existing DB if there is already info
+  3: optional bool overwrite = false,
 }
 
 struct AddDBResponse {
