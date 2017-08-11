@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.config;
 
+import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.bean.Role;
@@ -149,9 +150,10 @@ public class ConfigParserTest {
         "   }" +
         "}";
 
-    ClusterBean bean = ConfigParser.parseClusterConfig("test", config.getBytes());
+    ClusterBean bean = ConfigParser.parseClusterConfig(new Cluster("test", "test"), config.getBytes());
     Assert.assertNotNull(bean);
-    Assert.assertEquals(bean.getName(), "test");
+    Assert.assertEquals(bean.getCluster().getName(), "test");
+    Assert.assertEquals(bean.getCluster().getNamespace(), "test");
     Assert.assertEquals(bean.getSegments().size(), 2);
 
     // user_pins
@@ -211,9 +213,10 @@ public class ConfigParserTest {
         "   }" +
         "}";
 
-    ClusterBean cluster = ConfigParser.parseClusterConfig("test2", config.getBytes());
+    ClusterBean cluster = ConfigParser.parseClusterConfig(new Cluster("test", "test"), config.getBytes());
     Assert.assertNotNull(cluster);
-    Assert.assertEquals(cluster.getName(), "test2");
+    Assert.assertEquals(cluster.getCluster().getName(), "test");
+    Assert.assertEquals(cluster.getCluster().getNamespace(), "test");
     Assert.assertEquals(cluster.getSegments().size(), 1);
 
     SegmentBean userPins = findSegment(cluster.getSegments(), "user_pins").get();
@@ -249,7 +252,7 @@ public class ConfigParserTest {
 
   @Test(dataProvider = "config")
   public void testSerializeClusterConfig(String originalConfig) throws JsonProcessingException {
-    ClusterBean deserialized= ConfigParser.parseClusterConfig("", originalConfig.getBytes());
+    ClusterBean deserialized= ConfigParser.parseClusterConfig(new Cluster("test", "test"), originalConfig.getBytes());
     String serializedConfig = ConfigParser.serializeClusterConfig(deserialized);
     assertConfigEquals(originalConfig, serializedConfig);
   }
@@ -267,8 +270,10 @@ public class ConfigParserTest {
   }
 
   public static void assertConfigEquals(String conf1, String conf2) {
-    ClusterBean cluster1 = ConfigParser.parseClusterConfig("", conf1.getBytes());
-    ClusterBean cluster2 = ConfigParser.parseClusterConfig("", conf2.getBytes());
+    ClusterBean cluster1 = ConfigParser.parseClusterConfig(
+        new Cluster("test", "test"), conf1.getBytes());
+    ClusterBean cluster2 = ConfigParser.parseClusterConfig(
+        new Cluster("test2", "test2"), conf2.getBytes());
 
     Assert.assertNotNull(cluster1);
     Assert.assertNotNull(cluster2);
@@ -287,6 +292,5 @@ public class ConfigParserTest {
         }
       }
     }
-
   }
 }

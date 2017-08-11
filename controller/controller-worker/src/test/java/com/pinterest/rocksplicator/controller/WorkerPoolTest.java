@@ -36,7 +36,7 @@ public class WorkerPoolTest {
         new SleepIncrementTask(1000)
             .getEntity()
     );
-    task.clusterName = nameCounter.toString();
+    task.cluster = new Cluster("rocksdb", nameCounter.toString());
     nameCounter += 1;
     return task;
   }
@@ -103,7 +103,7 @@ public class WorkerPoolTest {
     Task task = getSleepIncrementTask();
     workerPool.assignTask(task);
     Thread.sleep(10);
-    workerPool.abortTask(task.clusterName);
+    workerPool.abortTask(task.cluster);
     Thread.sleep(100);
     Assert.assertEquals(1, idleWorkersSemaphore.availablePermits());
   }

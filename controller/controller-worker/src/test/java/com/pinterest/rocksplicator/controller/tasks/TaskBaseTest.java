@@ -20,6 +20,7 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.when;
 
 import com.pinterest.rocksdb_admin.thrift.Admin;
+import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
 import com.pinterest.rocksplicator.controller.util.EmailSender;
@@ -43,7 +44,7 @@ import java.net.InetSocketAddress;
  * @author Ang Xu (angxu@pinterest.com)
  */
 public abstract class TaskBaseTest {
-  protected static final String CLUSTER = "devtest";
+  protected static final Cluster CLUSTER = new Cluster("rocksdb", "devtest");
   protected static final String CONFIG =
       "{" +
           "  \"user_pins\": {" +

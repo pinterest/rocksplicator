@@ -77,6 +77,7 @@ public class Clusters {
   /**
    * Retrieves cluster information by cluster name.
    *
+   * @param namespace cluster namespace
    * @param clusterName name of the cluster
    * @return            ClusterBean
    */
@@ -133,6 +134,7 @@ public class Clusters {
    * Initializes a given cluster. This may include adding designated tag
    * in DB and/or writing shard config to zookeeper.
    *
+   * @param namespace cluster namespace
    * @param clusterName name of the cluster
    */
   @POST
@@ -153,6 +155,7 @@ public class Clusters {
   /**
    * Remove tag in DB and shard config in zookeeper.
    *
+   * @param namespace cluster namespace
    * @param clusterName name of the cluster
    */
   @POST
@@ -174,8 +177,9 @@ public class Clusters {
    * Otherwise, controller will randomly pick one for the user.
    *
    *
+   * @param namespace cluster namespace
    * @param clusterName name of the cluster
-   * @param oldHost     host to be replaced, in the format of ip:port
+   * @param oldHostString     host to be replaced, in the format of ip:port
    * @param newHostOp   (optional) new host to add, in the format of ip:port
    */
   @POST
@@ -222,6 +226,7 @@ public class Clusters {
   /**
    * Loads sst files from s3 into a given cluster.
    *
+   * @param namespace cluster namespace
    * @param clusterName name of the cluster
    * @param segmentName name of the segment
    * @param s3Bucket    S3 bucket name
@@ -255,6 +260,7 @@ public class Clusters {
    * operations on the same cluster. It is caller's responsibility to properly
    * release the lock via {@link #unlock(String)}.
    *
+   * @param namespace cluster namespace
    * @param clusterName name of the cluster to lock
    * @return true if the given cluster is locked, false otherwise
    */
@@ -274,6 +280,7 @@ public class Clusters {
   /**
    * Unlocks a given cluster.
    *
+   * @param namespace cluster namespace
    * @param clusterName name of the cluster to unlock
    * @return true if the given cluster is unlocked, false otherwise
    */
@@ -292,6 +299,8 @@ public class Clusters {
 
   /**
    * Send a LoggingTask to worker.
+   *
+   * @param namespace cluster namespace
    * @param clusterName
    * @return
    * @throws Exception
@@ -315,24 +324,19 @@ public class Clusters {
 
   /**
    * Send a healthcehck task to a cluster.
+   *
+   * @param namespace
    * @param clusterName
    * @param intervalSeconds If not specified, it's a one-off task, otherwise the task is repeatable.
-   * @param zkPrefix if not specified, use DEFAULT_ZK_PATH in WorkerConfig.
    */
   @POST
   @Path("/healthcheck/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName : [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
   public Response healthcheck(@PathParam("namespace") String namespace,
                               @PathParam("clusterName") String clusterName,
-                              @QueryParam("interval") Optional<Integer> intervalSeconds,
-                              @QueryParam("zkPrefix") Optional<String> zkPrefix) {
+                              @QueryParam("interval") Optional<Integer> intervalSeconds) {
     try {
-      HealthCheckTask.Param param = new HealthCheckTask.Param();
-      if (zkPrefix.isPresent()) {
-        param.setZkPrefix(zkPrefix.get());
-      }
-      TaskBase healthCheckTask = new HealthCheckTask(param)
-          .recur(intervalSeconds.orElse(0)).getEntity();
+      TaskBase healthCheckTask = new HealthCheckTask().recur(intervalSeconds.orElse(0)).getEntity();
       taskQueue.enqueueTask(healthCheckTask, new Cluster(namespace, clusterName), 0);
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } catch (JsonProcessingException e) {
@@ -344,6 +348,8 @@ public class Clusters {
 
   /**
    * Send a configcheck task to a cluster.
+   *
+   * @param namespace cluster namespace
    * @param clusterName
    * @param intervalSeconds if not specified, it's a one-off task, otherwise the task is repeatable.
    * @param numReplicas the number of replicas per shard. If not speicfied, use default of 3.

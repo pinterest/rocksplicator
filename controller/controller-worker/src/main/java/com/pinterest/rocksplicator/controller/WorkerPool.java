@@ -91,7 +91,7 @@ public final class WorkerPool {
    * @param cluster the name of the cluster
    * @return
    */
-  public synchronized boolean abortTask(String cluster) throws Exception {
+  public synchronized boolean abortTask(Cluster cluster) throws Exception {
     Future runningTask = runningTasks.get(cluster);
     if (runningTask == null) {
       LOG.error("No running task of cluster " + cluster);

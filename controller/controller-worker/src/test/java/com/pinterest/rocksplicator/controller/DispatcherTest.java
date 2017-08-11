@@ -49,7 +49,7 @@ public class DispatcherTest {
         new SleepIncrementTask(sleepTimeMillis)
             .getEntity()
     );
-    task.clusterName = nameCounter.toString();
+    task.setCluster(new Cluster("rocksdb", nameCounter.toString()));
     nameCounter += 1;
     return task;
   }
@@ -153,7 +153,7 @@ public class DispatcherTest {
         return super.finishTaskAndEnqueueRunningTask(id, output, newTask, worker);
       }
     };
-    tq.enqueueTask(task, Integer.toString(++nameCounter), 0);
+    tq.enqueueTask(task, new Cluster("rocksdb", Integer.toString(++nameCounter)), 0);
 
     Semaphore idleWorkersSemaphore = new Semaphore(2);
     ThreadPoolExecutor threadPoolExecutor =
@@ -202,7 +202,7 @@ public class DispatcherTest {
         return super.finishTaskAndEnqueueRunningTask(id, output, newTask, worker);
       }
     };
-    tq.enqueueTask(task, Integer.toString(++nameCounter), 0);
+    tq.enqueueTask(task, new Cluster("rocksdb", Integer.toString(++nameCounter)), 0);
 
     Semaphore idleWorkersSemaphore = new Semaphore(2);
     ThreadPoolExecutor threadPoolExecutor =
@@ -243,7 +243,7 @@ public class DispatcherTest {
         return super.finishTaskAndEnqueueRunningTask(id, output, newTask, worker);
       }
     };
-    tq.enqueueTask(task, Integer.toString(++nameCounter), 0);
+    tq.enqueueTask(task, new Cluster("rocksdb", Integer.toString(++nameCounter)), 0);
 
     Semaphore idleWorkersSemaphore = new Semaphore(2);
     ThreadPoolExecutor threadPoolExecutor =
