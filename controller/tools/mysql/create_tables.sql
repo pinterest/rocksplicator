@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS tag (
 
 CREATE TABLE IF NOT EXISTS task (
   id BIGINT AUTO_INCREMENT,
-  name VARCHAR(128),
+  name VARCHAR(128) NOT NULL,
   priority TINYINT UNSIGNED NOT NULL, # 0 is the highest priority
   state TINYINT UNSIGNED NOT NULL, # 0: Pending, 1: Running, 2: Done, 3: FAILED
   tag_namespace VARCHAR(128) NOT NULL,

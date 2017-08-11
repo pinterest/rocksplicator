@@ -86,11 +86,11 @@ public class TaskEntity {
   @NotNull
   private int state;
 
+  @ManyToOne
   @JoinColumns({
       @JoinColumn(name="tag_namespace", referencedColumnName="namespace"),
       @JoinColumn(name="tag_name", referencedColumnName="name")
   })
-  @ManyToOne
   @NotNull
   private TagEntity cluster;
 

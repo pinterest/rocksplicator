@@ -203,7 +203,7 @@ public class MySQLTaskQueue implements TaskQueue {
                                      final String claimedWorker) {
     TagEntity tagEntity = getEntityManager().find(
         TagEntity.class, new TagId(cluster), LockModeType.PESSIMISTIC_WRITE);
-    if (cluster == null) {
+    if (tagEntity == null) {
       LOG.error("Cluster {} is not created", cluster);
       getEntityManager().getTransaction().rollback();
       return null;
