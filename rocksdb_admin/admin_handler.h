@@ -49,6 +49,12 @@ class AdminHandler : virtual public AdminSvIf {
   void async_tm_ping(
       std::unique_ptr<apache::thrift::HandlerCallback<void>> callback) override;
 
+  void async_tm_addDB(
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+          AddDBResponse>>> callback,
+      std::unique_ptr<AddDBRequest> request) override;
+
+
   void async_tm_backupDB(
       std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
         BackupDBResponse>>> callback,
