@@ -28,24 +28,24 @@ public interface TaskQueue {
 
   /**
    * Create a new cluster in the task queue.
-   * @param clusterName
+   * @param cluster
    * @return false on error
    */
-  default boolean createCluster(final String clusterName) {
+  default boolean createCluster(final Cluster cluster) {
     return true;
   }
 
   /**
    * Enqueue a task.
    * @param taskBase entity of the task to enqueue
-   * @param clusterName Which cluster is this task for
+   * @param cluster Which cluster is this task for
    * @param runDelaySeconds the task should be delayed for this many of seconds to run. If <= 0, no
    *                        delay required
    * @return false on error
    */
   default boolean enqueueTask(final TaskBase taskBase,
-                             final String clusterName,
-                             final int runDelaySeconds) {
+                              final Cluster cluster,
+                              final int runDelaySeconds) {
     return true;
   }
 
@@ -134,7 +134,7 @@ public interface TaskQueue {
    * @param cluster which cluster to lock
    * @return false on error
    */
-  default boolean lockCluster(final String cluster) {
+  default boolean lockCluster(final Cluster cluster) {
     return true;
   }
 
@@ -143,7 +143,7 @@ public interface TaskQueue {
    * @param cluster which cluster to unlock
    * @return false on error
    */
-  default boolean unlockCluster(final String cluster) {
+  default boolean unlockCluster(final Cluster cluster) {
     return true;
   }
 
@@ -153,7 +153,7 @@ public interface TaskQueue {
    * @param cluster which cluster to remove
    * @return false on error
    */
-  default boolean removeCluster(final String cluster) {
+  default boolean removeCluster(final Cluster cluster) {
     return true;
   }
 
@@ -188,12 +188,12 @@ public interface TaskQueue {
    * Return all tasks in the state and associated with clusterName.
    * If clusterName is null, all clusters are included.
    * If state is null, all states are included.
-   * @param clusterName which cluster to peek tasks for
+   * @param cluster which cluster to peek tasks for
    * @param state peek tasks in this state only
    * @return the list of tasks found
    */
-  default List<Task> peekTasks(final String clusterName,
-                              final Integer state) {
+  default List<Task> peekTasks(final Cluster cluster,
+                               final Integer state) {
     return new ArrayList<>();
   }
 
@@ -219,7 +219,7 @@ public interface TaskQueue {
    * Return all clusters managed by this task queue.
    * @return a set of cluster names
    */
-  default Set<String> getAllClusters() {
+  default Set<Cluster> getAllClusters() {
     return Collections.emptySet();
   }
 }

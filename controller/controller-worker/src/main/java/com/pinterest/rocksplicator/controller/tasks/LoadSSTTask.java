@@ -75,12 +75,11 @@ public class LoadSSTTask extends AbstractTask<LoadSSTTask.Param> {
 
   @Override
   public void process(Context ctx) throws Exception {
-    final String clusterName = ctx.getCluster();
     final String segment = getParameter().getSegment();
 
-    ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, clusterName);
+    ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, ctx.getCluster());
     if (clusterBean == null) {
-      LOG.error("Failed to get config for cluster {}.", clusterName);
+      LOG.error("Failed to get config for cluster {}.", ctx.getCluster());
       ctx.getTaskQueue().failTask(ctx.getId(), "Failed to read cluster config from zookeeper.");
       return;
     }
@@ -90,7 +89,7 @@ public class LoadSSTTask extends AbstractTask<LoadSSTTask.Param> {
         .findAny()
         .orElse(null);
     if (segmentBean == null) {
-      String errMsg = String.format("Segment %s not in cluster %s.", segment, clusterName);
+      String errMsg = String.format("Segment %s not in cluster %s.", segment, ctx.getCluster());
       LOG.error(errMsg);
       ctx.getTaskQueue().failTask(ctx.getId(), errMsg);
       return;
@@ -106,14 +105,14 @@ public class LoadSSTTask extends AbstractTask<LoadSSTTask.Param> {
       doLoadSST(executor, segmentBean, Role.SLAVE);
       LOG.info("Second pass done.");
     } catch (InterruptedException | ExecutionException ex) {
-      LOG.error("Failed to load sst to cluster {}.", clusterName, ex);
+      LOG.error("Failed to load sst to cluster {}.", ctx.getCluster(), ex);
       ctx.getTaskQueue().failTask(ctx.getId(), "Failed to load sst, error=" + ex.getMessage());
       return;
     }
 
     executor.shutdown();
     executor.shutdownNow();
-    ctx.getTaskQueue().finishTask(ctx.getId(), "Finished loading sst to " + clusterName);
+    ctx.getTaskQueue().finishTask(ctx.getId(), "Finished loading sst to " + ctx.getCluster());
   }
 
   private void doLoadSST(ExecutorService executor, SegmentBean segment, Role role)

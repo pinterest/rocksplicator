@@ -16,7 +16,6 @@
 
 package com.pinterest.rocksplicator.controller;
 
-import java.sql.Timestamp;
 import java.util.Date;
 
 /**
@@ -29,7 +28,7 @@ public class Task extends TaskBase {
 
   public long id;
   public int state;
-  public String clusterName;
+  public Cluster cluster;
   public Date createdAt;
   public Date runAfter;
   public Date lastAliveAt;
@@ -46,8 +45,8 @@ public class Task extends TaskBase {
     return this;
   }
 
-  public Task setClusterName(String clusterName) {
-    this.clusterName = clusterName;
+  public Task setCluster(Cluster cluster) {
+    this.cluster = cluster;
     return this;
   }
 
@@ -103,7 +102,7 @@ public class Task extends TaskBase {
         "id=" + id +
         ", state=" + state +
         ", name='" + name + '\'' +
-        ", clusterName='" + clusterName + '\'' +
+        ", cluster='" + cluster.getNamespace() + "/" + cluster.getName()+ '\'' +
         ", createdAt=" + createdAt +
         ", runAfter=" + runAfter +
         ", lastAliveAt=" + lastAliveAt +

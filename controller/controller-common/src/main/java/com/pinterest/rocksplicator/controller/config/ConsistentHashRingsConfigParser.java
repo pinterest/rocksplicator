@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.config;
 
+import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.bean.ConsistentHashRingBean;
 import com.pinterest.rocksplicator.controller.bean.ConsistentHashRingsBean;
 
@@ -78,7 +79,7 @@ public class ConsistentHashRingsConfigParser {
 
   @SuppressWarnings("unchecked")
   public static ConsistentHashRingsBean parseConsistentHashRingsConfig(
-      String clusterName, byte[] content) {
+      Cluster cluster, byte[] content) {
     try {
       Map<String, Object> ringsMap = OBJECT_MAPPER.readValue(
           new String(content, UTF_8), HashMap.class);
@@ -100,7 +101,9 @@ public class ConsistentHashRingsConfigParser {
                 .setName(entry.getKey());
         rings.add(consistentHashRingBean);
       }
-      return new ConsistentHashRingsBean().setConsistentHashRings(rings).setName(clusterName);
+      return new ConsistentHashRingsBean()
+          .setConsistentHashRings(rings)
+          .setCluster(cluster);
     } catch (IOException e) {
       LOG.error("Failed to parse consistent hash ring config.", e);
       return null;

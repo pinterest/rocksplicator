@@ -16,9 +16,10 @@
 
 package com.pinterest.rocksplicator.controller.util;
 
-import com.pinterest.rocksplicator.controller.WorkerConfig;
+import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.config.ConfigParser;
+import com.pinterest.rocksplicator.controller.WorkerConfig;
 
 import org.apache.curator.framework.CuratorFramework;
 
@@ -30,48 +31,25 @@ public final class ZKUtil {
   private ZKUtil() {
   }
 
-  public static String getClusterConfigZKPath(String clusterName) {
-    return WorkerConfig.getZKPath() + clusterName;
+  public static String getClusterConfigZKPath(Cluster cluster) {
+    return WorkerConfig.getZKPath() + cluster.getNamespace() + "/" + cluster.getName();
   }
 
   /**
    * Get config for a given cluster from Zookeeper.
    *
    * @param zkClient zookeeper client to use
-   * @param clusterName name of the cluster
+   * @param cluster the cluster
    * @return serialized cluster config, or null if there is an error
    */
-  public static ClusterBean getClusterConfig(CuratorFramework zkClient, String clusterName)
-      throws Exception {
-    if (zkClient.checkExists().forPath(getClusterConfigZKPath(clusterName)) == null) {
+  public static ClusterBean getClusterConfig(CuratorFramework zkClient,
+                                             Cluster cluster) throws Exception {
+    if (zkClient.checkExists().forPath(getClusterConfigZKPath(cluster)) == null) {
       return null;
     }
 
-    byte[] data = zkClient.getData().forPath(ZKUtil.getClusterConfigZKPath(clusterName));
-    return ConfigParser.parseClusterConfig(clusterName, data);
-  }
-
-  /**
-   * Get config for a given cluster from zookeeper if the zk prefix is different from default.
-   *
-   * @param zkClient zookeeper client to use
-   * @param zkPrefix the customized zk prefix
-   * @param clusterName
-   * @return serialized cluster config, or null if there is an error
-   */
-  public static ClusterBean getClusterConfig(
-      CuratorFramework zkClient, String zkPrefix, String clusterName) throws Exception {
-    String zkPath;
-    if (zkPrefix.endsWith("/")) {
-      zkPath = zkPrefix + clusterName;
-    } else {
-      zkPath = zkPrefix + "/" + clusterName;
-    }
-    if (zkClient.checkExists().forPath(zkPath) == null) {
-      return null;
-    }
-    byte[] data = zkClient.getData().forPath(zkPath);
-    return ConfigParser.parseClusterConfig(clusterName, data);
+    byte[] data = zkClient.getData().forPath(ZKUtil.getClusterConfigZKPath(cluster));
+    return ConfigParser.parseClusterConfig(cluster, data);
   }
 
   /**
@@ -83,7 +61,7 @@ public final class ZKUtil {
   public static void updateClusterConfig(CuratorFramework zkClient, ClusterBean clusterBean)
       throws Exception {
     zkClient.setData().forPath(
-        getClusterConfigZKPath(clusterBean.getName()),
+        getClusterConfigZKPath(clusterBean.getCluster()),
         ConfigParser.serializeClusterConfig(clusterBean).getBytes()
     );
   }

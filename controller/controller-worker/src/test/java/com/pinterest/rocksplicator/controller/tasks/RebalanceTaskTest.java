@@ -81,7 +81,7 @@ public class RebalanceTaskTest extends TaskBaseTest {
     Context ctx = new Context(123, CLUSTER, taskQueue, null);
     task.process(ctx);
 
-    Assert.assertEquals(taskQueue.getResult(123), "Successfully rebalanced cluster devtest");
+    Assert.assertEquals(taskQueue.getResult(123), "Successfully rebalanced cluster rocksdb/devtest");
 
     byte[] newConfigBytes = zkClient.getData().forPath(ZKUtil.getClusterConfigZKPath(CLUSTER));
     ConfigParserTest.assertConfigEquals(new String(newConfigBytes), CONFIG);

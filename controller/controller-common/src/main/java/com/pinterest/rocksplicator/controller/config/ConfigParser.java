@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.config;
 
+import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.bean.Role;
@@ -53,12 +54,13 @@ public final class ConfigParser {
   /**
    * Convert cluster config data into a {@link ClusterBean}.
    *
-   * @param clusterName name of the cluster
+   * @param cluster
    * @param content binary config data
    * @return ClusterBean or null if parsing failed
    */
   @SuppressWarnings("unchecked")
-  public static ClusterBean parseClusterConfig(String clusterName, byte[] content) {
+  public static ClusterBean parseClusterConfig(Cluster cluster,
+                                               byte[] content) {
     try {
       Map<String, Object> segmentMap =
           OBJECT_MAPPER.readValue(new String(content, UTF_8), HashMap.class);
@@ -87,7 +89,7 @@ public final class ConfigParser {
         segment.setHosts(hosts);
         segments.add(segment);
       }
-      return new ClusterBean().setName(clusterName).setSegments(segments);
+      return new ClusterBean().setCluster(cluster).setSegments(segments);
     } catch (IOException | IllegalArgumentException e) {
       LOG.error("Failed to parse cluster config.", e);
       return null;

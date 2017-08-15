@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.config;
 
+import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.bean.ConsistentHashRingBean;
 import com.pinterest.rocksplicator.controller.bean.ConsistentHashRingsBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
@@ -58,8 +59,8 @@ public class ConsistentHashRingsConfigParserTest {
         "}";
     ConsistentHashRingsBean consistentHashRingsBean =
         ConsistentHashRingsConfigParser.parseConsistentHashRingsConfig(
-            "cluster", config.getBytes());
-    Assert.assertEquals(consistentHashRingsBean.getName(), "cluster");
+            new Cluster("namespace", "cluster"), config.getBytes());
+    Assert.assertEquals(consistentHashRingsBean.getCluster(), new Cluster("namespace", "cluster"));
     HashMap<String, List<String>> expectedRings = new HashMap<>();
     expectedRings.put("us-east-1a_0", Arrays.asList("127.1.1.1:8091", "127.1.1.2:8092"));
     expectedRings.put("us-east-1a_1", Arrays.asList("127.2.2.2:8093", "127.2.2.3:8094"));
@@ -77,6 +78,4 @@ public class ConsistentHashRingsConfigParserTest {
       Assert.assertEquals(hostsList, expectedRings.get(name));
     }
   }
-
-
 }

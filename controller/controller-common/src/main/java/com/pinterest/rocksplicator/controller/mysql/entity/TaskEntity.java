@@ -22,6 +22,7 @@ import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
 import javax.persistence.JoinColumn;
+import javax.persistence.JoinColumns;
 import javax.persistence.ManyToOne;
 import javax.persistence.NamedQueries;
 import javax.persistence.NamedQuery;
@@ -37,6 +38,7 @@ import java.util.Date;
  * name VARCHAR(128),
  * priority TINYINT UNSIGNED NOT NULL, # 0 is the highest priority
  * state  TINYINT UNSIGNED NOT NULL, # 0: Pending, 1: Running, 2: Done, 3: FAILED
+ * tag_namespace VARCHAR(128) NOT NULL,
  * tag_name VARCHAR(128) NOT NULL,
  * body TEXT NOT NULL,
  * created_at DATETIME NOT NULL,
@@ -45,7 +47,7 @@ import java.util.Date;
  * last_alive_at DATETIME,
  * output TEXT,
  * PRIMARY KEY (id),
- * FOREIGN KEY (tag_name) REFERENCES tag(name) ON UPDATE RESTRICT ON DELETE CASCADE
+ * FOREIGN KEY (tag_namespace, tag_name) REFERENCES tag(namespace, name) ON UPDATE RESTRICT ON DELETE CASCADE
  */
 @Entity (name = "task")
 @Table (name = "task")
@@ -57,13 +59,20 @@ import java.util.Date;
                 query = "SELECT t FROM task t WHERE t.id = :id AND t.state = 1"),
     @NamedQuery(name = "task.peekAllTasks",
                 query = "SELECT t FROM task t INNER JOIN t.cluster c"),
+    @NamedQuery(name = "task.peekTasksFromNamespace",
+                query = "SELECT t FROM task t INNER JOIN t.cluster c " +
+                        "WHERE c.namespace = :namespace"),
     @NamedQuery(name = "task.peekTasksFromCluster",
-                query = "SELECT t FROM task t INNER JOIN t.cluster c WHERE c.name = :name"),
+                query = "SELECT t FROM task t INNER JOIN t.cluster c " +
+                        "WHERE c.name = :name AND c.namespace = :namespace"),
     @NamedQuery(name = "task.peekTasksWithState",
                 query = "SELECT t FROM task t WHERE t.state = :state"),
+    @NamedQuery(name = "task.peekTasksWithStateFromNamespace",
+                query = "SELECT t FROM task t INNER JOIN t.cluster c WHERE t.state = :state AND " +
+                        "c.namespace = :namespace"),
     @NamedQuery(name = "task.peekTasksFromClusterWithState",
                 query = "SELECT t FROM task t INNER JOIN t.cluster c WHERE t.state = :state AND " +
-                    "c.name = :name"),
+                    "c.namespace = :namespace AND c.name = :name"),
 })
 public class TaskEntity {
 
@@ -83,8 +92,11 @@ public class TaskEntity {
   @NotNull
   private int state;
 
-  @JoinColumn(name="tag_name", referencedColumnName="name")
   @ManyToOne
+  @JoinColumns({
+      @JoinColumn(name="tag_namespace", referencedColumnName="namespace"),
+      @JoinColumn(name="tag_name", referencedColumnName="name")
+  })
   @NotNull
   private TagEntity cluster;
 

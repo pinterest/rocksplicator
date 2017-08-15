@@ -46,12 +46,12 @@ public class FIFOTaskQueue implements TaskQueue {
 
   @Override
   public boolean enqueueTask(final TaskBase task,
-                      final String clusterName,
-                      final int runDelaySeconds) {
+                             final Cluster cluster,
+                             final int runDelaySeconds) {
 
     Task taskInternal = new Task(task);
     taskInternal.id = currentId.getAndIncrement();
-    taskInternal.clusterName = clusterName;
+    taskInternal.cluster = cluster;
     taskInternal.runAfter = new Timestamp(System.currentTimeMillis() + runDelaySeconds * 1000);
     taskQueue.offer(taskInternal);
     return true;
@@ -95,7 +95,7 @@ public class FIFOTaskQueue implements TaskQueue {
                                                  final TaskBase taskBase,
                                                  final int runDelaySeconds) {
     result.putIfAbsent(id, output);
-    return enqueueTask(taskBase, "", runDelaySeconds);
+    return enqueueTask(taskBase, new Cluster("rocksdb", "test"), runDelaySeconds);
   }
 
   @Override
@@ -104,7 +104,7 @@ public class FIFOTaskQueue implements TaskQueue {
                                                final TaskBase taskBase,
                                                final int runDelaySeconds) {
     result.putIfAbsent(id, output);
-    return enqueueTask(taskBase, "", runDelaySeconds);
+    return enqueueTask(taskBase, new Cluster("rocksdb", "test"), runDelaySeconds);
   }
 
 }

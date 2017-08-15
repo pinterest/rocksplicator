@@ -63,7 +63,7 @@ public class ControllerService extends Application<ControllerConfiguration> {
     });
 
     environment.jersey().register(
-        new Clusters(configuration.getZkPath(), zkClient, taskQueue)
+        new Clusters(zkClient, taskQueue)
     );
     environment.jersey().register(new Tasks(taskQueue));
 

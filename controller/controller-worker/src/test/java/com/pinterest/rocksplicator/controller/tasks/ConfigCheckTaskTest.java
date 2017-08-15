@@ -34,7 +34,7 @@ public class ConfigCheckTaskTest extends TaskBaseTest{
     FIFOTaskQueue taskQueue = new FIFOTaskQueue(10);
     Context ctx = new Context(123, CLUSTER, taskQueue, null);
     configCheckTask.process(ctx);
-    Assert.assertEquals(taskQueue.getResult(123), "Cluster devtest has good config");
+    Assert.assertEquals(taskQueue.getResult(123), "Cluster rocksdb/devtest has good config");
   }
 
   @Test
@@ -48,16 +48,16 @@ public class ConfigCheckTaskTest extends TaskBaseTest{
             "  \"127.0.0.1:8092:us-east-1e\": [\"00000:S\", \"00001:S\", \"00002:M\"]" +
             "   }" +
             "}";
-    zkClient.createContainers(ZKUtil.getClusterConfigZKPath("badcluster"));
-    zkClient.setData().forPath(ZKUtil.getClusterConfigZKPath("badcluster"),
+    zkClient.createContainers(ZKUtil.getClusterConfigZKPath(CLUSTER));
+    zkClient.setData().forPath(ZKUtil.getClusterConfigZKPath(CLUSTER),
         missingReplicaConfig.getBytes());
     ConfigCheckTask configCheckTask = new ConfigCheckTask(3);
     injector.injectMembers(configCheckTask);
     FIFOTaskQueue taskQueue = new FIFOTaskQueue(10);
-    Context ctx = new Context(123, "badcluster", taskQueue, null);
+    Context ctx = new Context(123, CLUSTER, taskQueue, null);
     configCheckTask.process(ctx);
     Assert.assertEquals(taskQueue.getResult(123),
-        "Cluster badcluster doesn't have good shard distribution, " +
+        "Cluster rocksdb/devtest doesn't have good shard distribution, " +
             "reason = Incorrect number of replicas. Bad shards: {user_pins2=2},");
   }
 
@@ -72,16 +72,16 @@ public class ConfigCheckTaskTest extends TaskBaseTest{
             "  \"127.0.0.1:8092:us-east-1e\": [\"00000:S\", \"00001:S\", \"00002:M\"]"  +
             "   }" +
             "}";
-    zkClient.createContainers(ZKUtil.getClusterConfigZKPath("badcluster"));
-    zkClient.setData().forPath(ZKUtil.getClusterConfigZKPath("badcluster"),
+    zkClient.createContainers(ZKUtil.getClusterConfigZKPath(CLUSTER));
+    zkClient.setData().forPath(ZKUtil.getClusterConfigZKPath(CLUSTER),
         missingReplicaConfig.getBytes());
     ConfigCheckTask configCheckTask = new ConfigCheckTask(3);
     injector.injectMembers(configCheckTask);
     FIFOTaskQueue taskQueue = new FIFOTaskQueue(10);
-    Context ctx = new Context(123, "badcluster", taskQueue, null);
+    Context ctx = new Context(123, CLUSTER, taskQueue, null);
     configCheckTask.process(ctx);
     Assert.assertEquals(taskQueue.getResult(123),
-        "Cluster badcluster doesn't have good shard distribution, " +
+        "Cluster rocksdb/devtest doesn't have good shard distribution, " +
             "reason = Missing masters for some shards: [user_pins0],");
   }
 
@@ -96,16 +96,16 @@ public class ConfigCheckTaskTest extends TaskBaseTest{
             "  \"127.0.0.1:8092:us-east-1e\": [\"00000:S\", \"00001:S\", \"00002:M\"]"  +
             "   }" +
             "}";
-    zkClient.createContainers(ZKUtil.getClusterConfigZKPath("badcluster"));
-    zkClient.setData().forPath(ZKUtil.getClusterConfigZKPath("badcluster"),
+    zkClient.createContainers(ZKUtil.getClusterConfigZKPath(CLUSTER));
+    zkClient.setData().forPath(ZKUtil.getClusterConfigZKPath(CLUSTER),
         missingReplicaConfig.getBytes());
     ConfigCheckTask configCheckTask = new ConfigCheckTask(3);
     injector.injectMembers(configCheckTask);
     FIFOTaskQueue taskQueue = new FIFOTaskQueue(10);
-    Context ctx = new Context(123, "badcluster", taskQueue, null);
+    Context ctx = new Context(123, CLUSTER, taskQueue, null);
     configCheckTask.process(ctx);
     Assert.assertEquals(taskQueue.getResult(123),
-        "Cluster badcluster doesn't have good shard distribution, " +
+        "Cluster rocksdb/devtest doesn't have good shard distribution, " +
             "reason = Incorrect number of shards. Expected 3 but actually 4.,");
   }
 }
