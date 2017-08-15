@@ -116,7 +116,7 @@ public class Clusters {
     final List<ClusterBean> clusterBeans = new ArrayList<>(clusters.size());
     try {
       for (Cluster cluster : clusters) {
-        ClusterBean clusterBean = checkExistenceAndGetClusterBean(cluster.namespace, cluster.name);
+        ClusterBean clusterBean = checkExistenceAndGetClusterBean(cluster.getNamespace(), cluster.getName());
         if (clusterBean != null) {
           clusterBeans.add(clusterBean);
         }

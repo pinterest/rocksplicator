@@ -102,7 +102,7 @@ public class Task extends TaskBase {
         "id=" + id +
         ", state=" + state +
         ", name='" + name + '\'' +
-        ", cluster='" + cluster.namespace + "/" + cluster.name + '\'' +
+        ", cluster='" + cluster.getNamespace() + "/" + cluster.getName()+ '\'' +
         ", createdAt=" + createdAt +
         ", runAfter=" + runAfter +
         ", lastAliveAt=" + lastAliveAt +

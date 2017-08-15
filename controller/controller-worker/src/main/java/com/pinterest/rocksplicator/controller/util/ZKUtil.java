@@ -32,7 +32,7 @@ public final class ZKUtil {
   }
 
   public static String getClusterConfigZKPath(Cluster cluster) {
-    return WorkerConfig.getZKPath() + cluster.namespace + "/" + cluster.name;
+    return WorkerConfig.getZKPath() + cluster.getNamespace() + "/" + cluster.getName();
   }
 
   /**

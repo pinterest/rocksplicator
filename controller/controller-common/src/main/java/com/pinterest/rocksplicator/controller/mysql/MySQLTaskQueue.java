@@ -396,7 +396,7 @@ public class MySQLTaskQueue implements TaskQueue {
       query = getEntityManager()
         .createNamedQuery("task.peekTasksFromClusterWithState")
         .setParameter("state", state)
-        .setParameter("namespace", cluster.namespace).setParameter("name", cluster.name);
+        .setParameter("namespace", cluster.getNamespace()).setParameter("name", cluster.getName());
     } else if (state != null) {
       query = getEntityManager()
         .createNamedQuery("task.peekTasksWithState")
@@ -405,7 +405,7 @@ public class MySQLTaskQueue implements TaskQueue {
       // TODO
       query = getEntityManager()
         .createNamedQuery("task.peekTasksFromCluster")
-        .setParameter("name", cluster.name).setParameter("namespace", cluster.namespace);
+        .setParameter("name", cluster.getNamespace()).setParameter("namespace", cluster.getName());
     }else{
       query = getEntityManager()
         .createNamedQuery("task.peekAllTasks");

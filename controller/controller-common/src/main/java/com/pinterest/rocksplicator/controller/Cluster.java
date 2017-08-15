@@ -22,18 +22,16 @@ package com.pinterest.rocksplicator.controller;
  * @author shu (shu@pinterest.com)
  */
 public class Cluster {
-  public String namespace;
-  public String name;
+  private String namespace;
+  private String name;
 
   public Cluster(final String namespace, final String name) {
     this.namespace = namespace;
     this.name = name;
   }
 
-
   public String getNamespace() {
     return namespace;
-
   }
 
   public Cluster setNamespace(String namespace) {
@@ -60,7 +58,6 @@ public class Cluster {
     if (namespace != null ? !namespace.equals(cluster.namespace) : cluster.namespace != null)
       return false;
     return name != null ? name.equals(cluster.name) : cluster.name == null;
-
   }
 
   @Override
