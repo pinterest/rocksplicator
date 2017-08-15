@@ -16,35 +16,33 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
-import com.pinterest.rocksplicator.controller.bean.ClusterBean;
+import com.pinterest.rocksplicator.controller.bean.ConsistentHashRingBean;
+import com.pinterest.rocksplicator.controller.bean.ConsistentHashRingsBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
-import com.pinterest.rocksplicator.controller.bean.SegmentBean;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
 import com.pinterest.rocksplicator.controller.util.EmailSender;
 import com.pinterest.rocksplicator.controller.util.ZKUtil;
 
 import org.apache.curator.framework.CuratorFramework;
-import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.InetSocketAddress;
+import javax.inject.Inject;
+import java.net.InetAddress;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import javax.inject.Inject;
-
 
 /**
- * This task performs health-check for a given cluster. Things it checks on are:
+ * This task performs health-check for a given cluster using consistent hash ring config.
+ * Things it checks on are:
  *
  * 1) whether all hosts are up and running
  *
- * @author Ang Xu (angxu@pinterest.com)
+ * @author shu (shu@pinterest.com)
  */
-public class HealthCheckTask extends AbstractTask<Parameter> {
+public class ConsistentHashRingHealthCheckTask extends AbstractTask<Parameter> {
 
-  public static final Logger LOG = LoggerFactory.getLogger(HealthCheckTask.class);
+  public static final Logger LOG = LoggerFactory.getLogger(ConsistentHashRingHealthCheckTask.class);
 
   @Inject
   private CuratorFramework zkClient;
@@ -55,38 +53,32 @@ public class HealthCheckTask extends AbstractTask<Parameter> {
   @Inject
   private EmailSender emailSender;
 
-  /**
-   * Construct a new HealthCheckTask with number of replicas equals to 3
-   */
-  public HealthCheckTask() { this(new Parameter());}
+  public ConsistentHashRingHealthCheckTask() { this(new Parameter()); }
 
-  public HealthCheckTask(Parameter param) {
-    super(param);
+  public ConsistentHashRingHealthCheckTask(Parameter parameter) {
+    super(parameter);
   }
 
   @Override
-  public void process(Context ctx) {
+  public void process(Context ctx) throws Exception {
     try {
-      ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, ctx.getCluster());
-      if (clusterBean == null) {
+      ConsistentHashRingsBean consistentHashRingsBean =
+          ZKUtil.getConsistentHashRingsConfig(zkClient, ctx.getCluster());
+      if (consistentHashRingsBean == null) {
         ctx.getTaskQueue().failTask(ctx.getId(), "Failed to read cluster config from zookeeper.");
         return;
       }
 
-      Set<InetSocketAddress> hosts = new HashSet<>();
-      for (SegmentBean segmentBean : clusterBean.getSegments()) {
-        for (HostBean hostBean : segmentBean.getHosts()) {
-          hosts.add(new InetSocketAddress(hostBean.getIp(), hostBean.getPort()));
+      Set<InetAddress> hosts = new HashSet<>();
+      for (ConsistentHashRingBean ring : consistentHashRingsBean.getConsistentHashRings()) {
+        for (HostBean hostBean : ring.getHosts()) {
+          hosts.add(InetAddress.getByName(hostBean.getIp()));
         }
       }
 
-      // ping all hosts
       Set<String> badHosts = new HashSet<>();
-      for (InetSocketAddress hostAddr : hosts) {
-        try {
-          clientFactory.getClient(hostAddr).ping();
-        } catch (TException | ExecutionException ex) {
-          // record bad host
+      for (InetAddress hostAddr : hosts) {
+        if (!hostAddr.isReachable(5000)) {
           badHosts.add(hostAddr.toString());
         }
       }
@@ -98,9 +90,6 @@ public class HealthCheckTask extends AbstractTask<Parameter> {
         return;
       }
 
-      LOG.info("All hosts are good");
-      String output = String.format("Cluster %s is healthy", ctx.getCluster());
-      ctx.getTaskQueue().finishTask(ctx.getId(), output);
     } catch (Exception ex) {
       String errorMessage =
           String.format("Cluster %s is unhealthy, reason = %s", ctx.getCluster(), ex.getMessage());

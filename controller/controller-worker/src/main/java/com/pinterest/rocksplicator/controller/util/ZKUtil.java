@@ -18,9 +18,11 @@ package com.pinterest.rocksplicator.controller.util;
 
 import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
+import com.pinterest.rocksplicator.controller.bean.ConsistentHashRingsBean;
 import com.pinterest.rocksplicator.controller.config.ConfigParser;
 import com.pinterest.rocksplicator.controller.WorkerConfig;
 
+import com.pinterest.rocksplicator.controller.config.ConsistentHashRingsConfigParser;
 import org.apache.curator.framework.CuratorFramework;
 
 /**
@@ -64,5 +66,18 @@ public final class ZKUtil {
         getClusterConfigZKPath(clusterBean.getCluster()),
         ConfigParser.serializeClusterConfig(clusterBean).getBytes()
     );
+  }
+
+  /**
+   * Get consistent hash ring config from ZK.
+   */
+  public static ConsistentHashRingsBean getConsistentHashRingsConfig(
+      CuratorFramework zkClient, Cluster cluster) throws Exception {
+    if (zkClient.checkExists().forPath(getClusterConfigZKPath(cluster)) == null) {
+      return null;
+    }
+
+    byte[] data = zkClient.getData().forPath(ZKUtil.getClusterConfigZKPath(cluster));
+    return ConsistentHashRingsConfigParser.parseConsistentHashRingsConfig(cluster, data);
   }
 }

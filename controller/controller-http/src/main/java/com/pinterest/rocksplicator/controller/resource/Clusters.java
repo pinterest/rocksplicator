@@ -24,6 +24,7 @@ import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.config.ConfigParser;
 import com.pinterest.rocksplicator.controller.tasks.AddHostTask;
 import com.pinterest.rocksplicator.controller.tasks.ConfigCheckTask;
+import com.pinterest.rocksplicator.controller.tasks.ConsistentHashRingHealthCheckTask;
 import com.pinterest.rocksplicator.controller.tasks.HealthCheckTask;
 import com.pinterest.rocksplicator.controller.tasks.LoadSSTTask;
 import com.pinterest.rocksplicator.controller.tasks.LoggingTask;
@@ -334,9 +335,15 @@ public class Clusters {
   @Produces(MediaType.APPLICATION_JSON)
   public Response healthcheck(@PathParam("namespace") String namespace,
                               @PathParam("clusterName") String clusterName,
-                              @QueryParam("interval") Optional<Integer> intervalSeconds) {
+                              @QueryParam("interval") Optional<Integer> intervalSeconds,
+                              @QueryParam("connHash") Optional<Boolean> isConsistentHashRing) {
     try {
-      TaskBase healthCheckTask = new HealthCheckTask().recur(intervalSeconds.orElse(0)).getEntity();
+      TaskBase healthCheckTask;
+      if (isConsistentHashRing.orElse(false)) {
+        healthCheckTask = new HealthCheckTask().recur(intervalSeconds.orElse(0)).getEntity();
+      } else {
+        healthCheckTask = new ConsistentHashRingHealthCheckTask().recur(intervalSeconds.orElse(0)).getEntity();
+      }
       taskQueue.enqueueTask(healthCheckTask, new Cluster(namespace, clusterName), 0);
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } catch (JsonProcessingException e) {
