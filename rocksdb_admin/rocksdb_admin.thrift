@@ -35,7 +35,7 @@ struct AddDBRequest {
   # if the db exists already, a DB_EXIST error is thrown
   1: required string db_name,
   2: required string upstream_ip,
-  # if overwrite is true, then we will clear any existing DB if there is already info
+  # if overwrite is true, destroy any rocksdb instance under db_name
   3: optional bool overwrite = false,
 }
 
@@ -162,7 +162,6 @@ void ping()
 
 /*
  * Add the DB to the host, throw exception if it already exists
- * and overwrite is false.
  */
 AddDBResponse addDB(1: AddDBRequest request)
   throws (1:AdminException e)

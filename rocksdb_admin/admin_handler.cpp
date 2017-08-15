@@ -257,7 +257,6 @@ void AdminHandler::async_tm_addDB(
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
   AdminException e;
-  // validate the request
   auto db = getDB(request->db_name, &e);
   if (db) {
     e.errorCode = AdminErrorCode::DB_EXIST;
@@ -275,17 +274,9 @@ void AdminHandler::async_tm_addDB(
     return;
   }
 
-  // Open the actual rocksdb instance
-  rocksdb::DB* rocksdb_db;
   auto segment = admin::DbNameToSegment(request->db_name);
   auto db_path = FLAGS_rocksdb_dir + request->db_name;
-  auto status = rocksdb::DB::Open(rocksdb_options_(segment), db_path, &rocksdb_db);
-  if (!OKOrSetException(status,
-                        AdminErrorCode::DB_ERROR,
-                        &callback)) {
-    return;
-  }
-
+  rocksdb::Status status;
   if (request->overwrite) {
     LOG(INFO) << "Clearing DB: " << request->db_name;
     status = rocksdb::DestroyDB(db_path, rocksdb_options_(segment));
@@ -297,6 +288,16 @@ void AdminHandler::async_tm_addDB(
       return;
     }
   }
+
+  // Open the actual rocksdb instance
+  rocksdb::DB* rocksdb_db;
+  status = rocksdb::DB::Open(rocksdb_options_(segment), db_path, &rocksdb_db);
+  if (!OKOrSetException(status,
+                        AdminErrorCode::DB_ERROR,
+                        &callback)) {
+    return;
+  }
+
 
   // add the db to db_manager
   std::string err_msg;
