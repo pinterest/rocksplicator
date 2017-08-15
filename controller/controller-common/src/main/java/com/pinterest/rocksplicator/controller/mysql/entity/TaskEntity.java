@@ -59,11 +59,17 @@ import java.util.Date;
                 query = "SELECT t FROM task t WHERE t.id = :id AND t.state = 1"),
     @NamedQuery(name = "task.peekAllTasks",
                 query = "SELECT t FROM task t INNER JOIN t.cluster c"),
+    @NamedQuery(name = "task.peekTasksFromNamespace",
+                query = "SELECT t FROM task t INNER JOIN t.cluster c " +
+                        "WHERE c.namespace = :namespace"),
     @NamedQuery(name = "task.peekTasksFromCluster",
                 query = "SELECT t FROM task t INNER JOIN t.cluster c " +
                         "WHERE c.name = :name AND c.namespace = :namespace"),
     @NamedQuery(name = "task.peekTasksWithState",
                 query = "SELECT t FROM task t WHERE t.state = :state"),
+    @NamedQuery(name = "task.peekTasksWithStateFromNamespace",
+                query = "SELECT t FROM task t INNER JOIN t.cluster c WHERE t.state = :state AND " +
+                        "c.namespace = :namespace"),
     @NamedQuery(name = "task.peekTasksFromClusterWithState",
                 query = "SELECT t FROM task t INNER JOIN t.cluster c WHERE t.state = :state AND " +
                     "c.namespace = :namespace AND c.name = :name"),

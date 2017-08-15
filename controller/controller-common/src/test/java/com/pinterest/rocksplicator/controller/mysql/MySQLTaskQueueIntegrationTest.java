@@ -215,4 +215,35 @@ public class MySQLTaskQueueIntegrationTest {
     Assert.assertEquals(queue.removeFinishedTasks(3), 1);
   }
 
+  @Test
+  public void testPeekTasks() throws InterruptedException {
+    Cluster realpin_p2p = new Cluster("realpin", "p2p");
+    Cluster realpin_pinnability = new Cluster("realpin", "pinnability");
+    Cluster aperture = new Cluster("rocksdb", "aperture");
+    this.queue.createCluster(realpin_p2p);
+    this.queue.createCluster(realpin_pinnability);
+    this.queue.createCluster(aperture);
+    Assert.assertTrue(
+        queue.enqueueTask(createTaskBase("realpin-p2p", 1, "realpin-p2p-body"), realpin_p2p, 0));
+    Assert.assertTrue(
+        queue.enqueueTask(createTaskBase(
+            "realpin-pinnability", 1, "realpin-pinnability-body"), realpin_pinnability, 0));
+    Assert.assertTrue(
+        queue.enqueueTask(createTaskBase("apreture", 1, "aperture-body"), aperture, 0));
+    Assert.assertEquals(this.queue.peekTasks(realpin_p2p, 0).size(), 1);
+    Assert.assertEquals(this.queue.peekTasks(realpin_pinnability, 0).size(), 1);
+    Assert.assertEquals(this.queue.peekTasks(aperture, 0).size(), 1);
+    Assert.assertEquals(this.queue.peekTasks(realpin_p2p, null).size(), 1);
+    Assert.assertEquals(this.queue.peekTasks(realpin_pinnability, null).size(), 1);
+    Assert.assertEquals(this.queue.peekTasks(aperture, null).size(), 1);
+    Assert.assertEquals(this.queue.peekTasks(new Cluster("realpin", ""), 0).size(), 2);
+    Assert.assertEquals(this.queue.peekTasks(new Cluster("rocksdb", ""), 0).size(), 1);
+    Assert.assertEquals(this.queue.peekTasks(new Cluster("realpin", ""), null).size(), 2);
+    Assert.assertEquals(this.queue.peekTasks(new Cluster("rocksdb", ""), null).size(), 1);
+
+    this.queue.removeCluster(realpin_p2p);
+    this.queue.removeCluster(realpin_pinnability);
+    this.queue.removeCluster(aperture);
+  }
+
 }

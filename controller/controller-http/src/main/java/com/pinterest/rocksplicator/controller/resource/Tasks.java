@@ -80,7 +80,11 @@ public class Tasks {
   public Response findTasks(@QueryParam("namespace") Optional<String> namespace,
                             @QueryParam("clusterName") Optional<String> clusterName,
                             @QueryParam("state") Optional<TaskState> state) {
-    List<Task> result = taskQueue.peekTasks(new Cluster(namespace.get(), clusterName.get()),
+    if(!namespace.isPresent() && namespace.isPresent()) {
+      Utils.buildResponse(HttpStatus.NOT_FOUND_404,
+          ImmutableMap.of("message", "we don't allow empty namespace with non-empty cluster name"));
+    }
+    List<Task> result = taskQueue.peekTasks(new Cluster(namespace.orElse(""), clusterName.orElse("")),
                                             state.map(TaskState::intValue).orElse(null));
     return Utils.buildResponse(HttpStatus.OK_200, result);
   }

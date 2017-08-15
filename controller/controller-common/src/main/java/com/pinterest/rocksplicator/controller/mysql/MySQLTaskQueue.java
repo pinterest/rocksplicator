@@ -392,23 +392,30 @@ public class MySQLTaskQueue implements TaskQueue {
   @Override
   public List<Task> peekTasks(final Cluster cluster, final Integer state) {
     Query query;
-    if (cluster != null && state != null) {
+    if (!cluster.getName().isEmpty() && !cluster.getNamespace().isEmpty() && state != null) {
       query = getEntityManager()
         .createNamedQuery("task.peekTasksFromClusterWithState")
         .setParameter("state", state)
         .setParameter("namespace", cluster.getNamespace()).setParameter("name", cluster.getName());
-    } else if (state != null) {
+    } else if (!cluster.getNamespace().isEmpty() && cluster.getName().isEmpty() && state != null) {
       query = getEntityManager()
-        .createNamedQuery("task.peekTasksWithState")
-        .setParameter("state", state);
-    } else if (cluster != null) {
-      // TODO
+        .createNamedQuery("task.peekTasksWithStateFromNamespace")
+        .setParameter("state", state).setParameter("namespace", cluster.getNamespace());
+    } else if (cluster.getNamespace().isEmpty() && cluster.getName().isEmpty() && state != null) {
       query = getEntityManager()
-        .createNamedQuery("task.peekTasksFromCluster")
-        .setParameter("name", cluster.getNamespace()).setParameter("namespace", cluster.getName());
-    }else{
+          .createNamedQuery("task.peekTasksWithState")
+          .setParameter("state", state);
+    } else if (!cluster.getName().isEmpty() && !cluster.getNamespace().isEmpty() && state == null) {
       query = getEntityManager()
-        .createNamedQuery("task.peekAllTasks");
+          .createNamedQuery("task.peekTasksFromCluster")
+          .setParameter("namespace", cluster.getNamespace()).setParameter("name", cluster.getName());
+    } else if (!cluster.getNamespace().isEmpty() && cluster.getName().isEmpty() && state == null) {
+      query = getEntityManager()
+          .createNamedQuery("task.peekTasksFromNamespace")
+          .setParameter("namespace", cluster.getNamespace());
+    } else {
+      query = getEntityManager()
+          .createNamedQuery("task.peekAllTasks");
     }
     List<TaskEntity> result = query.getResultList();
     return result.stream().map(

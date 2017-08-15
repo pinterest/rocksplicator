@@ -22,7 +22,10 @@ package com.pinterest.rocksplicator.controller;
  * @author shu (shu@pinterest.com)
  */
 public class Cluster {
+  // Namespace is the type of the cluster. For example, realpin, rocksdb or scorpion
   private String namespace;
+
+  // name is the detailed cluster name under the namespace, used for multi-cluster setup for services.
   private String name;
 
   public Cluster(final String namespace, final String name) {
