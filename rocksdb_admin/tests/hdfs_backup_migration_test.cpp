@@ -40,7 +40,7 @@ unique_ptr<DB> OpenDB(const string& path, bool error_if_exists = false) {
   Options options;
   options.create_if_missing = true;
   options.error_if_exists = error_if_exists;
-  options.WAL_size_limit_MB = 100; //
+  options.WAL_size_limit_MB = 100;
   DB* db;
   auto status = DB::Open(options, path, &db);
   EXPECT_TRUE(status.ok());
