@@ -16,6 +16,8 @@
 // @author evening (evening@pinterest.com)
 //
 
+#include "rocksdb_admin/admin_handler.h"
+
 #include "boost/filesystem.hpp"
 #include "gtest/gtest.h"
 #include "rocksdb/db.h"
@@ -26,6 +28,7 @@ using boost::filesystem::remove_all;
 using rocksdb::BackupableDBOptions;
 using rocksdb::BackupEngine;
 using rocksdb::DB;
+using rocksdb::DestroyDB;
 using rocksdb::Env;
 using rocksdb::NewHdfsEnv;
 using rocksdb::Options;
@@ -34,6 +37,17 @@ using rocksdb::SequenceNumber;
 using std::string;
 using std::to_string;
 using std::unique_ptr;
+
+DEFINE_string(hdfs_name_node, "hdfs://hbasebak-infra-namenode-prod1c01-001:8020",
+              "The hdfs name node used for backup");
+
+DEFINE_string(backup_dir, "/migration_test", "The dir for backeduped rocksdb instances");
+
+DEFINE_string(original_db_path, "/tmp/test_hdfs_backup_migration_original",
+              "The dir for the original rocksdb instance");
+
+DEFINE_string(restored_db_path, "/tmp/test_hdfs_backup_migration_copy",
+              "The dir for the restored racksdb instance");
 
 // helper function to open a rocksdb instance
 unique_ptr<DB> OpenDB(const string& path, bool error_if_exists = false) {
@@ -48,25 +62,23 @@ unique_ptr<DB> OpenDB(const string& path, bool error_if_exists = false) {
 }
 
 unique_ptr<DB> CleanAndOpenDB(const string& path) {
-  EXPECT_NO_THROW(remove_all(path));
+  //EXPECT_NO_THROW(remove_all(path));
+  Options options;
+  auto status = DestroyDB(path, options);
+  EXPECT_TRUE(status.ok());
   return OpenDB(path, true);
 }
 
 TEST(HDFSBackupMigrationTest, Basics) {
 
-  string hdfs_name_node = "hdfs://hbasebak-infra-namenode-prod1c01-001:8020";
-  string backup_dir = "/migration_test";
-  string full_path = hdfs_name_node + backup_dir;
-  string original_db_path = "/tmp/test_hdfs_backup_migration_original";
-  string restored_db_path = "/tmp/test_hdfs_backup_migration_copy";
-
   // backup can be found in the hdfs_name_node by using the following command
   // hdfs dfs -ls /migration_test/private
-
+ 
+  string full_path = FLAGS_hdfs_name_node + FLAGS_backup_dir;
   int expected_seq_no = 10;
 
   // create a new db
-  auto original_db = CleanAndOpenDB(original_db_path);
+  auto original_db = CleanAndOpenDB(FLAGS_original_db_path);
   for (int i = 0; i < expected_seq_no; ++i) {
     EXPECT_EQ(original_db->GetLatestSequenceNumber(), i);
     auto status = original_db->Put(rocksdb::WriteOptions(),
@@ -92,11 +104,11 @@ TEST(HDFSBackupMigrationTest, Basics) {
   EXPECT_TRUE(status.ok());
 
   // restore db
-  status = engine->RestoreDBFromLatestBackup(restored_db_path, restored_db_path);
+  status = engine->RestoreDBFromLatestBackup(FLAGS_restored_db_path, FLAGS_restored_db_path);
   EXPECT_TRUE(status.ok());
 
   // compare the original db with the restored db
-  auto restored_db = OpenDB(restored_db_path);
+  auto restored_db = OpenDB(FLAGS_restored_db_path);
   EXPECT_EQ(restored_db->GetLatestSequenceNumber(), expected_seq_no);
   for (int i = 0; i < expected_seq_no; ++i) {
     string value;
@@ -110,5 +122,4 @@ int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
-
 
