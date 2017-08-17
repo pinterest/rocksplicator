@@ -24,7 +24,6 @@
 #include "rocksdb/env.h"
 #include "rocksdb/utilities/backupable_db.h"
 
-using boost::filesystem::remove_all;
 using rocksdb::BackupableDBOptions;
 using rocksdb::BackupEngine;
 using rocksdb::DB;
@@ -62,7 +61,6 @@ unique_ptr<DB> OpenDB(const string& path, bool error_if_exists = false) {
 }
 
 unique_ptr<DB> CleanAndOpenDB(const string& path) {
-  //EXPECT_NO_THROW(remove_all(path));
   Options options;
   auto status = DestroyDB(path, options);
   EXPECT_TRUE(status.ok());
