@@ -65,7 +65,10 @@ public class ConsistentHashRingHealthCheckTask extends AbstractTask<Parameter> {
       ConsistentHashRingsBean consistentHashRingsBean =
           ZKUtil.getConsistentHashRingsConfig(zkClient, ctx.getCluster());
       if (consistentHashRingsBean == null) {
-        ctx.getTaskQueue().failTask(ctx.getId(), "Failed to read cluster config from zookeeper.");
+        String errorMessage = String.format(
+            "Failed to read cluster config from zookeeper: %s", ctx.getCluster());
+        ctx.getTaskQueue().failTask(ctx.getId(), errorMessage);
+        emailSender.sendEmail("Healthcheck Failed for " + ctx.getCluster(), errorMessage);
         return;
       }
 
