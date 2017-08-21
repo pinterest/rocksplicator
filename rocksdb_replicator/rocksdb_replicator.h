@@ -199,7 +199,7 @@ class RocksDBReplicator {
   RocksDBReplicator();
   ~RocksDBReplicator();
 
-  wangle::CPUThreadPoolExecutor* const executor_;
+  std::unique_ptr<wangle::CPUThreadPoolExecutor> executor_;
 
   common::ThriftClientPool<ReplicatorAsyncClient> client_pool_;
 

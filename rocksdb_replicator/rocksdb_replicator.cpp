@@ -22,7 +22,6 @@
 
 #include <string>
 
-#include "common/global_cpu_executor.h"
 #include "rocksdb_replicator/replicator_handler.h"
 #include "wangle/concurrent/CPUThreadPoolExecutor.h"
 
@@ -32,15 +31,22 @@ DEFINE_int32(rocksdb_replicator_port, 9091,
 DEFINE_int32(num_replicator_io_threads, 8,
              "The number of io threads.");
 
+DEFINE_int32(rocksdb_replicator_executor_threads, 32,
+             "The number of rocksplicator executor threads.");
+
 namespace replicator {
 
 RocksDBReplicator::RocksDBReplicator()
-    : executor_(common::getGlobalCPUExecutor())
+    : executor_()
     , client_pool_(FLAGS_num_replicator_io_threads)
     , db_map_()
     , server_("disabled", false)
     , thread_()
     , cleaner_() {
+  executor_ = std::make_unique<wangle::CPUThreadPoolExecutor>(
+    std::max(FLAGS_rocksdb_replicator_executor_threads, 16),
+    std::make_shared<wangle::NamedThreadFactory>("Replicator"));
+
   server_.setInterface(std::make_unique<ReplicatorHandler>(&db_map_));
   server_.setPort(FLAGS_rocksdb_replicator_port);
   // TODO(bol) share io threads between server_ and client_pool_
@@ -66,8 +72,8 @@ ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
                                     const folly::SocketAddress& upstream_addr,
                                     ReplicatedDB** replicated_db) {
   std::shared_ptr<ReplicatedDB> new_db(
-      new ReplicatedDB(db_name, std::move(db), executor_,
-                       role, upstream_addr, &client_pool_));
+    new ReplicatedDB(db_name, std::move(db), executor_.get(),
+                     role, upstream_addr, &client_pool_));
 
   if (!db_map_.add(db_name, new_db)) {
     return ReturnCode::DB_PRE_EXIST;
