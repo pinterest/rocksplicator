@@ -92,7 +92,9 @@ public class ConsistentHashRingHealthCheckTask extends AbstractTask<Parameter> {
         emailSender.sendEmail("Healthcheck Failed for " + ctx.getCluster(), errorMessage);
         return;
       }
-
+      LOG.info("All hosts are good");
+      String output = String.format("Cluster %s is healthy", ctx.getCluster());
+      ctx.getTaskQueue().finishTask(ctx.getId(), output);
     } catch (Exception ex) {
       String errorMessage =
           String.format("Cluster %s is unhealthy, reason = %s", ctx.getCluster(), ex.getMessage());

@@ -339,10 +339,10 @@ public class Clusters {
                               @QueryParam("connHash") Optional<Boolean> isConsistentHashRing) {
     try {
       TaskBase healthCheckTask;
-      if (isConsistentHashRing.orElse(false)) {
-        healthCheckTask = new HealthCheckTask().recur(intervalSeconds.orElse(0)).getEntity();
-      } else {
+      if (isConsistentHashRing.isPresent() && isConsistentHashRing.get().equals(true)) {
         healthCheckTask = new ConsistentHashRingHealthCheckTask().recur(intervalSeconds.orElse(0)).getEntity();
+      } else {
+        healthCheckTask = new HealthCheckTask().recur(intervalSeconds.orElse(0)).getEntity();
       }
       taskQueue.enqueueTask(healthCheckTask, new Cluster(namespace, clusterName), 0);
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
