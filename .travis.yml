@@ -7,7 +7,7 @@ matrix:
       before_install:
         - docker pull pinterestbo/rocksplicator-build:rocksdb5.7.2
       script:
-        - travis_wait 20 docker run -v $(pwd):/rocksplicator -v $HOME/docker-root:/root pinterestbo/rocksplicator-build:rocksdb5.7.2 /bin/sh -c "cd /rocksplicator; mkdir -p build; cd build; cmake .. ; make -j ; env CTEST_OUTPUT_ON_FAILURE=1 make test"
+        - travis_wait 20 docker run -v $(pwd):/rocksplicator -v $HOME/docker-root:/root pinterestbo/rocksplicator-build:rocksdb5.7.2 /bin/sh -c "cd /rocksplicator && mkdir -p build && cd build && rm -rf * cmake .. && make -j && env CTEST_OUTPUT_ON_FAILURE=1 make test"
 
     - language: java
       sudo: required
