@@ -22,11 +22,15 @@
 #include "gtest/gtest.h"
 #include "rocksdb/db.h"
 
-static const std::string kNewBinary = "rocksdb_admin/tests/sst_binary";
-static const std::string kNewData = "rocksdb_admin/tests/sst_data.sst";
+static const std::string kNewBinary =
+  "/rocksplicator/build/rocksdb_admin/tests/sst_binary";
+static const std::string kNewData =
+  "/rocksplicator/build/rocksdb_admin/tests/sst_data.sst";
 static const std::string kOldBinary =
-  "LD_LIBRARY_PATH=../rocksdb_admin/tests/ ../rocksdb_admin/tests/old_sst_binary";
-static const std::string kOldData = "../rocksdb_admin/tests/old_sst_data.sst";
+  "LD_LIBRARY_PATH=/rocksplicator/rocksdb_admin/tests/ "
+  "/rocksplicator/rocksdb_admin/tests/old_sst_binary";
+static const std::string kOldData =
+  "/rocksplicator/rocksdb_admin/tests/old_sst_data.sst";
 
 
 static const int kNumKeys = 10;
