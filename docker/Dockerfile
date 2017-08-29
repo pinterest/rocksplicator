@@ -232,9 +232,9 @@ RUN cd /opt && \
 
 # rocksdb
 RUN cd /opt/ && \
-    wget https://github.com/facebook/rocksdb/archive/rocksdb-5.4.7.zip && \
-    unzip rocksdb-5.4.7.zip && \
-    (cd rocksdb-rocksdb-5.4.7 && \
+    wget https://github.com/facebook/rocksdb/archive/rocksdb-5.7.2.zip && \
+    unzip rocksdb-5.7.2.zip && \
+    (cd rocksdb-rocksdb-5.7.2 && \
       sed -i -- 's/std::rindex/rindex/g' ./env/env_hdfs.cc && \
       sed -i -- '/"util\/string_util.h"/a #include "util\/logging.h"' ./env/env_hdfs.cc && \
       export CLASSPATH= && \
@@ -250,7 +250,7 @@ RUN cd /opt/ && \
         make -j ${BUILD_JOBS}  shared_lib && \
       make install-shared && \
       ldconfig) && \
-    rm -rf rocksdb
+    rm -rf rocksdb-rocksdb-5.7.2
 
 # aws sdk
 RUN cd /opt && \
