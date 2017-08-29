@@ -1,0 +1,70 @@
+<div class="task-contrainer" ng-show="vm.loadComplete">
+
+    <div class="table-responsive-vertical md-whiteframe-z1" ng-show="vm.statusCode==200 && !vm.hideCluster">
+        <md-tabs>
+            <md-tab ng-repeat="(namespace, clusterList) in vm.clusters" md-on-select="onTabSelected(tab)" md-on-deselect="announceDeselected(tab)">
+                <md-tab-label>
+                    {{namespace}}
+                </md-tab-label>
+                <md-tab-body>
+                    <table class="table table-hover table-bordered">
+                        <thead>
+                        <tr>
+                            <th>Index</th>
+                            <th>Name</th>
+                            <th>View Tasks</th>
+                            <th>View Config</th>
+                            <th>Remove</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr ng-repeat="cluster in clusterList track by $index ">
+                            <td>
+                                <md-button class="toolbar-button">
+                                    <i class="material-icons" md-colors="{color: 'blue-grey-300'}">cloud</i>
+                                    <span class="notifications-label" md-colors="{background: 'blue-grey-700', color: 'blue-grey-50'}">{{$index + 1}}</span>
+                                </md-button>
+                            </td>
+                            <td><span class="cluster-name">{{cluster}}</span>
+                            </td>
+                            <td>
+                                <md-button class="toolbar-button">
+                                    <i class="material-icons" md-colors="{color: 'orange-500'}">dehaze</i>
+                                </md-button>
+                            <td>
+                                <md-button class="toolbar-button" ng-click="vm.selectCluster(namespace, cluster)">
+                                    <i class="material-icons" md-colors="{color: 'teal-500'}">dashboard</i>
+                                </md-button>
+                            </td>
+                            <td>
+                                <md-button class="toolbar-button">
+                                    <i class="material-icons" md-colors="{color: 'red-300'}">delete_forever</i>
+                                </md-button>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </md-tab-body>
+            </md-tab>
+        </md-tabs>
+    </div>
+
+    <md-content layout-padding ng-show="vm.statusCode!=200">
+        <md-list-item>
+            <md-button class="toolbar-button">
+                <i class="material-icons" md-colors="{color: 'blue-grey-500'}">error</i>
+            </md-button>
+            <span>HTTP Status Code: {{vm.statusCode}}</span>
+        </md-list-item>
+        <md-list-item>
+            <md-button class="toolbar-button">
+                <i class="material-icons" md-colors="{color: 'blue-grey-500'}">error</i>
+            </md-button>
+            <span>Error Message: {{vm.errorMessage.message}}</span>
+        </md-list-item>
+    </md-content>
+
+    <div ui-view></div>
+
+</div>
+
