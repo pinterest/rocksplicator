@@ -16,6 +16,8 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
+import com.codahale.metrics.health.HealthCheck;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.bean.SegmentBean;
@@ -30,6 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import javax.inject.Inject;
@@ -42,7 +45,7 @@ import javax.inject.Inject;
  *
  * @author Ang Xu (angxu@pinterest.com)
  */
-public class HealthCheckTask extends AbstractTask<Parameter> {
+public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
 
   public static final Logger LOG = LoggerFactory.getLogger(HealthCheckTask.class);
 
@@ -55,13 +58,18 @@ public class HealthCheckTask extends AbstractTask<Parameter> {
   @Inject
   private EmailSender emailSender;
 
-  /**
-   * Construct a new HealthCheckTask with number of replicas equals to 3
-   */
-  public HealthCheckTask() { this(new Parameter());}
+  public HealthCheckTask() {
+    this(new Param().setBadHostsStatesKeeper(
+        new BadHostsStatesKeeper(3, 30 * 60)));
+  }
 
-  public HealthCheckTask(Parameter param) {
-    super(param);
+  public HealthCheckTask(int countAsFailure, int emailMuteMinutes) {
+    this(new Param().setBadHostsStatesKeeper(
+        new BadHostsStatesKeeper(countAsFailure, emailMuteMinutes * 60)));
+  }
+
+  public HealthCheckTask(Param parameter) {
+    super(parameter);
   }
 
   @Override
@@ -91,7 +99,10 @@ public class HealthCheckTask extends AbstractTask<Parameter> {
         }
       }
 
-      if (!badHosts.isEmpty()) {
+      List<String> hostsToSendEmail =
+          getParameter().getBadHostsStatesKeeper().updateStatesAndGetHostsToEmail(badHosts);
+
+      if (!hostsToSendEmail.isEmpty()) {
         String errorMessage = String.format("Unable to ping hosts: %s", badHosts);
         ctx.getTaskQueue().failTask(ctx.getId(),errorMessage);
         emailSender.sendEmail("Healthcheck Failed for " + ctx.getCluster(), errorMessage);
@@ -108,4 +119,19 @@ public class HealthCheckTask extends AbstractTask<Parameter> {
       emailSender.sendEmail("Healthcheck Failed for " + ctx.getCluster(), errorMessage);
     }
   }
+
+  public static class Param extends Parameter {
+    @JsonProperty
+    private BadHostsStatesKeeper badHostsStatesKeeper;
+
+    public BadHostsStatesKeeper getBadHostsStatesKeeper() {
+      return badHostsStatesKeeper;
+    }
+
+    public Param setBadHostsStatesKeeper(BadHostsStatesKeeper badHostsStatesKeeper) {
+      this.badHostsStatesKeeper = badHostsStatesKeeper;
+      return this;
+    }
+  }
+
 }

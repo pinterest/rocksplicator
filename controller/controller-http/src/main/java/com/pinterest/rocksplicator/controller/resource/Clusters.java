@@ -212,7 +212,7 @@ public class Clusters {
                   50)
           )
           .andThen(new RebalanceTask())
-          .andThen(new HealthCheckTask())
+          .andThen(new HealthCheckTask(1, 30))
           //TODO(angxu) Add .retry(maxRetry) if necessary
           .getEntity();
 
@@ -336,13 +336,18 @@ public class Clusters {
   public Response healthcheck(@PathParam("namespace") String namespace,
                               @PathParam("clusterName") String clusterName,
                               @QueryParam("interval") Optional<Integer> intervalSeconds,
-                              @QueryParam("connHash") Optional<Boolean> isConsistentHashRing) {
+                              @QueryParam("connHash") Optional<Boolean> isConsistentHashRing,
+                              @QueryParam("countAsFailure") Optional<Integer> countAsFailure,
+                              @QueryParam("muteMins") Optional<Integer> muteMins) {
     try {
       TaskBase healthCheckTask;
       if (isConsistentHashRing.isPresent() && isConsistentHashRing.get().equals(true)) {
-        healthCheckTask = new ConsistentHashRingHealthCheckTask().recur(intervalSeconds.orElse(0)).getEntity();
+        healthCheckTask = new ConsistentHashRingHealthCheckTask(
+            countAsFailure.orElse(3), muteMins.orElse(30)).recur(
+            intervalSeconds.orElse(0)).getEntity();
       } else {
-        healthCheckTask = new HealthCheckTask().recur(intervalSeconds.orElse(0)).getEntity();
+        healthCheckTask = new HealthCheckTask(countAsFailure.orElse(3), muteMins.orElse(30)).recur(
+            intervalSeconds.orElse(0)).getEntity();
       }
       taskQueue.enqueueTask(healthCheckTask, new Cluster(namespace, clusterName), 0);
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));

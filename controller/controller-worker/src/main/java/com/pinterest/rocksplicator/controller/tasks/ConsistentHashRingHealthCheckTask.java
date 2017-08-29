@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.pinterest.rocksplicator.controller.bean.ConsistentHashRingBean;
 import com.pinterest.rocksplicator.controller.bean.ConsistentHashRingsBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
@@ -30,6 +31,7 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import java.net.InetAddress;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -40,7 +42,7 @@ import java.util.Set;
  *
  * @author shu (shu@pinterest.com)
  */
-public class ConsistentHashRingHealthCheckTask extends AbstractTask<Parameter> {
+public class ConsistentHashRingHealthCheckTask extends AbstractTask<ConsistentHashRingHealthCheckTask.Param> {
 
   public static final Logger LOG = LoggerFactory.getLogger(ConsistentHashRingHealthCheckTask.class);
 
@@ -53,9 +55,16 @@ public class ConsistentHashRingHealthCheckTask extends AbstractTask<Parameter> {
   @Inject
   private EmailSender emailSender;
 
-  public ConsistentHashRingHealthCheckTask() { this(new Parameter()); }
+  public ConsistentHashRingHealthCheckTask() {
+    this(new Param().setBadHostsStatesKeeper(new BadHostsStatesKeeper(3, 30 * 60)));
+  }
 
-  public ConsistentHashRingHealthCheckTask(Parameter parameter) {
+  public ConsistentHashRingHealthCheckTask(int countAsFailure, int emailMuteMinutes) {
+    this(new Param().setBadHostsStatesKeeper(
+        new BadHostsStatesKeeper(countAsFailure, emailMuteMinutes * 60)));
+  }
+
+  public ConsistentHashRingHealthCheckTask(Param parameter) {
     super(parameter);
   }
 
@@ -86,7 +95,10 @@ public class ConsistentHashRingHealthCheckTask extends AbstractTask<Parameter> {
         }
       }
 
-      if (!badHosts.isEmpty()) {
+      List<String> hostsToSendEmail =
+          getParameter().getBadHostsStatesKeeper().updateStatesAndGetHostsToEmail(badHosts);
+
+      if (!hostsToSendEmail.isEmpty()) {
         String errorMessage = String.format("Unable to ping hosts: %s", badHosts);
         ctx.getTaskQueue().failTask(ctx.getId(),errorMessage);
         emailSender.sendEmail("Healthcheck Failed for " + ctx.getCluster(), errorMessage);
@@ -102,4 +114,19 @@ public class ConsistentHashRingHealthCheckTask extends AbstractTask<Parameter> {
       emailSender.sendEmail("Healthcheck Failed for " + ctx.getCluster(), errorMessage);
     }
   }
+
+  public static class Param extends Parameter {
+    @JsonProperty
+    private BadHostsStatesKeeper badHostsStatesKeeper;
+
+    public BadHostsStatesKeeper getBadHostsStatesKeeper() {
+      return badHostsStatesKeeper;
+    }
+
+    public Param setBadHostsStatesKeeper(BadHostsStatesKeeper badHostsStatesKeeper) {
+      this.badHostsStatesKeeper = badHostsStatesKeeper;
+      return this;
+    }
+  }
+
 }
