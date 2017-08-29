@@ -44,6 +44,27 @@ public class BadHostsStatsKeeperTest {
   }
 
   @Test
+  public void testReset() {
+    BadHostsStatesKeeper badHostsStatesKeeper = new BadHostsStatesKeeper();
+    Set<String> inputSet = new HashSet<>();
+    inputSet.add("1.2.3.4");
+    Set<String> emptySet = new HashSet<>();
+    List<String> emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
+    Assert.assertTrue(emailedHosts.isEmpty());
+    emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
+    Assert.assertTrue(emailedHosts.isEmpty());
+    emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(emptySet);
+    Assert.assertTrue(emailedHosts.isEmpty());
+    emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
+    Assert.assertTrue(emailedHosts.isEmpty());
+    emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
+    Assert.assertTrue(emailedHosts.isEmpty());
+    emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
+    Assert.assertTrue(!emailedHosts.isEmpty());
+    Assert.assertEquals(emailedHosts.get(0), "1.2.3.4");
+  }
+
+  @Test
   public void testExpiration() throws InterruptedException {
     BadHostsStatesKeeper badHostsStatesKeeper = new BadHostsStatesKeeper(3, 5);
     Set<String> inputSet = new HashSet<>();
