@@ -12,16 +12,32 @@
       var vm = this;
       vm.clusterTable = [];
       vm.clusterSelected = '';
+      vm.namespaceSelected = '';
       vm.hideCluster = false;
       vm.loadComplete = false;
       vm.statusCode = -1;
       vm.errorMessage = '';
 
+      function getNameSpaceClusterDict(clusters) {
+          var dict = {};
+          for (var i = 0; i < clusters.length; i++) {
+              var namespace = clusters[i].namespace;
+              if (! (namespace in dict)) {
+                  dict[namespace] = [];
+                  dict[namespace].push(clusters[i].name);
+              }
+              else {
+                  dict[namespace].push(clusters[i].name);
+              }
+          }
+          return dict;
+      }
+
       clusterConfigService
           .loadAllClusterNames()
           .then(function(result) {
               vm.statusCode = result.status;
-              vm.clusterTable = result.data;
+              vm.clusters = getNameSpaceClusterDict(result.data);
               vm.loadComplete = true;
           },function (error){
               vm.statusCode = error.status;
@@ -30,10 +46,12 @@
           });
 
 
-      vm.selectCluster = function (cluster) {
+      vm.selectCluster = function (namespace, cluster) {
+          console.log(namespace, cluster);
+          vm.namespaceSelected = namespace
           vm.clusterSelected = cluster;
           vm.loadComplete = false;
-          clusterConfigService.setSelectedCluster(vm.clusterSelected);
+          clusterConfigService.setSelectedCluster(namespace, cluster);
           clusterConfigService.pullClusterConfig()
               .then(function(config){
                   clusterConfigService.setRawClusterConfig(config.data);
@@ -42,7 +60,10 @@
                           clusterConfigService.setRunningHosts(hosts.data);
                           clusterConfigService.processConfig();
                           vm.statusCode = hosts.status;
-                          $state.go('.shard', { 'clustersName': vm.clusterSelected});
+                          $state.go('.shard', {
+                              'namespace' : vm.namespaceSelected,
+                              'clustersName': vm.clusterSelected
+                          }); //todo
                           vm.hideCluster = true;
                           vm.loadComplete = true;
                       },function(error){

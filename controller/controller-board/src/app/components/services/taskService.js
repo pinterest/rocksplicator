@@ -11,7 +11,7 @@
 
         return {
             getAllTasks : function() {
-                return $http.get("http://localhost:8080/v1/tasks");
+                return $http.get("https://controllerhttp.pinadmin.com/v1/tasks");
             }
         };
     }

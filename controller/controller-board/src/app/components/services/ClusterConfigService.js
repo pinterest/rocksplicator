@@ -9,6 +9,7 @@
 
     function clusterConfigService($http){
         var clusterName = '';
+        var namespace = '';
         var rawClusterConfig = {};
         var runningHosts = [];
         var dataSegments = [];
@@ -19,6 +20,7 @@
 
         function reset () {
             clusterName = '';
+            namespace = '';
             rawClusterConfig = {};
             runningHosts = [];
             dataSegments = [];
@@ -91,15 +93,16 @@
         return {
             loadAllClusterNames : function() {
                 reset();
-                return $http.get('http://localhost:8080/v1/clusters?verbose=false');
+                return $http.get('https://controllerhttp.pinadmin.com/v1/clusters?verbose=false');
             },
 
-            setSelectedCluster : function (cluster) {
+            setSelectedCluster : function (ns, cluster) {
+                namespace = ns;
                 clusterName = cluster;
             },
 
             pullClusterConfig : function () {
-                return $http.get('http://localhost:8080/v1/clusters/' + clusterName);
+                return $http.get('https://controllerhttp.pinadmin.com/v1/clusters/' + namespace + '/'+ clusterName);
             },
 
             setRawClusterConfig : function(rawConfig) {
@@ -121,7 +124,7 @@
             },
 
             getClusterName : function () {
-                return clusterName;
+                return clusterName;//todo
             },
 
             getDataSegments : function(){
