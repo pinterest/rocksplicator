@@ -124,7 +124,7 @@
             },
 
             getClusterName : function () {
-                return clusterName;//todo
+                return clusterName;
             },
 
             getDataSegments : function(){

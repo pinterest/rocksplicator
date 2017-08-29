@@ -38,6 +38,7 @@
           .then(function(result) {
               vm.statusCode = result.status;
               vm.clusters = getNameSpaceClusterDict(result.data);
+              vm.clusterTable = result.data;
               vm.loadComplete = true;
           },function (error){
               vm.statusCode = error.status;
@@ -63,7 +64,7 @@
                           $state.go('.shard', {
                               'namespace' : vm.namespaceSelected,
                               'clustersName': vm.clusterSelected
-                          }); //todo
+                          });
                           vm.hideCluster = true;
                           vm.loadComplete = true;
                       },function(error){
