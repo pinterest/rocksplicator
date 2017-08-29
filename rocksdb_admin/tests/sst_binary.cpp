@@ -38,16 +38,7 @@ std::unique_ptr<rocksdb::DB> OpenDB(const std::string& path) {
   return std::unique_ptr<rocksdb::DB>(db);
 }
 
-int main(int argc, char** argv) {
-  if (argc != 2) {
-    LOG(ERROR) << "Invalid cmd parameters: " << argc;
-    return -1;
-  }
-
-  auto db = OpenDB(kDBPath);
-  auto status = db->AddFile(argv[1]);
-  CHECK(status.ok()) << "AddFile() failed: " << status.ToString();
-
+void VerifyData(rocksdb::DB* db) {
   std::unique_ptr<rocksdb::Iterator> itor(
     db->NewIterator(rocksdb::ReadOptions()));
   CHECK(itor) << "null iterator returned";
@@ -60,4 +51,23 @@ int main(int argc, char** argv) {
       itor->value().ToString();
     itor->Next();
   }
+
+}
+
+int main(int argc, char** argv) {
+  if (argc != 2) {
+    LOG(ERROR) << "Invalid cmd parameters: " << argc;
+    return -1;
+  }
+
+  auto db = OpenDB(kDBPath);
+  auto status = db->AddFile(argv[1]);
+  CHECK(status.ok()) << "AddFile() failed: " << status.ToString();
+
+  VerifyData(db.get());
+
+  status = db->CompactRange(nullptr, nullptr);
+  CHECK(status.ok()) << "CompactRange() failed: " << status.ToString();
+
+  VerifyData(db.get());
 }
