@@ -20,9 +20,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.validation.constraints.NotNull;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -53,13 +51,17 @@ public class BadHostsStatesKeeper {
 
   private static final Logger LOG = LoggerFactory.getLogger(BadHostsStatesKeeper.class);
 
-  @NotNull
+  @JsonProperty
   private int numFailuresCountAsBad;
-  @NotNull
+
+  @JsonProperty
   private int emailMuteIntervalSeconds;
 
+  @JsonProperty
   private long emailMuteIntervalMillis;
-  private Map<String, BadHostState> badHostStates = Collections.emptyMap();
+
+  @JsonProperty
+  private Map<String, BadHostState> badHostStates = new HashMap<>();
 
   public BadHostsStatesKeeper() {
     this(3, 30 * 60);
