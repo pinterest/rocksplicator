@@ -9,7 +9,7 @@ matrix:
       before_install:
         - docker pull pinterestbo/rocksplicator-build:rocksdb5.7.2
       script:
-        - docker run -v $HOME/.ccache:/rocksplicator/build -v $(pwd):/rocksplicator pinterestbo/rocksplicator-build:rocksdb5.7.2 /bin/sh -c "cd /rocksplicator/build && cmake .. && make -j && env CTEST_OUTPUT_ON_FAILURE=1 make test"
+        - docker run -v $HOME/.ccache:/rocksplicator/build -v $(pwd):/rocksplicator pinterestbo/rocksplicator-build:rocksdb5.7.2 /bin/sh -c "cd /rocksplicator/build && cmake .. && make && env CTEST_OUTPUT_ON_FAILURE=1 make test"
 
     - language: java
       sudo: required
