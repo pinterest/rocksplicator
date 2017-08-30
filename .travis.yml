@@ -9,7 +9,27 @@ matrix:
       before_install:
         - docker pull pinterestbo/rocksplicator-build:rocksdb5.7.2
       script:
+        - cd $HOME/.ccache
+        - |
+          if [[ -f touch_order.txt ]]; then
+            while read fn; do
+              touch $fn
+            done < touch_order.txt
+            # touch changed git files to trigger their rebuild
+            read PREVIOUS_GIT_COMMIT < previous_git_commit.txt
+            cd "${TRAVIS_BUILD_DIR}"
+            changed_files=`git diff --name-only $PREVIOUS_GIT_COMMIT HEAD`
+            echo "Previously cached Travis build based on git commit ${PREVIOUS_GIT_COMMIT}."
+            echo "... changed files since then:"
+            echo $changed_files
+            touch `echo $changed_files`
+          else
+            echo "Full build ..."
+          fi
         - docker run -v $HOME/.ccache:/rocksplicator/build -v $(pwd):/rocksplicator pinterestbo/rocksplicator-build:rocksdb5.7.2 /bin/sh -c "cd /rocksplicator/build && cmake .. && make && env CTEST_OUTPUT_ON_FAILURE=1 make test"
+      before_cache:
+        - cd $HOME/.ccache && find . -type f -printf "%T+\t%p\n" | sort | cut -f 2 > touch_order.txt
+        - cd "${TRAVIS_BUILD_DIR}" && git rev-parse HEAD > $HOME/.ccache/previous_git_commit.txt
 
     - language: java
       sudo: required
