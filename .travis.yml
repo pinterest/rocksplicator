@@ -11,7 +11,8 @@ matrix:
       script:
         - cd $HOME/.ccache
         - |
-          if [ -e previous_git_commit.txt ] then
+          if [ -e previous_git_commit.txt ]
+          then
             read PREVIOUS_GIT_COMMIT < previous_git_commit.txt
             cd "${TRAVIS_BUILD_DIR}"
             if git branch -r --contains $PREVIOUS_GIT_COMMIT; then
