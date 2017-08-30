@@ -120,7 +120,7 @@ public class RecurTask extends AbstractTask<RecurTask.Param>{
       task.process(ctx);
       // in case the current body is changed, and we need to carry the state
       // to next enqueued job
-      getParameter().getTask().body = task.getParameter().serialize();
+      getParameter().getTask().setBody(task.getParameter().serialize());
     } catch (Throwable th) {
       t = th;
     }
