@@ -31,24 +31,27 @@ public class TaskBase {
     return name;
   }
 
-  public void setName(String name) {
+  public TaskBase setName(String name) {
     this.name = name;
+    return this;
   }
 
   public int getPriority() {
     return priority;
   }
 
-  public void setPriority(int priority) {
+  public TaskBase setPriority(int priority) {
     this.priority = priority;
+    return this;
   }
 
   public String getBody() {
     return body;
   }
 
-  public void setBody(String body) {
+  public TaskBase setBody(String body) {
     this.body = body;
+    return this;
   }
 
 }
