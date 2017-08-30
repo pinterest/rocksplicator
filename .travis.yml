@@ -23,6 +23,7 @@ matrix:
             echo "... changed files since then:"
             echo $changed_files
             touch `echo $changed_files`
+            echo "Touch done"
           else
             echo "Full build ..."
           fi
