@@ -4,10 +4,12 @@ matrix:
       sudo: required
       services:
         - docker
+      cache:
+        - ccache
       before_install:
         - docker pull pinterestbo/rocksplicator-build:rocksdb5.7.2
       script:
-        - docker run -v $(pwd):/rocksplicator pinterestbo/rocksplicator-build:rocksdb5.7.2 /bin/sh -c "cd /rocksplicator && mkdir -p build; cd build && cmake .. && make -j && env CTEST_OUTPUT_ON_FAILURE=1 make test"
+        - docker run -v $HOME/.ccache:/ccache -v $(pwd):/rocksplicator pinterestbo/rocksplicator-build:rocksdb5.7.2 /bin/sh -c "cd /ccache && cmake /rocksplicator && make -j && env CTEST_OUTPUT_ON_FAILURE=1 make test"
 
     - language: java
       sudo: required
