@@ -16,8 +16,6 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
-import com.codahale.metrics.health.HealthCheck;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.bean.SegmentBean;
@@ -25,8 +23,8 @@ import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
 import com.pinterest.rocksplicator.controller.util.EmailSender;
 import com.pinterest.rocksplicator.controller.util.ZKUtil;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.curator.framework.CuratorFramework;
-import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +32,6 @@ import java.net.InetSocketAddress;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import javax.inject.Inject;
 
 
@@ -93,7 +90,7 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
       for (InetSocketAddress hostAddr : hosts) {
         try {
           clientFactory.getClient(hostAddr).ping();
-        } catch (TException | ExecutionException ex) {
+        } catch (Exception ex) {
           // record bad host
           badHosts.add(hostAddr.toString());
         }

@@ -26,4 +26,32 @@ public class TaskBase {
   public String name;
   public int priority;
   public String body;
+
+  public String getName() {
+    return name;
+  }
+
+  public TaskBase setName(String name) {
+    this.name = name;
+    return this;
+  }
+
+  public int getPriority() {
+    return priority;
+  }
+
+  public TaskBase setPriority(int priority) {
+    this.priority = priority;
+    return this;
+  }
+
+  public String getBody() {
+    return body;
+  }
+
+  public TaskBase setBody(String body) {
+    this.body = body;
+    return this;
+  }
+
 }
