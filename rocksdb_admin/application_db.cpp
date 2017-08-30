@@ -21,7 +21,7 @@
 #include "common/timer.h"
 
 DEFINE_bool(disable_rocksplicator_db_stats, false,
-            "Disable the stats for rocksplicator db")
+            "Disable the stats for rocksplicator db");
 
 namespace {
 
