@@ -33,7 +33,6 @@
         function processConfigHelper() {
             rawClusterConfig.segments.forEach(function(segment) {
                 // initialize segment list
-
                 var dataSegmentDict = {};
                 dataSegmentDict['name'] = segment.name;
                 dataSegmentDict['numShards'] = segment.numShards;
