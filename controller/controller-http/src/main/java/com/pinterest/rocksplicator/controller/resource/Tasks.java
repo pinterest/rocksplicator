@@ -80,7 +80,7 @@ public class Tasks {
   public Response findTasks(@QueryParam("namespace") Optional<String> namespace,
                             @QueryParam("clusterName") Optional<String> clusterName,
                             @QueryParam("state") Optional<TaskState> state) {
-    if(!namespace.isPresent() && namespace.isPresent()) {
+    if(!namespace.isPresent() && clusterName.isPresent()) {
       Utils.buildResponse(HttpStatus.NOT_FOUND_404,
           ImmutableMap.of("message", "we don't allow empty namespace with non-empty cluster name"));
     }
