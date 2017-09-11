@@ -28,19 +28,6 @@
             return new Date(data).toString().split(' ').splice(1,4).join(' ');
         };
 
-        vm.getStateText = function(state){
-            switch (state) {
-                case 0:
-                    return 'PENDING';
-                case 1:
-                    return 'RUNNING';
-                case 2:
-                    return 'FINISHED';
-                case 3:
-                    return 'FAILED';
-            }
-        };
-
         vm.getStateProgressBarValue = function (state) {
             var stateToProgressValueDict = {
                 0 : 1,
@@ -58,6 +45,19 @@
 
         vm.toggleShowDetail = function(index){
           vm.showDetail[index] = !vm.showDetail[index];
+        };
+
+        vm.getStateText = function(state){
+            switch (state) {
+                case 0:
+                    return 'PENDING';
+                case 1:
+                    return 'RUNNING';
+                case 2:
+                    return 'FINISHED';
+                case 3:
+                    return 'FAILED';
+            }
         };
 
         clusterConfigService
