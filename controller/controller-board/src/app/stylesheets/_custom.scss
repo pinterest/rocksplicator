@@ -194,7 +194,7 @@ md-backdrop.md-sidenav-backdrop {
 }
 
 .taskDetail{
-  text-align: center;
+  text-align: left;
 }
 
 .cluster-name{
@@ -205,4 +205,8 @@ md-backdrop.md-sidenav-backdrop {
 .search-bar {
   padding-bottom: 0;
   margin-bottom: 0;
+}
+
+md-tooltip {
+  height: auto !important;
 }

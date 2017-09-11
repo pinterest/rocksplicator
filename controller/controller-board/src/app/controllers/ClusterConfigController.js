@@ -77,6 +77,6 @@
                   vm.errorMessage = error.data;
                   vm.loadComplete = true;
               });
-      }
+      };
   }
 })();
