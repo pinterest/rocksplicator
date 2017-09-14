@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller;
 
+import com.pinterest.rocksplicator.controller.mysql.MySQLClusterManager;
 import com.pinterest.rocksplicator.controller.mysql.MySQLTaskQueue;
 import com.pinterest.rocksplicator.controller.resource.Clusters;
 import com.pinterest.rocksplicator.controller.resource.Tasks;
@@ -24,10 +25,8 @@ import com.pinterest.rocksplicator.controller.util.ZookeeperConfigParser;
 import io.dropwizard.Application;
 import io.dropwizard.lifecycle.Managed;
 import io.dropwizard.setup.Environment;
-import org.apache.curator.CuratorZookeeperClient;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
-import org.apache.curator.retry.RetryForever;
 import org.apache.curator.retry.RetryOneTime;
 
 /**
@@ -45,6 +44,8 @@ public class ControllerService extends Application<ControllerConfiguration> {
                   Environment environment) throws Exception {
     TaskQueue taskQueue = new MySQLTaskQueue(configuration.getJdbcUrl(), configuration
         .getMysqlUser(), configuration.getMysqlPassword());
+    ClusterManager clusterManager = new MySQLClusterManager(
+        configuration.getJdbcUrl(), configuration.getMysqlUser(), configuration.getMysqlPassword());
     CuratorFramework zkClient = CuratorFrameworkFactory.newClient(
         ZookeeperConfigParser.parseEndpoints(
             configuration.getZkHostsFile(), configuration.getZkCluster()),
@@ -63,7 +64,7 @@ public class ControllerService extends Application<ControllerConfiguration> {
     });
 
     environment.jersey().register(
-        new Clusters(zkClient, taskQueue)
+        new Clusters(zkClient, taskQueue, clusterManager)
     );
     environment.jersey().register(new Tasks(taskQueue));
 

@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS tag (
   locks TINYINT UNSIGNED NOT NULL,
   created_at DATETIME NOT NULL,
   owner VARCHAR(256),
+  live_hosts MEDIUMTEXT,
+  blacklisted_hosts MEDIUMTEXT,
   PRIMARY KEY (namespace, name)
 ) ENGINE=INNODB;
 
