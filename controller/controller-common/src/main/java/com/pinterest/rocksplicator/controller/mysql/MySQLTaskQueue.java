@@ -16,7 +16,6 @@
 
 package com.pinterest.rocksplicator.controller.mysql;
 
-import com.google.common.collect.ImmutableMap;
 import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.Task;
 import com.pinterest.rocksplicator.controller.TaskBase;
@@ -29,10 +28,7 @@ import org.apache.commons.lang3.time.DateUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.persistence.EntityManager;
-import javax.persistence.EntityManagerFactory;
 import javax.persistence.LockModeType;
-import javax.persistence.Persistence;
 import javax.persistence.Query;
 import java.util.Date;
 import java.util.HashSet;
@@ -43,7 +39,7 @@ import java.util.stream.Collectors;
 /**
  * A {@link TaskQueue} which talks to MySQL directly on all kinds of queue operations through JPA.
  */
-public class MySQLTaskQueue implements TaskQueue {
+public class MySQLTaskQueue extends MySQLBase implements TaskQueue {
 
   private static final Logger LOG = LoggerFactory.getLogger(MySQLTaskQueue.class);
 
@@ -51,41 +47,8 @@ public class MySQLTaskQueue implements TaskQueue {
     public MySQLTaskQueueException() { super(); }
   }
 
-  private ThreadLocal<EntityManager> entityManager;
-  private EntityManagerFactory entityManagerFactory;
-
-  private class JDBC_CONFIGS {
-    static final String PERSISTENCE_UNIT_NAME = "controller";
-    static final String DRIVER_PROPERTY = "javax.persistence.jdbc.driver";
-    static final String JDBC_DRIVER = "com.mysql.jdbc.Driver";
-    static final String URL_PROPERTY = "javax.persistence.jdbc.url";
-    static final String USER_PROPERTY = "javax.persistence.jdbc.user";
-    static final String PASSWORD_PROPERTY = "javax.persistence.jdbc.password";
-  }
-
-  EntityManager getEntityManager() {
-    if (entityManager.get() == null) {
-      entityManager.set(entityManagerFactory.createEntityManager());
-    }
-    return entityManager.get();
-  }
-
-  void beginTransaction() {
-    if (!getEntityManager().getTransaction().isActive()) {
-      getEntityManager().getTransaction().begin();
-    }
-  }
-
   public MySQLTaskQueue(String jdbcUrl, String dbUser, String dbPassword) {
-    this.entityManagerFactory = Persistence.createEntityManagerFactory(
-        JDBC_CONFIGS.PERSISTENCE_UNIT_NAME, new ImmutableMap.Builder<String, String>()
-            .put(JDBC_CONFIGS.DRIVER_PROPERTY, JDBC_CONFIGS.JDBC_DRIVER)
-            .put(JDBC_CONFIGS.URL_PROPERTY, jdbcUrl)
-            .put(JDBC_CONFIGS.USER_PROPERTY, dbUser)
-            .put(JDBC_CONFIGS.PASSWORD_PROPERTY, dbPassword)
-            .build()
-    );
-    entityManager = new ThreadLocal<EntityManager>();
+    super(jdbcUrl, dbUser, dbPassword);
   }
 
   static Task convertTaskEntityToTask(TaskEntity taskEntity) {

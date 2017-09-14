@@ -17,6 +17,7 @@
 package com.pinterest.rocksplicator.controller.resource;
 
 import com.pinterest.rocksplicator.controller.Cluster;
+import com.pinterest.rocksplicator.controller.ClusterManager;
 import com.pinterest.rocksplicator.controller.TaskBase;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
@@ -64,11 +65,14 @@ public class Clusters {
   private static final String ZK_PREFIX = "/config/services/";
   private final CuratorFramework zkClient;
   private final TaskQueue taskQueue;
+  private final ClusterManager clusterManager;
 
   public Clusters(CuratorFramework zkClient,
-                  TaskQueue taskQueue) {
+                  TaskQueue taskQueue,
+                  ClusterManager clusterManager) {
     this.zkClient = zkClient;
     this.taskQueue = taskQueue;
+    this.clusterManager = clusterManager;
   }
 
   private String getClusterZKPath(final String namespace, final String clusterName) {
@@ -385,6 +389,57 @@ public class Clusters {
       return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500,
           ImmutableMap.of("message", message));
     }
+  }
+
+  @POST
+  @Path("/register/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName: [a-zA-Z0-9\\-_]+}")
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response registerHost(@PathParam("namespace") String namespace,
+                               @PathParam("clusterName") String clusterName,
+                               @NotEmpty @QueryParam("host") String hostString) {
+    HostBean host = HostBean.fromUrlParam(hostString);
+    if (host == null || host.getAvailabilityZone().isEmpty()) {
+      return Utils.buildResponse(HttpStatus.BAD_REQUEST_400,
+          ImmutableMap.of("message", "Bad string format for host"));
+    }
+    return Utils.buildResponse(HttpStatus.OK_200,
+        ImmutableMap.of("data", clusterManager.registerToCluster(
+            new Cluster(namespace, clusterName), host)));
+  }
+
+  @POST
+  @Path("/unregister/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName: [a-zA-Z0-9\\-_]+}")
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response unregisterHost(@PathParam("namespace") String namespace,
+                                 @PathParam("clusterName") String clusterName,
+                                 @NotEmpty @QueryParam("host") String hostString) {
+    HostBean host = HostBean.fromUrlParam(hostString);
+    if (host == null || host.getAvailabilityZone().isEmpty()) {
+      return Utils.buildResponse(HttpStatus.BAD_REQUEST_400,
+          ImmutableMap.of("message", "Bad string format for host"));
+    }
+    return Utils.buildResponse(HttpStatus.OK_200,
+        ImmutableMap.of("data", clusterManager.unregisterFromCluster(
+            new Cluster(namespace, clusterName), host)));
+  }
+
+  @POST
+  @Path("/hosts/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName: [a-zA-Z0-9\\-_]+}")
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response getHosts(@PathParam("namespace") String namespace,
+                           @PathParam("clusterName") String clusterName,
+                           @QueryParam("excludeBlacklisted") Optional<Boolean> excludeBlacklisted) {
+    List<HostBean> hosts = clusterManager.getHosts(new Cluster(namespace, clusterName),
+        excludeBlacklisted.orElse(false));
+    return Utils.buildResponse(HttpStatus.OK_200, hosts);
+  }
+
+  @POST
+  @Path("/blacklisted/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName: [a-zA-Z0-9\\-_]+}")
+  public Response getBlacklistedHosts(@PathParam("namespace") String namespace,
+                                      @PathParam("clusterName") String clusterName) {
+    List<HostBean> hosts = clusterManager.getBlacklistedHosts(new Cluster(namespace, clusterName));
+    return Utils.buildResponse(HttpStatus.OK_200, hosts);
   }
 
 
