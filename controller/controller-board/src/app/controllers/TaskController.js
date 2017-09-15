@@ -4,57 +4,25 @@
         .module('app')
         .controller('TaskController', [
             'taskService',
+            'clusterConfigService',
             TaskController
         ]);
 
-    function TaskController(taskService) {
+    function TaskController(taskService, clusterConfigService) {
         var vm = this;
-        vm.allTasks = [];
+        vm.clusterloadComplete = false;
+        vm.taskloadComplete = false;
+        vm.clusterStatusCode = -1;
+        vm.clusterErrorMessage = 'UNDEFINED';
+        vm.taskStatusCode = -1;
+        vm.taskErrorMessage = 'UNDEFINED';
+        vm.namespaceClusters = [];
+        vm.namespace = 'UNDEFINED';
+        vm.clustername = 'UNDEFINED';
+        vm.state = 'UNDEFINED';
         vm.showDetail = [];
-        vm.loadComplete = false;
-        vm.statusCode = -1;
-        vm.errorMessage = '';
-
-        taskService.getAllTasks()
-            .then(function(result) {
-                vm.statusCode = result.status;
-                vm.allTasks = result.data;
-                // todo: remove fake tasks below
-                vm.allTasks.push({
-                    "name": "com.pinterest.rocksplicator.controller.tasks.HealthCheckTask",
-                    "priority": 1,
-                    "body": "{\"numReplicas\":3,\"intervalSeconds\":0}",
-                    "id": 13,
-                    "state": 0,
-                    "clusterName": "my_cluster",
-                    "createdAt": 1500529716000,
-                    "runAfter": 1500529716000,
-                    "lastAliveAt": 1501533308000,
-                    "claimedWorker": "evening-MBP13-SX0PK",
-                    "output": "im just a output"
-                });
-                vm.allTasks.push({
-                    "name": "com.pinterest.rocksplicator.controller.tasks.HealthCheckTask",
-                    "priority": 0,
-                    "body": "{\"numReplicas\":3,\"intervalSeconds\":0}",
-                    "id": 14,
-                    "state": 1,
-                    "clusterName": "my_cluster",
-                    "createdAt": 1500529716000,
-                    "runAfter": 1500529716000,
-                    "lastAliveAt": 1501533308000,
-                    "claimedWorker": "evening-MBP13-SX0PK",
-                    "output": null
-                });
-                vm.showDetail = Array(vm.allTasks.length).fill(false);
-                vm.loadComplete = true;
-
-                },function (error){
-                    vm.statusCode = error.status;
-                    vm.errorMessage = error.data;
-                    vm.loadComplete = true;
-            });
-
+        vm.tasks = [];
+        var BAD_REQUEST = 400;
 
         vm.getDate = function(data){
             return new Date(data).toString().split(' ').splice(1,4).join(' ');
@@ -90,6 +58,42 @@
                 case 3:
                     return 'FAILED';
             }
+        };
+
+        clusterConfigService
+            .loadAllClusterNames()
+            .then(function(result) {
+                vm.clusterStatusCode = result.status;
+                vm.namespaceClusters = result.data;
+                vm.clusterloadComplete = true;
+            },function (error){
+                vm.statusCode = error.status;
+                vm.clusterErrorMessage = error.data.message;
+                vm.clusterloadComplete = true;
+            });
+
+        vm.selectTask = function () {
+            vm.taskloadComplete = false;
+            if (vm.state === 'UNDEFINED' || (vm.namespace === 'UNDEFINED' && vm.clustername !== 'UNDEFINED')) {
+                vm.taskStatusCode = BAD_REQUEST;
+                vm.taskErrorMessage = vm.state === 'UNDEFINED' ?
+                    "You have to specify the task state"
+                    : "You cannot have an empty namespace with non-empty clustername";
+                vm.taskloadComplete = true;
+                return;
+            }
+
+            taskService.getTasks(vm.namespace, vm.clustername, vm.state)
+                .then(function(result) {
+                    vm.taskStatusCode = result.status;
+                    vm.tasks = result.data;
+                    vm.showDetail = Array(vm.tasks.length).fill(false);
+                    vm.taskloadComplete = true;
+                }, function (error){
+                    vm.taskStatusCode = error.status;
+                    vm.taskErrorMessage = error.data.message;
+                    vm.taskloadComplete = true;
+                });
         };
     }
 })();

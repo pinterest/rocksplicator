@@ -10,8 +10,12 @@
     function taskService($http){
 
         return {
-            getAllTasks : function() {
-                return $http.get("https://controllerhttp.pinadmin.com/v1/tasks");
+            getTasks : function(namespace, clustername, state) {
+                var url = 'https://controllerhttp.pinadmin.com/v1/tasks?' +
+                    (namespace === 'UNDEFINED' ? '': 'namespace=' + namespace + '&')  +
+                    (clustername === 'UNDEFINED' ? '': 'clustername=' + clustername + '&')  +
+                    'state=' + state;
+                return $http.get(url);
             }
         };
     }

@@ -1,104 +1,168 @@
-<div class="task-contrainer" ng-show="vm.loadComplete">
-
-    <div class="table-responsive-vertical md-whiteframe-z1" ng-show="vm.statusCode==200">
-        <md-toolbar class="md-table-toolbar md-default">
-            <div class="md-toolbar-tools">
-                <span>Tasks</span>
-            </div>
-        </md-toolbar>
-
-        <table md-table class="table table-hover table-bordered" >
-            <thead md-head>
+<div class="task-contrainer">
+    <div ng-show="vm.clusterloadComplete">
+        <div class="table-responsive-vertical md-whiteframe-z1" ng-show="vm.clusterStatusCode==200">
+            <md-toolbar class="md-table-toolbar" md-colors="{background: 'red-300', color: 'blue-grey-50'}">
+                <div class="md-toolbar-tools">
+                    <span>View Tasks by NameSpace -> Clustername -> State</span>
+                </div>
+            </md-toolbar>
+            <table md-table class="table">
+                <thead md-head>
                 <tr md-row>
-                    <th md-column>ID</th>
-                    <th md-column>Name</th>
-                    <th md-column>Cluster</th>
-                    <th md-column>Priority</th>
-                    <th md-column>State</th>
-                    <th md-column>Details</th>
-                    <th md-column>Delete / Retry</th>
+                    <th md-column>Namespace</th>
+                    <th md-column>Cluster Name</th>
+                    <th md-column>State *</th>
+                    <th md-column>View</th>
                 </tr>
-            </thead>
-            <tbody md-body>
-            <tr md-row ng-repeat-start="task in vm.allTasks">
-                <td md-cell class="no-bottom-border">{{task.id}}</td>
-                <td md-cell class="no-bottom-border">{{task.name.split('.').reverse()[0]}}</td>
-                <td md-cell class="no-bottom-border">{{task.clusterName}}</td>
-                <td md-cell class="no-bottom-border">
-                    <md-button class="toolbar-button">
-                    <i class="material-icons" md-colors="{color: 'blue-grey-500'}">access_alarm</i>
-                        <span class="notifications-label" md-colors="{background: 'red-' + {{3-task.priority}} + '00', color: 'red-900'}">{{task.priority}}</span>
-                    </md-button>
-                </td>
-                <td md-cell class="no-bottom-border">
-                    <md-progress-linear class="table-progress"
-                                        ng-class="task.state==0 ? '' : (task.state==1 ? 'orange' : (task.state==2 ? 'md-accent' : 'md-warn'))"
-                                        value={{vm.getStateProgressBarValue(task.state)}}>
-                    </md-progress-linear>
-                    <md-tooltip md-direction="left" md-autohide=true>{{vm.getStateText(task.state)}}</md-tooltip>
+                </thead>
+                <tbody md-body>
+                <tr md-row >
+                    <td md-cell>
+                        <md-input-container>
+                            <md-select ng-model="vm.namespace" placeholder="Select a Data Segment">
+                                <md-option ng-value="namespaceCluster.namespace" ng-repeat="namespaceCluster in vm.namespaceClusters">{{ namespaceCluster.namespace }}</md-option>
+                            </md-select>
+                        </md-input-container>
+                    </td>
+                    <td md-cell>
+                        <md-input-container>
+                            <md-select ng-model="vm.clustername" placeholder="Select a Cluster Name">
+                                <md-option ng-value="namespaceCluster.name" ng-repeat="namespaceCluster in vm.namespaceClusters">{{ namespaceCluster.name }}</md-option>
+                            </md-select>
+                        </md-input-container>
+                    </td>
+                    <td md-cell>
+                        <md-input-container>
+                            <md-select ng-model="vm.state" placeholder="Select a Task State">
+                                <md-option value="RUNNING">Running</md-option>
+                                <md-option value="PENDING">Pending</md-option>
+                                <md-option value="FAILED">Failed</md-option>
+                            </md-select>
+                        </md-input-container>
+                    </td>
+                    <td md-cell>
+                        <md-button class="toolbar-button right" ng-click="vm.selectTask()">
+                            <i class="material-icons" md-colors="{color: 'blue-grey-500'}">remove_red_eye</i>
+                        </md-button>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
 
-                </td>
-                <td md-cell class="no-bottom-border">
-                    <md-button class="toolbar-button" ng-click="vm.toggleShowDetail($index)">
-                        <i class="material-icons" md-colors="{color: 'blue-grey-500'}">expand_more</i>
-                    </md-button>
-                </td>
-                <td md-cell class="no-bottom-border">
-                    <md-button class="toolbar-button">
-                        <i class="material-icons" md-colors="{color: 'red-300'}">delete_forever</i>
-                    </md-button>
-                    <md-button class="toolbar-button">
-                        <i class="material-icons" md-colors="{color: 'teal-400'}">replay</i>
-                    </md-button>
-                </td>
-            </tr>
-
-            <tr md-row ng-repeat-end class="no-border" ng-show="vm.showDetail[$index]">
-                <td md-cell colspan="3" class="no-border">
-                    <div class="taskDetail" md-colors="{color: 'blue-grey-500'}">
-                        <md-list-item>
-                            <span>Created At : {{vm.getDate(vm.allTasks[$index].createdAt)}}</span>
-                        </md-list-item>
-
-                        <md-list-item>
-                            <span>Run After : {{vm.getDate(vm.allTasks[$index].runAfter)}}</span>
-                        </md-list-item>
-                        <md-list-item>
-                            <span>Body : {{vm.allTasks[$index].body}}</span>
-                        </md-list-item>
-                    </div>
-                </td>
-                <td md-cell colspan="4" class="no-border">
-                    <div class="taskDetail" md-colors="{color: 'blue-grey-500'}">
-                        <md-list-item>
-                            <span>Last Alive At : {{vm.getDate(vm.allTasks[$index].lastAliveAt)}}</span>
-                        </md-list-item>
-                        <md-list-item>
-                            <span>Claimed Worker : {{vm.allTasks[$index].claimedWorker}}</span>
-                        </md-list-item>
-                        <md-list-item>
-                            <span>Output : {{vm.allTasks[$index].output}}</span>
-                        </md-list-item>
-                    </div>
-                </td>
-            </tr>
-            </tbody>
-        </table>
+        <md-content layout-padding ng-show="vm.clusterStatusCode!=200">
+            <md-list-item>
+                <md-button class="toolbar-button">
+                    <i class="material-icons" md-colors="{color: 'blue-grey-500'}">error</i>
+                </md-button>
+                <span>HTTP Status Code: {{vm.clusterStatusCode}}</span>
+            </md-list-item>
+            <md-list-item>
+                <md-button class="toolbar-button">
+                    <i class="material-icons" md-colors="{color: 'blue-grey-500'}">error</i>
+                </md-button>
+                <span>Error Message: {{vm.clusterErrorMessage}}</span>
+            </md-list-item>
+        </md-content>
     </div>
 
-    <md-content layout-padding ng-show="vm.statusCode!=200">
-        <md-list-item>
-            <md-button class="toolbar-button">
-                <i class="material-icons" md-colors="{color: 'blue-grey-500'}">error</i>
-            </md-button>
-            <span>HTTP Status Code: {{vm.statusCode}}</span>
-        </md-list-item>
-        <md-list-item>
-            <md-button class="toolbar-button">
-                <i class="material-icons" md-colors="{color: 'blue-grey-500'}">error</i>
-            </md-button>
-            <span>Error Message: {{vm.errorMessage.message}}</span>
-        </md-list-item>
-    </md-content>
+    <div ng-show="vm.taskloadComplete">
+        <div class="table-responsive-vertical md-whiteframe-z1" ng-show="vm.taskStatusCode==200">
+            <md-toolbar class="md-table-toolbar md-default">
+                <div class="md-toolbar-tools">
+                    <span>{{vm.tasks.length}} Tasks</span>
+                </div>
+            </md-toolbar>
 
+            <md-content>
+                <table md-table class="table table-bordered" >
+                    <thead md-head>
+                    <tr md-row>
+                        <th md-column>ID</th>
+                        <th md-column>Name</th>
+                        <th md-column>Cluster</th>
+                        <th md-column>Priority</th>
+                        <th md-column>Status</th>
+                        <th md-column>Body / Output</th>
+                        <th md-column>Delete / Retry</th>
+                    </tr>
+                    </thead>
+                    <tbody md-body>
+                    <tr md-row ng-repeat-start="task in vm.tasks">
+                        <td md-cell class="no-bottom-border">{{task.id}}</td>
+                        <td md-cell class="no-bottom-border">{{task.name.split('.').reverse()[0]}}</td>
+                        <td md-cell class="no-bottom-border">{{task.cluster.namespace}}/{{task.cluster.name}}</td>
+                        <td md-cell class="no-bottom-border">
+                            <md-button class="toolbar-button">
+                                <i class="material-icons" md-colors="{color: 'blue-grey-500'}">access_alarm</i>
+                                <span class="notifications-label" md-colors="{background: 'red-' + {{3-task.priority}} + '00', color: 'red-900'}">{{task.priority}}</span>
+                            </md-button>
+                        </td>
+                        <td md-cell class="no-bottom-border">
+                            <md-progress-linear class="table-progress"
+                                                ng-class="task.state==0 ? '' : (task.state==1 ? 'orange' : (task.state==2 ? 'md-accent' : 'md-warn'))"
+                                                value={{vm.getStateProgressBarValue(task.state)}}>
+                            </md-progress-linear>
+                            <md-tooltip md-direction="left" md-autohide=true>
+                                {{vm.getStateText(task.state)}}
+                                <br>
+                                Created At : {{vm.getDate(vm.tasks[$index].createdAt)}}
+                                <br>
+                                Run After : {{vm.getDate(vm.tasks[$index].runAfter)}}
+                                <br>
+                                Last Alive At : {{vm.getDate(vm.tasks[$index].lastAliveAt)}}
+                                <br>
+                                Claimed Worker : {{vm.tasks[$index].claimedWorker}}
+                            </md-tooltip>
+
+                        </td>
+                        <td md-cell class="no-bottom-border">
+                            <md-button class="toolbar-button" ng-click="vm.toggleShowDetail($index)">
+                                <i class="material-icons" md-colors="{color: 'blue-grey-500'}">expand_more</i>
+                            </md-button>
+                        </td>
+                        <td md-cell class="no-bottom-border">
+                            <md-button class="toolbar-button">
+                                <i class="material-icons" md-colors="{color: 'red-300'}">delete_forever</i>
+                            </md-button>
+                            <md-button class="toolbar-button">
+                                <i class="material-icons" md-colors="{color: 'teal-400'}">replay</i>
+                            </md-button>
+                        </td>
+                    </tr>
+
+                    <tr md-row ng-repeat-end class="no-border" ng-show="vm.showDetail[$index]">
+                        <td md-cell colspan="7" class="no-border">
+                            <div class="taskDetail">
+                                <md-card md-colors="{background: 'blue-grey-500'}">
+                                    <md-card-content>
+                                        <span>Body : {{vm.tasks[$index].body}}</span>
+                                        <br><br>
+                                        <span>Output : {{vm.tasks[$index].output}}</span>
+                                    </md-card-content>
+                                </md-card>
+
+                            </div>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </md-content>
+        </div>
+
+        <md-content layout-padding ng-show="vm.taskStatusCode!=200">
+            <md-list-item>
+                <md-button class="toolbar-button">
+                    <i class="material-icons" md-colors="{color: 'blue-grey-500'}">error</i>
+                </md-button>
+                <span>HTTP Status Code: {{vm.taskStatusCode}}</span>
+            </md-list-item>
+            <md-list-item>
+                <md-button class="toolbar-button">
+                    <i class="material-icons" md-colors="{color: 'blue-grey-500'}">error</i>
+                </md-button>
+                <span>Error Message: {{vm.taskErrorMessage}}</span>
+            </md-list-item>
+        </md-content>
+    </div>
 </div>
