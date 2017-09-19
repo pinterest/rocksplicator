@@ -19,7 +19,7 @@ package com.pinterest.rocksplicator.controller;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 
 import java.util.Collections;
-import java.util.List;
+import java.util.Set;
 
 /**
  *
@@ -28,6 +28,16 @@ import java.util.List;
  * @author shu (shu@pinterest.com)
  */
 public interface ClusterManager {
+
+  /**
+   * Create the cluster in ClusterManager's world.
+   * @param cluster
+   * @return
+   */
+  default boolean createCluster(final Cluster cluster) {
+    return true;
+  }
+
 
   /**
    * Register a host to the cluster.
@@ -63,8 +73,8 @@ public interface ClusterManager {
    * @param cluster
    * @return
    */
-  default List<HostBean> getHosts(final Cluster cluster, boolean excludeBlacklisted) {
-    return Collections.emptyList();
+  default Set<HostBean> getHosts(final Cluster cluster, boolean excludeBlacklisted) {
+    return Collections.emptySet();
   }
 
   /**
@@ -72,8 +82,8 @@ public interface ClusterManager {
    * @param cluster
    * @return
    */
-  default List<HostBean> getBlacklistedHosts(final Cluster cluster) {
-    return Collections.emptyList();
+  default Set<HostBean> getBlacklistedHosts(final Cluster cluster) {
+    return Collections.emptySet();
   }
 
 }

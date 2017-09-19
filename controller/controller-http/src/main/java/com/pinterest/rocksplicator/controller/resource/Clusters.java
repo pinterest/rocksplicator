@@ -429,7 +429,7 @@ public class Clusters {
   public Response getHosts(@PathParam("namespace") String namespace,
                            @PathParam("clusterName") String clusterName,
                            @QueryParam("excludeBlacklisted") Optional<Boolean> excludeBlacklisted) {
-    List<HostBean> hosts = clusterManager.getHosts(new Cluster(namespace, clusterName),
+    Set<HostBean> hosts = clusterManager.getHosts(new Cluster(namespace, clusterName),
         excludeBlacklisted.orElse(false));
     return Utils.buildResponse(HttpStatus.OK_200, hosts);
   }
@@ -438,7 +438,7 @@ public class Clusters {
   @Path("/blacklisted/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName: [a-zA-Z0-9\\-_]+}")
   public Response getBlacklistedHosts(@PathParam("namespace") String namespace,
                                       @PathParam("clusterName") String clusterName) {
-    List<HostBean> hosts = clusterManager.getBlacklistedHosts(new Cluster(namespace, clusterName));
+    Set<HostBean> hosts = clusterManager.getBlacklistedHosts(new Cluster(namespace, clusterName));
     return Utils.buildResponse(HttpStatus.OK_200, hosts);
   }
 
