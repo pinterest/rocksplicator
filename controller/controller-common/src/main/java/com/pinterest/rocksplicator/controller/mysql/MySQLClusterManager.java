@@ -82,7 +82,7 @@ public class MySQLClusterManager extends MySQLBase implements ClusterManager{
   }
 
   private boolean persistTagHostsEntity(TagHostsEntity tagHostsEntity) {
-    persistTagHostsEntity(tagHostsEntity, false);
+    return persistTagHostsEntity(tagHostsEntity, false);
   }
 
   @Override
