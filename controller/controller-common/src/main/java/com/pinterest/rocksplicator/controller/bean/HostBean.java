@@ -91,6 +91,40 @@ public class HostBean {
     return ip + ":" + port + ":" + availabilityZone;
   }
 
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+
+    HostBean hostBean = (HostBean) o;
+
+    if (port != hostBean.port) return false;
+    if (ip != null ? !ip.equals(hostBean.ip) : hostBean.ip != null) return false;
+    return availabilityZone != null ? availabilityZone.equals(hostBean.availabilityZone) : hostBean.availabilityZone == null;
+  }
+
+  @Override
+  public int hashCode() {
+    int result = ip != null ? ip.hashCode() : 0;
+    result = 31 * result + port;
+    result = 31 * result + (availabilityZone != null ? availabilityZone.hashCode() : 0);
+    return result;
+  }
+
+  public static HostBean fromString(final String hostString) {
+    String[] parts = hostString.split(":");
+    try {
+      HostBean hostBean = new HostBean().setIp(parts[0]).setPort(Integer.valueOf(parts[1]));
+      if (parts.length == 3) {
+        hostBean.setAvailabilityZone(parts[2]);
+      }
+      return hostBean;
+    } catch (Exception e) {
+      LOG.error("Cannot parse hostBean from string: " + hostString);
+      throw e;
+    }
+  }
+
   public static HostBean fromUrlParam(String queryParam) {
     // assuming the string is in the format like 127-0-0-1-9090-us-east-1a or
     // 127-0-0-1-9090

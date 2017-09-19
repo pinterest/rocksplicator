@@ -6,6 +6,7 @@
 
 DROP TABLE IF EXISTS task;
 DROP TABLE IF EXISTS tag;
+DROP TABLE IF EXISTS tag_hosts;
 
 CREATE TABLE IF NOT EXISTS tag (
   namespace VARCHAR(128) NOT NULL,
@@ -31,6 +32,16 @@ CREATE TABLE IF NOT EXISTS task (
   claimed_worker VARCHAR(128),
   last_alive_at DATETIME,
   output TEXT,
+  PRIMARY KEY (id),
+  FOREIGN KEY (tag_namespace, tag_name) REFERENCES tag(namespace, name) ON UPDATE RESTRICT ON DELETE CASCADE
+) ENGINE=INNODB;
+
+CREATE TABLE IF NOT EXISTS tag_hosts (
+  id BIGINT AUTO_INCREMENT,
+  tag_namespace VARCHAR(128) NOT NULL,
+  tag_name VARCHAR(128) NOT NULL,
+  live_hosts MEDIUMTEXT,
+  blacklisted_hosts MEDIUMTEXT,
   PRIMARY KEY (id),
   FOREIGN KEY (tag_namespace, tag_name) REFERENCES tag(namespace, name) ON UPDATE RESTRICT ON DELETE CASCADE
 ) ENGINE=INNODB;
