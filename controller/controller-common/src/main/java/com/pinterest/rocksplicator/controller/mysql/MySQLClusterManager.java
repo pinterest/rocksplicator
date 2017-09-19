@@ -72,15 +72,22 @@ public class MySQLClusterManager extends MySQLBase implements ClusterManager{
     return entities.get(0);
   }
 
-  private boolean persistTagHostsEntity(TagHostsEntity tagHostsEntity) {
-    beginTransaction();
+  private boolean persistTagHostsEntity(TagHostsEntity tagHostsEntity, boolean transactionBegan) {
+    if (!transactionBegan) {
+      beginTransaction();
+    }
     getEntityManager().persist(tagHostsEntity);
     getEntityManager().getTransaction().commit();
     return true;
   }
 
+  private boolean persistTagHostsEntity(TagHostsEntity tagHostsEntity) {
+    persistTagHostsEntity(tagHostsEntity, false);
+  }
+
   @Override
   public boolean createCluster(final Cluster cluster) {
+    beginTransaction();
     TagHostsEntity tagHostsEntity = findTagHostsEntity(cluster);
     if (tagHostsEntity != null) {
       LOG.error("The cluster {} is already created", cluster.toString());
@@ -89,7 +96,7 @@ public class MySQLClusterManager extends MySQLBase implements ClusterManager{
     tagHostsEntity = new TagHostsEntity().setCluster(
         getEntityManager().find(TagEntity.class, new TagId(cluster)));
     tagHostsEntity.setBlacklistedHosts("").setLiveHosts("");
-    return persistTagHostsEntity(tagHostsEntity);
+    return persistTagHostsEntity(tagHostsEntity, true);
   }
 
   @Override
