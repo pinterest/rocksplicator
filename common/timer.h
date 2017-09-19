@@ -52,14 +52,6 @@ class Timer {
     }
   }
 
- protected:
-  // fetch the current time in MS
-  static uint64_t now() {
-    struct timeval now;
-    gettimeofday(&now, nullptr);
-    return now.tv_sec * 1000 + now.tv_usec / 1000;
-  }
-
  private:
   const uint32_t metric_int_;
   const std::string metric_str_;
