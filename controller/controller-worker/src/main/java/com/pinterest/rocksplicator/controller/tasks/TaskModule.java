@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
+import com.pinterest.rocksplicator.controller.ClusterManager;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
 import com.pinterest.rocksplicator.controller.util.EmailSender;
 
@@ -32,13 +33,16 @@ public class TaskModule extends AbstractModule {
   private final CuratorFramework zkClient;
   private final AdminClientFactory adminClientFactory;
   private final EmailSender emailSender;
+  private final ClusterManager clusterManager;
 
   public TaskModule(CuratorFramework zkClient,
                     AdminClientFactory adminClientFactory,
-                    EmailSender emailSender) {
+                    EmailSender emailSender,
+                    ClusterManager clusterManager) {
     this.zkClient = zkClient;
     this.adminClientFactory = adminClientFactory;
     this.emailSender = emailSender;
+    this.clusterManager = clusterManager;
   }
 
   @Override
@@ -46,5 +50,6 @@ public class TaskModule extends AbstractModule {
     bind(CuratorFramework.class).toInstance(zkClient);
     bind(AdminClientFactory.class).toInstance(adminClientFactory);
     bind(EmailSender.class).toInstance(emailSender);
+    bind(ClusterManager.class).toInstance(clusterManager);
   }
 }

@@ -31,6 +31,7 @@ import com.pinterest.rocksplicator.controller.tasks.LoadSSTTask;
 import com.pinterest.rocksplicator.controller.tasks.LoggingTask;
 import com.pinterest.rocksplicator.controller.tasks.PromoteTask;
 import com.pinterest.rocksplicator.controller.tasks.RebalanceTask;
+import com.pinterest.rocksplicator.controller.tasks.RegisterHostTask;
 import com.pinterest.rocksplicator.controller.tasks.RemoveHostTask;
 import com.pinterest.rocksplicator.controller.Utils;
 
@@ -263,7 +264,7 @@ public class Clusters {
   /**
    * Locks a given cluster. Outside system may use this API to synchronize
    * operations on the same cluster. It is caller's responsibility to properly
-   * release the lock via {@link #unlock(String)}.
+   * release the lock via {@link #(String)}.
    *
    * @param namespace cluster namespace
    * @param clusterName name of the cluster to lock
@@ -397,30 +398,20 @@ public class Clusters {
   public Response registerHost(@PathParam("namespace") String namespace,
                                @PathParam("clusterName") String clusterName,
                                @NotEmpty @QueryParam("host") String hostString) {
-    HostBean host = HostBean.fromUrlParam(hostString);
-    if (host == null || host.getAvailabilityZone().isEmpty()) {
-      return Utils.buildResponse(HttpStatus.BAD_REQUEST_400,
-          ImmutableMap.of("message", "Bad string format for host"));
+    try {
+      HostBean host = HostBean.fromUrlParam(hostString);
+      if (host == null || host.getAvailabilityZone().isEmpty()) {
+        return Utils.buildResponse(HttpStatus.BAD_REQUEST_400,
+            ImmutableMap.of("message", "Bad string format for host"));
+      }
+      Cluster cluster = new Cluster(namespace, clusterName);
+      TaskBase registerHostTask = new RegisterHostTask(host, cluster).getEntity();
+      taskQueue.enqueueTask(registerHostTask, cluster, 0);
+      return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
+    } catch (JsonProcessingException e) {
+      String errorMessage = "Cannot serialize parameters";
+      return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500, ImmutableMap.of("message", errorMessage));
     }
-    return Utils.buildResponse(HttpStatus.OK_200,
-        ImmutableMap.of("data", clusterManager.registerToCluster(
-            new Cluster(namespace, clusterName), host)));
-  }
-
-  @POST
-  @Path("/unregister/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName: [a-zA-Z0-9\\-_]+}")
-  @Produces(MediaType.APPLICATION_JSON)
-  public Response unregisterHost(@PathParam("namespace") String namespace,
-                                 @PathParam("clusterName") String clusterName,
-                                 @NotEmpty @QueryParam("host") String hostString) {
-    HostBean host = HostBean.fromUrlParam(hostString);
-    if (host == null || host.getAvailabilityZone().isEmpty()) {
-      return Utils.buildResponse(HttpStatus.BAD_REQUEST_400,
-          ImmutableMap.of("message", "Bad string format for host"));
-    }
-    return Utils.buildResponse(HttpStatus.OK_200,
-        ImmutableMap.of("data", clusterManager.unregisterFromCluster(
-            new Cluster(namespace, clusterName), host)));
   }
 
   @POST

@@ -15,6 +15,7 @@
  */
 package com.pinterest.rocksplicator.controller;
 
+import com.pinterest.rocksplicator.controller.mysql.MySQLClusterManager;
 import com.pinterest.rocksplicator.controller.mysql.MySQLTaskQueue;
 import com.pinterest.rocksplicator.controller.tasks.TaskFactory;
 import com.pinterest.rocksplicator.controller.tasks.TaskModule;
@@ -64,8 +65,10 @@ public class WorkerService {
       AdminClientFactory adminClientFactory = new AdminClientFactory(30);
       EmailSender emailSender = new EmailSender(WorkerConfig.getSenderEmailAddress(),
           WorkerConfig.getReceiverEmailAddress());
+      ClusterManager clusterManager = new MySQLClusterManager(WorkerConfig.getJdbcUrl(),
+          WorkerConfig.getMySqlUser(), WorkerConfig.getMySqlPassword());
       TaskFactory.setInjector(Guice.createInjector(
-          new TaskModule(zkClient, adminClientFactory, emailSender)
+          new TaskModule(zkClient, adminClientFactory, emailSender, clusterManager)
       ));
 
       int workerPoolSize = WorkerConfig.getWorkerPoolSize();
