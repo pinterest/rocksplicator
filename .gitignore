@@ -4,6 +4,7 @@ build
 .project
 .idea
 *.iml
+.DS_store
 target/
 cmake-build-debug/
 

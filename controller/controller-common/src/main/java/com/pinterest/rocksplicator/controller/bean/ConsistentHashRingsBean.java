@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.bean;
 
+import com.pinterest.rocksplicator.controller.Cluster;
 import org.hibernate.validator.constraints.NotEmpty;
 
 import java.util.ArrayList;
@@ -30,16 +31,16 @@ import java.util.List;
 public class ConsistentHashRingsBean {
 
   @NotEmpty
-  private String name;
+  private Cluster cluster;
 
   private List<ConsistentHashRingBean> consistentHashRings = Collections.emptyList();
 
-  public String getName() {
-    return name;
+  public Cluster getCluster() {
+    return cluster;
   }
 
-  public ConsistentHashRingsBean setName(String name) {
-    this.name = name;
+  public ConsistentHashRingsBean setCluster(Cluster cluster) {
+    this.cluster = cluster;
     return this;
   }
 
@@ -55,7 +56,7 @@ public class ConsistentHashRingsBean {
 
   @Override
   public String toString() {
-    return name;
+    return cluster.toString();
   }
 
 }

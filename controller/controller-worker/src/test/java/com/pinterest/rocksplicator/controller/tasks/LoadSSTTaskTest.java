@@ -52,7 +52,7 @@ public class LoadSSTTaskTest extends TaskBaseTest {
     Context ctx = new Context(123, CLUSTER, taskQueue, null);
     task.process(ctx);
 
-    Assert.assertEquals(taskQueue.getResult(123), "Finished loading sst to devtest");
+    Assert.assertEquals(taskQueue.getResult(123), "Finished loading sst to rocksdb/devtest");
     Assert.assertEquals(clearDBCaptor.getAllValues().size(), 9);
     Assert.assertEquals(addS3SstCaptor.getAllValues().size(), 9);
     for (AddS3SstFilesToDBRequest request : addS3SstCaptor.getAllValues()) {
@@ -74,7 +74,7 @@ public class LoadSSTTaskTest extends TaskBaseTest {
     Context ctx = new Context(123, CLUSTER, taskQueue, null);
     task.process(ctx);
 
-    Assert.assertEquals(taskQueue.getResult(123), "Segment unknown not in cluster devtest.");
+    Assert.assertEquals(taskQueue.getResult(123), "Segment unknown not in cluster rocksdb/devtest.");
   }
 
   @Test

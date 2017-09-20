@@ -49,8 +49,7 @@ public class ConfigCheckTask extends AbstractTask<ConfigCheckTask.Param> {
 
   @Override
   public void process(Context ctx) throws Exception {
-    final String clusterName = ctx.getCluster();
-    ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, clusterName);
+    ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, ctx.getCluster());
     if (clusterBean == null) {
       ctx.getTaskQueue().failTask(ctx.getId(), "Failed to read cluster config from zookeeper.");
       return;
@@ -59,13 +58,13 @@ public class ConfigCheckTask extends AbstractTask<ConfigCheckTask.Param> {
       for (SegmentBean segmentBean : clusterBean.getSegments()) {
         checkSegment(segmentBean, getParameter().getNumReplicas());
       }
-      ctx.getTaskQueue().finishTask(ctx.getId(), "Cluster " + clusterName + " has good config");
+      ctx.getTaskQueue().finishTask(ctx.getId(), "Cluster " + ctx.getCluster() + " has good config");
     } catch (Exception e) {
       String errorMessage =
           String.format("Cluster %s doesn't have good shard distribution, reason = %s,",
-              clusterName, e.getMessage());
+              ctx.getCluster(), e.getMessage());
       ctx.getTaskQueue().failTask(ctx.getId(), errorMessage);
-      emailSender.sendEmail("Config Check failed for " + clusterName, errorMessage);
+      emailSender.sendEmail("Config Check failed for " + ctx.getCluster(), errorMessage);
     }
   }
 

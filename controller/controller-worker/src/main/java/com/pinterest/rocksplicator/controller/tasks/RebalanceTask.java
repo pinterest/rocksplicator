@@ -65,8 +65,7 @@ public class RebalanceTask extends AbstractTask<RebalanceTask.Param> {
 
   @Override
   public void process(Context ctx) throws Exception {
-    final String clusterName = ctx.getCluster();
-    final ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, clusterName);
+    final ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, ctx.getCluster());
 
     for (SegmentBean segmentBean : clusterBean.getSegments()) {
       int numHosts = segmentBean.getHosts().size();
@@ -147,7 +146,7 @@ public class RebalanceTask extends AbstractTask<RebalanceTask.Param> {
         }
       }
     }
-    ctx.getTaskQueue().finishTask(ctx.getId(), "Successfully rebalanced cluster " + clusterName);
+    ctx.getTaskQueue().finishTask(ctx.getId(), "Successfully rebalanced cluster " + ctx.getCluster());
   }
 
   /**

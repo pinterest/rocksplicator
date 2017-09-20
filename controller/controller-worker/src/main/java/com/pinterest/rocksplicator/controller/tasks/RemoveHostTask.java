@@ -71,7 +71,6 @@ public class RemoveHostTask extends AbstractTask<RemoveHostTask.Param> {
 
   @Override
   public void process(Context ctx) throws Exception {
-    final String clusterName = ctx.getCluster();
     final HostBean toRemove = getParameter().getHostToRemove();
     final Admin.Client client = clientFactory.getClient(toRemove);
 
@@ -91,9 +90,9 @@ public class RemoveHostTask extends AbstractTask<RemoveHostTask.Param> {
     }
 
     // 2) update cluster config to reflect the change
-    ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, clusterName);
+    ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, ctx.getCluster());
     if (clusterBean == null) {
-      LOG.error("Failed to get config for cluster {}.", clusterName);
+      LOG.error("Failed to get config for cluster {}.", ctx.getCluster());
       ctx.getTaskQueue().failTask(ctx.getId(), "Failed to read cluster config from zookeeper.");
       return;
     }

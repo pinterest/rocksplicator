@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
+import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.Task;
 import com.pinterest.rocksplicator.controller.TaskBase;
 import com.pinterest.rocksplicator.controller.TaskQueue;
@@ -90,15 +91,15 @@ class LocalAckTaskQueue implements TaskQueue {
 
   /** methods below simply delegates calls to {@code taskQueue} **/
   @Override
-  public boolean createCluster(final String clusterName) {
-    return taskQueue.createCluster(clusterName);
+  public boolean createCluster(final Cluster cluster) {
+    return taskQueue.createCluster(cluster);
   }
 
   @Override
   public boolean enqueueTask(final TaskBase task,
-                             final String clusterName,
+                             final Cluster cluster,
                              final int runDelaySeconds) {
-    return taskQueue.enqueueTask(task, clusterName, runDelaySeconds);
+    return taskQueue.enqueueTask(task, cluster, runDelaySeconds);
   }
 
   @Override
@@ -123,17 +124,17 @@ class LocalAckTaskQueue implements TaskQueue {
   }
 
   @Override
-  public boolean lockCluster(final String cluster) {
+  public boolean lockCluster(final Cluster cluster) {
     return taskQueue.lockCluster(cluster);
   }
 
   @Override
-  public boolean unlockCluster(final String cluster) {
+  public boolean unlockCluster(final Cluster cluster) {
     return taskQueue.unlockCluster(cluster);
   }
 
   @Override
-  public boolean removeCluster(final String cluster) {
+  public boolean removeCluster(final Cluster cluster) {
     return taskQueue.removeCluster(cluster);
   }
 
@@ -153,9 +154,9 @@ class LocalAckTaskQueue implements TaskQueue {
   }
 
   @Override
-  public List<Task> peekTasks(final String clusterName,
-                                      final Integer state) {
-    return taskQueue.peekTasks(clusterName, state);
+  public List<Task> peekTasks(final Cluster cluster,
+                              final Integer state) {
+    return taskQueue.peekTasks(cluster, state);
   }
 
   @Override
@@ -169,7 +170,7 @@ class LocalAckTaskQueue implements TaskQueue {
   }
 
   @Override
-  public Set<String> getAllClusters() {
+  public Set<Cluster> getAllClusters() {
     return taskQueue.getAllClusters();
   }
 }

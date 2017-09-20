@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.resource;
 
+import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.Task;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 import com.pinterest.rocksplicator.controller.bean.TaskState;
@@ -67,7 +68,7 @@ public class Tasks {
   }
 
   /**
-   * Retrieves all the tasks that match the given cluster name and/or
+   * Retrieves all the tasks that match the given cluster namespace/name and/or
    * the {@link TaskState state}.
    *
    * @param clusterName name of the cluster being queried
@@ -76,9 +77,14 @@ public class Tasks {
    */
   @GET
   @Produces(MediaType.APPLICATION_JSON)
-  public Response findTasks(@QueryParam("clusterName") Optional<String> clusterName,
-                              @QueryParam("state") Optional<TaskState> state) {
-    List<Task> result = taskQueue.peekTasks(clusterName.orElse(null),
+  public Response findTasks(@QueryParam("namespace") Optional<String> namespace,
+                            @QueryParam("clusterName") Optional<String> clusterName,
+                            @QueryParam("state") Optional<TaskState> state) {
+    if(!namespace.isPresent() && clusterName.isPresent()) {
+      Utils.buildResponse(HttpStatus.NOT_FOUND_404,
+          ImmutableMap.of("message", "we don't allow empty namespace with non-empty cluster name"));
+    }
+    List<Task> result = taskQueue.peekTasks(new Cluster(namespace.orElse(""), clusterName.orElse("")),
                                             state.map(TaskState::intValue).orElse(null));
     return Utils.buildResponse(HttpStatus.OK_200, result);
   }

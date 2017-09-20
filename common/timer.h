@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include <sys/time.h>
+#include <chrono>
 #include <string>
 
 #include "common/stats/stats.h"
@@ -26,17 +26,19 @@ class Timer {
  public:
   // start the clock
   explicit Timer(const uint32_t metric)
-    : metric_int_(metric), metric_str_(""), start_(now()) {}
+    : metric_int_(metric)
+    , metric_str_("")
+    , start_(std::chrono::steady_clock::now()) {}
 
   explicit Timer(const std::string& metric)
-    : metric_int_(0), metric_str_(metric), start_(now()) {}
+    : metric_int_(0)
+    , metric_str_(metric)
+    , start_(std::chrono::steady_clock::now()) {}
 
-  uint64_t getElapsedTimeMs() {
-    auto end = now();
-    if (end < start_) {
-      end = start_;
-    }
-    return end - start_;
+  int64_t getElapsedTimeMs() {
+    auto end = std::chrono::steady_clock::now();
+    auto diff = end - start_;
+    return std::chrono::duration_cast<std::chrono::milliseconds>(diff).count();
   }
 
   // stop the clock and report the delta through metric_[str|int]_
@@ -50,18 +52,10 @@ class Timer {
     }
   }
 
- protected:
-  // fetch the current time in MS
-  static uint64_t now() {
-    struct timeval now;
-    gettimeofday(&now, nullptr);
-    return now.tv_sec * 1000 + now.tv_usec / 1000;
-  }
-
  private:
   const uint32_t metric_int_;
   const std::string metric_str_;
-  uint64_t start_;
+  const std::chrono::time_point<std::chrono::steady_clock> start_;
 };
 
 }  // namespace common

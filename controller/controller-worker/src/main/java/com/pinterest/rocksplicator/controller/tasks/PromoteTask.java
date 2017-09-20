@@ -65,8 +65,7 @@ public class PromoteTask extends AbstractTask<PromoteTask.Param> {
 
   @Override
   public void process(Context ctx) throws Exception {
-    final String clusterName = ctx.getCluster();
-    final ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, clusterName);
+    final ClusterBean clusterBean = ZKUtil.getClusterConfig(zkClient, ctx.getCluster());
 
     boolean updated = false;
     for (SegmentBean segment : clusterBean.getSegments()) {

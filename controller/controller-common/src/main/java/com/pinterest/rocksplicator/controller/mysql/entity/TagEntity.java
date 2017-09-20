@@ -19,6 +19,7 @@ package com.pinterest.rocksplicator.controller.mysql.entity;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
+import javax.persistence.IdClass;
 import javax.persistence.NamedQueries;
 import javax.persistence.NamedQuery;
 import javax.persistence.Table;
@@ -29,20 +30,26 @@ import java.util.Date;
 
 /**
  * MySQL tag table schema:
+ *  namespace VARCHAR(128) NOT NULL,
  *  name VARCHAR(128) NOT NULL,
  *  locks TINYINT UNSIGNED NOT NULL,
  *  created_at DATETIME NOT NULL,
  *  owner VARCHAR(256),
- *  PRIMARY KEY (name)
+ *  PRIMARY KEY (namespace, name)
  */
-
 @Entity(name = "tag")
+@IdClass(TagId.class)
 @Table(name = "tag")
 @NamedQueries({
     @NamedQuery(name = "tag.findAll",
-        query = "SELECT t.name FROM tag t"),
+        query = "SELECT t.namespace, t.name FROM tag t"),
 })
 public class TagEntity {
+
+  @Id
+  @Column(name = "namespace")
+  @NotNull
+  private String namespace;
 
   @Id
   @Column(name = "name")
@@ -63,6 +70,13 @@ public class TagEntity {
 
   public TagEntity() {
     this.createdAt = new Date();
+  }
+
+  public String getNamespace() { return namespace; }
+
+  public TagEntity setNamespace(String namespace) {
+    this.namespace =  namespace;
+    return this;
   }
 
   public String getName() {

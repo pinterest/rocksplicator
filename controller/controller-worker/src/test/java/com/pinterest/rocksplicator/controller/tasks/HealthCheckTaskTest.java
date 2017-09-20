@@ -38,7 +38,7 @@ public class HealthCheckTaskTest extends TaskBaseTest {
     Context ctx = new Context(123, CLUSTER, taskQueue, null);
     t.process(ctx);
 
-    Assert.assertEquals(taskQueue.getResult(123), "Cluster devtest is healthy");
+    Assert.assertEquals(taskQueue.getResult(123), "Cluster rocksdb/devtest is healthy");
   }
 
   @Test

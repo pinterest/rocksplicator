@@ -118,6 +118,9 @@ public class RecurTask extends AbstractTask<RecurTask.Param>{
     try {
       ctx = new Context(id, ctx.getCluster(), localAckTaskQueue, ctx.getWorker());
       task.process(ctx);
+      // in case the current body is changed, and we need to carry the state
+      // to next enqueued job
+      getParameter().getTask().setBody(task.getParameter().serialize());
     } catch (Throwable th) {
       t = th;
     }

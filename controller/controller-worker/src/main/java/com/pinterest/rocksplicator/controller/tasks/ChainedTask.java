@@ -49,7 +49,6 @@ final class ChainedTask extends AbstractTask<ChainedTask.Param> {
   @Override
   public void process(Context ctx) throws Exception {
     long id = ctx.getId();
-    final String cluster = ctx.getCluster();
     final String worker = ctx.getWorker();
     final TaskQueue taskQueue = ctx.getTaskQueue();
 
@@ -69,7 +68,7 @@ final class ChainedTask extends AbstractTask<ChainedTask.Param> {
         tasks.push(chainedTask.getParameter().getT1());
       } else {
         LocalAckTaskQueue lq = new LocalAckTaskQueue(taskQueue);
-        ctx = new Context(id, cluster, lq, worker);
+        ctx = new Context(id, ctx.getCluster(), lq, worker);
         try {
           task.process(ctx);
         } catch (Exception ex) {

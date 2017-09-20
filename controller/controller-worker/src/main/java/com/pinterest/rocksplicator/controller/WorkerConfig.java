@@ -46,7 +46,7 @@ public final class WorkerConfig {
   private static final String SENDER_EMAIL_ADDRESS_KEY = "sender_email";
   private static final String RECEIVER_EMAIL_ADDRESS_KEY = "receiver_email";
 
-  private static final String DEFAULT_ZK_PATH = "/config/services/rocksdb/";
+  private static final String DEFAULT_ZK_PATH = "/config/services/";
   private static final String DEFAULT_ZK_ENDPOINTS = "observerzookeeper010:2181";
   private static final String DEFAULT_ZK_HOSTS_FILE_PATH = "bin/zookeeper_hosts.conf";
   private static final String DEFAULT_ZK_CLUSTER = "default";

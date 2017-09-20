@@ -89,7 +89,7 @@ public class AddHostTaskTest extends TaskBaseTest {
     Assert.assertEquals(backupDBRequests.get(0).getDb_name(), "user_pins00001");
     Assert.assertEquals(backupDBRequests.get(0).getLimit_mbs(), 100);
     Assert.assertTrue(backupDBRequests.get(0).getHdfs_backup_dir().startsWith(
-        "/hdfs/devtest/user_pins/00001/127.0.0.1/"));
+        "/hdfs/rocksdb/devtest/user_pins/00001/127.0.0.1/"));
 
     List<RestoreDBRequest> restoreDBRequests = restoreDBCaptor.getAllValues();
     Assert.assertEquals(restoreDBRequests.size(), 2);

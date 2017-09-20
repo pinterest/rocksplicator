@@ -20,6 +20,8 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.when;
 
 import com.pinterest.rocksdb_admin.thrift.Admin;
+import com.pinterest.rocksplicator.controller.Cluster;
+import com.pinterest.rocksplicator.controller.ClusterManager;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
 import com.pinterest.rocksplicator.controller.util.EmailSender;
@@ -38,12 +40,13 @@ import org.testng.annotations.BeforeMethod;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.Set;
 
 /**
  * @author Ang Xu (angxu@pinterest.com)
  */
 public abstract class TaskBaseTest {
-  protected static final String CLUSTER = "devtest";
+  protected static final Cluster CLUSTER = new Cluster("rocksdb", "devtest");
   protected static final String CONFIG =
       "{" +
           "  \"user_pins\": {" +
@@ -76,8 +79,39 @@ public abstract class TaskBaseTest {
     zkClient.createContainers(ZKUtil.getClusterConfigZKPath(CLUSTER));
     zkClient.setData().forPath(ZKUtil.getClusterConfigZKPath(CLUSTER), CONFIG.getBytes());
     emailSender = new EmailSender("", "");
+    ClusterManager clusterManager = new ClusterManager() {
+      @Override
+      public boolean createCluster(Cluster cluster) {
+        return false;
+      }
 
-    TaskModule module = new TaskModule(zkClient, clientFactory, emailSender);
+      @Override
+      public boolean registerToCluster(Cluster cluster, HostBean hostBean) {
+        return false;
+      }
+
+      @Override
+      public boolean unregisterFromCluster(Cluster cluster, HostBean hostBean) {
+        return false;
+      }
+
+      @Override
+      public boolean blacklistHost(Cluster cluster, HostBean hostBean) {
+        return false;
+      }
+
+      @Override
+      public Set<HostBean> getHosts(Cluster cluster, boolean excludeBlacklisted) {
+        return null;
+      }
+
+      @Override
+      public Set<HostBean> getBlacklistedHosts(Cluster cluster) {
+        return null;
+      }
+    };
+
+    TaskModule module = new TaskModule(zkClient, clientFactory, emailSender, clusterManager);
     injector = Guice.createInjector(module);
 
     // mock client factory

@@ -38,7 +38,7 @@
 #include "rocksdb_admin/utils.h"
 
 
-DEFINE_string(hdfs_name_node, "hdfs://hdfsbackup-a02-namenode-001:8020",
+DEFINE_string(hdfs_name_node, "hdfs://hbasebak-infra-namenode-prod1c01-001:8020",
               "The hdfs name node used for backup");
 
 DEFINE_string(rocksdb_dir, "/data/xvdb/aperture/",
@@ -247,6 +247,70 @@ std::unique_ptr<rocksdb::DB> AdminHandler::removeDB(
   }
 
   return db;
+}
+
+void AdminHandler::async_tm_addDB(
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+          AddDBResponse>>> callback,
+      std::unique_ptr<AddDBRequest> request) {
+  db_admin_lock_.Lock(request->db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
+
+  AdminException e;
+  auto db = getDB(request->db_name, &e);
+  if (db) {
+    e.errorCode = AdminErrorCode::DB_EXIST;
+    e.message = "Db already exists";
+    callback.release()->exceptionInThread(std::move(e));
+    return;
+  }
+
+  // Get the upstream for the db to be added
+  auto upstream_addr = std::make_unique<folly::SocketAddress>();
+  if (!SetAddressOrException(request->upstream_ip,
+                             FLAGS_rocksdb_replicator_port,
+                             upstream_addr.get(),
+                             &callback)) {
+    return;
+  }
+
+  auto segment = admin::DbNameToSegment(request->db_name);
+  auto db_path = FLAGS_rocksdb_dir + request->db_name;
+  rocksdb::Status status;
+  if (request->overwrite) {
+    LOG(INFO) << "Clearing DB: " << request->db_name;
+    status = rocksdb::DestroyDB(db_path, rocksdb_options_(segment));
+    if (!OKOrSetException(status,
+                          AdminErrorCode::DB_ADMIN_ERROR,
+                          &callback)) {
+      LOG(ERROR) << "Failed to clear DB " << request->db_name << " "
+                 << status.ToString();
+      return;
+    }
+  }
+
+  // Open the actual rocksdb instance
+  rocksdb::DB* rocksdb_db;
+  status = rocksdb::DB::Open(rocksdb_options_(segment), db_path, &rocksdb_db);
+  if (!OKOrSetException(status,
+                        AdminErrorCode::DB_ERROR,
+                        &callback)) {
+    return;
+  }
+
+
+  // add the db to db_manager
+  std::string err_msg;
+  if (!db_manager_->addDB(request->db_name,
+                          std::unique_ptr<rocksdb::DB>(rocksdb_db),
+                          replicator::DBRole::SLAVE, std::move(upstream_addr),
+                          &err_msg)) {
+    e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+    e.message = std::move(err_msg);
+    callback.release()->exceptionInThread(std::move(e));
+    return;
+  }
+  callback->result(AddDBResponse());
 }
 
 void AdminHandler::async_tm_ping(
@@ -580,6 +644,9 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
                   << kS3UtilRecheckSec << " seconds";
         std::this_thread::sleep_for(std::chrono::seconds(kS3UtilRecheckSec));
       }
+      // Invoke destructor explicitly to make sure Aws::InitAPI()
+      // and Aps::ShutdownApi() appear in pairs.
+      s3_util_ = nullptr;
       s3_util_ = common::S3Util::BuildS3Util(request->s3_download_limit_mb,
                                              request->s3_bucket);
     }
