@@ -222,11 +222,15 @@ TEST(RocksDBAssumptionTest, SequenceNumber) {
 
 
   // add two SST files to the empty DB, the sequence # should still be zero
+  rocksdb::IngestExternalFileOptions ifo;
+  ifo.move_files = true;
+  /* allow for overlapping keys */
+  ifo.allow_global_seqno = true;
   EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
-  s = db->AddFile(sst_file1, true);
+  s = db->IngestExternalFile({sst_file1}, ifo);
   EXPECT_TRUE(s.ok());
   EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
-  s = db->AddFile(sst_file2, false);
+  s = db->IngestExternalFile({sst_file2}, ifo);
   EXPECT_TRUE(s.ok());
   EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
 

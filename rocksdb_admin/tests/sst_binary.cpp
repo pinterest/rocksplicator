@@ -22,6 +22,8 @@
 #include "boost/filesystem.hpp"
 #include "glog/logging.h"
 #include "rocksdb/db.h"
+#include "rocksdb/options.h"
+
 
 static const std::string kDBPath = "/tmp/sst_load_compatibility_test_db";
 static const int kNumKeys = 10;
@@ -61,8 +63,12 @@ int main(int argc, char** argv) {
   }
 
   auto db = OpenDB(kDBPath);
-  auto status = db->AddFile(argv[1]);
-  CHECK(status.ok()) << "AddFile() failed: " << status.ToString();
+  rocksdb::IngestExternalFileOptions ifo;
+  ifo.move_files = false;
+  /* allow for overlapping keys */
+  ifo.allow_global_seqno = true;
+  auto status = db->IngestExternalFile({argv[1]}, ifo);
+  CHECK(status.ok()) << "IngestExternalFile() failed: " << status.ToString();
 
   VerifyData(db.get());
 

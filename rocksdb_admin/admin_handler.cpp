@@ -34,6 +34,7 @@
 #include "folly/String.h"
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
+#include "rocksdb/options.h"
 #include "rocksdb/utilities/backupable_db.h"
 #include "rocksdb_admin/utils.h"
 
@@ -717,6 +718,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   const boost::filesystem::directory_iterator end_itor;
   boost::filesystem::directory_iterator itor(local_path);
   static const std::string suffix = ".sst";
+  std::vector<std::string> sst_file_paths;
   for (; itor != end_itor; ++itor) {
     auto file_name = itor->path().filename().string();
     if (file_name.size() < suffix.size() + 1 ||
@@ -726,14 +728,20 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
       continue;
     }
 
-    auto status = db->AddFile(local_path + file_name, true /* move_file */);
-    if (!OKOrSetException(status,
-                          AdminErrorCode::DB_ADMIN_ERROR,
-                          &callback)) {
-      LOG(ERROR) << "Failed to add file " << local_path + file_name << " "
-                 << status.ToString();
-      return;
-    }
+    sst_file_paths.push_back(local_path + file_name);
+  }
+
+  rocksdb::IngestExternalFileOptions ifo;
+  ifo.move_files = true;
+  /* allow for overlapping keys */
+  ifo.allow_global_seqno = true;
+  auto status = db->IngestExternalFile(sst_file_paths, ifo);
+  if (!OKOrSetException(status,
+                        AdminErrorCode::DB_ADMIN_ERROR,
+                        &callback)) {
+    LOG(ERROR) << "Failed to add files to DB " << request->db_name
+               << status.ToString();
+    return;
   }
 
   if (FLAGS_compact_db_after_load_sst) {
