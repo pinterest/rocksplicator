@@ -114,6 +114,7 @@ public class MySQLClusterManager extends MySQLBase implements ClusterManager{
 
   @Override
   public boolean unregisterFromCluster(final Cluster cluster, final HostBean hostBean) {
+    beginTransaction();
     TagHostsEntity tagHostsEntity = findTagHostsEntity(cluster);
     if (tagHostsEntity == null) {
       LOG.error("Trying to unregister {} from non-existing cluster {}", hostBean.toString(), cluster.toString());
@@ -131,11 +132,12 @@ public class MySQLClusterManager extends MySQLBase implements ClusterManager{
       blacklistedHosts.remove(hostBean);
       tagHostsEntity.setBlacklistedHosts(toHostsString(blacklistedHosts));
     }
-    return persistTagHostsEntity(tagHostsEntity);
+    return persistTagHostsEntity(tagHostsEntity, true);
   }
 
   @Override
   public boolean blacklistHost(final Cluster cluster, final HostBean hostBean) {
+    beginTransaction();
     TagHostsEntity tagHostsEntity = findTagHostsEntity(cluster);
     if (tagHostsEntity == null) {
       LOG.error("Trying to blacklist {} to non-existing cluster {}", hostBean.toString(), cluster.toString());
@@ -144,7 +146,7 @@ public class MySQLClusterManager extends MySQLBase implements ClusterManager{
     Set<HostBean> blacklistedHosts = fromHostsString(tagHostsEntity.getBlacklistedHosts());
     blacklistedHosts.add(hostBean);
     tagHostsEntity.setBlacklistedHosts(toHostsString(blacklistedHosts));
-    return persistTagHostsEntity(tagHostsEntity);
+    return persistTagHostsEntity(tagHostsEntity, true);
   }
 
   @Override
