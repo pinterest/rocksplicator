@@ -229,6 +229,7 @@ TEST(RocksDBAssumptionTest, SequenceNumber) {
   EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
   s = db->IngestExternalFile({sst_file1}, ifo);
   EXPECT_TRUE(s.ok());
+  ifo.move_files = false;
   EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
   s = db->IngestExternalFile({sst_file2}, ifo);
   EXPECT_TRUE(s.ok());
