@@ -149,13 +149,15 @@ public class Clusters {
   public Response initialize(@PathParam("namespace") String namespace,
                              @PathParam("clusterName") String clusterName,
                              @QueryParam("zkPrefix") Optional<String> zkPrefix) {
-    // Create directly, we dont
-    if (taskQueue.createCluster(new Cluster(namespace, clusterName))) {
-      return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
-    } else {
+    if (!taskQueue.createCluster(new Cluster(namespace, clusterName))) {
       String message = String.format("Cluster %s is already existed", clusterName);
       return Utils.buildResponse(HttpStatus.BAD_REQUEST_400, ImmutableMap.of("message", message));
     }
+    if (!clusterManager.createCluster(new Cluster(namespace, clusterName))) {
+      String message = String.format("Cluster %s is already existed in cluster manager", clusterName);
+      return Utils.buildResponse(HttpStatus.BAD_REQUEST_400, ImmutableMap.of("message", message));
+    }
+    return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
   }
 
   /**
@@ -405,7 +407,7 @@ public class Clusters {
             ImmutableMap.of("message", "Bad string format for host"));
       }
       Cluster cluster = new Cluster(namespace, clusterName);
-      TaskBase registerHostTask = new RegisterHostTask(host, cluster).getEntity();
+      TaskBase registerHostTask = new RegisterHostTask(host).getEntity();
       taskQueue.enqueueTask(registerHostTask, cluster, 0);
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } catch (JsonProcessingException e) {
