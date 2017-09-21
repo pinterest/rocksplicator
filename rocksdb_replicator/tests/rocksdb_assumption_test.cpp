@@ -256,6 +256,18 @@ TEST(RocksDBAssumptionTest, SequenceNumber) {
   s = db->Get(rocksdb::ReadOptions(), to_string(2 * nKeys), &value);
   EXPECT_TRUE(s.ok());
   EXPECT_EQ(value, to_string(2 * nKeys));
+
+  // Adding files after online writes
+  s = db->IngestExternalFile({sst_file2}, ifo);
+  EXPECT_EQ(db->GetLatestSequenceNumber(), 2);
+  // verify the data is correct
+  for (int i = 0; i <= 2 * nKeys; ++i) {
+    string value;
+    ReadOptions read_options;
+    s = db->Get(read_options, to_string(i), &value);
+    EXPECT_TRUE(s.ok());
+    EXPECT_EQ(value, to_string(i));
+  }
 }
 
 void ReplicateDB(const unique_ptr<DB>& master, unique_ptr<DB>* slave,
