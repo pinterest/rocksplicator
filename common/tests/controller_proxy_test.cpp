@@ -20,12 +20,31 @@
 
 #include "common/controller_proxy.h"
 
+namespace common {
+
+std::string construct_controller_curl_cmd(
+        const std::string& controller_http_curl,
+        const std::string& cluster_namespace,
+        const std::string& cluster_name,
+        const std::string& ip_string,
+        const uint16_t port, const std::string& az_string);
+
+bool parse_controller_result(const std::string& curl_response);
+}  // namespace common
+
+
 TEST(ControllerProxyTest, UrlTest) {
   std::string real_curl_cmd = common::construct_controller_curl_cmd(
           "https://controllerhttp.pinadmin.com/",
           "rocksdb", "aperture-shared", "1.2.3.4", 9090, "us-east-1a");
   EXPECT_EQ(real_curl_cmd, "curl -X POST 'https://controllerhttp.pinadmin.com/v1/clusters/register/rocksdb/aperture-shared?host=1-2-3-4-9090-us-east-1a'");
 }
+
+TEST(ControllerProxyTest, CurlResponseTest) {
+  EXPECT_TRUE(common::parse_controller_result("{\"data\":true}"));
+  EXPECT_FALSE(common::parse_controller_result("{\"data\":false}"));
+}
+
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

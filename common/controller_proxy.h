@@ -22,19 +22,16 @@
 
 #include <string>
 
-#include <gflags/gflags.h>
-
 namespace common {
 
-std::string construct_controller_curl_cmd(
-        const std::string& controller_http_curl,
-        const std::string& cluster_namespace,
-        const std::string& cluster_name,
-        const std::string& ip_string,
-        const int port, const std::string& az_string);
-
+// Every Rocksplicator process will call this function before serve(),
+// this is to contact controller-http service for the existence of the host
+// in the cluster. Controller cluster management module will be able to
+// use the reported information to do cluster management tasks for example
+// replacing bad hosts.
+//
 // We need to specify port here because port flag is defined in realpin and
 // rocksplicator, so we avoid using gflag directly.
-bool registerHostToController(const int port);
+bool registerHostToController(const uint16_t port);
 
 }  // namespace common

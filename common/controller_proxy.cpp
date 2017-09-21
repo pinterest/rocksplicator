@@ -21,6 +21,7 @@
 
 #include <folly/ScopeGuard.h>
 #include <folly/String.h>
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 
 #include <cstdio>
@@ -38,7 +39,7 @@ std::string construct_controller_curl_cmd (
         const std::string& controller_http_curl,
         const std::string& cluster_namespace,
         const std::string& cluster_name,
-        const std::string& ip_string, const int port,
+        const std::string& ip_string, const uint16_t port,
         const std::string& az_string) {
   std::string mutate_ip_string = ip_string;
   std::replace(mutate_ip_string.begin(), mutate_ip_string.end(), '.', '-');
@@ -53,7 +54,17 @@ std::string construct_controller_curl_cmd (
   return full_curl_cmd;
 }
 
-bool registerHostToController(int port) {
+bool parse_controller_result(const std::string& curl_response) {
+  // A good response is a string as "{"data":true}".
+  bool is_good_response = curl_response == "{\"data\":true}";
+  if (!is_good_response) {
+    LOG(ERROR) << "Failed to register host: " << curl_response;
+  }
+  return is_good_response;
+}
+
+
+bool registerHostToController(uint16_t port) {
   if (FLAGS_controller_http_url.empty() || FLAGS_cluster_name.empty() ||
           FLAGS_cluster_namespace.empty()) {
     LOG(INFO) << "controller_http_url or cluster namespace or cluster name is"
@@ -77,13 +88,15 @@ bool registerHostToController(int port) {
   };
 
   char buf[128];
-  fread(buf, 1, sizeof(buf), f);
+  auto len = fread(buf, 1, sizeof(buf), f);
   if (ferror(f)) {
     LOG(ERROR) << "fread() failed with errno: " << errno;
     return false;
   }
 
-  return true;
+  std::string curl_response(buf, len);
+
+  return parse_controller_result(curl_response);
 }
 
 }  // namespace common
