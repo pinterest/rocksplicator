@@ -32,6 +32,6 @@ namespace common {
 //
 // We need to specify port here because port flag is defined in realpin and
 // rocksplicator, so we avoid using gflag directly.
-bool registerHostToController(const uint16_t port);
+bool RegisterHostToController(const uint16_t port);
 
 }  // namespace common

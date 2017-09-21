@@ -66,7 +66,7 @@ bool parse_controller_result(const std::string& curl_response) {
 }
 
 
-bool registerHostToController(uint16_t port) {
+bool RegisterHostToController(uint16_t port) {
   if (FLAGS_controller_http_url.empty() || FLAGS_cluster_name.empty() ||
           FLAGS_cluster_namespace.empty()) {
     LOG(INFO) << "controller_http_url or cluster namespace or cluster name is"
