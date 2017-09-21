@@ -24,8 +24,6 @@
 
 #include <gflags/gflags.h>
 
-DECLARE_int32(port);
-
 namespace common {
 
 std::string construct_controller_curl_cmd(
@@ -35,6 +33,8 @@ std::string construct_controller_curl_cmd(
         const std::string& ip_string,
         const int port, const std::string& az_string);
 
+// We need to specify port here because port flag is defined in realpin and
+// rocksplicator, so we avoid using gflag directly.
 bool registerHostToController(const int port);
 
 }  // namespace common
