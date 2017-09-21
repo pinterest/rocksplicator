@@ -16,17 +16,19 @@
 // @author shu (shu@pinterest.com)
 //
 
-#include "common/availability_zone.h"
-#include "common/network_util.h"
+#include "common/controller_proxy.h"
+
+#include <algorithm>
+#include <cstdio>
+#include <string>
 
 #include <folly/ScopeGuard.h>
 #include <folly/String.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
-#include <cstdio>
-#include <algorithm>
-#include <string>
+#include "common/availability_zone.h"
+#include "common/network_util.h"
 
 DEFINE_string(controller_http_url, "https://controllerhttp.pinadmin.com/",
               "The url for talking to controller service");
