@@ -45,19 +45,13 @@
     </md-content>
 </div>
 
-<md-sidenav md-component-id="right"
-            class="md-whiteframe-z2 md-sidenav-right">
-    <md-toolbar>
-        <md-toolbar class="md-warn" layout="row" layout-align="center center">
-            TODO
-        </md-toolbar>
-    </md-toolbar>
-
+<md-sidenav md-component-id="right" class="md-whiteframe-z2 md-sidenav-right">
     <section>
         <md-toolbar md-theme="grey" class="md-hue-1">
             <div class="md-toolbar-tools">
-                <h3>TODO</h3>
+                <h3>New Tasks</h3>
             </div>
         </md-toolbar>
+        <div ng-include src="'app/views/newTask.html'"/>
     </section>
 </md-sidenav>
