@@ -222,11 +222,16 @@ TEST(RocksDBAssumptionTest, SequenceNumber) {
 
 
   // add two SST files to the empty DB, the sequence # should still be zero
+  rocksdb::IngestExternalFileOptions ifo;
+  ifo.move_files = true;
+  /* allow for overlapping keys */
+  ifo.allow_global_seqno = true;
   EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
-  s = db->AddFile(sst_file1, true);
+  s = db->IngestExternalFile({sst_file1}, ifo);
   EXPECT_TRUE(s.ok());
+  ifo.move_files = false;
   EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
-  s = db->AddFile(sst_file2, false);
+  s = db->IngestExternalFile({sst_file2}, ifo);
   EXPECT_TRUE(s.ok());
   EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
 
@@ -251,6 +256,18 @@ TEST(RocksDBAssumptionTest, SequenceNumber) {
   s = db->Get(rocksdb::ReadOptions(), to_string(2 * nKeys), &value);
   EXPECT_TRUE(s.ok());
   EXPECT_EQ(value, to_string(2 * nKeys));
+
+  // Adding files after online writes
+  s = db->IngestExternalFile({sst_file2}, ifo);
+  EXPECT_EQ(db->GetLatestSequenceNumber(), 2);
+  // verify the data is correct
+  for (int i = 0; i <= 2 * nKeys; ++i) {
+    string value;
+    ReadOptions read_options;
+    s = db->Get(read_options, to_string(i), &value);
+    EXPECT_TRUE(s.ok());
+    EXPECT_EQ(value, to_string(i));
+  }
 }
 
 void ReplicateDB(const unique_ptr<DB>& master, unique_ptr<DB>* slave,
