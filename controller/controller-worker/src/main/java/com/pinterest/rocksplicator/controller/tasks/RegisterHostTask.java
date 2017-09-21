@@ -39,7 +39,7 @@ public class RegisterHostTask extends AbstractTask<RegisterHostTask.Param> {
   private ClusterManager clusterManager;
 
   public RegisterHostTask(HostBean hostToRegister) {
-    this(new Param().setHostToRegister(hostToRegister);
+    this(new Param().setHostToRegister(hostToRegister));
   }
 
   public RegisterHostTask(Param param) {
