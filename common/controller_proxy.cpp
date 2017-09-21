@@ -49,7 +49,7 @@ std::string construct_controller_curl_cmd (
           "%s-%s-%s", mutate_ip_string.c_str(), std::to_string(port).c_str(),
           az_string.c_str());
 
-  std::string full_curl_cmd =folly::stringPrintf(
+  std::string full_curl_cmd = folly::stringPrintf(
           "curl -X POST '%sv1/clusters/register/%s/%s?host=%s'",
           controller_http_curl.c_str(), cluster_namespace.c_str(),
           cluster_name.c_str(), full_host_string.c_str());
