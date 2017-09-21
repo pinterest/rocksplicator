@@ -16,7 +16,6 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
-import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.ClusterManager;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 
@@ -39,8 +38,8 @@ public class RegisterHostTask extends AbstractTask<RegisterHostTask.Param> {
   @Inject
   private ClusterManager clusterManager;
 
-  public RegisterHostTask(HostBean hostToRegister, Cluster clusterToRegister) {
-    this(new Param().setHostToRegister(hostToRegister).setClusterToRegister(clusterToRegister));
+  public RegisterHostTask(HostBean hostToRegister) {
+    this(new Param().setHostToRegister(hostToRegister));
   }
 
   public RegisterHostTask(Param param) {
@@ -50,7 +49,7 @@ public class RegisterHostTask extends AbstractTask<RegisterHostTask.Param> {
   @Override
   public void process(Context ctx) throws Exception {
     boolean registerResult = clusterManager.registerToCluster(
-        getParameter().getClusterToRegister(), getParameter().getHostToRegister());
+        ctx.getCluster(), getParameter().getHostToRegister());
     if (!registerResult) {
       ctx.getTaskQueue().failTask(ctx.getId(), "Failed to register to cluster");
     } else {
@@ -62,24 +61,12 @@ public class RegisterHostTask extends AbstractTask<RegisterHostTask.Param> {
     @JsonProperty
     private HostBean hostToRegister;
 
-    @JsonProperty
-    private Cluster clusterToRegister;
-
     public HostBean getHostToRegister() {
       return hostToRegister;
     }
 
     public Param setHostToRegister(HostBean hostToRegister) {
       this.hostToRegister = hostToRegister;
-      return this;
-    }
-
-    public Cluster getClusterToRegister() {
-      return clusterToRegister;
-    }
-
-    public Param setClusterToRegister(Cluster clusterToRegister) {
-      this.clusterToRegister = clusterToRegister;
       return this;
     }
   }
