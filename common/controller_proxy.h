@@ -32,8 +32,9 @@ std::string construct_controller_curl_cmd(
         const std::string& controller_http_curl,
         const std::string& cluster_namespace,
         const std::string& cluster_name,
-        const std::string& ip_string, int port, const std::string& az_string);
+        const std::string& ip_string,
+        const int port, const std::string& az_string);
 
-bool registerHostToController();
+bool registerHostToController(const int port);
 
 }  // namespace common

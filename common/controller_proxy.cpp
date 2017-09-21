@@ -27,7 +27,6 @@
 #include <algorithm>
 #include <string>
 
-DEFINE_int32(port, 9090, "Port of the server");
 DEFINE_string(controller_http_url, "https://controllerhttp.pinadmin.com/",
               "The url for talking to controller service");
 DEFINE_string(cluster_namespace, "", "The cluster namespace");
@@ -39,7 +38,8 @@ std::string construct_controller_curl_cmd (
         const std::string& controller_http_curl,
         const std::string& cluster_namespace,
         const std::string& cluster_name,
-        const std::string& ip_string, int port, const std::string& az_string) {
+        const std::string& ip_string, const int port,
+        const std::string& az_string) {
   std::string mutate_ip_string = ip_string;
   std::replace(mutate_ip_string.begin(), mutate_ip_string.end(), '.', '-');
   std::string full_host_string = folly::stringPrintf(
@@ -53,7 +53,7 @@ std::string construct_controller_curl_cmd (
   return full_curl_cmd;
 }
 
-bool registerHostToController() {
+bool registerHostToController(int port) {
   if (FLAGS_controller_http_url.empty() || FLAGS_cluster_name.empty() ||
           FLAGS_cluster_namespace.empty()) {
     LOG(INFO) << "controller_http_url or cluster namespace or cluster name is"
@@ -64,7 +64,7 @@ bool registerHostToController() {
   std::string ip_string = common::getLocalIPAddress();
   std::string full_curl_cmd = construct_controller_curl_cmd(
           FLAGS_controller_http_url, FLAGS_cluster_namespace,
-          FLAGS_cluster_name, ip_string, FLAGS_port, az_string);
+          FLAGS_cluster_name, ip_string, port, az_string);
 
   auto f = popen(full_curl_cmd.c_str(), "re");
   if (f == nullptr) {

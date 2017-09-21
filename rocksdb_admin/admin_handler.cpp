@@ -48,6 +48,8 @@ DEFINE_string(rocksdb_dir, "/data/xvdb/aperture/",
 DEFINE_int32(num_hdfs_access_threads, 8,
              "The number of threads for backup or restore to/from HDFS");
 
+DEFINE_int32(port, 9090, "Port of the server");
+
 DEFINE_string(shard_config_path, "",
              "Local path of file storing shard mapping for Aperture");
 
@@ -55,7 +57,6 @@ DEFINE_bool(compact_db_after_load_sst, false,
             "Compact DB after loading SST files");
 
 DECLARE_int32(rocksdb_replicator_port);
-DECLARE_int32(port);
 
 DEFINE_bool(s3_direct_io, false, "Whether to enable direct I/O for s3 client");
 
