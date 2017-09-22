@@ -416,19 +416,18 @@ public class Clusters {
     }
   }
 
-  @POST
+  @GET
   @Path("/hosts/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName: [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
   public Response getHosts(@PathParam("namespace") String namespace,
-                           @PathParam("clusterName") String clusterName,
-                           @QueryParam("excludeBlacklisted") Optional<Boolean> excludeBlacklisted) {
-    Set<HostBean> hosts = clusterManager.getHosts(new Cluster(namespace, clusterName),
-        excludeBlacklisted.orElse(false));
+                           @PathParam("clusterName") String clusterName) {
+    Set<HostBean> hosts = clusterManager.getHosts(new Cluster(namespace, clusterName), false);
     return Utils.buildResponse(HttpStatus.OK_200, hosts);
   }
 
-  @POST
+  @GET
   @Path("/blacklisted/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName: [a-zA-Z0-9\\-_]+}")
+  @Produces(MediaType.APPLICATION_JSON)
   public Response getBlacklistedHosts(@PathParam("namespace") String namespace,
                                       @PathParam("clusterName") String clusterName) {
     Set<HostBean> hosts = clusterManager.getBlacklistedHosts(new Cluster(namespace, clusterName));
