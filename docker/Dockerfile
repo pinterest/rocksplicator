@@ -232,25 +232,29 @@ RUN cd /opt && \
 
 # rocksdb
 RUN cd /opt/ && \
-    wget https://github.com/facebook/rocksdb/archive/rocksdb-5.7.2.zip && \
-    unzip rocksdb-5.7.2.zip && \
-    (cd rocksdb-rocksdb-5.7.2 && \
-      sed -i -- 's/std::rindex/rindex/g' ./env/env_hdfs.cc && \
-      sed -i -- '/"util\/string_util.h"/a #include "util\/logging.h"' ./env/env_hdfs.cc && \
-      export CLASSPATH= && \
-      for f in `find /usr/lib/hadoop-hdfs | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \
-      for f in `find /usr/lib/hadoop | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \
-      for f in `find /usr/lib/hadoop/client | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \
-      USE_HDFS=1 \
-      JAVA_HOME=/usr/lib/jvm/java-6-openjdk-amd64 \
-      LD_LIBRARY_PATH=$JAVA_HOME/jre/lib/amd64/server:$JAVA_HOME/jre/lib/amd64:/usr/lib/hadoop/lib/native \
-        JEMALLOC_LIB=" /usr/lib/x86_64-linux-gnu/libjemalloc.a" \
-        JEMALLOC_INCLUDE=" -I /usr/include/" \
-        EXTRA_CXXFLAGS="-gdwarf-2 -std=c++1y -O3 -fno-omit-frame-pointer" \
-        make -j ${BUILD_JOBS}  shared_lib && \
-      make install-shared && \
-      ldconfig) && \
-    rm -rf rocksdb-rocksdb-5.7.2
+    git clone https://github.com/facebook/rocksdb.git && \
+    (cd rocksdb && \
+     git checkout -b 5.7.fb origin/5.7.fb && \
+     git reset --hard cfaeb5846bec0ac90d8da15dc11f53eafbbfd537 && \
+     git cherry-pick c5f0c6cc660f1f4a8051db2aac3b8afc17818e70 && \
+     git cherry-pick ba3c58cab6c691c53c7f98589651233695da1f62 && \
+     sed -i -- 's/std::rindex/rindex/g' ./env/env_hdfs.cc && \
+     sed -i -- '/"util\/string_util.h"/a #include "util\/logging.h"' ./env/env_hdfs.cc && \
+     export CLASSPATH= && \
+     for f in `find /usr/lib/hadoop-hdfs | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \
+     for f in `find /usr/lib/hadoop | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \
+     for f in `find /usr/lib/hadoop/client | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \
+     USE_SSE=1 \
+     USE_HDFS=1 \
+     JAVA_HOME=/usr/lib/jvm/java-6-openjdk-amd64 \
+     LD_LIBRARY_PATH=$JAVA_HOME/jre/lib/amd64/server:$JAVA_HOME/jre/lib/amd64:/usr/lib/hadoop/lib/native \
+       JEMALLOC_LIB=" /usr/lib/x86_64-linux-gnu/libjemalloc.a" \
+       JEMALLOC_INCLUDE=" -I /usr/include/" \
+       EXTRA_CXXFLAGS="-gdwarf-2 -std=c++1y -O3 -fno-omit-frame-pointer" \
+       make -j ${BUILD_JOBS}  shared_lib && \
+     make install-shared && \
+     ldconfig) && \
+    rm -rf rocksdb
 
 # aws sdk
 RUN cd /opt && \
