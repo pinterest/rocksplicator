@@ -660,26 +660,6 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   db_admin_lock_.Lock(request->db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
-  replicator::DBRole db_role;
-  std::unique_ptr<folly::SocketAddress> upstream_addr;
-  {
-    auto db = getDB(request->db_name, nullptr);
-    if (db == nullptr) {
-      e.message = request->db_name + " not exists.";
-      callback.release()->exceptionInThread(std::move(e));
-      LOG(ERROR) << "Could not add SST files to a non existing DB "
-                 << request->db_name;
-      return;
-    }
-
-    db_role = db->IsSlave() ? replicator::DBRole::SLAVE :
-      replicator::DBRole::MASTER;
-    if (db->upstream_addr()) {
-      upstream_addr =
-        std::make_unique<folly::SocketAddress>(*(db->upstream_addr()));
-    }
-  }
-
   auto local_path = FLAGS_rocksdb_dir + "s3_tmp/" + request->db_name + "/";
   boost::system::error_code remove_err;
   boost::system::error_code create_err;
@@ -714,13 +694,6 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     }
   }
 
-
-  auto db = getDB(request->db_name, &e);
-  if (db == nullptr) {
-    LOG(ERROR) << "Failed to getDB for sst ingestion " << request->db_name;
-    callback.release()->exceptionInThread(std::move(e));
-    return;
-  }
   const boost::filesystem::directory_iterator end_itor;
   boost::filesystem::directory_iterator itor(local_path);
   static const std::string suffix = ".sst";
@@ -735,6 +708,15 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     }
 
     sst_file_paths.push_back(local_path + file_name);
+  }
+
+  auto db = getDB(request->db_name, nullptr);
+  if (db == nullptr) {
+    e.message = request->db_name + " doesnt exist.";
+    callback.release()->exceptionInThread(std::move(e));
+    LOG(ERROR) << "Could not add SST files to a non existing DB "
+               << request->db_name;
+    return;
   }
 
   rocksdb::IngestExternalFileOptions ifo;
