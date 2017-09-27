@@ -714,7 +714,13 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     }
   }
 
-  auto db = removeDB(request->db_name, nullptr);
+
+  auto db = getDB(request->db_name, &e);
+  if (db == nullptr) {
+    LOG(ERROR) << "Failed to getDB for sst ingestion " << request->db_name;
+    callback.release()->exceptionInThread(std::move(e));
+    return;
+  }
   const boost::filesystem::directory_iterator end_itor;
   boost::filesystem::directory_iterator itor(local_path);
   static const std::string suffix = ".sst";
@@ -735,7 +741,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   ifo.move_files = true;
   /* allow for overlapping keys */
   ifo.allow_global_seqno = true;
-  auto status = db->IngestExternalFile(sst_file_paths, ifo);
+  auto status = db->rocksdb()->IngestExternalFile(sst_file_paths, ifo);
   if (!OKOrSetException(status,
                         AdminErrorCode::DB_ADMIN_ERROR,
                         &callback)) {
@@ -745,18 +751,10 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   }
 
   if (FLAGS_compact_db_after_load_sst) {
-    auto status = db->CompactRange(nullptr, nullptr);
+    auto status = db->rocksdb()->CompactRange(nullptr, nullptr);
     if (!status.ok()) {
       LOG(ERROR) << "Failed to compact DB: " << status.ToString();
     }
-  }
-
-  std::string err_msg;
-  if (!db_manager_->addDB(request->db_name, std::move(db), db_role,
-                          std::move(upstream_addr), &err_msg)) {
-    e.message = std::move(err_msg);
-    callback.release()->exceptionInThread(std::move(e));
-    return;
   }
 
   callback->result(AddS3SstFilesToDBResponse());
