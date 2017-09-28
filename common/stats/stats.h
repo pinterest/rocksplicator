@@ -29,6 +29,11 @@
  * Stats::get()->Incr(counter, 100);
  * Stats::get()->AddMetric(metric, 45);
  *
+ * Register callbacks so the Incr / AddMetric is called periodically when
+ * refreshing threadlocal stats.
+ * Stats::get()->RegisterIncr(counter, std::function<uint64_t()>);
+ * Stats::get()->RegisterAddMetric(metric, std::function<int64_t()>);
+ *
  * Stats::get()->GetCounter(counter)->GetTotal();
  * Stats::get()->GetCounter(counter)->GetLastMinute();
  *
@@ -82,6 +87,11 @@ class Stats {
   // Metric update functions.
   void AddMetric(const uint32_t metric, int64_t value);
   void AddMetric(const std::string& metric, int64_t value);
+
+  // Register callback for Counter / Metric so they will be reported
+  // periodically by the Stats class.
+  void RegisterIncr(const std::string& counter, std::function<uint64_t()>);
+  void RegisterAddMetric(const std::string& metric, std::function<int64_t()>);
 
   // Returns the singleton stats instance.
   static Stats* get();
@@ -195,6 +205,12 @@ class Stats {
 
   std::thread flush_thread_;
   std::atomic<bool> should_stop_;
+
+  // Callbacks registerd for pulling periodically
+  std::mutex lock_counter_callbacks_;
+  std::mutex lock_metrics_callbacks_;
+  std::unordered_map<std::string, std::function<uint64_t()>> counter_callbacks_;
+  std::unordered_map<std::string, std::function<int64_t()>> metrics_callbacks_;
 };
 
 }  // namespace common

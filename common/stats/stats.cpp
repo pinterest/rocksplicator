@@ -324,6 +324,18 @@ Stats::Stats() : flush_interval_(kFlushIntervalMS)
   flush_thread_ = thread([this] {
     while (!should_stop_) {
       sleep_for(this->flush_interval_);
+      {
+        lock_guard<mutex> g(lock_counter_callbacks_);
+        for (auto &registered_counters : counter_callbacks_) {
+          Incr(registered_counters.first, registered_counters.second());
+        }
+      }
+      {
+        lock_guard<mutex> g(lock_metrics_callbacks_);
+        for (auto& registered_metrics : metrics_callbacks_) {
+          AddMetric(registered_metrics.first, registered_metrics.second());
+        }
+      }
       // Note that this object blocks creation of new thread local objects until
       // it is destroyed.
       auto accessor = this->local_stats_.accessAllThreads();
@@ -353,6 +365,19 @@ void Stats::AddMetric(const uint32_t metric, int64_t value) {
 
 void Stats::AddMetric(const string& metric, int64_t value) {
   GetLocalStats()->AddMetric(metric, value);
+}
+
+void Stats::RegisterIncr(const std::string &counter,
+                         std::function<uint64_t()> callback) {
+  lock_guard<mutex> g(lock_counter_callbacks_);
+  counter_callbacks_.emplace(counter, callback);
+}
+
+
+void Stats::RegisterAddMetric(const std::string &metric,
+                              std::function<int64_t()> callback) {
+  lock_guard<mutex> g(lock_metrics_callbacks_);
+  metrics_callbacks_.emplace(metric, callback);
 }
 
 LocalStats* Stats::GetLocalStats() {
