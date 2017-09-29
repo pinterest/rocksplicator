@@ -370,14 +370,14 @@ void Stats::AddMetric(const string& metric, int64_t value) {
 void Stats::RegisterIncr(const std::string &counter,
                          std::function<uint64_t()> callback) {
   lock_guard<mutex> g(lock_counter_callbacks_);
-  counter_callbacks_.emplace(counter, callback);
+  counter_callbacks_.emplace(counter, std::move(callback));
 }
 
 
 void Stats::RegisterAddMetric(const std::string &metric,
                               std::function<int64_t()> callback) {
   lock_guard<mutex> g(lock_metrics_callbacks_);
-  metrics_callbacks_.emplace(metric, callback);
+  metrics_callbacks_.emplace(metric, std::move(callback));
 }
 
 LocalStats* Stats::GetLocalStats() {
