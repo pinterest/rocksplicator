@@ -53,6 +53,9 @@ DEFINE_int32(port, 9090, "Port of the server");
 DEFINE_string(shard_config_path, "",
              "Local path of file storing shard mapping for Aperture");
 
+DEFINE_bool(allow_global_seqno, false,
+            "Allow a global seqno");
+
 DEFINE_bool(compact_db_after_load_sst, false,
             "Compact DB after loading SST files");
 
@@ -722,7 +725,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   rocksdb::IngestExternalFileOptions ifo;
   ifo.move_files = true;
   /* allow for overlapping keys */
-  ifo.allow_global_seqno = true;
+  ifo.allow_global_seqno = FLAGS_allow_global_seqno;
   auto status = db->rocksdb()->IngestExternalFile(sst_file_paths, ifo);
   if (!OKOrSetException(status,
                         AdminErrorCode::DB_ADMIN_ERROR,
