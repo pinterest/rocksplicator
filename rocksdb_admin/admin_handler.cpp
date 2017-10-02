@@ -725,6 +725,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   ifo.move_files = true;
   /* if true, rocksdb will allow for overlapping keys */
   ifo.allow_global_seqno = FLAGS_rocksdb_allow_global_seqno;
+  ifo.allow_blocking_flush = FLAGS_rocksdb_allow_global_seqno;
   auto status = db->rocksdb()->IngestExternalFile(sst_file_paths, ifo);
   if (!OKOrSetException(status,
                         AdminErrorCode::DB_ADMIN_ERROR,
