@@ -187,86 +187,142 @@ TEST(RocksDBAssumptionTest, SequenceNumber) {
   EXPECT_EQ(db->GetLatestSequenceNumber(), 7);
 
 
-  // close, destroy and reopen DB, sequence # should start from zero again
-  db.reset(nullptr);
-  Options options;
-  s = DestroyDB(db_path, options);
-  EXPECT_TRUE(s.ok());
-  db = OpenDB(db_path);
-  EXPECT_TRUE(db != nullptr);
-  EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
-
-
-  // manually write two SST files
-  SstFileWriter sst_file_writer1(EnvOptions(), options, options.comparator);
-  SstFileWriter sst_file_writer2(EnvOptions(), options, options.comparator);
-  string sst_file1 = "/tmp/file1.sst";
-  string sst_file2 = "/tmp/file2.sst";
-  s = sst_file_writer1.Open(sst_file1);
-  EXPECT_TRUE(s.ok());
-  s = sst_file_writer2.Open(sst_file2);
-  EXPECT_TRUE(s.ok());
-
-  const int nKeys = 5;
-  for (int i = 0; i < nKeys; ++i) {
-    s = sst_file_writer1.Add(to_string(i), to_string(i));
+  // We should be very careful to support both bulk update and online writes in
+  // one service.
+  // If we have to support both, we need to make sure we do it strictly in the
+  // following order: 1) stop online writes, 2) clean up DB, 3) do bulk upload
+  // and 4) resume online writes.
+  const std::vector<bool> allow_overlappings = { true, false };
+  for (const auto allow_overlapping : allow_overlappings) {
+    // close, destroy and reopen DB, sequence # should start from zero again
+    db.reset(nullptr);
+    Options options;
+    s = DestroyDB(db_path, options);
     EXPECT_TRUE(s.ok());
-    s = sst_file_writer2.Add(to_string(i + nKeys), to_string(i + nKeys));
+    db = OpenDB(db_path);
+    EXPECT_TRUE(db != nullptr);
+    EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
+
+
+    // manually write three SST files
+    SstFileWriter sst_file_writer1(EnvOptions(), options, options.comparator);
+    SstFileWriter sst_file_writer2(EnvOptions(), options, options.comparator);
+    SstFileWriter sst_file_writer3(EnvOptions(), options, options.comparator);
+    string sst_file1 = "/tmp/file1.sst";
+    string sst_file2 = "/tmp/file2.sst";
+    string sst_file3 = "/tmp/file3.sst";
+    s = sst_file_writer1.Open(sst_file1);
     EXPECT_TRUE(s.ok());
-  }
-
-  s = sst_file_writer1.Finish();
-  EXPECT_TRUE(s.ok());
-  s = sst_file_writer2.Finish();
-  EXPECT_TRUE(s.ok());
-
-
-  // add two SST files to the empty DB, the sequence # should still be zero
-  rocksdb::IngestExternalFileOptions ifo;
-  ifo.move_files = true;
-  /* allow for overlapping keys */
-  ifo.allow_global_seqno = true;
-  EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
-  s = db->IngestExternalFile({sst_file1}, ifo);
-  EXPECT_TRUE(s.ok());
-  ifo.move_files = false;
-  EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
-  s = db->IngestExternalFile({sst_file2}, ifo);
-  EXPECT_TRUE(s.ok());
-  EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
-
-
-  // verify the data is correct
-  for (int i = 0; i < 2 * nKeys; ++i) {
-    string value;
-    ReadOptions read_options;
-    s = db->Get(read_options, to_string(i), &value);
+    s = sst_file_writer2.Open(sst_file2);
     EXPECT_TRUE(s.ok());
-    EXPECT_EQ(value, to_string(i));
-  }
-  EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
-
-
-  // Online writes after adding files
-  s = db->Put(rocksdb::WriteOptions(), to_string(2 * nKeys),
-              to_string(2 * nKeys));
-  EXPECT_TRUE(s.ok());
-  EXPECT_EQ(db->GetLatestSequenceNumber(), 1);
-
-  s = db->Get(rocksdb::ReadOptions(), to_string(2 * nKeys), &value);
-  EXPECT_TRUE(s.ok());
-  EXPECT_EQ(value, to_string(2 * nKeys));
-
-  // Adding files after online writes
-  s = db->IngestExternalFile({sst_file2}, ifo);
-  EXPECT_EQ(db->GetLatestSequenceNumber(), 2);
-  // verify the data is correct
-  for (int i = 0; i <= 2 * nKeys; ++i) {
-    string value;
-    ReadOptions read_options;
-    s = db->Get(read_options, to_string(i), &value);
+    s = sst_file_writer3.Open(sst_file3);
     EXPECT_TRUE(s.ok());
-    EXPECT_EQ(value, to_string(i));
+
+    // file1 contains key 0-4, file2 contains key 5-9, file3 contains 10-14
+    const int nKeys = 5;
+    for (int i = 0; i < nKeys; ++i) {
+      s = sst_file_writer1.Add(to_string(i), to_string(i));
+      EXPECT_TRUE(s.ok());
+      s = sst_file_writer2.Add(to_string(i + nKeys), to_string(i + nKeys));
+      EXPECT_TRUE(s.ok());
+      s = sst_file_writer3.Add(to_string(i + 2 * nKeys),
+                               to_string(i + 2 * nKeys));
+      EXPECT_TRUE(s.ok());
+    }
+
+    s = sst_file_writer1.Finish();
+    EXPECT_TRUE(s.ok());
+    s = sst_file_writer2.Finish();
+    EXPECT_TRUE(s.ok());
+    s = sst_file_writer3.Finish();
+    EXPECT_TRUE(s.ok());
+
+    // add two SST files to the empty DB, the sequence # should still be zero
+    rocksdb::IngestExternalFileOptions ifo;
+    ifo.move_files = true;
+    ifo.allow_global_seqno = allow_overlapping;
+    ifo.allow_blocking_flush = allow_overlapping;
+    EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
+    s = db->IngestExternalFile({sst_file1}, ifo);
+    EXPECT_TRUE(s.ok());
+    ifo.move_files = false;
+    EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
+    s = db->IngestExternalFile({sst_file2}, ifo);
+    EXPECT_TRUE(s.ok());
+    EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
+
+
+    // verify the data is correct
+    for (int i = 0; i < 2 * nKeys; ++i) {
+      string value;
+      ReadOptions read_options;
+      s = db->Get(read_options, to_string(i), &value);
+      EXPECT_TRUE(s.ok());
+      EXPECT_EQ(value, to_string(i));
+    }
+    EXPECT_EQ(db->GetLatestSequenceNumber(), 0);
+
+
+    // Online writes after adding files
+    s = db->Put(rocksdb::WriteOptions(), to_string(-1), to_string(-1));
+    EXPECT_TRUE(s.ok());
+    EXPECT_EQ(db->GetLatestSequenceNumber(), 1);
+
+    s = db->Get(rocksdb::ReadOptions(), to_string(-1), &value);
+    EXPECT_TRUE(s.ok());
+    EXPECT_EQ(value, to_string(-1));
+    EXPECT_EQ(db->GetLatestSequenceNumber(), 1);
+
+    // Add a file without overlapping keys, seq no is unchanged no matter if
+    // we allow overlapping or not.
+    s = db->IngestExternalFile({ sst_file3 }, ifo);
+    EXPECT_TRUE(s.ok());
+    EXPECT_EQ(db->GetLatestSequenceNumber(), 1);
+
+    // Adding a file with overlapping keys, seq no is changed if we allow
+    // overlapping keys. It fails if we don't allow overlapping keys.
+    s = db->IngestExternalFile({ sst_file2 }, ifo);
+    if (allow_overlapping) {
+      EXPECT_TRUE(s.ok());
+      EXPECT_EQ(db->GetLatestSequenceNumber(), 2);
+    } else {
+      EXPECT_FALSE(s.ok());
+      EXPECT_EQ(db->GetLatestSequenceNumber(), 1);
+    }
+
+    // We are able to get online write through GetUpdatesSince() even after
+    // bulk uploads.
+    std::unique_ptr<rocksdb::TransactionLogIterator> iter;
+    s = db->GetUpdatesSince(1, &iter);
+    EXPECT_TRUE(s.ok());
+    EXPECT_TRUE(iter->Valid());
+    auto result = iter->GetBatch();
+    EXPECT_EQ(result.writeBatchPtr->Count(), 1);
+
+    // We are able to successfully call GetUpdatesSince() on seq no bumped by
+    // ingesting overlapping files, but the generated iterator is invalid.
+    iter.reset(nullptr);
+    EXPECT_EQ(db->GetLatestSequenceNumber(), 1 + allow_overlapping);
+    s = db->GetUpdatesSince(2, &iter);
+    if (allow_overlapping) {
+      EXPECT_TRUE(s.ok());
+      EXPECT_FALSE(iter->Valid());
+      iter->Next();
+      EXPECT_FALSE(iter->Valid());
+    } else {
+      EXPECT_FALSE(s.ok());
+      EXPECT_TRUE(s.IsNotFound());
+      EXPECT_EQ(iter, nullptr);
+    }
+
+    // verify the data is correct
+    for (int i = -1; i < 3 * nKeys; ++i) {
+      string value;
+      ReadOptions read_options;
+      s = db->Get(read_options, to_string(i), &value);
+      EXPECT_TRUE(s.ok());
+      EXPECT_EQ(value, to_string(i));
+    }
   }
 }
 
