@@ -87,12 +87,4 @@ public interface ClusterManager {
     return Collections.emptySet();
   }
 
-  /**
-   * Take in the ClusterBean, return the hosts registered but not in real cluster Config.
-   */
-  default Set<HostBean> getHostsNotInConfig(final Cluster cluster,
-                                            final ClusterBean clusterBean) {
-    return Collections.emptySet();
-  }
-
 }

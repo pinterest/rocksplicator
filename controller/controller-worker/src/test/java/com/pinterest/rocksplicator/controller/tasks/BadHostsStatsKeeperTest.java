@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.tasks;
 
+import com.pinterest.rocksplicator.controller.bean.HostBean;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -28,28 +29,30 @@ public class BadHostsStatsKeeperTest {
   @Test
   public void testCounting() {
     BadHostsStatesKeeper badHostsStatesKeeper = new BadHostsStatesKeeper();
-    Set<String> inputSet = new HashSet<>();
-    inputSet.add("1.2.3.4");
-    List<String> emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
+    Set<HostBean> inputSet = new HashSet<>();
+    HostBean bean = new HostBean().setIp("1.2.3.4").setPort(9090);
+    inputSet.add(bean);
+    List<HostBean> emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
     Assert.assertTrue(emailedHosts.isEmpty());
     emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
     Assert.assertTrue(emailedHosts.isEmpty());
     emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
     Assert.assertTrue(!emailedHosts.isEmpty());
-    Assert.assertEquals(emailedHosts.get(0), "1.2.3.4");
+    Assert.assertEquals(emailedHosts.get(0), bean);
     // It goes into silence mode
     emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
     Assert.assertTrue(emailedHosts.isEmpty());
-    Assert.assertEquals(badHostsStatesKeeper.getBadHostStates().get("1.2.3.4").consecutiveFailures, 4);
+    Assert.assertEquals(badHostsStatesKeeper.getBadHostStates().get(bean).consecutiveFailures, 4);
   }
 
   @Test
   public void testReset() {
     BadHostsStatesKeeper badHostsStatesKeeper = new BadHostsStatesKeeper();
-    Set<String> inputSet = new HashSet<>();
-    inputSet.add("1.2.3.4");
-    Set<String> emptySet = new HashSet<>();
-    List<String> emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
+    Set<HostBean> inputSet = new HashSet<>();
+    HostBean bean = new HostBean().setIp("1.2.3.4").setPort(9090);
+    inputSet.add(bean);
+    Set<HostBean> emptySet = new HashSet<>();
+    List<HostBean> emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
     Assert.assertTrue(emailedHosts.isEmpty());
     emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
     Assert.assertTrue(emailedHosts.isEmpty());
@@ -61,29 +64,30 @@ public class BadHostsStatsKeeperTest {
     Assert.assertTrue(emailedHosts.isEmpty());
     emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
     Assert.assertTrue(!emailedHosts.isEmpty());
-    Assert.assertEquals(emailedHosts.get(0), "1.2.3.4");
+    Assert.assertEquals(emailedHosts.get(0), bean);
   }
 
   @Test
   public void testExpiration() throws InterruptedException {
     BadHostsStatesKeeper badHostsStatesKeeper = new BadHostsStatesKeeper(3, 5);
-    Set<String> inputSet = new HashSet<>();
-    inputSet.add("1.2.3.4");
-    List<String> emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
+    Set<HostBean> inputSet = new HashSet<>();
+    HostBean bean = new HostBean().setIp("1.2.3.4").setPort(9090);
+    inputSet.add(bean);
+    List<HostBean> emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
     Assert.assertTrue(emailedHosts.isEmpty());
     emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
     Assert.assertTrue(emailedHosts.isEmpty());
     emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
     Assert.assertTrue(!emailedHosts.isEmpty());
-    Assert.assertEquals(emailedHosts.get(0), "1.2.3.4");
+    Assert.assertEquals(emailedHosts.get(0), bean);
     // It goes into silence mode
     emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
     Assert.assertTrue(emailedHosts.isEmpty());
-    Assert.assertEquals(badHostsStatesKeeper.getBadHostStates().get("1.2.3.4").consecutiveFailures, 4);
+    Assert.assertEquals(badHostsStatesKeeper.getBadHostStates().get(bean).consecutiveFailures, 4);
     Thread.sleep(6000);
     emailedHosts = badHostsStatesKeeper.updateStatesAndGetHostsToEmail(inputSet);
     Assert.assertTrue(!emailedHosts.isEmpty());
-    Assert.assertEquals(emailedHosts.get(0), "1.2.3.4");
+    Assert.assertEquals(emailedHosts.get(0), bean);
   }
 
 }

@@ -17,7 +17,7 @@
 package com.pinterest.rocksplicator.controller.tasks;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.pinterest.rocksplicator.controller.bean.ConsistentHashRingBean;
+import com.pinterest.rocksplicator.controller.ClusterManager;
 import com.pinterest.rocksplicator.controller.bean.ConsistentHashRingsBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
@@ -55,6 +55,9 @@ public class ConsistentHashRingHealthCheckTask extends AbstractTask<ConsistentHa
   @Inject
   private EmailSender emailSender;
 
+  @Inject
+  private ClusterManager clusterManager;
+
   public ConsistentHashRingHealthCheckTask() {
     this(new Param().setBadHostsStatesKeeper(new BadHostsStatesKeeper(3, 30 * 60)));
   }
@@ -81,28 +84,37 @@ public class ConsistentHashRingHealthCheckTask extends AbstractTask<ConsistentHa
         return;
       }
 
-      Set<InetAddress> hosts = new HashSet<>();
-      for (ConsistentHashRingBean ring : consistentHashRingsBean.getConsistentHashRings()) {
-        for (HostBean hostBean : ring.getHosts()) {
-          hosts.add(InetAddress.getByName(hostBean.getIp()));
-        }
-      }
+      Set<HostBean> hostsInConfig = consistentHashRingsBean.getHosts();
+      Set<HostBean> hostsRegistered = clusterManager.getHosts(ctx.getCluster(), false);
+      Set<HostBean> blacklistedHost = clusterManager.getBlacklistedHosts(ctx.getCluster());
 
-      Set<String> badHosts = new HashSet<>();
-      for (InetAddress hostAddr : hosts) {
+      Set<HostBean> badHosts = new HashSet<>();
+      for (HostBean hostBean : hostsRegistered) {
+        InetAddress hostAddr = InetAddress.getLocalHost().getByName(hostBean.getIp());
         if (!hostAddr.isReachable(5000)) {
-          badHosts.add(hostAddr.toString());
+          badHosts.add(hostBean);
         }
       }
 
-      List<String> hostsToSendEmail =
+      List<HostBean> hostsConsecutiveFailing =
           getParameter().getBadHostsStatesKeeper().updateStatesAndGetHostsToEmail(badHosts);
 
-      if (!hostsToSendEmail.isEmpty()) {
-        String errorMessage = String.format("Unable to ping hosts: %s", badHosts);
-        ctx.getTaskQueue().failTask(ctx.getId(),errorMessage);
-        emailSender.sendEmail("Healthcheck Failed for " + ctx.getCluster(), errorMessage);
-        return;
+      for (HostBean hostConsecutiveFailing : hostsConsecutiveFailing) {
+        if (!hostsInConfig.contains(hostConsecutiveFailing)
+            && blacklistedHost.contains(hostConsecutiveFailing)) {
+          // The host is probably down (not in config also in BlackListed)
+          clusterManager.unregisterFromCluster(ctx.getCluster(), hostConsecutiveFailing);
+          emailSender.sendEmail(String.format("Healthcheck task remove %s out from %s",
+              hostConsecutiveFailing.toString()), "As title");
+        } else if (!hostsInConfig.contains(hostConsecutiveFailing)) {
+          // The host is in candidate pool but not in config
+          emailSender.sendEmail(String.format("Candidate Host %s of cluster %s is down",
+              hostConsecutiveFailing.toString(), ctx.getCluster()), "As title");
+        } else {
+          // The host is in config but not reachable at this moment
+          emailSender.sendEmail(String.format("CRITICAL: Host %s of cluster %s is down",
+              hostConsecutiveFailing.toString(), ctx.getCluster()), "As title");
+        }
       }
       LOG.info("All hosts are good");
       String output = String.format("Cluster %s is healthy", ctx.getCluster());

@@ -19,7 +19,6 @@ package com.pinterest.rocksplicator.controller.tasks;
 import com.pinterest.rocksplicator.controller.ClusterManager;
 import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
-import com.pinterest.rocksplicator.controller.bean.SegmentBean;
 import com.pinterest.rocksplicator.controller.util.AdminClientFactory;
 import com.pinterest.rocksplicator.controller.util.EmailSender;
 import com.pinterest.rocksplicator.controller.util.ZKUtil;
