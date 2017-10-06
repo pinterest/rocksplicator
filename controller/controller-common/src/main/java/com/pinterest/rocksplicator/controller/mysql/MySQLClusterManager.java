@@ -19,6 +19,7 @@ package com.pinterest.rocksplicator.controller.mysql;
 import com.google.common.base.Strings;
 import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.ClusterManager;
+import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 import com.pinterest.rocksplicator.controller.mysql.entity.TagEntity;
 import com.pinterest.rocksplicator.controller.mysql.entity.TagHostsEntity;
@@ -174,5 +175,13 @@ public class MySQLClusterManager extends MySQLBase implements ClusterManager{
       return new HashSet<>();
     }
     return fromHostsString(tagHostsEntity.getBlacklistedHosts());
+  }
+
+  @Override
+  public Set<HostBean> getHostsNotInConfig(final Cluster cluster, final ClusterBean clusterBean) {
+    Set<HostBean> hostsInConfig = clusterBean.getHosts();
+    Set<HostBean> hosts = getHosts(cluster, false);
+    hosts.removeAll(hostsInConfig);
+    return hosts;
   }
 }

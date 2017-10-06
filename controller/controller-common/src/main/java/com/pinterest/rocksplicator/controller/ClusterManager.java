@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller;
 
+import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 
 import java.util.Collections;
@@ -83,6 +84,14 @@ public interface ClusterManager {
    * @return
    */
   default Set<HostBean> getBlacklistedHosts(final Cluster cluster) {
+    return Collections.emptySet();
+  }
+
+  /**
+   * Take in the ClusterBean, return the hosts registered but not in real cluster Config.
+   */
+  default Set<HostBean> getHostsNotInConfig(final Cluster cluster,
+                                            final ClusterBean clusterBean) {
     return Collections.emptySet();
   }
 
