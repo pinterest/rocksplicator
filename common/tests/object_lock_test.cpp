@@ -28,7 +28,10 @@ using std::promise;
 using std::thread;
 using std::vector;
 
-void RunMultipleThreadTest(size_t nThread, size_t nObjects, size_t n) {
+void RunMultipleThreadTest(size_t nThread,
+                           size_t nObjects,
+                           size_t n,
+                           bool try_lock) {
   ObjectLock<int> locks(nThread);
   promise<void> p;
   auto sf = p.get_future().share();
@@ -42,11 +45,16 @@ void RunMultipleThreadTest(size_t nThread, size_t nObjects, size_t n) {
   }
 
   for (size_t i = 0; i < nThread; ++i) {
-    threads[i] = thread([n, objects, &locks, &sf, &sums]() mutable {
+    threads[i] = thread([n, objects, &locks, &sf, &sums, try_lock]() mutable {
       sf.wait();
       while (n--) {
         for (const auto obj : objects) {
-          locks.Lock(obj);
+          if (try_lock) {
+            while (!locks.TryLock(obj)) {
+            }
+          } else {
+            locks.Lock(obj);
+          }
           ++sums[obj];
           locks.Unlock(obj);
         }
@@ -71,15 +79,54 @@ void RunMultipleThreadTest(size_t nThread, size_t nObjects, size_t n) {
 }
 
 TEST(ObjectLockTest, ObjectLockTest) {
-  RunMultipleThreadTest(1, 1, 1);
-  RunMultipleThreadTest(1, 1, 100);
-  RunMultipleThreadTest(1, 100, 100);
-  RunMultipleThreadTest(1, 10000, 100);
-  RunMultipleThreadTest(100, 1, 100);
-  RunMultipleThreadTest(1000, 1, 100);
-  RunMultipleThreadTest(1000, 10, 999);
-  RunMultipleThreadTest(100, 1000, 100);
-  RunMultipleThreadTest(99, 999, 99);
+  RunMultipleThreadTest(1, 1, 1, false);
+  RunMultipleThreadTest(1, 1, 100, false);
+  RunMultipleThreadTest(1, 100, 100, false);
+  RunMultipleThreadTest(1, 10000, 100, false);
+  RunMultipleThreadTest(100, 1, 100, false);
+  RunMultipleThreadTest(1000, 1, 100, false);
+  RunMultipleThreadTest(1000, 10, 999, false);
+  RunMultipleThreadTest(100, 1000, 100, false);
+  RunMultipleThreadTest(99, 999, 99, false);
+}
+
+TEST(ObjectLockTest, TryLockBasics) {
+  ObjectLock<int> lock;
+  int token = 123;
+  int times = 100;
+  while (times--) {
+    int n = 0;
+    // we may fail spuriously
+    while (!lock.TryLock(token)) {
+      ++n;
+    }
+    EXPECT_LE(n, 3);
+    lock.Unlock(token);
+  }
+
+  while (!lock.TryLock(token)) {
+  }
+
+  thread thr([&lock, token] () {
+      int n = 100;
+      while (n--) {
+        EXPECT_FALSE(lock.TryLock(token));
+      }
+    });
+
+  thr.join();
+  lock.Unlock(token);
+}
+
+TEST(ObjectLockTest, ObjectTryLockTest) {
+  RunMultipleThreadTest(1, 1, 1, true);
+  RunMultipleThreadTest(1, 1, 100, true);
+  RunMultipleThreadTest(1, 100, 100, true);
+  RunMultipleThreadTest(1, 10000, 100, true);
+  RunMultipleThreadTest(10, 1, 1, true);
+  RunMultipleThreadTest(10, 1, 100, true);
+  RunMultipleThreadTest(10, 100, 100, true);
+  RunMultipleThreadTest(10, 10000, 100, true);
 }
 
 int main(int argc, char** argv) {
