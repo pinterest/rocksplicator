@@ -69,6 +69,32 @@ class ObjectLock {
       itor->nodeMutex.lock();
     }
 
+    // Return true if successfully acquired the lock. Otherwise, return false.
+    template <typename ALLOC>
+    bool TryLock(const ObjectType& object, ALLOC&& alloc) {
+      if (!bucketMutex.try_lock()) {
+        return false;
+      }
+
+      std::lock_guard<MutexType> g(bucketMutex, std::adopt_lock);
+      auto itor = FindNodeLocked(object);
+
+      if (itor == nodes.end()) {
+        // Currently the object is not locked by anyone, lock() won't block us
+        auto p = alloc();
+        p->object = object;
+        ++p->refCount;
+        p->nodeMutex.lock();
+
+        nodes.push_front(*p);
+        return true;
+      }
+
+      // Highly likely someone else is holding the lock for the object, don't
+      // bother to try_lock it.
+      return false;
+    }
+
     template <typename DEALLOC>
     void Unlock(const ObjectType& object, DEALLOC&& dealloc) {
       std::lock_guard<MutexType> g(bucketMutex);
@@ -128,6 +154,13 @@ class ObjectLock {
   void Lock(const ObjectType& object) {
     auto idx = hasher_(object) % nBucket_;
     buckets_[idx].Lock(object, [this]() {
+      return AllocNode();
+    });
+  }
+
+  bool TryLock(const ObjectType& object) {
+    auto idx = hasher_(object) % nBucket_;
+    return buckets_[idx].TryLock(object, [this]() {
       return AllocNode();
     });
   }
