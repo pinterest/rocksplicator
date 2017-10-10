@@ -19,9 +19,12 @@ package com.pinterest.rocksplicator.controller.bean;
 import com.pinterest.rocksplicator.controller.Cluster;
 import org.hibernate.validator.constraints.NotEmpty;
 
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Mapping to another type of config: a collection of consistent hash rings.
@@ -57,6 +60,16 @@ public class ConsistentHashRingsBean {
   @Override
   public String toString() {
     return cluster.toString();
+  }
+
+  public Set<HostBean> getHosts() {
+    Set<HostBean> hosts = new HashSet<>();
+    for (ConsistentHashRingBean ring : getConsistentHashRings()) {
+      for (HostBean hostBean : ring.getHosts()) {
+        hosts.add(hostBean);
+      }
+    }
+    return hosts;
   }
 
 }

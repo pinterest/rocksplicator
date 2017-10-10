@@ -17,6 +17,7 @@
 package com.pinterest.rocksplicator.controller.tasks;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.pinterest.rocksplicator.controller.bean.HostBean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +62,7 @@ public class BadHostsStatesKeeper {
   private long emailMuteIntervalMillis;
 
   @JsonProperty
-  private Map<String, BadHostState> badHostStates = new HashMap<>();
+  private Map<HostBean, BadHostState> badHostStates = new HashMap<>();
 
   public BadHostsStatesKeeper() {
     this(3, 30 * 60);
@@ -91,11 +92,11 @@ public class BadHostsStatesKeeper {
     return this;
   }
 
-  public Map<String, BadHostState> getBadHostStates() {
+  public Map<HostBean, BadHostState> getBadHostStates() {
     return badHostStates;
   }
 
-  public BadHostsStatesKeeper setBadHostStates(Map<String, BadHostState> badHostStates) {
+  public BadHostsStatesKeeper setBadHostStates(Map<HostBean, BadHostState> badHostStates) {
     this.badHostStates = badHostStates;
     return this;
   }
@@ -106,11 +107,11 @@ public class BadHostsStatesKeeper {
    * @param thisTimeBadHosts
    * @return
    */
-  public List<String> updateStatesAndGetHostsToEmail(Set<String> thisTimeBadHosts) {
-    Map<String, BadHostState> updatedBadHostStates = new HashMap<>();
-    List<String> hostsShouldSendEmail = new ArrayList<>();
+  public List<HostBean> updateStatesAndGetHostsToEmail(Set<HostBean> thisTimeBadHosts) {
+    Map<HostBean, BadHostState> updatedBadHostStates = new HashMap<>();
+    List<HostBean> hostsShouldSendEmail = new ArrayList<>();
     Date currentTime = new Date();
-    for (String thisTimeBadHost : thisTimeBadHosts) {
+    for (HostBean thisTimeBadHost : thisTimeBadHosts) {
       if (badHostStates.containsKey(thisTimeBadHost)) {
         BadHostState previousState = badHostStates.get(thisTimeBadHost);
         previousState.consecutiveFailures ++;

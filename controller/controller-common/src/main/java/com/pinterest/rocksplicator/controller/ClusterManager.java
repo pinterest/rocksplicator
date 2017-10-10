@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller;
 
+import com.pinterest.rocksplicator.controller.bean.ClusterBean;
 import com.pinterest.rocksplicator.controller.bean.HostBean;
 
 import java.util.Collections;

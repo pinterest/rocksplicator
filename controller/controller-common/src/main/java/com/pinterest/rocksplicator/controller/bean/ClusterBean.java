@@ -22,7 +22,9 @@ import org.hibernate.validator.constraints.NotEmpty;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * @author Ang Xu (angxu@pinterest.com)
@@ -56,6 +58,16 @@ public class ClusterBean {
   @Override
   public String toString() {
     return cluster.toString();
+  }
+
+  public Set<HostBean> getHosts() {
+    Set<HostBean> hosts = new HashSet<>();
+    for (SegmentBean segmentBean : getSegments()) {
+      for (HostBean hostBean: segmentBean.getHosts()) {
+        hosts.add(hostBean);
+      }
+    }
+    return hosts;
   }
 
 }
