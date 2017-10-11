@@ -420,6 +420,10 @@ class ThriftRouter {
     // synchronization. We should remove this function once we are able to get
     // a reliable atomic is_good flag.
     static bool is_client_good(ClientType* client) {
+      if (client == nullptr) {
+        return false;
+      }
+
       auto transport = dynamic_cast<apache::thrift::HeaderClientChannel*>
         (client->getChannel())->getTransport();
 
@@ -449,7 +453,8 @@ class ThriftRouter {
         auto& cs = (*clients_)[host->addr];
         cs.client = client_pool_.getClient(host->addr,
                                            FLAGS_client_connect_timeout_millis,
-                                           &cs.is_good);
+                                           &cs.is_good,
+                                           false /* aggressively */);
         cs.create_time = now();
       }
     }

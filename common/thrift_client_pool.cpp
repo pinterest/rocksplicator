@@ -29,3 +29,6 @@ DEFINE_int32(channel_send_timeout_ms, 0,
 
 DEFINE_int32(default_thrift_client_pool_threads, sysconf(_SC_NPROCESSORS_ONLN),
              "The number of threads driving evbs in thrift client pool.");
+
+DEFINE_int32(min_channel_create_interval_seconds, 10,
+             "The minimum time between two identical channel creation");
