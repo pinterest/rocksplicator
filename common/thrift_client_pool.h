@@ -42,6 +42,8 @@ DECLARE_int32(channel_send_timeout_ms);
 
 DECLARE_int32(default_thrift_client_pool_threads);
 
+DECLARE_int32(min_channel_create_interval_seconds);
+
 namespace common {
 
 /*
@@ -84,7 +86,7 @@ class ThriftClientPool {
   struct ClientStatusCallback
       : public apache::thrift::CloseCallback
       , public apache::thrift::async::TAsyncSocket::ConnectCallback {
-    ClientStatusCallback() : is_good(true) {
+    ClientStatusCallback() : is_good(true), create_time(time(nullptr)) {
     }
 
     void channelClosed() override {
@@ -100,6 +102,7 @@ class ThriftClientPool {
     }
 
     std::atomic<bool> is_good;
+    const time_t create_time;
   };
 
   struct EventLoop {
@@ -153,19 +156,35 @@ class ThriftClientPool {
       }
     }
 
+    // If aggressively is set to true, a new channel will be created
+    // immediately if there is no existing good channel for the addr
+    //
+    // a nullptr or bad channel can be returned if it's too soon to create a new
+    // channel and aggressively is set to false
     std::shared_ptr<apache::thrift::HeaderClientChannel>
     getChannelFor(const folly::SocketAddress& addr,
                   const uint32_t connect_timeout_ms,
-                  const std::atomic<bool>** is_good) {
+                  const std::atomic<bool>** is_good,
+                  const bool aggressively) {
       std::shared_ptr<apache::thrift::HeaderClientChannel> channel;
       auto itor = channels_.find(addr);
       bool should_new_channel = false;
-      if (itor == channels_.end() ||
-          (channel = itor->second.first.lock()) == nullptr ||
-          !channel->getTransport()->good()) {
-        // no such channel or it has been released or !good(), we need to
-        // create a new one for addr
+
+      if (itor == channels_.end()) {
+        // no such channel yet
         should_new_channel = true;
+      } else {
+        channel = itor->second.first.lock();
+        const bool channel_good = (channel && channel->getTransport()->good());
+        const bool too_soon =
+          (itor->second.second->create_time +
+           FLAGS_min_channel_create_interval_seconds > time(nullptr));
+        // we only want to create a new channel if the current channel is not
+        // good for use and it's not too soon to create a new one or we want to
+        // be aggressive
+        if (!channel_good && (!too_soon || aggressively)) {
+          should_new_channel = true;
+        }
       }
 
       if (should_new_channel) {
@@ -279,9 +298,14 @@ class ThriftClientPool {
   // @param is_good is an optional out parameter indicating if the underlying
   // channel is good. It is guaranteed to be alive until the returned client
   // is released
+  // If aggressively is set to true, a new channel will be created
+  // immediately if there is no existing good channel for the addr
+  //
+  // @note a nullptr will be returned if a channel couldn't be obtained.
   auto getClient(const folly::SocketAddress& addr,
                  const uint32_t connect_timeout_ms = 0,
-                 const std::atomic<bool>** is_good = nullptr) {
+                 const std::atomic<bool>** is_good = nullptr,
+                 const bool aggressively = true) {
     auto idx = nextEvbIdx_.fetch_add(1) % event_loops_.size();
 
     // We can't use lambda for std::unique_ptr deleter. Otherwise, we won't be
@@ -305,9 +329,9 @@ class ThriftClientPool {
     std::unique_ptr<T, Deleter> client(nullptr, deleter);
     event_loops_[idx].evb_->runInEventBaseThreadAndWait(
         [&client, &event_loop = event_loops_[idx], &addr, &is_good,
-         connect_timeout_ms] () mutable {
+         connect_timeout_ms, aggressively] () mutable {
           auto channel = event_loop.getChannelFor(addr, connect_timeout_ms,
-                                                  is_good);
+                                                  is_good, aggressively);
 
           event_loop.cleanupStaleChannels(addr);
 
@@ -320,7 +344,9 @@ class ThriftClientPool {
           // This must be called after cleanupStaleChannels above. Otherwise
           // there will be a race between ~ThriftClientPool() and getClient()
           // for pools which don't own the underlying IO threads.
-          client.reset(new T(channel));
+          if (channel) {
+            client.reset(new T(channel));
+          }
         });
 
     return client;
@@ -329,9 +355,10 @@ class ThriftClientPool {
   // Similar to getClient() above
   auto getClient(const std::string& ip, const uint16_t port,
                  const uint32_t connect_timeout_ms = 0,
-                 const std::atomic<bool>** is_good = nullptr) {
+                 const std::atomic<bool>** is_good = nullptr,
+                 const bool aggressively = true) {
     return getClient(folly::SocketAddress(ip, port), connect_timeout_ms,
-                     is_good);
+                     is_good, aggressively);
   }
 
   // no copy or move
