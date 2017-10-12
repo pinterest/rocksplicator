@@ -17,9 +17,9 @@
 #include <ifaddrs.h>
 #include "folly/SocketAddress.h"
 
-namespace common {
+namespace {
 
-std::string getLocalIPAddress() {
+std::string getLocalIPAddressImpl() {
   ifaddrs* ips;
   CHECK_EQ(::getifaddrs(&ips), 0);
   ifaddrs* ips_tmp = ips;
@@ -37,6 +37,16 @@ std::string getLocalIPAddress() {
     ips_tmp = ips_tmp->ifa_next;
   }
   freeifaddrs(ips);
+  return local_ip;
+}
+
+}  // namespace
+
+
+namespace common {
+
+const std::string& getLocalIPAddress() {
+  static const std::string local_ip = getLocalIPAddressImpl();
   return local_ip;
 }
 
