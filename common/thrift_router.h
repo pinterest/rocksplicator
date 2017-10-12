@@ -29,12 +29,13 @@
 #include <utility>
 
 #include "common/file_watcher.h"
-#include "common/availability_zone.h"
+#include "common/network_util.h"
 #include "common/thrift_client_pool.h"
 #include "folly/RWSpinLock.h"
 #include "folly/SocketAddress.h"
 #include "folly/ThreadLocal.h"
 
+DECLARE_int32(port);
 DECLARE_bool(always_prefer_local_host);
 DECLARE_int32(min_client_reconnect_interval_seconds);
 DECLARE_int64(client_connect_timeout_millis);
@@ -55,7 +56,7 @@ struct Host {
   }
 
   folly::SocketAddress addr;
-  std::string az;  // availability zone
+  std::string replica_name;  // replica name, for example: us-east-1a_0
 };
 
 struct SegmentInfo {
@@ -67,7 +68,7 @@ struct SegmentInfo {
 
 struct ClusterLayout {
   std::map<SegmentName, SegmentInfo> segments;
-  std::set<Host> all_hosts;
+  std::unordered_map<folly::SocketAddress, Host> all_hosts;
 };
 
 }  // namespace detail
@@ -95,14 +96,14 @@ class ThriftRouter {
    *                     an in memory READONLY ClusterLayout structure.
    */
   ThriftRouter(
-      const std::string& local_az,
+      const std::string& local_ip,
       const std::string& config_path,
       std::function<std::unique_ptr<const ClusterLayout>(std::string)> parser)
       : config_path_(config_path)
       , parser_(std::move(parser))
       , layout_rwlock_()
       , cluster_layout_()
-      , local_client_map_(local_az) {
+      , local_client_map_(local_ip, FLAGS_port){
     CHECK(common::FileWatcher::Instance()->AddFile(
       config_path_,
       [this] (std::string content) {
@@ -114,7 +115,6 @@ class ThriftRouter {
         }
       }))
     << "Failed to watch " << config_path_;
-    LOG(INFO) << "Local AZ used by ThriftRouter: " << local_az;
   }
 
   ~ThriftRouter() {
@@ -204,7 +204,7 @@ class ThriftRouter {
   }
 
   /*
-   * This function is AZ unaware. It returns the total number of hosts
+   * This function is replica unaware. It returns the total number of hosts
    * within the segment and shard.
    */
   uint32_t getHostNumberFor(const std::string& segment, const ShardID shard) {
@@ -242,8 +242,8 @@ class ThriftRouter {
 
   class ThreadLocalClientMap {
    public:
-    explicit ThreadLocalClientMap(std::string local_az):
-        local_az_(std::move(local_az)) {
+    explicit ThreadLocalClientMap(const std::string& local_ip,
+      const uint16_t port): local_addr_(local_ip, port) {
       *local_cluster_layout_ = std::make_shared<const ClusterLayout>();
     }
 
@@ -333,13 +333,15 @@ class ThriftRouter {
 
       // store the new cluster layout
       *local_cluster_layout_ = std::move(layout);
-
       // remove clients for non-existing servers
       const auto& hosts = (*local_cluster_layout_)->all_hosts;
-      Host host;
+      if (hosts.find(local_addr_) == hosts.cend()) {
+        local_replica_ = "";
+      } else {
+        local_replica_ = hosts.find(local_addr_)->second.replica_name;
+      }
       for (auto itor = clients_->begin(); itor != clients_->end();) {
-        host.addr = itor->first;
-        if (hosts.find(host) != hosts.end()) {
+        if (hosts.find(itor->first) != hosts.end()) {
           ++itor;
         } else {
           itor = clients_->erase(itor);
@@ -394,17 +396,18 @@ class ThriftRouter {
         std::vector<const Host*>* v,
         const unsigned rotation_counter) {
       auto comparator = [this] (const Host* h1, const Host* h2) -> bool {
-        if (h1->az != h2->az &&
-            (h1->az == this->local_az_ || h2->az == this->local_az_)) {
-          return h1->az == this->local_az_;
+        if (h1->replica_name != h2->replica_name &&
+            (h1->replica_name == this->local_replica_ ||
+              h2->replica_name == this->local_replica_)) {
+          return h1->replica_name == this->local_replica_;
         } else {
-          return h1->az < h2->az;
+          return h1->replica_name < h2->replica_name;
         }
       };
       std::sort(v->begin(), v->end(), comparator);
 
       auto non_local = [this] (const Host* host) -> bool {
-        return host->az != this->local_az_;
+        return host->replica_name != this->local_replica_;
       };
       auto non_local_it = std::find_if(v->begin(), v->end(), non_local);
       auto rotation_vec_size = std::distance(non_local_it, v->end());
@@ -474,7 +477,8 @@ class ThriftRouter {
       uint64_t create_time;
     };
 
-    const std::string local_az_;
+    folly::SocketAddress local_addr_;
+    std::string local_replica_;
     ThriftClientPool<ClientType, USE_BINARY_PROTOCOL> client_pool_;
     folly::ThreadLocal<std::shared_ptr<const ClusterLayout>>
       local_cluster_layout_;

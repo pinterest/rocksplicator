@@ -72,7 +72,7 @@ static const char* g_config_v1 =
   "   }"
   "}";
 
-static const char* g_config_v1az =
+static const char* g_config_v1Replica =
   "{"
   "  \"user_pins\": {"
   "  \"num_leaf_segments\": 3,"
@@ -151,10 +151,10 @@ void updateConfigFile(const string& content) {
 }
 
 TEST(ThriftRouterTest, Basics) {
+  FLAGS_port = 8099; // a foreign host
   updateConfigFile("");
   ThriftRouter<DummyServiceAsyncClient> router(
-    "", g_config_path, common::parseConfig);
-
+          "127.0.0.1", g_config_path, common::parseConfig);
   EXPECT_EQ(router.getShardNumberFor("user_pins"), 0);
   EXPECT_EQ(router.getShardNumberFor("interest_pins"), 0);
   EXPECT_EQ(router.getShardNumberFor("unknown"), 0);
@@ -363,7 +363,7 @@ void stress(int n_threads, int n_ops) {
 
   updateConfigFile(g_config_v2);
   ThriftRouter<DummyServiceAsyncClient> router(
-    "", g_config_path, common::parseConfig);
+    "127.0.0.1", g_config_path, common::parseConfig);
   sleep(1);
 
   for (int i = 0; i < n_threads; ++i) {
@@ -423,10 +423,11 @@ TEST(ThriftRouterTest, Stress) {
   stress(99, 1000);
 }
 
-TEST(ThriftRouterTest, LocalAzTest) {
-  updateConfigFile(g_config_v1az);
+TEST(ThriftRouterTest, LocalReplicaTest) {
+  FLAGS_port = 8090;
+  updateConfigFile(g_config_v1Replica);
   ThriftRouter<DummyServiceAsyncClient> router(
-    "us-east-1a", g_config_path, common::parseConfig);
+    "127.0.0.1", g_config_path, common::parseConfig);
 
   std::vector<shared_ptr<DummyServiceAsyncClient>> v;
   shared_ptr<DummyServiceTestHandler> handlers[3];
@@ -437,7 +438,7 @@ TEST(ThriftRouterTest, LocalAzTest) {
   tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
   tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
   sleep(1);
-  
+
   EXPECT_EQ(router.getShardNumberFor("user_pins"), 3);
   EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 3);
   EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 3);
@@ -454,12 +455,12 @@ TEST(ThriftRouterTest, LocalAzTest) {
     EXPECT_EQ(h->nPings_.load(), 1);
   }
 
-  // Get the client from local az
-  // All requests should hit the local az handler
+  // Get the client from local Replica
+  // All requests should hit the local Replica handler
   for (int i = 0; i < 100; i ++) {
     std::vector<shared_ptr<DummyServiceAsyncClient>> v;
     EXPECT_EQ(
-        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v), 
+        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v),
         ReturnCode::OK);
     EXPECT_EQ(v.size(), 1);
     v[0]->future_ping().get();
@@ -477,10 +478,11 @@ TEST(ThriftRouterTest, LocalAzTest) {
 }
 
 
-TEST(ThriftRouterTest, ForeignAzTest) {
-  updateConfigFile(g_config_v1az);
+TEST(ThriftRouterTest, ForeignReplicaTest) {
+  FLAGS_port = 8096;
+  updateConfigFile(g_config_v1Replica);
   ThriftRouter<DummyServiceAsyncClient> router(
-    "us-east-1b", g_config_path, common::parseConfig);
+    "127.0.0.1", g_config_path, common::parseConfig);
 
   std::vector<shared_ptr<DummyServiceAsyncClient>> v;
   shared_ptr<DummyServiceTestHandler> handlers[3];
@@ -491,7 +493,7 @@ TEST(ThriftRouterTest, ForeignAzTest) {
   tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
   tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
   sleep(1);
-  
+
   EXPECT_EQ(router.getShardNumberFor("user_pins"), 3);
   EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 3);
   EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 3);
@@ -511,7 +513,7 @@ TEST(ThriftRouterTest, ForeignAzTest) {
   for (int i = 0; i < 100; i ++) {
     std::vector<shared_ptr<DummyServiceAsyncClient>> v;
     EXPECT_EQ(
-        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v), 
+        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v),
         ReturnCode::OK);
     EXPECT_EQ(v.size(), 1);
     v[0]->future_ping().get();
@@ -530,10 +532,11 @@ TEST(ThriftRouterTest, ForeignAzTest) {
   }
 }
 
-TEST(ThriftRouterTest, ForeignAzMultiClientsTest) {
-  updateConfigFile(g_config_v1az);
+TEST(ThriftRouterTest, ForeignReplicaMultiClientsTest) {
+  FLAGS_port = 8099;
+  updateConfigFile(g_config_v1Replica);
   ThriftRouter<DummyServiceAsyncClient> router(
-    "us-east-1b", g_config_path, common::parseConfig);
+    "127.0.0.1", g_config_path, common::parseConfig);
 
   shared_ptr<DummyServiceTestHandler> handlers[3];
   shared_ptr<ThriftServer> servers[3];
@@ -579,9 +582,11 @@ TEST(ThriftRouterTest, ForeignAzMultiClientsTest) {
 }
 
 TEST(ThriftRouterTest, HostOrderTest) {
+  FLAGS_port = 8091;
   updateConfigFile(g_config_v3);
   ThriftRouter<DummyServiceAsyncClient> router(
-    "us-east-1c", g_config_path, common::parseConfig);
+    "127.0.0.1", g_config_path, common::parseConfig);
+
 
   std::vector<shared_ptr<DummyServiceAsyncClient>> v;
   shared_ptr<DummyServiceTestHandler> handlers[3];

@@ -19,7 +19,7 @@
 
 namespace common {
 
-std::string getLocalIPAddress() {
+const std::string getLocalIPAddress() {
   ifaddrs* ips;
   CHECK_EQ(::getifaddrs(&ips), 0);
   ifaddrs* ips_tmp = ips;

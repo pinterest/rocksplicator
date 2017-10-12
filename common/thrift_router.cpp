@@ -29,7 +29,7 @@ DEFINE_int32(min_client_reconnect_interval_seconds, 5,
              "min reconnect interval in seconds");
 DEFINE_int64(client_connect_timeout_millis, 100,
              "Timeout for establishing client connection.");
-
+DEFINE_int32(port, 9090, "Port of the server");
 
 namespace {
 
@@ -46,7 +46,7 @@ bool parseHost(const std::string& str, common::detail::Host* host) {
     return false;
   }
 
-  host->az = (tokens.size() == 3 ? tokens[2] : "unknown");
+  host->replica_name = (tokens.size() == 3 ? tokens[2] : "unknown");
   return true;
 }
 
@@ -118,7 +118,8 @@ std::unique_ptr<const detail::ClusterLayout> parseConfig(std::string content) {
         return nullptr;
       }
 
-      const detail::Host* pHost = &*(cl->all_hosts.insert(host).first);
+      const detail::Host* pHost =
+        &(cl->all_hosts.emplace(host.addr, host).first->second);
       const auto& shard_list = segment_value[host_port_az];
       // for each shard
       for (Json::ArrayIndex i = 0; i < shard_list.size(); ++i) {
