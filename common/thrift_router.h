@@ -476,7 +476,7 @@ class ThriftRouter {
       uint64_t create_time;
     };
 
-    folly::SocketAddress local_addr_;
+    const folly::SocketAddress local_addr_;
     std::string local_group_;
     ThriftClientPool<ClientType, USE_BINARY_PROTOCOL> client_pool_;
     folly::ThreadLocal<std::shared_ptr<const ClusterLayout>>
