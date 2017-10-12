@@ -72,7 +72,7 @@ static const char* g_config_v1 =
   "   }"
   "}";
 
-static const char* g_config_v1Replica =
+static const char* g_config_v1Group =
   "{"
   "  \"user_pins\": {"
   "  \"num_leaf_segments\": 3,"
@@ -423,9 +423,9 @@ TEST(ThriftRouterTest, Stress) {
   stress(99, 1000);
 }
 
-TEST(ThriftRouterTest, LocalReplicaTest) {
+TEST(ThriftRouterTest, LocalGroupTest) {
   FLAGS_port = 8090;
-  updateConfigFile(g_config_v1Replica);
+  updateConfigFile(g_config_v1Group);
   ThriftRouter<DummyServiceAsyncClient> router(
     "127.0.0.1", g_config_path, common::parseConfig);
 
@@ -455,8 +455,8 @@ TEST(ThriftRouterTest, LocalReplicaTest) {
     EXPECT_EQ(h->nPings_.load(), 1);
   }
 
-  // Get the client from local Replica
-  // All requests should hit the local Replica handler
+  // Get the client from local Group
+  // All requests should hit the local Group handler
   for (int i = 0; i < 100; i ++) {
     std::vector<shared_ptr<DummyServiceAsyncClient>> v;
     EXPECT_EQ(
@@ -478,9 +478,9 @@ TEST(ThriftRouterTest, LocalReplicaTest) {
 }
 
 
-TEST(ThriftRouterTest, ForeignReplicaTest) {
+TEST(ThriftRouterTest, ForeignGroupTest) {
   FLAGS_port = 8096;
-  updateConfigFile(g_config_v1Replica);
+  updateConfigFile(g_config_v1Group);
   ThriftRouter<DummyServiceAsyncClient> router(
     "127.0.0.1", g_config_path, common::parseConfig);
 
@@ -532,9 +532,9 @@ TEST(ThriftRouterTest, ForeignReplicaTest) {
   }
 }
 
-TEST(ThriftRouterTest, ForeignReplicaMultiClientsTest) {
+TEST(ThriftRouterTest, ForeignGroupMultiClientsTest) {
   FLAGS_port = 8099;
-  updateConfigFile(g_config_v1Replica);
+  updateConfigFile(g_config_v1Group);
   ThriftRouter<DummyServiceAsyncClient> router(
     "127.0.0.1", g_config_path, common::parseConfig);
 

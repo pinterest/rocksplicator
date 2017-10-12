@@ -29,7 +29,6 @@
 #include <utility>
 
 #include "common/file_watcher.h"
-#include "common/network_util.h"
 #include "common/thrift_client_pool.h"
 #include "folly/RWSpinLock.h"
 #include "folly/SocketAddress.h"
@@ -56,7 +55,7 @@ struct Host {
   }
 
   folly::SocketAddress addr;
-  std::string replica_name;  // replica name, for example: us-east-1a_0
+  std::string group_name;  // group name, for example: us-east-1a_0
 };
 
 struct SegmentInfo {
@@ -204,7 +203,7 @@ class ThriftRouter {
   }
 
   /*
-   * This function is replica unaware. It returns the total number of hosts
+   * This function is group unaware. It returns the total number of hosts
    * within the segment and shard.
    */
   uint32_t getHostNumberFor(const std::string& segment, const ShardID shard) {
@@ -336,9 +335,9 @@ class ThriftRouter {
       // remove clients for non-existing servers
       const auto& hosts = (*local_cluster_layout_)->all_hosts;
       if (hosts.find(local_addr_) == hosts.cend()) {
-        local_replica_ = "";
+        local_group_ = "";
       } else {
-        local_replica_ = hosts.find(local_addr_)->second.replica_name;
+        local_group_ = hosts.find(local_addr_)->second.group_name;
       }
       for (auto itor = clients_->begin(); itor != clients_->end();) {
         if (hosts.find(itor->first) != hosts.end()) {
@@ -396,18 +395,18 @@ class ThriftRouter {
         std::vector<const Host*>* v,
         const unsigned rotation_counter) {
       auto comparator = [this] (const Host* h1, const Host* h2) -> bool {
-        if (h1->replica_name != h2->replica_name &&
-            (h1->replica_name == this->local_replica_ ||
-              h2->replica_name == this->local_replica_)) {
-          return h1->replica_name == this->local_replica_;
+        if (h1->group_name != h2->group_name &&
+            (h1->group_name == this->local_group_ ||
+              h2->group_name == this->local_group_)) {
+          return h1->group_name == this->local_group_;
         } else {
-          return h1->replica_name < h2->replica_name;
+          return h1->group_name < h2->group_name;
         }
       };
       std::sort(v->begin(), v->end(), comparator);
 
       auto non_local = [this] (const Host* host) -> bool {
-        return host->replica_name != this->local_replica_;
+        return host->group_name != this->local_group_;
       };
       auto non_local_it = std::find_if(v->begin(), v->end(), non_local);
       auto rotation_vec_size = std::distance(non_local_it, v->end());
@@ -478,7 +477,7 @@ class ThriftRouter {
     };
 
     folly::SocketAddress local_addr_;
-    std::string local_replica_;
+    std::string local_group_;
     ThriftClientPool<ClientType, USE_BINARY_PROTOCOL> client_pool_;
     folly::ThreadLocal<std::shared_ptr<const ClusterLayout>>
       local_cluster_layout_;

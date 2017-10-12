@@ -21,6 +21,6 @@ namespace common {
 /*
  * Get the local IP address from eth0.
  */
-const std::string getLocalIPAddress();
+const std::string& getLocalIPAddress();
 
 }  // namespace common

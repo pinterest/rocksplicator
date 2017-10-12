@@ -46,7 +46,7 @@ bool parseHost(const std::string& str, common::detail::Host* host) {
     return false;
   }
 
-  host->replica_name = (tokens.size() == 3 ? tokens[2] : "unknown");
+  host->group_name = (tokens.size() == 3 ? tokens[2] : "unknown");
   return true;
 }
 
