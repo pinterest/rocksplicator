@@ -29,7 +29,7 @@
 #include <utility>
 
 #include "common/file_watcher.h"
-#include "common/availability_zone.h"
+#include "common/network_util.h"
 #include "common/thrift_client_pool.h"
 #include "folly/RWSpinLock.h"
 #include "folly/SocketAddress.h"
@@ -37,6 +37,7 @@
 
 DECLARE_bool(always_prefer_local_host);
 DECLARE_int32(min_client_reconnect_interval_seconds);
+DECLARE_int32(port);
 DECLARE_int64(client_connect_timeout_millis);
 
 namespace common {
@@ -56,6 +57,8 @@ struct Host {
 
   folly::SocketAddress addr;
   std::string az;  // availability zone
+  // The hosts's groups in different segments
+  std::unordered_map<std::string, std::string> groups;
 };
 
 struct SegmentInfo {
@@ -67,7 +70,7 @@ struct SegmentInfo {
 
 struct ClusterLayout {
   std::map<SegmentName, SegmentInfo> segments;
-  std::set<Host> all_hosts;
+  std::map<folly::SocketAddress, Host> all_hosts;
 };
 
 }  // namespace detail
@@ -289,13 +292,12 @@ class ThriftRouter {
         clients.clear();
 
         auto hosts_for_shard = filterByRoleAndSortByPreference(
-          shard_to_hosts[shard], role, rotation_counter);
+          shard_to_hosts[shard], role, rotation_counter, segment);
         if (hosts_for_shard.empty()) {
           LOG(ERROR) << "Could not find hosts for shard " << shard;
           ret = ReturnCode::NOT_FOUND;
           continue;
         }
-
         auto sz = hosts_for_shard.size();
         filterBadHosts(&hosts_for_shard);
         if (sz != hosts_for_shard.size() && quantity == Quantity::ALL) {
@@ -339,11 +341,19 @@ class ThriftRouter {
       Host host;
       for (auto itor = clients_->begin(); itor != clients_->end();) {
         host.addr = itor->first;
-        if (hosts.find(host) != hosts.end()) {
+        if (hosts.find(host.addr) != hosts.end()) {
           ++itor;
         } else {
           itor = clients_->erase(itor);
         }
+      }
+
+      // Update local_groups_
+      folly::SocketAddress local_addr(common::getLocalIPAddress(), FLAGS_port);
+      if (hosts.find(local_addr) != hosts.end()) {
+        local_groups_ = hosts.at(local_addr).groups;
+      } else {
+        local_groups_.clear();
       }
     }
 
@@ -363,10 +373,11 @@ class ThriftRouter {
     auto filterByRoleAndSortByPreference(
         const std::vector<std::pair<const Host*, Role>>& host_info,
         const Role role,
-        const unsigned rotation_counter) {
+        const unsigned rotation_counter,
+        const std::string& segment) {
       std::vector<const Host*> v;
       if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
-        // prefer MASTER, then prefer local
+        // prefer MASTER, then prefer same group, then prefer same AZ
         std::vector<const Host*> v_s;
         for (const auto& hi : host_info) {
           if (hi.second == Role::SLAVE) {
@@ -375,8 +386,8 @@ class ThriftRouter {
             v.push_back(hi.first);
           }
         }
-        MoveUpLocalAndRotateRemote(&v, rotation_counter);
-        MoveUpLocalAndRotateRemote(&v_s, rotation_counter);
+        MoveUpLocalAndRotateRemote(&v, rotation_counter, segment);
+        MoveUpLocalAndRotateRemote(&v_s, rotation_counter, segment);
         v.insert(v.end(), v_s.begin(), v_s.end());
       } else {
         // prefer local
@@ -385,20 +396,49 @@ class ThriftRouter {
             v.push_back(hi.first);
           }
         }
-        MoveUpLocalAndRotateRemote(&v, rotation_counter);
+        MoveUpLocalAndRotateRemote(&v, rotation_counter, segment);
       }
       return v;
     }
 
+    inline std::string GetHostGroup(const Host* host,
+                                    const std::string& segment) {
+      if (host->groups.find(segment) == host->groups.end()) {
+        return "";
+      } else {
+        return host->groups.at(segment);
+      }
+    }
+
     void MoveUpLocalAndRotateRemote(
         std::vector<const Host*>* v,
-        const unsigned rotation_counter) {
-      auto comparator = [this] (const Host* h1, const Host* h2) -> bool {
-        if (h1->az != h2->az &&
-            (h1->az == this->local_az_ || h2->az == this->local_az_)) {
-          return h1->az == this->local_az_;
+        const unsigned rotation_counter,
+        const std::string& segment) {
+      bool is_foreign_host = local_groups_.empty() ||
+        local_groups_.find(segment) == local_groups_.end();
+      auto comparator = [this, is_foreign_host, segment]
+        (const Host* h1, const Host* h2) -> bool {
+        if (is_foreign_host) {
+          // ThriftRouter is owned by an external host, so we use
+          // local_az as the ranking criteria
+          if (h1->az != h2->az &&
+              (h1->az == this->local_az_ || h2->az == this->local_az_)) {
+            return h1->az == this->local_az_;
+          } else {
+            return h1->az < h2->az;
+          }
         } else {
-          return h1->az < h2->az;
+          // ThriftRouter is owned by an internal host inside the cluster,
+          // we use local_group_ as the ranking criteria
+          const auto& local_group = local_groups_[segment];
+          const auto& h1_group = GetHostGroup(h1, segment);
+          const auto& h2_group = GetHostGroup(h2, segment);
+          if (h1_group != h2_group &&
+              (h1_group == local_group || h2_group == local_group)) {
+            return h1_group == local_group;
+          } else {
+            return h1_group < h2_group;
+          }
         }
       };
       std::sort(v->begin(), v->end(), comparator);
@@ -408,11 +448,22 @@ class ThriftRouter {
       };
       auto non_local_it = std::find_if(v->begin(), v->end(), non_local);
       auto rotation_vec_size = std::distance(non_local_it, v->end());
-      if (rotation_vec_size <= 1) {
-        return;
+      if (rotation_vec_size > 1) {
+        unsigned rotation_offset = rotation_counter % rotation_vec_size;
+        std::rotate(non_local_it, non_local_it + rotation_offset, v->end());
       }
-      unsigned rotation_offset = rotation_counter % rotation_vec_size;
-      std::rotate(non_local_it, non_local_it + rotation_offset, v->end());
+
+      // If it's external host, we also try to rotate multiple hosts
+      // in the same AZ for load balancing.
+      if (is_foreign_host) {
+        auto local_rotation_vec_size = v->size() - rotation_vec_size;
+        if (local_rotation_vec_size <= 1) {
+          return;
+        }
+        unsigned rotation_offset = rotation_counter % local_rotation_vec_size;
+        std::rotate(v->begin(), v->begin() + rotation_offset,
+                    v->begin() + local_rotation_vec_size);
+      }
     }
 
     // TODO(bol) In theory, there is data race in this function. Because the IO
@@ -480,6 +531,7 @@ class ThriftRouter {
     };
 
     const std::string local_az_;
+    std::unordered_map<std::string, std::string> local_groups_;
     ThriftClientPool<ClientType, USE_BINARY_PROTOCOL> client_pool_;
     folly::ThreadLocal<std::shared_ptr<const ClusterLayout>>
       local_cluster_layout_;

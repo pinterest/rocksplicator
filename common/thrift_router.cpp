@@ -27,13 +27,14 @@ DEFINE_bool(always_prefer_local_host, false,
             "Always prefer local host when ordering hosts");
 DEFINE_int32(min_client_reconnect_interval_seconds, 5,
              "min reconnect interval in seconds");
+DEFINE_int32(port, 9090, "Port of the server");
 DEFINE_int64(client_connect_timeout_millis, 100,
              "Timeout for establishing client connection.");
 
-
 namespace {
 
-bool parseHost(const std::string& str, common::detail::Host* host) {
+bool parseHost(const std::string& str, common::detail::Host* host,
+               const std::string& segment) {
   std::vector<std::string> tokens;
   folly::split(":", str, tokens);
   if (tokens.size() < 2 || tokens.size() > 3) {
@@ -45,8 +46,11 @@ bool parseHost(const std::string& str, common::detail::Host* host) {
   } catch (...) {
     return false;
   }
-
-  host->az = (tokens.size() == 3 ? tokens[2] : "unknown");
+  auto group = (tokens.size() == 3 ? tokens[2] : "unknown");
+  host->groups[segment] = group;
+  tokens.clear();
+  folly::split("_", group, tokens);
+  host->az = tokens[0];
   return true;
 }
 
@@ -113,12 +117,19 @@ std::unique_ptr<const detail::ClusterLayout> parseConfig(std::string content) {
       }
 
       detail::Host host;
-      if (!parseHost(host_port_az, &host)) {
+      if (!parseHost(host_port_az, &host, segment)) {
         LOG(ERROR) << "Invalid host port az " << host_port_az;
         return nullptr;
       }
 
-      const detail::Host* pHost = &*(cl->all_hosts.insert(host).first);
+      if (cl->all_hosts.find(host.addr) == cl->all_hosts.end()) {
+        cl->all_hosts.emplace(host.addr, host);
+      } else {
+        cl->all_hosts[host.addr].groups.insert(
+                host.groups.begin(), host.groups.end());
+      }
+
+      detail::Host* pHost = &(cl->all_hosts.at(host.addr));
       const auto& shard_list = segment_value[host_port_az];
       // for each shard
       for (Json::ArrayIndex i = 0; i < shard_list.size(); ++i) {
