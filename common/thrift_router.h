@@ -58,7 +58,7 @@ struct Host {
   folly::SocketAddress addr;
   std::string az;  // availability zone
   // The hosts's groups in different segments
-  std::unordered_map<std::string, std::string> groups;
+  std::unordered_map<std::string, uint16_t> groups_prefix_lengths;
 };
 
 struct SegmentInfo {
@@ -98,14 +98,14 @@ class ThriftRouter {
    *                     an in memory READONLY ClusterLayout structure.
    */
   ThriftRouter(
-      const std::string& local_az,
+      const std::string& local_group,
       const std::string& config_path,
       std::function<std::unique_ptr<const ClusterLayout>(std::string)> parser)
       : config_path_(config_path)
       , parser_(std::move(parser))
       , layout_rwlock_()
       , cluster_layout_()
-      , local_client_map_(local_az) {
+      , local_client_map_(local_group) {
     CHECK(common::FileWatcher::Instance()->AddFile(
       config_path_,
       [this] (std::string content) {
@@ -579,6 +579,7 @@ class ThriftRouter {
   "   }"
   "}";
  */
-std::unique_ptr<const detail::ClusterLayout> parseConfig(std::string content);
+std::unique_ptr<const detail::ClusterLayout> parseConfig(
+  std::string content, const std::string& local_group);
 
 }  // namespace common

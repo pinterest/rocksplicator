@@ -18,6 +18,7 @@
 
 #include "common/thrift_router.h"
 
+#include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
@@ -33,8 +34,20 @@ DEFINE_int64(client_connect_timeout_millis, 100,
 
 namespace {
 
+inline uint16_t longest_common_prefix(const std::string& s1,
+                                      const std::string& s2) {
+  auto length = std::min(s1.length(), s2.length());
+  uint16_t count = 0;
+  for (int i = 0; i < length; i ++, count ++) {
+    if (s1[i] != s2[i]) {
+      return count;
+    }
+  }
+  return count;
+}
+
 bool parseHost(const std::string& str, common::detail::Host* host,
-               const std::string& segment) {
+               const std::string& segment, const std::string& local_group) {
   std::vector<std::string> tokens;
   folly::split(":", str, tokens);
   if (tokens.size() < 2 || tokens.size() > 3) {
@@ -47,10 +60,9 @@ bool parseHost(const std::string& str, common::detail::Host* host,
     return false;
   }
   auto group = (tokens.size() == 3 ? tokens[2] : "unknown");
-  host->groups[segment] = group;
+  host->groups_prefix_lengths[segment] =
+    longest_common_prefix(group, local_group);
   tokens.clear();
-  folly::split("_", group, tokens);
-  host->az = tokens[0];
   return true;
 }
 
@@ -79,7 +91,8 @@ bool parseShard(const std::string& str, common::detail::Role* role,
 
 namespace common {
 
-std::unique_ptr<const detail::ClusterLayout> parseConfig(std::string content) {
+std::unique_ptr<const detail::ClusterLayout> parseConfig(
+  std::string content, const std::string& local_group) {
   auto cl = std::make_unique<detail::ClusterLayout>();
   Json::Reader reader;
   Json::Value root;
@@ -109,33 +122,34 @@ std::unique_ptr<const detail::ClusterLayout> parseConfig(std::string content) {
     }
 
     cl->segments[segment].shard_to_hosts.resize(shard_number);
-    // for each host:port:az
-    for (const auto& host_port_az : segment_value.getMemberNames()) {
-      if (host_port_az == SHARD_NUM_STRs[0] ||
-          host_port_az == SHARD_NUM_STRs[1]) {
+    // for each host:port:group
+    for (const auto& host_port_group : segment_value.getMemberNames()) {
+      if (host_port_group == SHARD_NUM_STRs[0] ||
+          host_port_group == SHARD_NUM_STRs[1]) {
         continue;
       }
 
       detail::Host host;
-      if (!parseHost(host_port_az, &host, segment)) {
-        LOG(ERROR) << "Invalid host port az " << host_port_az;
+      if (!parseHost(host_port_group, &host, segment, local_group)) {
+        LOG(ERROR) << "Invalid host port group " << host_port_group;
         return nullptr;
       }
 
       if (cl->all_hosts.find(host.addr) == cl->all_hosts.end()) {
         cl->all_hosts.emplace(host.addr, host);
       } else {
-        cl->all_hosts[host.addr].groups.insert(
-                host.groups.begin(), host.groups.end());
+        cl->all_hosts[host.addr].groups_prefix_lengths.insert(
+                host.groups_prefix_lengths.begin(),
+                host.groups_prefix_lengths.end());
       }
 
       detail::Host* pHost = &(cl->all_hosts.at(host.addr));
-      const auto& shard_list = segment_value[host_port_az];
+      const auto& shard_list = segment_value[host_port_group];
       // for each shard
       for (Json::ArrayIndex i = 0; i < shard_list.size(); ++i) {
         const auto& shard = shard_list[i];
         if (!shard.isString()) {
-          LOG(ERROR) << "Invalid shard list for " << host_port_az;
+          LOG(ERROR) << "Invalid shard list for " << host_port_group;
           return nullptr;
         }
 
