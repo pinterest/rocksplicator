@@ -167,7 +167,6 @@ void updateConfigFile(const string& content) {
 }
 
 TEST(ThriftRouterTest, Basics) {
-  FLAGS_port = 8098; // Foreign host
   updateConfigFile("");
   ThriftRouter<DummyServiceAsyncClient> router(
     "zone-b", g_config_path, common::parseConfig);
@@ -371,7 +370,6 @@ TEST(ThriftRouterTest, Basics) {
 
 
 void stress(int n_threads, int n_ops) {
-  FLAGS_port = 8098;
   vector<thread> threads(n_threads);
   shared_ptr<DummyServiceTestHandler> handlers[3];
   shared_ptr<ThriftServer> servers[3];
@@ -443,7 +441,6 @@ TEST(ThriftRouterTest, Stress) {
 }
 
 TEST(ThriftRouterTest, LocalAzTest) {
-  FLAGS_port = 8090;
   updateConfigFile(g_config_v1az);
   ThriftRouter<DummyServiceAsyncClient> router(
     "us-east-1a", g_config_path, common::parseConfig);
@@ -496,9 +493,7 @@ TEST(ThriftRouterTest, LocalAzTest) {
   }
 }
 
-
 TEST(ThriftRouterTest, ForeignAzTest) {
-  FLAGS_port = 8098;
   updateConfigFile(g_config_v1az);
   ThriftRouter<DummyServiceAsyncClient> router(
     "us-east-1b", g_config_path, common::parseConfig);
@@ -552,7 +547,6 @@ TEST(ThriftRouterTest, ForeignAzTest) {
 }
 
 TEST(ThriftRouterTest, ForeignAzMultiClientsTest) {
-  FLAGS_port = 8098;
   updateConfigFile(g_config_v1az);
   ThriftRouter<DummyServiceAsyncClient> router(
     "us-east-1b", g_config_path, common::parseConfig);
@@ -602,7 +596,6 @@ TEST(ThriftRouterTest, ForeignAzMultiClientsTest) {
 
 
 TEST(ThriftRouterTest, HostOrderTest) {
-  FLAGS_port = 8091;
   updateConfigFile(g_config_v3);
   ThriftRouter<DummyServiceAsyncClient> router(
     "us-east-1c", g_config_path, common::parseConfig);
@@ -713,86 +706,11 @@ TEST(ThriftRouterTest, HostOrderTest) {
   }
 }
 
-
-TEST(ThriftRouterTest, LocalHostGroupTest) {
-  FLAGS_port = 8091;
-  FLAGS_always_prefer_local_host = true;
-  updateConfigFile(g_config_v4);
-  ThriftRouter<DummyServiceAsyncClient> router(
-    "us-east-1a", g_config_path, common::parseConfig);
-
-  std::vector<shared_ptr<DummyServiceAsyncClient>> v;
-  shared_ptr<DummyServiceTestHandler> handlers[4];
-  shared_ptr<ThriftServer> servers[4];
-  unique_ptr<thread> thrs[4];
-
-  tie(handlers[0], servers[0], thrs[0]) = makeServer(8090);
-  tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
-  tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
-  tie(handlers[3], servers[3], thrs[3]) = makeServer(8093);
-  sleep(1);
-
-  EXPECT_EQ(router.getShardNumberFor("user_pins"), 4);
-  EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 4);
-  EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 4);
-  EXPECT_EQ(router.getHostNumberFor("user_pins", 2), 4);
-  EXPECT_EQ(router.getHostNumberFor("user_pins", 3), 4);
-
-  EXPECT_EQ(
-    router.getClientsFor("user_pins", Role::ANY, Quantity::ALL, 2, &v),
-    ReturnCode::OK);
-  EXPECT_EQ(v.size(), 4);
-  for (auto client : v) {
-    EXPECT_NO_THROW(client->future_ping().get());
-  }
-  for (const auto& h : handlers) {
-    EXPECT_EQ(h->nPings_.load(), 1);
-  }
-
-  for (int i = 0; i < 100; i ++) {
-    std::vector<shared_ptr<DummyServiceAsyncClient>> v;
-    EXPECT_EQ(
-        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v),
-        ReturnCode::OK);
-    EXPECT_EQ(v.size(), 1);
-    v[0]->future_ping().get();
-  }
-
-  ASSERT_TRUE(handlers[0]->nPings_.load() == 1);
-  ASSERT_TRUE(handlers[1]->nPings_.load() == 101);
-  ASSERT_TRUE(handlers[2]->nPings_.load() == 1);
-  ASSERT_TRUE(handlers[3]->nPings_.load() == 1);
-
-  // If master, still foreign host hosting master..
-  for (int i = 0; i < 100; i ++) {
-    std::vector<shared_ptr<DummyServiceAsyncClient>> v;
-    EXPECT_EQ(
-        router.getClientsFor("user_pins", Role::MASTER, Quantity::ONE, 2, &v),
-        ReturnCode::OK);
-    EXPECT_EQ(v.size(), 1);
-    v[0]->future_ping().get();
-  }
-  ASSERT_TRUE(handlers[0]->nPings_.load() == 1);
-  ASSERT_TRUE(handlers[1]->nPings_.load() == 101);
-  ASSERT_TRUE(handlers[2]->nPings_.load() == 101);
-  ASSERT_TRUE(handlers[3]->nPings_.load() == 1);
-
-  // stop all servers
-  for (auto& s : servers) {
-    s->stop();
-  }
-
-  for (auto& t : thrs) {
-    t->join();
-  }
-}
-
 TEST(ThriftRouterTest, ForeignHostGroupTestNonPreferLocal) {
-  FLAGS_port = 8098;
   FLAGS_always_prefer_local_host = false;
   updateConfigFile(g_config_v4);
   ThriftRouter<DummyServiceAsyncClient> router(
-    "us-east-1a", g_config_path, common::parseConfig);
+    "us-east-1c", g_config_path, common::parseConfig);
 
   std::vector<shared_ptr<DummyServiceAsyncClient>> v;
   shared_ptr<DummyServiceTestHandler> handlers[4];
@@ -847,7 +765,6 @@ TEST(ThriftRouterTest, ForeignHostGroupTestNonPreferLocal) {
 }
 
 TEST(ThriftRouterTest, ForeignHostGroupTestPreferLocal) {
-  FLAGS_port = 8098;
   FLAGS_always_prefer_local_host = true;
   updateConfigFile(g_config_v4);
   ThriftRouter<DummyServiceAsyncClient> router(

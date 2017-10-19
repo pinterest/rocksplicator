@@ -37,7 +37,6 @@
 
 DECLARE_bool(always_prefer_local_host);
 DECLARE_int32(min_client_reconnect_interval_seconds);
-DECLARE_int32(port);
 DECLARE_int64(client_connect_timeout_millis);
 
 namespace common {
@@ -261,7 +260,6 @@ class ThriftRouter {
         LOG(ERROR) << "Unknown segment: " << segment;
         return ReturnCode::UNKNOWN_SEGMENT;
       }
-
       // get all hosts involved, and create or fix clients for them.
       std::set<const Host*> hosts;
       thread_local unsigned rotation_counter = 0;
@@ -278,7 +276,6 @@ class ThriftRouter {
         }
       }
       createOrFixClientsFor(hosts);
-
       // Trying to fill clients for as many shards as possible.
       // If all shards are successfully fulfilled with the required clients,
       // OK is returned.
@@ -289,7 +286,6 @@ class ThriftRouter {
         auto shard = s_c.first;
         auto& clients = s_c.second;
         clients.clear();
-
         auto hosts_for_shard = filterByRoleAndSortByPreference(
           shard_to_hosts[shard], role, rotation_counter, segment);
         if (hosts_for_shard.empty()) {
@@ -396,12 +392,23 @@ class ThriftRouter {
         std::vector<const Host*>* v,
         const unsigned rotation_counter,
         const std::string& segment) {
+      if (v->size() == 0) return;
       auto comparator = [this, segment]
         (const Host* h1, const Host* h2) -> bool {
-        return h1->groups_prefix_lengths.at(segment) <
+        // Descending order
+        return h1->groups_prefix_lengths.at(segment) >
                 h2->groups_prefix_lengths.at(segment);
       };
       std::sort(v->begin(), v->end(), comparator);
+      /*
+      LOG(ERROR) << "start";
+      for (int i = 0; i < v->size(); i ++) {
+        LOG(ERROR) << v->at(i)->addr.getAddressStr() << ": " << v->at(i)
+                ->addr.getPort() << ": " << v->at(i)->groups_prefix_lengths
+                .at(segment);
+      }
+      LOG(ERROR) << "end";
+       */
       // for the front k hosts, rotate them.
       auto longest_prefix_length = v->at(0)->groups_prefix_lengths.at(segment);
       auto smaller_prefix_length =
@@ -410,11 +417,12 @@ class ThriftRouter {
       };
       auto smaller_prefix_it =
         std::find_if(v->begin(), v->end(), smaller_prefix_length);
-      auto rotation_vec_size = std::distance(smaller_prefix_it, v->end());
+      auto rotation_vec_size = std::distance(v->begin(), smaller_prefix_it);
       if (rotation_vec_size > 1) {
         unsigned rotation_offset = rotation_counter % rotation_vec_size;
         std::rotate(
-          smaller_prefix_it, smaller_prefix_it + rotation_offset, v->end());
+          v->begin(), v->begin() + rotation_offset,
+          v->begin() + rotation_vec_size);
       }
     }
 

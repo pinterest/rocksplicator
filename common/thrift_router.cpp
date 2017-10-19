@@ -28,7 +28,6 @@ DEFINE_bool(always_prefer_local_host, false,
             "Always prefer local host when ordering hosts");
 DEFINE_int32(min_client_reconnect_interval_seconds, 5,
              "min reconnect interval in seconds");
-DEFINE_int32(port, 9090, "Port of the server");
 DEFINE_int64(client_connect_timeout_millis, 100,
              "Timeout for establishing client connection.");
 
