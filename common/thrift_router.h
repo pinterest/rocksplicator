@@ -400,15 +400,6 @@ class ThriftRouter {
                 h2->groups_prefix_lengths.at(segment);
       };
       std::sort(v->begin(), v->end(), comparator);
-      /*
-      LOG(ERROR) << "start";
-      for (int i = 0; i < v->size(); i ++) {
-        LOG(ERROR) << v->at(i)->addr.getAddressStr() << ": " << v->at(i)
-                ->addr.getPort() << ": " << v->at(i)->groups_prefix_lengths
-                .at(segment);
-      }
-      LOG(ERROR) << "end";
-       */
       // for the front k hosts, rotate them.
       auto longest_prefix_length = v->at(0)->groups_prefix_lengths.at(segment);
       auto smaller_prefix_length =

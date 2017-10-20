@@ -33,18 +33,6 @@ DEFINE_int64(client_connect_timeout_millis, 100,
 
 namespace {
 
-inline uint16_t longest_common_prefix(const std::string& s1,
-                                      const std::string& s2) {
-  auto length = std::min(s1.length(), s2.length());
-  uint16_t count = 0;
-  for (int i = 0; i < length; i ++, count ++) {
-    if (s1[i] != s2[i]) {
-      return count;
-    }
-  }
-  return count;
-}
-
 bool parseHost(const std::string& str, common::detail::Host* host,
                const std::string& segment, const std::string& local_group) {
   std::vector<std::string> tokens;
@@ -58,10 +46,10 @@ bool parseHost(const std::string& str, common::detail::Host* host,
   } catch (...) {
     return false;
   }
-  auto group = (tokens.size() == 3 ? tokens[2] : "unknown");
+  auto group = (tokens.size() == 3 ? tokens[2] : "");
   host->groups_prefix_lengths[segment] =
-    longest_common_prefix(group, local_group);
-  tokens.clear();
+    std::distance(group.begin(), std::mismatch(group.begin(), group.end(),
+                  local_group.begin(), local_group.end()).first);
   return true;
 }
 
@@ -91,7 +79,7 @@ bool parseShard(const std::string& str, common::detail::Role* role,
 namespace common {
 
 std::unique_ptr<const detail::ClusterLayout> parseConfig(
-  std::string content, const std::string& local_group) {
+    std::string content, const std::string& local_group) {
   auto cl = std::make_unique<detail::ClusterLayout>();
   Json::Reader reader;
   Json::Value root;
