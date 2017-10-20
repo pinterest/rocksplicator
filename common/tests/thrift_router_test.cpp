@@ -23,11 +23,9 @@
 #include <tuple>
 #include <utility>
 #include <vector>
-#include <boost/algorithm/string/replace.hpp>
 
 #include "gtest/gtest.h"
 
-#include "common/network_util.h"
 #include "common/tests/thrift/gen-cpp2/DummyService.h"
 #include "common/thrift_router.h"
 #include "thrift/lib/cpp2/server/ThriftServer.h"
@@ -88,14 +86,14 @@ static const char* g_config_v2 =
   "{"
   "  \"user_pins\": {"
   "  \"num_leaf_segments\": 3,"
-  "  \"127.0.0.1:8090:zone-a\": [\"00002:M\", \"00000:M\"],"
-  "  \"127.0.0.1:8091:zone-b_1\": [\"00000:S\", \"00001:M\", \"00002:M\"],"
-  "  \"127.0.0.1:8092:zone-c\": [\"00001:S\", \"00002:M\"]"
+  "  \"127.0.0.1:8090:zone_a\": [\"00002:M\", \"00000:M\"],"
+  "  \"127.0.0.1:8091:test\": [\"00000:S\", \"00001:M\", \"00002:M\"],"
+  "  \"127.0.0.1:8092:zone_c\": [\"00001:S\", \"00002:M\"]"
   "   },"
   "  \"interest_pins\": {"
   "  \"num_leaf_segments\": 2,"
-  "  \"127.0.0.1:8090:zone-a\": [\"00000:M\"],"
-  "  \"127.0.0.1:8091:zone-b_0\": [\"00001:S\"]"
+  "  \"127.0.0.1:8090:zone_a\": [\"00000:M\"],"
+  "  \"127.0.0.1:8091:test\": [\"00001:S\"]"
   "   }"
   "}";
 
@@ -158,18 +156,15 @@ makeServer(uint16_t port) {
 }
 
 void updateConfigFile(const string& content) {
-  // replace the IP with real local IP.
-  string modify_content = content;
-  boost::replace_all(modify_content, "127.0.0.1", common::getLocalIPAddress());
   ofstream os(g_config_path);
   EXPECT_TRUE(os);
-  os << modify_content;
+  os << content;
 }
 
 TEST(ThriftRouterTest, Basics) {
   updateConfigFile("");
   ThriftRouter<DummyServiceAsyncClient> router(
-    "zone-b", g_config_path, common::parseConfig);
+    "test", g_config_path, common::parseConfig);
 
   EXPECT_EQ(router.getShardNumberFor("user_pins"), 0);
   EXPECT_EQ(router.getShardNumberFor("interest_pins"), 0);
@@ -368,7 +363,6 @@ TEST(ThriftRouterTest, Basics) {
   }
 }
 
-
 void stress(int n_threads, int n_ops) {
   vector<thread> threads(n_threads);
   shared_ptr<DummyServiceTestHandler> handlers[3];
@@ -380,7 +374,7 @@ void stress(int n_threads, int n_ops) {
 
   updateConfigFile(g_config_v2);
   ThriftRouter<DummyServiceAsyncClient> router(
-    "zone-b", g_config_path, common::parseConfig);
+    "", g_config_path, common::parseConfig);
   sleep(1);
 
   for (int i = 0; i < n_threads; ++i) {
@@ -454,7 +448,7 @@ TEST(ThriftRouterTest, LocalAzTest) {
   tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
   tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
   sleep(1);
-  
+
   EXPECT_EQ(router.getShardNumberFor("user_pins"), 3);
   EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 3);
   EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 3);
@@ -476,7 +470,7 @@ TEST(ThriftRouterTest, LocalAzTest) {
   for (int i = 0; i < 100; i ++) {
     std::vector<shared_ptr<DummyServiceAsyncClient>> v;
     EXPECT_EQ(
-        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v), 
+        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v),
         ReturnCode::OK);
     EXPECT_EQ(v.size(), 1);
     v[0]->future_ping().get();
@@ -507,7 +501,7 @@ TEST(ThriftRouterTest, ForeignAzTest) {
   tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
   tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
   sleep(1);
-  
+
   EXPECT_EQ(router.getShardNumberFor("user_pins"), 3);
   EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 3);
   EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 3);
@@ -527,7 +521,7 @@ TEST(ThriftRouterTest, ForeignAzTest) {
   for (int i = 0; i < 100; i ++) {
     std::vector<shared_ptr<DummyServiceAsyncClient>> v;
     EXPECT_EQ(
-        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v), 
+        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v),
         ReturnCode::OK);
     EXPECT_EQ(v.size(), 1);
     v[0]->future_ping().get();
@@ -593,7 +587,6 @@ TEST(ThriftRouterTest, ForeignAzMultiClientsTest) {
     t->join();
   }
 }
-
 
 TEST(ThriftRouterTest, HostOrderTest) {
   updateConfigFile(g_config_v3);
