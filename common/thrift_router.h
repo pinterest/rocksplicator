@@ -55,7 +55,7 @@ struct Host {
   }
 
   folly::SocketAddress addr;
-  // The hosts's groups in different segments
+  // The hosts' longest common prefix length with local group
   std::unordered_map<std::string, uint16_t> groups_prefix_lengths;
 };
 
@@ -393,7 +393,7 @@ class ThriftRouter {
         const unsigned rotation_counter,
         const std::string& segment) {
       if (v->size() == 0) return;
-      auto comparator = [this, segment]
+      auto comparator = [this, &segment]
         (const Host* h1, const Host* h2) -> bool {
         // Descending order
         return h1->groups_prefix_lengths.at(segment) >
