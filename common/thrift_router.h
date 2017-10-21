@@ -31,6 +31,7 @@
 #include "common/file_watcher.h"
 #include "common/network_util.h"
 #include "common/thrift_client_pool.h"
+#include "folly/Hash.h"
 #include "folly/RWSpinLock.h"
 #include "folly/SocketAddress.h"
 #include "folly/ThreadLocal.h"
@@ -398,10 +399,10 @@ class ThriftRouter {
         auto s1 = h1->groups_prefix_lengths.at(segment);
         auto s2 = h2->groups_prefix_lengths.at(segment);
         if (s1 == s2) {
-          auto hash1 = std::hash<std::string>{}(
-            std::to_string(reinterpret_cast<uint64_t>(h1) ^ rotation_counter));
-          auto hash2 = std::hash<std::string>{}(
-            std::to_string(reinterpret_cast<uint64_t>(h2) ^ rotation_counter));
+          auto hash1 = folly::hash::twang_mix64(
+            reinterpret_cast<uint64_t>(h1) ^ rotation_counter);
+          auto hash2 = folly::hash::twang_mix64(
+            reinterpret_cast<uint64_t>(h2) ^ rotation_counter);
           return hash1 < hash2;
         } else {
           return s1 > s2;
