@@ -121,16 +121,15 @@ std::unique_ptr<const detail::ClusterLayout> parseConfig(
         LOG(ERROR) << "Invalid host port group " << host_port_group;
         return nullptr;
       }
-
-      if (cl->all_hosts.find(host.addr) == cl->all_hosts.end()) {
-        cl->all_hosts.emplace(host.addr, host);
-      } else {
-        cl->all_hosts[host.addr].groups_prefix_lengths.insert(
-                host.groups_prefix_lengths.begin(),
-                host.groups_prefix_lengths.end());
+      auto host_iter = cl->all_hosts.find(host);
+      if (host_iter != cl->all_hosts.end()) {
+        host.groups_prefix_lengths.insert(
+                host_iter->groups_prefix_lengths.begin(),
+                host_iter->groups_prefix_lengths.end());
+        cl->all_hosts.erase(host_iter);
       }
-
-      detail::Host* pHost = &(cl->all_hosts.at(host.addr));
+        cl->all_hosts.insert(std::move(host));
+      const detail::Host* pHost = &*(cl->all_hosts.find(host));
       const auto& shard_list = segment_value[host_port_group];
       // for each shard
       for (Json::ArrayIndex i = 0; i < shard_list.size(); ++i) {

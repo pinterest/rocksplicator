@@ -68,7 +68,7 @@ struct SegmentInfo {
 
 struct ClusterLayout {
   std::map<SegmentName, SegmentInfo> segments;
-  std::map<folly::SocketAddress, Host> all_hosts;
+  std::set<Host> all_hosts;
 };
 
 }  // namespace detail
@@ -336,7 +336,7 @@ class ThriftRouter {
       Host host;
       for (auto itor = clients_->begin(); itor != clients_->end();) {
         host.addr = itor->first;
-        if (hosts.find(host.addr) != hosts.end()) {
+        if (hosts.find(host) != hosts.end()) {
           ++itor;
         } else {
           itor = clients_->erase(itor);
@@ -364,7 +364,7 @@ class ThriftRouter {
         const std::string& segment) {
       std::vector<const Host*> v;
       if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
-        // prefer MASTER, then prefer same group, then prefer same AZ
+        // prefer MASTER, then prefer groups with longer common prefix length
         std::vector<const Host*> v_s;
         for (const auto& hi : host_info) {
           if (hi.second == Role::SLAVE) {
@@ -392,29 +392,22 @@ class ThriftRouter {
         std::vector<const Host*>* v,
         const unsigned rotation_counter,
         const std::string& segment) {
-      if (v->size() == 0) return;
-      auto comparator = [this, &segment]
+      auto comparator = [this, &segment, &rotation_counter]
         (const Host* h1, const Host* h2) -> bool {
         // Descending order
-        return h1->groups_prefix_lengths.at(segment) >
-                h2->groups_prefix_lengths.at(segment);
+        auto s1 = h1->groups_prefix_lengths.at(segment);
+        auto s2 = h2->groups_prefix_lengths.at(segment);
+        if (s1 == s2) {
+          auto hash1 = std::hash<std::string>{}(
+            std::to_string(reinterpret_cast<uint64_t>(h1) ^ rotation_counter));
+          auto hash2 = std::hash<std::string>{}(
+            std::to_string(reinterpret_cast<uint64_t>(h2) ^ rotation_counter));
+          return hash1 < hash2;
+        } else {
+          return s1 > s2;
+        }
       };
       std::sort(v->begin(), v->end(), comparator);
-      // for the front k hosts, rotate them.
-      auto longest_prefix_length = v->at(0)->groups_prefix_lengths.at(segment);
-      auto smaller_prefix_length =
-        [this, segment, longest_prefix_length] (const Host* host) -> bool {
-        return host->groups_prefix_lengths.at(segment) != longest_prefix_length;
-      };
-      auto smaller_prefix_it =
-        std::find_if(v->begin(), v->end(), smaller_prefix_length);
-      auto rotation_vec_size = std::distance(v->begin(), smaller_prefix_it);
-      if (rotation_vec_size > 1) {
-        unsigned rotation_offset = rotation_counter % rotation_vec_size;
-        std::rotate(
-          v->begin(), v->begin() + rotation_offset,
-          v->begin() + rotation_vec_size);
-      }
     }
 
     // TODO(bol) In theory, there is data race in this function. Because the IO

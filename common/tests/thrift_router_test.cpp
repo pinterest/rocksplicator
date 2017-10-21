@@ -799,11 +799,11 @@ TEST(ThriftRouterTest, ForeignHostGroupTestPreferLocal) {
     EXPECT_EQ(v.size(), 1);
     v[0]->future_ping().get();
   }
-  // Load should be balanced
-  ASSERT_TRUE(handlers[0]->nPings_.load() == 51);
-  ASSERT_TRUE(handlers[1]->nPings_.load() == 51);
+  ASSERT_TRUE(handlers[0]->nPings_.load() > 1);
+  ASSERT_TRUE(handlers[1]->nPings_.load() > 1);
   ASSERT_TRUE(handlers[2]->nPings_.load() == 1);
   ASSERT_TRUE(handlers[3]->nPings_.load() == 1);
+  ASSERT_TRUE(handlers[0]->nPings_.load() + handlers[1]->nPings_.load() == 102);
 
   // stop all servers
   for (auto& s : servers) {
