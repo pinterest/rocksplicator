@@ -106,7 +106,7 @@ std::unique_ptr<::admin::ApplicationDBManager> CreateDBBasedOnConfig(
   std::string content;
   CHECK(folly::readFile(FLAGS_shard_config_path.c_str(), content));
 
-  auto cluster_layout = common::parseConfig(std::move(content));
+  auto cluster_layout = common::parseConfig(std::move(content), "");
   CHECK(cluster_layout);
 
   folly::SocketAddress local_addr(common::getLocalIPAddress(), FLAGS_port);

@@ -87,13 +87,13 @@ static const char* g_config_v2 =
   "  \"user_pins\": {"
   "  \"num_leaf_segments\": 3,"
   "  \"127.0.0.1:8090:zone_a\": [\"00002:M\", \"00000:M\"],"
-  "  \"127.0.0.1:8091:\": [\"00000:S\", \"00001:M\", \"00002:M\"],"
+  "  \"127.0.0.1:8091:test\": [\"00000:S\", \"00001:M\", \"00002:M\"],"
   "  \"127.0.0.1:8092:zone_c\": [\"00001:S\", \"00002:M\"]"
   "   },"
   "  \"interest_pins\": {"
   "  \"num_leaf_segments\": 2,"
   "  \"127.0.0.1:8090:zone_a\": [\"00000:M\"],"
-  "  \"127.0.0.1:8091:\": [\"00001:S\"]"
+  "  \"127.0.0.1:8091:test\": [\"00001:S\"]"
   "   }"
   "}";
 
@@ -107,6 +107,17 @@ static const char* g_config_v3 =
   "   }"
   "}";
 
+// This config has 2 groups under each zone
+static const char* g_config_v4 =
+  "{"
+  "  \"user_pins\": {"
+  "  \"num_leaf_segments\": 4,"
+  "  \"127.0.0.1:8090:us-east-1a_0\": [\"00000:M\", \"00001:S\", \"00002:S\", \"00003:S\"],"
+  "  \"127.0.0.1:8091:us-east-1a_1\": [\"00000:S\", \"00001:M\", \"00002:S\", \"00003:S\"],"
+  "  \"127.0.0.1:8092:us-east-1b_0\": [\"00000:S\", \"00001:S\", \"00002:M\", \"00003:S\"],"
+  "  \"127.0.0.1:8093:us-east-1b_1\": [\"00000:S\", \"00001:S\", \"00002:S\", \"00003:M\"]"
+  "   }"
+  "}";
 
 using ClusterLayout = ThriftRouter<DummyServiceAsyncClient>::ClusterLayout;
 using Role = ThriftRouter<DummyServiceAsyncClient>::Role;
@@ -153,7 +164,7 @@ void updateConfigFile(const string& content) {
 TEST(ThriftRouterTest, Basics) {
   updateConfigFile("");
   ThriftRouter<DummyServiceAsyncClient> router(
-    "", g_config_path, common::parseConfig);
+    "test", g_config_path, common::parseConfig);
 
   EXPECT_EQ(router.getShardNumberFor("user_pins"), 0);
   EXPECT_EQ(router.getShardNumberFor("interest_pins"), 0);
@@ -437,7 +448,7 @@ TEST(ThriftRouterTest, LocalAzTest) {
   tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
   tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
   sleep(1);
-  
+
   EXPECT_EQ(router.getShardNumberFor("user_pins"), 3);
   EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 3);
   EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 3);
@@ -459,7 +470,7 @@ TEST(ThriftRouterTest, LocalAzTest) {
   for (int i = 0; i < 100; i ++) {
     std::vector<shared_ptr<DummyServiceAsyncClient>> v;
     EXPECT_EQ(
-        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v), 
+        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v),
         ReturnCode::OK);
     EXPECT_EQ(v.size(), 1);
     v[0]->future_ping().get();
@@ -476,7 +487,6 @@ TEST(ThriftRouterTest, LocalAzTest) {
   }
 }
 
-
 TEST(ThriftRouterTest, ForeignAzTest) {
   updateConfigFile(g_config_v1az);
   ThriftRouter<DummyServiceAsyncClient> router(
@@ -491,7 +501,7 @@ TEST(ThriftRouterTest, ForeignAzTest) {
   tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
   tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
   sleep(1);
-  
+
   EXPECT_EQ(router.getShardNumberFor("user_pins"), 3);
   EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 3);
   EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 3);
@@ -511,7 +521,7 @@ TEST(ThriftRouterTest, ForeignAzTest) {
   for (int i = 0; i < 100; i ++) {
     std::vector<shared_ptr<DummyServiceAsyncClient>> v;
     EXPECT_EQ(
-        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v), 
+        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v),
         ReturnCode::OK);
     EXPECT_EQ(v.size(), 1);
     v[0]->future_ping().get();
@@ -678,6 +688,122 @@ TEST(ThriftRouterTest, HostOrderTest) {
   EXPECT_EQ(handlers[2]->nPings_.load(), 4);
 
   FLAGS_always_prefer_local_host = false;
+
+  // stop all servers
+  for (auto& s : servers) {
+    s->stop();
+  }
+
+  for (auto& t : thrs) {
+    t->join();
+  }
+}
+
+TEST(ThriftRouterTest, ForeignHostGroupTestNonPreferLocal) {
+  FLAGS_always_prefer_local_host = false;
+  updateConfigFile(g_config_v4);
+  ThriftRouter<DummyServiceAsyncClient> router(
+    "us-east-1c", g_config_path, common::parseConfig);
+
+  std::vector<shared_ptr<DummyServiceAsyncClient>> v;
+  shared_ptr<DummyServiceTestHandler> handlers[4];
+  shared_ptr<ThriftServer> servers[4];
+  unique_ptr<thread> thrs[4];
+
+  tie(handlers[0], servers[0], thrs[0]) = makeServer(8090);
+  tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
+  tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
+  tie(handlers[3], servers[3], thrs[3]) = makeServer(8093);
+  sleep(1);
+
+  EXPECT_EQ(router.getShardNumberFor("user_pins"), 4);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 4);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 4);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 2), 4);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 3), 4);
+
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::ANY, Quantity::ALL, 2, &v),
+    ReturnCode::OK);
+  EXPECT_EQ(v.size(), 4);
+  for (auto client : v) {
+    EXPECT_NO_THROW(client->future_ping().get());
+  }
+  for (const auto& h : handlers) {
+    EXPECT_EQ(h->nPings_.load(), 1);
+  }
+
+  for (int i = 0; i < 100; i ++) {
+    std::vector<shared_ptr<DummyServiceAsyncClient>> v;
+    EXPECT_EQ(
+        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v),
+        ReturnCode::OK);
+    EXPECT_EQ(v.size(), 1);
+    v[0]->future_ping().get();
+  }
+
+  ASSERT_TRUE(handlers[0]->nPings_.load() == 1);
+  ASSERT_TRUE(handlers[1]->nPings_.load() == 1);
+  ASSERT_TRUE(handlers[2]->nPings_.load() == 101);
+  ASSERT_TRUE(handlers[3]->nPings_.load() == 1);
+
+  // stop all servers
+  for (auto& s : servers) {
+    s->stop();
+  }
+
+  for (auto& t : thrs) {
+    t->join();
+  }
+}
+
+TEST(ThriftRouterTest, ForeignHostGroupTestPreferLocal) {
+  FLAGS_always_prefer_local_host = true;
+  updateConfigFile(g_config_v4);
+  ThriftRouter<DummyServiceAsyncClient> router(
+    "us-east-1a", g_config_path, common::parseConfig);
+
+  std::vector<shared_ptr<DummyServiceAsyncClient>> v;
+  shared_ptr<DummyServiceTestHandler> handlers[4];
+  shared_ptr<ThriftServer> servers[4];
+  unique_ptr<thread> thrs[4];
+
+  tie(handlers[0], servers[0], thrs[0]) = makeServer(8090);
+  tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
+  tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
+  tie(handlers[3], servers[3], thrs[3]) = makeServer(8093);
+  sleep(1);
+
+  EXPECT_EQ(router.getShardNumberFor("user_pins"), 4);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 4);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 4);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 2), 4);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 3), 4);
+
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::ANY, Quantity::ALL, 2, &v),
+    ReturnCode::OK);
+  EXPECT_EQ(v.size(), 4);
+  for (auto client : v) {
+    EXPECT_NO_THROW(client->future_ping().get());
+  }
+  for (const auto& h : handlers) {
+    EXPECT_EQ(h->nPings_.load(), 1);
+  }
+
+  for (int i = 0; i < 100; i ++) {
+    std::vector<shared_ptr<DummyServiceAsyncClient>> v;
+    EXPECT_EQ(
+        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v),
+        ReturnCode::OK);
+    EXPECT_EQ(v.size(), 1);
+    v[0]->future_ping().get();
+  }
+  ASSERT_TRUE(handlers[0]->nPings_.load() > 1);
+  ASSERT_TRUE(handlers[1]->nPings_.load() > 1);
+  ASSERT_TRUE(handlers[2]->nPings_.load() == 1);
+  ASSERT_TRUE(handlers[3]->nPings_.load() == 1);
+  ASSERT_TRUE(handlers[0]->nPings_.load() + handlers[1]->nPings_.load() == 102);
 
   // stop all servers
   for (auto& s : servers) {

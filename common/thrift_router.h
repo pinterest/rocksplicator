@@ -29,8 +29,9 @@
 #include <utility>
 
 #include "common/file_watcher.h"
-#include "common/availability_zone.h"
+#include "common/network_util.h"
 #include "common/thrift_client_pool.h"
+#include "folly/Hash.h"
 #include "folly/RWSpinLock.h"
 #include "folly/SocketAddress.h"
 #include "folly/ThreadLocal.h"
@@ -55,7 +56,8 @@ struct Host {
   }
 
   folly::SocketAddress addr;
-  std::string az;  // availability zone
+  // The hosts' longest common prefix length with local group
+  std::unordered_map<std::string, uint16_t> groups_prefix_lengths;
 };
 
 struct SegmentInfo {
@@ -95,26 +97,27 @@ class ThriftRouter {
    *                     an in memory READONLY ClusterLayout structure.
    */
   ThriftRouter(
-      const std::string& local_az,
+      const std::string& local_group,
       const std::string& config_path,
-      std::function<std::unique_ptr<const ClusterLayout>(std::string)> parser)
+      std::function<std::unique_ptr<const ClusterLayout>(
+        std::string, const std::string&)> parser)
       : config_path_(config_path)
       , parser_(std::move(parser))
       , layout_rwlock_()
       , cluster_layout_()
-      , local_client_map_(local_az) {
+      , local_client_map_() {
     CHECK(common::FileWatcher::Instance()->AddFile(
       config_path_,
-      [this] (std::string content) {
+      [this, local_group] (std::string content) {
         std::shared_ptr<const ClusterLayout> new_layout(
-          parser_(std::move(content)));
+          parser_(std::move(content), local_group));
         {
           folly::RWSpinLock::WriteHolder write_guard(layout_rwlock_);
           cluster_layout_.swap(new_layout);
         }
       }))
     << "Failed to watch " << config_path_;
-    LOG(INFO) << "Local AZ used by ThriftRouter: " << local_az;
+    LOG(INFO) << "Local Group used by ThriftRouter: " << local_group;
   }
 
   ~ThriftRouter() {
@@ -242,8 +245,7 @@ class ThriftRouter {
 
   class ThreadLocalClientMap {
    public:
-    explicit ThreadLocalClientMap(std::string local_az):
-        local_az_(std::move(local_az)) {
+    explicit ThreadLocalClientMap() {
       *local_cluster_layout_ = std::make_shared<const ClusterLayout>();
     }
 
@@ -259,7 +261,6 @@ class ThriftRouter {
         LOG(ERROR) << "Unknown segment: " << segment;
         return ReturnCode::UNKNOWN_SEGMENT;
       }
-
       // get all hosts involved, and create or fix clients for them.
       std::set<const Host*> hosts;
       thread_local unsigned rotation_counter = 0;
@@ -276,7 +277,6 @@ class ThriftRouter {
         }
       }
       createOrFixClientsFor(hosts);
-
       // Trying to fill clients for as many shards as possible.
       // If all shards are successfully fulfilled with the required clients,
       // OK is returned.
@@ -287,15 +287,13 @@ class ThriftRouter {
         auto shard = s_c.first;
         auto& clients = s_c.second;
         clients.clear();
-
         auto hosts_for_shard = filterByRoleAndSortByPreference(
-          shard_to_hosts[shard], role, rotation_counter);
+          shard_to_hosts[shard], role, rotation_counter, segment);
         if (hosts_for_shard.empty()) {
           LOG(ERROR) << "Could not find hosts for shard " << shard;
           ret = ReturnCode::NOT_FOUND;
           continue;
         }
-
         auto sz = hosts_for_shard.size();
         filterBadHosts(&hosts_for_shard);
         if (sz != hosts_for_shard.size() && quantity == Quantity::ALL) {
@@ -363,10 +361,11 @@ class ThriftRouter {
     auto filterByRoleAndSortByPreference(
         const std::vector<std::pair<const Host*, Role>>& host_info,
         const Role role,
-        const unsigned rotation_counter) {
+        const unsigned rotation_counter,
+        const std::string& segment) {
       std::vector<const Host*> v;
       if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
-        // prefer MASTER, then prefer local
+        // prefer MASTER, then prefer groups with longer common prefix length
         std::vector<const Host*> v_s;
         for (const auto& hi : host_info) {
           if (hi.second == Role::SLAVE) {
@@ -375,8 +374,8 @@ class ThriftRouter {
             v.push_back(hi.first);
           }
         }
-        MoveUpLocalAndRotateRemote(&v, rotation_counter);
-        MoveUpLocalAndRotateRemote(&v_s, rotation_counter);
+        RankHostsByGroupPrefixLength(&v, rotation_counter, segment);
+        RankHostsByGroupPrefixLength(&v_s, rotation_counter, segment);
         v.insert(v.end(), v_s.begin(), v_s.end());
       } else {
         // prefer local
@@ -385,34 +384,31 @@ class ThriftRouter {
             v.push_back(hi.first);
           }
         }
-        MoveUpLocalAndRotateRemote(&v, rotation_counter);
+        RankHostsByGroupPrefixLength(&v, rotation_counter, segment);
       }
       return v;
     }
 
-    void MoveUpLocalAndRotateRemote(
+    void RankHostsByGroupPrefixLength(
         std::vector<const Host*>* v,
-        const unsigned rotation_counter) {
-      auto comparator = [this] (const Host* h1, const Host* h2) -> bool {
-        if (h1->az != h2->az &&
-            (h1->az == this->local_az_ || h2->az == this->local_az_)) {
-          return h1->az == this->local_az_;
+        const unsigned rotation_counter,
+        const std::string& segment) {
+      auto comparator = [this, &segment, rotation_counter]
+        (const Host* h1, const Host* h2) -> bool {
+        // Descending order
+        const auto s1 = h1->groups_prefix_lengths.at(segment);
+        const auto s2 = h2->groups_prefix_lengths.at(segment);
+        if (s1 == s2) {
+          const auto hash1 = folly::hash::twang_mix64(
+            reinterpret_cast<uint64_t>(h1) ^ rotation_counter);
+          const auto hash2 = folly::hash::twang_mix64(
+            reinterpret_cast<uint64_t>(h2) ^ rotation_counter);
+          return hash1 < hash2;
         } else {
-          return h1->az < h2->az;
+          return s1 > s2;
         }
       };
       std::sort(v->begin(), v->end(), comparator);
-
-      auto non_local = [this] (const Host* host) -> bool {
-        return host->az != this->local_az_;
-      };
-      auto non_local_it = std::find_if(v->begin(), v->end(), non_local);
-      auto rotation_vec_size = std::distance(non_local_it, v->end());
-      if (rotation_vec_size <= 1) {
-        return;
-      }
-      unsigned rotation_offset = rotation_counter % rotation_vec_size;
-      std::rotate(non_local_it, non_local_it + rotation_offset, v->end());
     }
 
     // TODO(bol) In theory, there is data race in this function. Because the IO
@@ -479,7 +475,6 @@ class ThriftRouter {
       uint64_t create_time;
     };
 
-    const std::string local_az_;
     ThriftClientPool<ClientType, USE_BINARY_PROTOCOL> client_pool_;
     folly::ThreadLocal<std::shared_ptr<const ClusterLayout>>
       local_cluster_layout_;
@@ -488,7 +483,8 @@ class ThriftRouter {
   };
 
   const std::string config_path_;
-  std::function<std::unique_ptr<const ClusterLayout>(std::string)> parser_;
+  std::function<std::unique_ptr<const ClusterLayout>(
+    std::string, const std::string&)> parser_;
 
   // TODO(bol) use atomic<shared_ptr<>> once move to gcc 5.1
   folly::RWSpinLock layout_rwlock_;
@@ -527,6 +523,7 @@ class ThriftRouter {
   "   }"
   "}";
  */
-std::unique_ptr<const detail::ClusterLayout> parseConfig(std::string content);
+std::unique_ptr<const detail::ClusterLayout> parseConfig(
+  std::string content, const std::string& local_group);
 
 }  // namespace common
