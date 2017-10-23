@@ -22,11 +22,10 @@ RUN add-apt-repository -y ppa:boost-latest/ppa && \
     add-apt-repository -y ppa:ubuntu-toolchain-r/test
 
 # For HDFS debian libs
+COPY hortonworks.gpg .
 RUN wget http://public-repo-1.hortonworks.com/HDP/ubuntu12/2.1.5.0/hdp.list \
       -O /etc/apt/sources.list.d/hdp.list && \
-    gpg --keyserver pgp.mit.edu --recv-keys B9733A7A07513CAD && \
-    gpg -a --export 07513CAD | apt-key add -
-
+    cat hortonworks.gpg | apt-key add -
 
 RUN apt-get -q -y update && \
     apt-get install --force-yes -q -y \
@@ -260,8 +259,7 @@ RUN cd /opt/ && \
 RUN cd /opt && \
     git clone https://github.com/aws/aws-sdk-cpp.git && \
     (cd aws-sdk-cpp && \
-      # Rebase to : https://github.com/aws/aws-sdk-cpp/commit/39a03136ef8525bc94d82669432491e653154677
-      git reset --hard 39a03136ef8525bc94d82669432491e653154677 && \
+      git checkout 1.2.7 && \
       mkdir build && cd build && \
       cmake -DCMAKE_BUILD_TYPE=Release -DCUSTOM_MEMORY_MANAGEMENT=0 -DSTATIC_LINKING=1 -DBUILD_ONLY="s3" .. && \
       make -j ${BUILD_JOBS} && \
