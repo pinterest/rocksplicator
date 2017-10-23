@@ -90,6 +90,18 @@ rocksdb::Status ApplicationDB::Get(
   }
 }
 
+rocksdb::Status ApplicationDB::Get(const rocksdb::ReadOptions& options,
+                                   const rocksdb::Slice& key,
+                                   rocksdb::PinnableSlice* value) {
+  if (FLAGS_disable_rocksplicator_db_stats) {
+    return db_->Get(options, db_->DefaultColumnFamily(), key, value);
+  } else {
+    common::Stats::get()->Incr(kRocksdbGet);
+    common::Timer timer(kRocksdbGetMs);
+    return db_->Get(options, db_->DefaultColumnFamily(), key, value);
+  }
+}
+
 std::vector<rocksdb::Status> ApplicationDB::MultiGet(
     const rocksdb::ReadOptions& options,
     const std::vector<rocksdb::Slice>& slice,

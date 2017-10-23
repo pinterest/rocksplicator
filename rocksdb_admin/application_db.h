@@ -55,6 +55,12 @@ class ApplicationDB {
                       const rocksdb::Slice& key,
                       std::string* value);
 
+  // Similar to the above Get(). Output a PinnableSlice instead of a string
+  rocksdb::Status Get(const rocksdb::ReadOptions& options,
+                      const rocksdb::Slice& key,
+                      rocksdb::PinnableSlice* value);
+
+
   // MultiGet  rocksdb value for multiple keys
   // options: (IN) Read options
   // key: (IN) rocksdb keys
