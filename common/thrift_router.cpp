@@ -128,7 +128,7 @@ std::unique_ptr<const detail::ClusterLayout> parseConfig(
                 host_iter->groups_prefix_lengths.end());
         cl->all_hosts.erase(host_iter);
       }
-        cl->all_hosts.insert(std::move(host));
+      cl->all_hosts.insert(std::move(host));
       const detail::Host* pHost = &*(cl->all_hosts.find(host));
       const auto& shard_list = segment_value[host_port_group];
       // for each shard

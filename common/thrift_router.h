@@ -393,15 +393,15 @@ class ThriftRouter {
         std::vector<const Host*>* v,
         const unsigned rotation_counter,
         const std::string& segment) {
-      auto comparator = [this, &segment, &rotation_counter]
+      auto comparator = [this, &segment, rotation_counter]
         (const Host* h1, const Host* h2) -> bool {
         // Descending order
-        auto s1 = h1->groups_prefix_lengths.at(segment);
-        auto s2 = h2->groups_prefix_lengths.at(segment);
+        const auto s1 = h1->groups_prefix_lengths.at(segment);
+        const auto s2 = h2->groups_prefix_lengths.at(segment);
         if (s1 == s2) {
-          auto hash1 = folly::hash::twang_mix64(
+          const auto hash1 = folly::hash::twang_mix64(
             reinterpret_cast<uint64_t>(h1) ^ rotation_counter);
-          auto hash2 = folly::hash::twang_mix64(
+          const auto hash2 = folly::hash::twang_mix64(
             reinterpret_cast<uint64_t>(h2) ^ rotation_counter);
           return hash1 < hash2;
         } else {
