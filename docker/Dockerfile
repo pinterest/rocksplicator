@@ -259,7 +259,6 @@ RUN cd /opt/ && \
 RUN cd /opt && \
     git clone https://github.com/aws/aws-sdk-cpp.git && \
     (cd aws-sdk-cpp && \
-      # Rebase to : https://github.com/aws/aws-sdk-cpp/commit/39a03136ef8525bc94d82669432491e653154677
       git checkout 1.2.7 && \
       mkdir build && cd build && \
       cmake -DCMAKE_BUILD_TYPE=Release -DCUSTOM_MEMORY_MANAGEMENT=0 -DSTATIC_LINKING=1 -DBUILD_ONLY="s3" .. && \
