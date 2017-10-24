@@ -815,6 +815,61 @@ TEST(ThriftRouterTest, ForeignHostGroupTestPreferLocal) {
   }
 }
 
+TEST(ThriftRouterTest, LocalGroupLongerThanConfigGroupTest) {
+  FLAGS_always_prefer_local_host = true;
+  updateConfigFile(g_config_v3);
+  ThriftRouter<DummyServiceAsyncClient> router(
+    "us-east-1c_some-more-info", g_config_path, common::parseConfig);
+
+  std::vector<shared_ptr<DummyServiceAsyncClient>> v;
+  shared_ptr<DummyServiceTestHandler> handlers[3];
+  shared_ptr<ThriftServer> servers[3];
+  unique_ptr<thread> thrs[3];
+
+  tie(handlers[0], servers[0], thrs[0]) = makeServer(8090);
+  tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
+  tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
+  sleep(1);
+
+  EXPECT_EQ(router.getShardNumberFor("user_pins"), 3);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 3);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 3);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 2), 3);
+
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::ANY, Quantity::ALL, 2, &v),
+    ReturnCode::OK);
+  EXPECT_EQ(v.size(), 3);
+  for (auto client : v) {
+    EXPECT_NO_THROW(client->future_ping().get());
+  }
+  for (const auto& h : handlers) {
+    EXPECT_EQ(h->nPings_.load(), 1);
+  }
+
+  for (int i = 0; i < 100; i ++) {
+    std::vector<shared_ptr<DummyServiceAsyncClient>> v;
+    EXPECT_EQ(
+        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v),
+        ReturnCode::OK);
+    EXPECT_EQ(v.size(), 1);
+    v[0]->future_ping().get();
+  }
+
+  ASSERT_TRUE(handlers[0]->nPings_.load() == 1);
+  ASSERT_TRUE(handlers[1]->nPings_.load() == 101);
+  ASSERT_TRUE(handlers[2]->nPings_.load() == 1);
+
+  // stop all servers
+  for (auto& s : servers) {
+    s->stop();
+  }
+
+  for (auto& t : thrs) {
+    t->join();
+  }
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   FLAGS_channel_cleanup_min_interval_seconds = -1;
