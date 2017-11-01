@@ -119,6 +119,15 @@ static const char* g_config_v4 =
   "   }"
   "}";
 
+// This config contains an unreachable host
+static const char* g_config_v5 =
+  "{"
+  "  \"user_pins\": {"
+  "  \"num_leaf_segments\": 1,"
+  "  \"10.255.255.1:80\": [\"00000:M\"]"
+  "   }"
+  "}";
+
 using ClusterLayout = ThriftRouter<DummyServiceAsyncClient>::ClusterLayout;
 using Role = ThriftRouter<DummyServiceAsyncClient>::Role;
 using Quantity = ThriftRouter<DummyServiceAsyncClient>::Quantity;
@@ -868,6 +877,44 @@ TEST(ThriftRouterTest, LocalGroupLongerThanConfigGroupTest) {
   for (auto& t : thrs) {
     t->join();
   }
+}
+
+TEST(ThriftRouterTest, UnreachableHost) {
+  FLAGS_default_thrift_client_pool_threads = 1;
+  FLAGS_client_connect_timeout_millis = 10;
+
+  updateConfigFile(g_config_v5);
+  ThriftRouter<DummyServiceAsyncClient> router(
+    "", g_config_path, common::parseConfig);
+
+  std::vector<shared_ptr<DummyServiceAsyncClient>> v;
+
+  EXPECT_EQ(router.getShardNumberFor("user_pins"), 1);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 1);
+
+  // We are able to create a client to an unreachable host. Because connect() is
+  // async
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 0, &v),
+    ReturnCode::OK);
+  EXPECT_EQ(v.size(), 1);
+
+  usleep(6000);
+
+  // We will still be able to get a client after 6 ms. Because the connect
+  // timeout is 10 ms
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 0, &v),
+    ReturnCode::OK);
+  EXPECT_EQ(v.size(), 1);
+
+  usleep(6000);
+
+  // After timeout, we won't be able to get any client to the host. Because the
+  // connection is bad and it's too soon to create a new connection.
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 0, &v),
+    ReturnCode::BAD_HOST);
 }
 
 int main(int argc, char** argv) {

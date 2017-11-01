@@ -86,23 +86,38 @@ class ThriftClientPool {
   struct ClientStatusCallback
       : public apache::thrift::CloseCallback
       , public apache::thrift::async::TAsyncSocket::ConnectCallback {
-    ClientStatusCallback() : is_good(true), create_time(time(nullptr)) {
-    }
+    ClientStatusCallback(const folly::SocketAddress& addr)
+      : is_good(true)
+      , create_time(time(nullptr))
+      , peer_addr(addr) {}
 
     void channelClosed() override {
+      LOG(INFO) << peer_addr << " connection closed after "
+                << elapsedTime() << " seconds";
+
       is_good.store(false);
     }
 
     void connectSuccess() noexcept override {
+      LOG(INFO) << peer_addr << " connection established after "
+                << elapsedTime() << " seconds";
     }
 
-    void connectError(const apache::thrift::transport::TTransportException&)
+    void connectError(const apache::thrift::transport::TTransportException& ex)
         noexcept override {
+      LOG(ERROR) << peer_addr << " ConnectError: " << ex.what()
+                 << " after " << elapsedTime() << " seconds";
+
       is_good.store(false);
+    }
+
+    time_t elapsedTime() const {
+      return time(nullptr) - create_time;
     }
 
     std::atomic<bool> is_good;
     const time_t create_time;
+    const folly::SocketAddress peer_addr;
   };
 
   struct EventLoop {
@@ -189,7 +204,7 @@ class ThriftClientPool {
 
       if (should_new_channel) {
         auto socket = apache::thrift::async::TAsyncSocket::newSocket(evb_);
-        auto cb = std::make_unique<ClientStatusCallback>();
+        auto cb = std::make_unique<ClientStatusCallback>(addr);
         socket->connect(cb.get(), addr, connect_timeout_ms);
         channel = apache::thrift::HeaderClientChannel::newChannel(socket);
         if (FLAGS_channel_send_timeout_ms > 0) {
