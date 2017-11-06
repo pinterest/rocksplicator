@@ -180,6 +180,29 @@ public class Clusters {
   }
 
   /**
+   * Remove a host from cluster and rebalance the master slaves.
+   */
+  @POST
+  @Path("/removeHost/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName : [a-zA-Z0-9\\-_]+}")
+  @Produces
+  public Response removeHost(@PathParam("namespace") String namespace,
+                             @PathParam("clusterName") String clusterName,
+                             @NotEmpty @QueryParam("host") String hostString) {
+    try {
+      HostBean oldHost = HostBean.fromUrlParam(hostString);
+      TaskBase task = new RemoveHostTask(oldHost)
+          .andThen(new PromoteTask())
+          .andThen(new HealthCheckTask(1, 30))
+          .getEntity();
+      taskQueue.enqueueTask(task, new Cluster(namespace, clusterName), 0);
+      return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
+    } catch (JsonProcessingException e) {
+      String message = "Cannot serialize parameters";
+      return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500, ImmutableMap.of("message", message));
+    }
+  }
+
+  /**
    * Replaces a host in a given cluster with a new one. If new host is provided
    * in the query parameter, that host will be used to replace the old one.
    * Otherwise, controller will randomly pick one for the user.
@@ -197,15 +220,45 @@ public class Clusters {
                               @PathParam("clusterName") String clusterName,
                               @NotEmpty @QueryParam("oldHost") String oldHostString,
                               @QueryParam("newHost") Optional<String> newHostOp) {
-
-    //TODO(angxu) support adding random new host later
-    if (!newHostOp.isPresent()) {
-      return Utils.buildResponse(HttpStatus.BAD_REQUEST_400, ImmutableMap.of("message", "New host is not specified"));
-    }
-
     try {
-      HostBean newHost = HostBean.fromUrlParam(newHostOp.get());
       HostBean oldHost = HostBean.fromUrlParam(oldHostString);
+      HostBean newHost = null;
+      if (!newHostOp.isPresent()) {
+        final ClusterBean clusterBeanInConfig;
+        try {
+          clusterBeanInConfig = checkExistenceAndGetClusterBean(namespace, clusterName);
+        } catch (Exception e) {
+          String message = String.format("Failed to read from zookeeper: %s", e);
+          LOG.error(message);
+          return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500,
+              ImmutableMap.of("message", message));
+        }
+        Set<HostBean> allLiveHosts =
+            clusterManager.getHosts(new Cluster(namespace, clusterName), true);
+        if (!allLiveHosts.removeAll(clusterBeanInConfig.getHosts())) {
+          String message = String.format("Cannot get idle hosts for %s", clusterName);
+          LOG.error(message);
+          return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500,
+              ImmutableMap.of("message", message));
+        }
+        for (HostBean hostBean : allLiveHosts) {
+          if (hostBean.getAvailabilityZone().equals(oldHost.getAvailabilityZone())) {
+            newHost = hostBean;
+            break;
+          }
+        }
+      } else {
+        newHost = HostBean.fromUrlParam(newHostOp.get());
+      }
+
+      if (newHost == null) {
+        String message = String.format("Cannot get idle hosts for %s in location %s",
+            clusterName, oldHost.getAvailabilityZone());
+        LOG.error(message);
+        return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500,
+            ImmutableMap.of("message", message));
+      }
+
       TaskBase task = new RemoveHostTask(oldHost)
           .andThen(new PromoteTask())
           .andThen(
