@@ -220,12 +220,6 @@ public class Clusters {
                               @PathParam("clusterName") String clusterName,
                               @NotEmpty @QueryParam("oldHost") String oldHostString,
                               @QueryParam("newHost") Optional<String> newHostOp) {
-
-    if (!newHostOp.isPresent()) {
-      // Find a host from the candidate pool by AZ
-      return Utils.buildResponse(HttpStatus.BAD_REQUEST_400, ImmutableMap.of("message", "New host is not specified"));
-    }
-
     try {
       HostBean oldHost = HostBean.fromUrlParam(oldHostString);
       HostBean newHost = null;
