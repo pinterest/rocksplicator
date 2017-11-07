@@ -187,11 +187,47 @@ public class Clusters {
   @Produces(MediaType.APPLICATION_JSON)
   public Response removeHost(@PathParam("namespace") String namespace,
                              @PathParam("clusterName") String clusterName,
-                             @NotEmpty @QueryParam("host") String hostString) {
+                             @NotEmpty @QueryParam("host") String hostString,
+                             @QueryParam("force") Optional<Boolean> force) {
     try {
       HostBean oldHost = HostBean.fromUrlParam(hostString);
-      TaskBase task = new RemoveHostTask(oldHost)
+      TaskBase task = new RemoveHostTask(oldHost, force.orElse(false))
           .andThen(new PromoteTask())
+          .andThen(new HealthCheckTask(1, 30))
+          .getEntity();
+      taskQueue.enqueueTask(task, new Cluster(namespace, clusterName), 0);
+      return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
+    } catch (JsonProcessingException e) {
+      String message = "Cannot serialize parameters";
+      return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500, ImmutableMap.of("message", message));
+    }
+  }
+
+  /**
+   * Add a host back to the cluster. This API requires a new host IP and port.
+   */
+  @POST
+  @Path("/addHost/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName : [a-zA-Z0-9\\-_]+}")
+  @Produces(MediaType.APPLICATION_JSON)
+  public Response addHost(@PathParam("namespace") String namespace,
+                          @PathParam("clusterName") String clusterName,
+                          @NotEmpty @QueryParam("host") String hostString) {
+    try {
+      HostBean newHost = HostBean.fromUrlParam(hostString);
+      if (newHost.getAvailabilityZone().isEmpty()) {
+        String message = "Please give location info in the input host";
+        return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500,
+            ImmutableMap.of("message", message));
+      }
+      TaskBase task = new PromoteTask().andThen(
+              new AddHostTask(
+                  newHost.getIp(),
+                  newHost.getPort(),
+                  newHost.getAvailabilityZone(),
+                  "/rocksdb",
+                  50)
+          )
+          .andThen(new RebalanceTask())
           .andThen(new HealthCheckTask(1, 30))
           .getEntity();
       taskQueue.enqueueTask(task, new Cluster(namespace, clusterName), 0);
