@@ -184,7 +184,7 @@ public class Clusters {
    */
   @POST
   @Path("/removeHost/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName : [a-zA-Z0-9\\-_]+}")
-  @Produces
+  @Produces(MediaType.APPLICATION_JSON)
   public Response removeHost(@PathParam("namespace") String namespace,
                              @PathParam("clusterName") String clusterName,
                              @NotEmpty @QueryParam("host") String hostString) {
