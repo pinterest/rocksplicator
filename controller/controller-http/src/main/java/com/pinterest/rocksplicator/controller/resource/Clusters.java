@@ -255,7 +255,8 @@ public class Clusters {
   public Response replaceHost(@PathParam("namespace") String namespace,
                               @PathParam("clusterName") String clusterName,
                               @NotEmpty @QueryParam("oldHost") String oldHostString,
-                              @QueryParam("newHost") Optional<String> newHostOp) {
+                              @QueryParam("newHost") Optional<String> newHostOp,
+                              @QueryParam("force") Optional<Boolean> force) {
     try {
       HostBean oldHost = HostBean.fromUrlParam(oldHostString);
       HostBean newHost = null;
@@ -295,7 +296,7 @@ public class Clusters {
             ImmutableMap.of("message", message));
       }
 
-      TaskBase task = new RemoveHostTask(oldHost)
+      TaskBase task = new RemoveHostTask(oldHost, force.orElse(false))
           .andThen(new PromoteTask())
           .andThen(
               new AddHostTask(
