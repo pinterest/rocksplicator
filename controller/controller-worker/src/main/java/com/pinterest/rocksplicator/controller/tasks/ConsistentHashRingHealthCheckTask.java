@@ -116,8 +116,8 @@ public class ConsistentHashRingHealthCheckTask extends AbstractTask<ConsistentHa
               hostConsecutiveFailing.toString(), ctx.getCluster()), "As title");
         }
       }
-      LOG.info("All hosts are good");
-      String output = String.format("Cluster %s is healthy", ctx.getCluster());
+      String output = String.format("Cluster %s healthchecked", ctx.getCluster());
+      LOG.info(output);
       ctx.getTaskQueue().finishTask(ctx.getId(), output);
     } catch (Exception ex) {
       String errorMessage =
