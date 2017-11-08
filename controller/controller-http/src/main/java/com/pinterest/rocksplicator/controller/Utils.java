@@ -24,7 +24,10 @@ import javax.ws.rs.core.Response;
 public class Utils {
 
   public static Response buildResponse(int status, Object body) {
-	return Response.status(status).entity(body).build();
+	return Response.status(status).entity(body)
+            .header("Access-Control-Allow-Origin", "https://controllerboard.pinadmin.com")
+            .header("Access-Control-Allow-Methods", "GET, POST, DELETE, PUT, OPTIONS")
+            .build();
   }
   
 }
