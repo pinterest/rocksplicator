@@ -78,7 +78,10 @@ final class ChainedTask extends AbstractTask<ChainedTask.Param> {
 
         LocalAckTaskQueue.State state = lq.getState();
         if (state.state == LocalAckTaskQueue.State.StateName.UNFINISHED) {
-          LOG.error("Task {} finished processing without ack", id);
+          String errorMsg = String.format(
+              "Task %s finished processing without ack, abort the task chain", id);
+          LOG.error(errorMsg);
+          taskQueue.failTask(id, state.output);
           return;
         } else if (state.state == LocalAckTaskQueue.State.StateName.FAILED) {
           LOG.error("Task {} failed with reason: {}. Abort the task chain.", id, state.output);

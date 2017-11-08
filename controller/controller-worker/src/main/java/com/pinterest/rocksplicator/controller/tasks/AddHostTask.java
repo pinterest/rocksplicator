@@ -109,6 +109,11 @@ public class AddHostTask extends AbstractTask<AddHostTask.Param> {
     }
 
     for (SegmentBean segment : clusterBean.getSegments()) {
+      final HostBean hostToAddThisSegment = new HostBean()
+          .setAvailabilityZone(hostToAdd.getAvailabilityZone())
+          .setIp(hostToAdd.getIp())
+          .setPort(hostToAdd.getPort());
+
       // 2) find shards to serve for new host
       Set<Integer> shardToServe =
           IntStream.range(0, segment.getNumShards())
@@ -116,7 +121,7 @@ public class AddHostTask extends AbstractTask<AddHostTask.Param> {
                    .collect(Collectors.toSet());
       for (HostBean host : segment.getHosts()) {
         // ignore hosts in different AZ than the new host
-        if (host.getAvailabilityZone().equals(hostToAdd.getAvailabilityZone())) {
+        if (host.getAvailabilityZone().equals(hostToAddThisSegment.getAvailabilityZone())) {
           host.getShards().forEach(shard -> shardToServe.remove(shard.getId()));
         }
       }
@@ -153,13 +158,13 @@ public class AddHostTask extends AbstractTask<AddHostTask.Param> {
       }
 
       // add shard config to new host
-      hostToAdd.setShards(
+      hostToAddThisSegment.setShards(
           shardToServe.stream()
-                      .map(id -> new ShardBean().setId(id).setRole(Role.SLAVE))
-                      .collect(Collectors.toList())
+              .map(id -> new ShardBean().setId(id).setRole(Role.SLAVE))
+              .collect(Collectors.toList())
       );
       List<HostBean> newHostList = segment.getHosts();
-      newHostList.add(hostToAdd);
+      newHostList.add(hostToAddThisSegment);
       segment.setHosts(newHostList);
     }
 

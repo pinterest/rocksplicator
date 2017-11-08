@@ -85,7 +85,8 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
       Set<HostBean> blacklistedHost = clusterManager.getBlacklistedHosts(ctx.getCluster());
 
       Set<HostBean> badHosts = new HashSet<>();
-      for (HostBean hostBean : hostsRegistered) {
+      Set<HostBean> hostsToCheck = hostsRegistered.isEmpty()? hostsInConfig : hostsRegistered;
+      for (HostBean hostBean : hostsToCheck) {
         try {
           clientFactory.getClient(new InetSocketAddress(hostBean.getIp(), hostBean.getPort())).ping();
         } catch (Exception ex) {
@@ -113,6 +114,9 @@ public class HealthCheckTask extends AbstractTask<HealthCheckTask.Param> {
               hostConsecutiveFailing.toString(), ctx.getCluster()), "As title");
         }
       }
+      String output = String.format("Cluster %s healthchecked", ctx.getCluster());
+      LOG.info(output);
+      ctx.getTaskQueue().finishTask(ctx.getId(), output);
     } catch (Exception ex) {
       String errorMessage =
           String.format("Cluster %s is unhealthy, reason = %s", ctx.getCluster(), ex.getMessage());
