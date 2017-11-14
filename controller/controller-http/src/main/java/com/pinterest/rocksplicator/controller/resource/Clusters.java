@@ -277,7 +277,7 @@ public class Clusters {
           String message = String.format("Cannot get idle hosts for %s", clusterName);
           LOG.error(message);
           return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500,
-                  ImmutableMap.of("message", message));
+              ImmutableMap.of("message", message));
         }
         for (HostBean hostBean : allLiveHosts) {
           if (hostBean.getAvailabilityZone().equals(oldHost.getAvailabilityZone())) {
