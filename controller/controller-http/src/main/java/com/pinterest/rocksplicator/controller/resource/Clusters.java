@@ -272,11 +272,12 @@ public class Clusters {
         }
         Set<HostBean> allLiveHosts =
             clusterManager.getHosts(new Cluster(namespace, clusterName), true);
-        if (!allLiveHosts.removeAll(clusterBeanInConfig.getHosts())) {
+        allLiveHosts.removeAll(clusterBeanInConfig.getHosts());
+        if (allLiveHosts.isEmpty()) {
           String message = String.format("Cannot get idle hosts for %s", clusterName);
           LOG.error(message);
           return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500,
-              ImmutableMap.of("message", message));
+                  ImmutableMap.of("message", message));
         }
         for (HostBean hostBean : allLiveHosts) {
           if (hostBean.getAvailabilityZone().equals(oldHost.getAvailabilityZone())) {
@@ -524,12 +525,7 @@ public class Clusters {
         return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500,
                 ImmutableMap.of("message", message));
       }
-      if (!hosts.removeAll(clusterBeanInConfig.getHosts())) {
-        String message = String.format("Cannot get idle hosts for %s", clusterName);
-        LOG.error(message);
-        return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500,
-                ImmutableMap.of("message", message));
-      }
+      hosts.removeAll(clusterBeanInConfig.getHosts();
     }
     return Utils.buildResponse(HttpStatus.OK_200, hosts);
   }
