@@ -510,8 +510,27 @@ public class Clusters {
   @Path("/hosts/{namespace: [a-zA-Z0-9\\-_]+}/{clusterName: [a-zA-Z0-9\\-_]+}")
   @Produces(MediaType.APPLICATION_JSON)
   public Response getHosts(@PathParam("namespace") String namespace,
-                           @PathParam("clusterName") String clusterName) {
-    Set<HostBean> hosts = clusterManager.getHosts(new Cluster(namespace, clusterName), false);
+                           @PathParam("clusterName") String clusterName,
+                           @QueryParam("excludeBlacklisted") Optional<Boolean> excludeBlacklisted,
+                           @QueryParam("excludeHostsInConfig") Optional<Boolean> excludeHostsInConfig) {
+    Set<HostBean> hosts = clusterManager.getHosts(new Cluster(namespace, clusterName), excludeBlacklisted.orElse(false));
+    if (excludeHostsInConfig.isPresent() && excludeHostsInConfig.get().equals(true)) {
+      final ClusterBean clusterBeanInConfig;
+      try {
+        clusterBeanInConfig = checkExistenceAndGetClusterBean(namespace, clusterName);
+      } catch (Exception e) {
+        String message = String.format("Failed to read from zookeeper: %s", e);
+        LOG.error(message);
+        return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500,
+                ImmutableMap.of("message", message));
+      }
+      if (!hosts.removeAll(clusterBeanInConfig.getHosts())) {
+        String message = String.format("Cannot get idle hosts for %s", clusterName);
+        LOG.error(message);
+        return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500,
+                ImmutableMap.of("message", message));
+      }
+    }
     return Utils.buildResponse(HttpStatus.OK_200, hosts);
   }
 
