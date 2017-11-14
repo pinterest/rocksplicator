@@ -38,11 +38,11 @@ bool isAllowedAz(const std::string& az) {
   return allowed_azs.find(az) != allowed_azs.end();
 }
 
-const std::string command =
-  "curl --silent --max-time 10 --connect-timeout 5 "
-  "http://169.254.169.254/latest/meta-data/placement/availability-zone";
-
 std::string getAvailabilityZoneImpl() {
+  static const std::string command =
+    "curl --silent --max-time 10 --connect-timeout 5 "
+    "http://169.254.169.254/latest/meta-data/placement/availability-zone";
+
   auto f = popen(command.c_str(), "re");
   if (f == nullptr) {
     LOG(ERROR) << "Failed to popen() with errno: " << errno;
