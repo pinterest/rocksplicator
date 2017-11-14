@@ -525,7 +525,7 @@ public class Clusters {
         return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500,
                 ImmutableMap.of("message", message));
       }
-      hosts.removeAll(clusterBeanInConfig.getHosts();
+      hosts.removeAll(clusterBeanInConfig.getHosts());
     }
     return Utils.buildResponse(HttpStatus.OK_200, hosts);
   }
