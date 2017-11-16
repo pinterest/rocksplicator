@@ -47,7 +47,6 @@
                         <thead md-head>
                         <tr md-row>
                             <th md-column md-numeric>ID</th>
-                            <th md-column ><span>Host Name</span></th>
                             <th md-column ><span>Host IP</span></th>
                             <th md-column ><span>Host Location</span></th>
                             <th md-column ><span>View Shards</span></th>
@@ -56,7 +55,6 @@
                         <tbody md-body>
                         <tr md-row ng-repeat="host in vm.hostsInConfig | filter : hostquery track by $index">
                             <td md-cell>{{$index+1}}</td>
-                            <td md-cell>{{host.name}}</td>
                             <td md-cell>{{host.ip}}</td>
                             <td md-cell>{{host.availabilityZone}}</td>
                             <td md-cell>
@@ -89,7 +87,6 @@
                         <thead md-head>
                         <tr md-row>
                             <th md-column md-numeric>ID</th>
-                            <th md-column ><span>Host Name</span></th>
                             <th md-column ><span>Host IP</span></th>
                             <th md-column ><span>Host Location</span></th>
                         </tr>
@@ -97,7 +94,6 @@
                         <tbody md-body>
                         <tr md-row ng-repeat="host in vm.blacklistedHosts | filter : hostquery track by $index">
                             <td md-cell>{{$index+1}}</td>
-                            <td md-cell>{{host.name}}</td>
                             <td md-cell>{{host.ip}}</td>
                             <td md-cell>{{host.availabilityZone}}</td>
                         </tr>
@@ -120,7 +116,6 @@
                         <thead md-head>
                         <tr md-row>
                             <th md-column md-numeric>ID</th>
-                            <th md-column ><span>Host Name</span></th>
                             <th md-column ><span>Host IP</span></th>
                             <th md-column ><span>Host Location</span></th>
                         </tr>
@@ -128,7 +123,6 @@
                         <tbody md-body>
                         <tr md-row ng-repeat="host in vm.candidateHosts | filter : hostquery track by $index">
                             <td md-cell>{{$index+1}}</td>
-                            <td md-cell>{{host.name}}</td>
                             <td md-cell>{{host.ip}}</td>
                             <td md-cell>{{host.availabilityZone}}</td>
                         </tr>
