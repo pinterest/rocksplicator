@@ -34,12 +34,12 @@
         <md-tabs md-selected="selectedIndex" md-center-tabs=true md-dynamic-height=true>
             <md-tab md-on-select="onTabSelected(tab)" md-on-deselect="announceDeselected(tab)">
                 <md-tab-label>
-                    Hosts In Config
+                    Hosts In ZK Config
                 </md-tab-label>
                 <md-tab-body>
                     <md-content layout="column" layout-padding>
                         <md-input-container class="search-bar">
-                            <input ng-model="hostquery" placeholder="Search For a Cluster Here">
+                            <input aria-label="search" ng-model="hostquery">
                             <md-icon class="material-icons">search</md-icon>
                         </md-input-container>
                     </md-content>
@@ -47,7 +47,6 @@
                         <thead md-head>
                         <tr md-row>
                             <th md-column md-numeric>ID</th>
-                            <th md-column ><span>Host Name</span></th>
                             <th md-column ><span>Host IP</span></th>
                             <th md-column ><span>Host Location</span></th>
                             <th md-column ><span>View Shards</span></th>
@@ -56,7 +55,6 @@
                         <tbody md-body>
                         <tr md-row ng-repeat="host in vm.hostsInConfig | filter : hostquery track by $index">
                             <td md-cell>{{$index+1}}</td>
-                            <td md-cell>{{host.name}}</td>
                             <td md-cell>{{host.ip}}</td>
                             <td md-cell>{{host.availabilityZone}}</td>
                             <td md-cell>
@@ -76,12 +74,12 @@
             </md-tab>
             <md-tab md-on-select="onTabSelected(tab)" md-on-deselect="announceDeselected(tab)">
                 <md-tab-label>
-                    Hosts not In Config
+                    Blacklisted hosts
                 </md-tab-label>
                 <md-tab-body>
                     <md-content layout="column" layout-padding>
                         <md-input-container class="search-bar">
-                            <input ng-model="query" placeholder="Search For a Cluster Here">
+                            <input aria-label="search" ng-model="hostquery">
                             <md-icon class="material-icons">search</md-icon>
                         </md-input-container>
                     </md-content>
@@ -89,15 +87,13 @@
                         <thead md-head>
                         <tr md-row>
                             <th md-column md-numeric>ID</th>
-                            <th md-column ><span>Host Name</span></th>
                             <th md-column ><span>Host IP</span></th>
                             <th md-column ><span>Host Location</span></th>
                         </tr>
                         </thead>
                         <tbody md-body>
-                        <tr md-row ng-repeat="host in vm.hostsNotInConfig track by $index">
+                        <tr md-row ng-repeat="host in vm.blacklistedHosts | filter : hostquery track by $index">
                             <td md-cell>{{$index+1}}</td>
-                            <td md-cell>{{host.name}}</td>
                             <td md-cell>{{host.ip}}</td>
                             <td md-cell>{{host.availabilityZone}}</td>
                         </tr>
@@ -107,10 +103,31 @@
             </md-tab>
             <md-tab md-on-select="onTabSelected(tab)" md-on-deselect="announceDeselected(tab)">
                 <md-tab-label>
-                    Dead Hosts
+                    Healthy Standby Hosts
                 </md-tab-label>
                 <md-tab-body>
-                    todo
+                    <md-content layout="column" layout-padding>
+                        <md-input-container class="search-bar">
+                            <input aria-label="search" ng-model="hostquery">
+                            <md-icon class="material-icons">search</md-icon>
+                        </md-input-container>
+                    </md-content>
+                    <table md-table class="table table-hover table-bordered" >
+                        <thead md-head>
+                        <tr md-row>
+                            <th md-column md-numeric>ID</th>
+                            <th md-column ><span>Host IP</span></th>
+                            <th md-column ><span>Host Location</span></th>
+                        </tr>
+                        </thead>
+                        <tbody md-body>
+                        <tr md-row ng-repeat="host in vm.healthyStandbyHosts | filter : hostquery track by $index">
+                            <td md-cell>{{$index+1}}</td>
+                            <td md-cell>{{host.ip}}</td>
+                            <td md-cell>{{host.availabilityZone}}</td>
+                        </tr>
+                        </tbody>
+                    </table>
                 </md-tab-body>
             </md-tab>
         </md-tabs>

@@ -38,6 +38,9 @@
           .then(function(result) {
               vm.statusCode = result.status;
               vm.clusters = getNameSpaceClusterDict(result.data);
+              if (Object.keys(vm.clusters).length) {
+                  vm.namespaceSelected = Object.keys(vm.clusters)[0];
+              }
               vm.clusterTable = result.data;
               vm.loadComplete = true;
           },function (error){
@@ -47,26 +50,32 @@
           });
 
 
-      vm.selectCluster = function (namespace, cluster) {
-          console.log(namespace, cluster);
-          vm.namespaceSelected = namespace
+      vm.gotoConfig = function (cluster) {
           vm.clusterSelected = cluster;
           vm.loadComplete = false;
-          clusterConfigService.setSelectedCluster(namespace, cluster);
+          clusterConfigService.setSelectedCluster(vm.namespaceSelected, cluster);
           clusterConfigService.pullClusterConfig()
               .then(function(config){
                   clusterConfigService.setRawClusterConfig(config.data);
-                  clusterConfigService.pullRunningHosts()
-                      .then(function(hosts){
-                          clusterConfigService.setRunningHosts(hosts.data);
-                          clusterConfigService.processConfig();
-                          vm.statusCode = hosts.status;
-                          $state.go('.shard', {
-                              'namespace' : vm.namespaceSelected,
-                              'clustersName': vm.clusterSelected
-                          });
-                          vm.hideCluster = true;
-                          vm.loadComplete = true;
+                  clusterConfigService.pullBlacklistedHosts()
+                      .then(function(blacklistedHosts){
+                          clusterConfigService.setBlacklistedHosts(blacklistedHosts.data);
+                          clusterConfigService.pullHealthyStandbyHosts()
+                              .then(function(healthyStandbyHosts){
+                                  clusterConfigService.setHealthyStandbyHosts(healthyStandbyHosts.data);
+                                  clusterConfigService.processConfig();
+                                  vm.statusCode = healthyStandbyHosts.status;
+                                  $state.go('.shard', {
+                                      'namespace' : vm.namespaceSelected,
+                                      'clustersName': vm.clusterSelected
+                                  });
+                                  vm.hideCluster = true;
+                                  vm.loadComplete = true;
+                              }, function(error){
+                                  vm.statusCode = error.status;
+                                  vm.errorMessage = error.data;
+                                  vm.loadComplete = true;
+                              });
                       },function(error){
                           vm.statusCode = error.status;
                           vm.errorMessage = error.data;
@@ -78,5 +87,9 @@
                   vm.loadComplete = true;
               });
       };
+
+      vm.showCluster = function (namespace) {
+          vm.namespaceSelected = namespace;
+      }
   }
 })();

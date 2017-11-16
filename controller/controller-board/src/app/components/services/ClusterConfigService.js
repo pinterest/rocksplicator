@@ -13,10 +13,10 @@
         var rawClusterConfig = {};
         var runningHosts = [];
         var dataSegments = [];
-        var hostsFromConfig = {};
         var shardConfig = {};
         var hostInConfig = [];
-        var hostNotInConfig = [];
+        var blacklistedHosts = [];
+        var healthyStandbyHosts = [];
 
         function reset () {
             clusterName = '';
@@ -24,13 +24,14 @@
             rawClusterConfig = {};
             runningHosts = [];
             dataSegments = [];
-            hostsFromConfig = {};
             shardConfig = {};
             hostInConfig = [];
-            hostNotInConfig = [];
+            blacklistedHosts = [];
+            healthyStandbyHosts = []
         }
 
         function processConfigHelper() {
+            var hostInConfigDict = {};
             rawClusterConfig.segments.forEach(function(segment) {
                 // initialize segment list
                 var dataSegmentDict = {};
@@ -41,13 +42,14 @@
                 shardConfig[segment.name] = {};
                 segment.hosts.forEach(function(host) {
 
-                    // initialize hostsFromConfig
-                    if (! (host.ip in hostsFromConfig)) {
-                        hostsFromConfig[host.ip] = {
+                    // initialize hostInConfig
+                    if (! (host.ip in hostInConfigDict)) {
+                        hostInConfigDict[host.ip] = 1;
+                        hostInConfig.push({
                             'ip': host.ip,
                             'port': host.port,
                             'availabilityZone': host.availabilityZone
-                        }
+                        });
                     }
 
                     // initialize shardConfig
@@ -69,24 +71,7 @@
                         shardConfig[segment.name][shard.id].push(hostInfo);
                     });
                 });
-            } );
-
-            for (var i = 0; i < runningHosts.length; i++){
-                var ip = runningHosts[i]['config.internal_address'];
-                if (ip in hostsFromConfig) {
-                    var host = hostsFromConfig[ip];
-                    host['name'] = runningHosts[i]['config.name'];
-                    hostInConfig.push(host);
-                }
-                else {
-                    var host = {
-                        name: runningHosts[i]['config.name'],
-                        ip: runningHosts[i]['config.internal_address'],
-                        availabilityZone: runningHosts[i]['location'],
-                    }
-                    hostNotInConfig.push(host);
-                }
-            }
+            });
         }
 
         return {
@@ -108,14 +93,21 @@
                 rawClusterConfig = rawConfig;
             },
 
-            pullRunningHosts : function () {
-                var goodClusterName = clusterName.replace(/_/g, '-');
-                var url = 'https://cmdb.pinadmin.com:8443/api/cmdb/getquery?fields=config.name,config.internal_address,location&query=state:running AND tags.Name:*' + goodClusterName + '*';
-                return $http.post(url);
+            pullBlacklistedHosts : function () {
+                return $http.get('https://controllerhttp.pinadmin.com/v1/clusters/hosts/' + namespace + '/'+ clusterName);
             },
 
-            setRunningHosts : function (hosts) {
-                runningHosts = hosts;
+            setBlacklistedHosts : function (hosts) {
+                blacklistedHosts = hosts;
+            },
+
+            pullHealthyStandbyHosts : function () {
+                return $http.get('https://controllerhttp.pinadmin.com/v1/clusters/hosts/'
+                    + namespace + '/'+ clusterName + '?ExcludeBlacklisted=true&excludeHostsInConfig=true');
+            },
+
+            setHealthyStandbyHosts : function (hosts) {
+                healthyStandbyHosts = hosts;
             },
 
             processConfig : function () {
@@ -134,8 +126,12 @@
                 return hostInConfig;
             },
 
-            getHostNotInConfig : function () {
-                return hostNotInConfig;
+            getBlacklistedHosts : function () {
+                return blacklistedHosts;
+            },
+
+            getHealthyStandbyHosts : function () {
+                return healthyStandbyHosts;
             }
         };
     }
