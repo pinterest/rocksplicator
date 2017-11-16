@@ -26,9 +26,9 @@ angular.module('angularMaterialAdmin', ['ngAnimate', 'ngCookies',
             })
             .state('home.clusters.shard', {
                 url: '/:namespace/:clustersName',
-                controller: 'ShardController',
+                controller: 'HostController',
                 controllerAs: 'vm',
-                templateUrl: 'app/views/shard.html'
+                templateUrl: 'app/views/host.html'
             })
             .state('home.admin', {
                 url: '/admin',
