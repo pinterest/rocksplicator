@@ -64,7 +64,7 @@
                               .then(function(candidateHosts){
                                   clusterConfigService.setCandidateHosts(candidateHosts.data);
                                   clusterConfigService.processConfig();
-                                   vm.statusCode = candidateHosts.status;
+                                  vm.statusCode = candidateHosts.status;
                                   $state.go('.shard', {
                                       'namespace' : vm.namespaceSelected,
                                       'clustersName': vm.clusterSelected
@@ -74,7 +74,6 @@
                               }, function(error){
                                   vm.statusCode = error.status;
                                   vm.errorMessage = error.data;
-                                  vm.hideCluster = true;
                                   vm.loadComplete = true;
                               });
                       },function(error){
