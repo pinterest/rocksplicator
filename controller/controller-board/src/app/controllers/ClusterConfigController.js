@@ -60,11 +60,11 @@
                   clusterConfigService.pullBlacklistedHosts()
                       .then(function(blacklistedHosts){
                           clusterConfigService.setBlacklistedHosts(blacklistedHosts.data);
-                          clusterConfigService.pullCandidateHosts()
-                              .then(function(candidateHosts){
-                                  clusterConfigService.setCandidateHosts(candidateHosts.data);
+                          clusterConfigService.pullHealthyStandbyHosts()
+                              .then(function(healthyStandbyHosts){
+                                  clusterConfigService.setHealthyStandbyHosts(healthyStandbyHosts.data);
                                   clusterConfigService.processConfig();
-                                  vm.statusCode = candidateHosts.status;
+                                  vm.statusCode = healthyStandbyHosts.status;
                                   $state.go('.shard', {
                                       'namespace' : vm.namespaceSelected,
                                       'clustersName': vm.clusterSelected

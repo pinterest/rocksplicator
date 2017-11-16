@@ -14,7 +14,7 @@
         vm.dataSegments = clusterConfigService.getDataSegments();
         vm.hostsInConfig = clusterConfigService.getHostInConfig();
         vm.blacklistedHosts = clusterConfigService.getBlacklistedHosts();
-        vm.candidateHosts = clusterConfigService.getCandidateHosts();
+        vm.healthyStandbyHosts = clusterConfigService.getHealthyStandbyHosts();
         vm.loadComplete = true;
     }
 

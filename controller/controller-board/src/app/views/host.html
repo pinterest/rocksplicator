@@ -103,7 +103,7 @@
             </md-tab>
             <md-tab md-on-select="onTabSelected(tab)" md-on-deselect="announceDeselected(tab)">
                 <md-tab-label>
-                    Candidate Hosts
+                    Healthy Standby Hosts
                 </md-tab-label>
                 <md-tab-body>
                     <md-content layout="column" layout-padding>
@@ -121,7 +121,7 @@
                         </tr>
                         </thead>
                         <tbody md-body>
-                        <tr md-row ng-repeat="host in vm.candidateHosts | filter : hostquery track by $index">
+                        <tr md-row ng-repeat="host in vm.healthyStandbyHosts | filter : hostquery track by $index">
                             <td md-cell>{{$index+1}}</td>
                             <td md-cell>{{host.ip}}</td>
                             <td md-cell>{{host.availabilityZone}}</td>

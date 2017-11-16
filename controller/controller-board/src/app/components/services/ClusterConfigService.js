@@ -16,7 +16,7 @@
         var shardConfig = {};
         var hostInConfig = [];
         var blacklistedHosts = [];
-        var candidateHosts = [];
+        var healthyStandbyHosts = [];
 
         function reset () {
             clusterName = '';
@@ -27,7 +27,7 @@
             shardConfig = {};
             hostInConfig = [];
             blacklistedHosts = [];
-            candidateHosts = []
+            healthyStandbyHosts = []
         }
 
         function processConfigHelper() {
@@ -101,13 +101,13 @@
                 blacklistedHosts = hosts;
             },
 
-            pullCandidateHosts : function () {
+            pullHealthyStandbyHosts : function () {
                 return $http.get('https://controllerhttp.pinadmin.com/v1/clusters/hosts/'
                     + namespace + '/'+ clusterName + '?ExcludeBlacklisted=true&excludeHostsInConfig=true');
             },
 
-            setCandidateHosts : function (hosts) {
-                candidateHosts = hosts;
+            setHealthyStandbyHosts : function (hosts) {
+                healthyStandbyHosts = hosts;
             },
 
             processConfig : function () {
@@ -130,8 +130,8 @@
                 return blacklistedHosts;
             },
 
-            getCandidateHosts : function () {
-                return candidateHosts;
+            getHealthyStandbyHosts : function () {
+                return healthyStandbyHosts;
             }
         };
     }
