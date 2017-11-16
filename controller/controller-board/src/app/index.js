@@ -3,7 +3,7 @@
 angular.module('angularMaterialAdmin', ['ngAnimate', 'ngCookies',
     'ngSanitize', 'ui.router', 'ngMaterial', 'nvd3', 'app' , 'md.data.table'])
     .config(function ($stateProvider, $urlRouterProvider, $mdThemingProvider,
-                      $mdIconProvider) {
+                      $mdIconProvider, $locationProvider) {
         $stateProvider
             .state('home', {
                 url: '',
@@ -42,6 +42,7 @@ angular.module('angularMaterialAdmin', ['ngAnimate', 'ngCookies',
             });
 
         $urlRouterProvider.otherwise('/tasks');
+        $locationProvider.html5Mode(true);
 
         $mdThemingProvider
             .theme('default')
