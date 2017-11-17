@@ -268,7 +268,9 @@
                 <i class="material-icons" md-colors="{color: 'blue-grey-500'}">error</i>
             </md-button>
             <span ng-show="vm.statusCode!=200">Error Message: {{vm.errorMessage.message}}</span>
-            <span ng-show="vm.statusCode==200">Replace Host Succeed!</span>
+            <span ng-show="vm.statusCode==200">Replace Host task is sent to Controllerworker,
+                Please go back to Task Page to view progress!
+            </span>
         </md-list-item>
     </md-content>
 </div>
