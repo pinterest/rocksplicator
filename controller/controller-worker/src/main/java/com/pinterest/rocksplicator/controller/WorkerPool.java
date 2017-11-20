@@ -19,8 +19,8 @@ package com.pinterest.rocksplicator.controller;
 import com.pinterest.rocksplicator.controller.tasks.Context;
 import com.pinterest.rocksplicator.controller.tasks.AbstractTask;
 import com.pinterest.rocksplicator.controller.tasks.TaskFactory;
-
 import com.pinterest.rocksplicator.controller.util.EmailSender;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

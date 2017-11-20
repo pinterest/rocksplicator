@@ -18,9 +18,9 @@ package com.pinterest.rocksplicator.controller.tasks;
 
 import com.pinterest.rocksplicator.controller.TaskBase;
 import com.pinterest.rocksplicator.controller.TaskQueue;
+import com.pinterest.rocksplicator.controller.util.EmailSender;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.pinterest.rocksplicator.controller.util.EmailSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
