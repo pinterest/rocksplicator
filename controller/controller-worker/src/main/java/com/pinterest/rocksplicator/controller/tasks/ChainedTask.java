@@ -20,9 +20,11 @@ import com.pinterest.rocksplicator.controller.TaskBase;
 import com.pinterest.rocksplicator.controller.TaskQueue;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.pinterest.rocksplicator.controller.util.EmailSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
 import java.util.Stack;
 
 /**
@@ -34,6 +36,9 @@ import java.util.Stack;
  * @author Ang Xu (angxu@pinterest.com)
  */
 final class ChainedTask extends AbstractTask<ChainedTask.Param> {
+
+  @Inject
+  private EmailSender emailSender;
 
   private static final Logger LOG = LoggerFactory.getLogger(ChainedTask.class);
 
@@ -72,7 +77,12 @@ final class ChainedTask extends AbstractTask<ChainedTask.Param> {
         try {
           task.process(ctx);
         } catch (Exception ex) {
-          LOG.error("Unexpected exception from task: {} in task chain.", task.getName(), ex);
+          String errorMessage = String.format(
+              "Exception from task %s in task chain, Exception message: %s",
+              task.getName(), ex.getMessage());
+          LOG.error(errorMessage);
+          emailSender.sendEmail(
+              task.getName() + "execution failed for " + ctx.getCluster(), errorMessage);
           lq.failTask(id, ex.getMessage());
         }
 

@@ -78,7 +78,8 @@ public class WorkerService {
               TimeUnit.SECONDS, new ArrayBlockingQueue<Runnable>(1));
       TaskQueue taskQueue = new MySQLTaskQueue(WorkerConfig.getJdbcUrl(),
           WorkerConfig.getMySqlUser(), WorkerConfig.getMySqlPassword());
-      WorkerPool workerPool = new WorkerPool(threadPoolExecutor, idleWorkersSemaphore, taskQueue);
+      WorkerPool workerPool = new WorkerPool(
+          threadPoolExecutor, idleWorkersSemaphore, taskQueue, emailSender);
       TaskDispatcher dispatcher = new TaskDispatcher(
           WorkerConfig.getDispatcherPollIntervalSec(), idleWorkersSemaphore, workerPool, taskQueue);
       dispatcher.start();

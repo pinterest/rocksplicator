@@ -20,6 +20,7 @@ import com.pinterest.rocksplicator.controller.tasks.Context;
 import com.pinterest.rocksplicator.controller.tasks.AbstractTask;
 import com.pinterest.rocksplicator.controller.tasks.TaskFactory;
 
+import com.pinterest.rocksplicator.controller.util.EmailSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,14 +44,23 @@ public final class WorkerPool {
   private final ConcurrentHashMap<Cluster, Future> runningTasks;
   private final ExecutorService executorService;
   private final TaskQueue taskQueue;
+  private final EmailSender emailSender;
 
   public WorkerPool(ExecutorService executorService,
                     Semaphore idleWorkersSemaphore,
                     TaskQueue taskQueue) {
+    this(executorService, idleWorkersSemaphore, taskQueue, null);
+  }
+
+  public WorkerPool(ExecutorService executorService,
+                    Semaphore idleWorkersSemaphore,
+                    TaskQueue taskQueue,
+                    EmailSender emailSender) {
     this.executorService = executorService;
     this.idleWorkersSemaphore = idleWorkersSemaphore;
     this.runningTasks = new ConcurrentHashMap<>();
     this.taskQueue = taskQueue;
+    this.emailSender = emailSender;
   }
 
   /**
@@ -75,6 +85,10 @@ public final class WorkerPool {
         LOG.error("Unexpected exception thrown from task {}.", task, t);
         // This is just a defensive maneuver. It's okay if the task has already been
         // completed by itself. Therefore, the result of this operation is ignored.
+        if (emailSender != null) {
+          emailSender.sendEmail(task.getName() +
+              " failed with exception", t.getMessage());
+        }
         taskQueue.failTask(task.id, t.getMessage());
       } finally {
         runningTasks.remove(task.cluster);
