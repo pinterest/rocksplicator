@@ -119,9 +119,19 @@ public class RebalanceTask extends AbstractTask<RebalanceTask.Param> {
           long newMasterSeqNum =
               newMasterClient.getSequenceNumber(new GetSequenceNumberRequest(dbName)).getSeq_num();
           if (newMasterSeqNum == oldMasterSeqNum) {
+            String periodicMessage = String.format(
+                "New master for %s has caught up! " +
+                    "New Master SeqNum: %d, Old master Seq num: %d",
+                dbName, newMasterSeqNum, oldMasterSeqNum);
+            LOG.info(periodicMessage);
             break;
           } else {
-            Thread.sleep(100);
+            String periodicMessage = String.format(
+                "New master for %s has not been caught up yet. " +
+                "New Master SeqNum: %d, Old master Seq num: %d",
+                dbName, newMasterSeqNum, oldMasterSeqNum);
+            LOG.info(periodicMessage);
+            Thread.sleep(1000);
           }
         }
 
