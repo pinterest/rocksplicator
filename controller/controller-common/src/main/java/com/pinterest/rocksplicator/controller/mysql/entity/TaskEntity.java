@@ -67,12 +67,21 @@ import java.util.Date;
                         "WHERE c.name = :name AND c.namespace = :namespace"),
     @NamedQuery(name = "task.peekTasksWithState",
                 query = "SELECT t FROM task t WHERE t.state = :state"),
+    @NamedQuery(name = "task.peekTasksWithStateAndName",
+                query = "SELECT t FROM task t INNER JOIN t.cluster c WHERE t.state = :state AND " +
+                        "t.name = :name"),
     @NamedQuery(name = "task.peekTasksWithStateFromNamespace",
                 query = "SELECT t FROM task t INNER JOIN t.cluster c WHERE t.state = :state AND " +
                         "c.namespace = :namespace"),
-    @NamedQuery(name = "task.peekTasksFromClusterWithState",
+    @NamedQuery(name = "task.peekTasksWithStateAndNameFromNamespace",
                 query = "SELECT t FROM task t INNER JOIN t.cluster c WHERE t.state = :state AND " +
-                    "c.namespace = :namespace AND c.name = :name"),
+                        "c.namespace = :namespace AND t.name = :name"),
+    @NamedQuery(name = "task.peekTasksWithStateFromCluster",
+                query = "SELECT t FROM task t INNER JOIN t.cluster c WHERE t.state = :state AND " +
+                        "c.namespace = :namespace AND c.name = :name"),
+    @NamedQuery(name = "task.peekTasksWithStateAndNameFromCluster",
+                query = "SELECT t FROM task t INNER JOIN t.cluster c WHERE t.state = :state AND " +
+                        "t.name = :name AND c.namespace = :namespace AND c.name = :clusterName")
 })
 public class TaskEntity {
 

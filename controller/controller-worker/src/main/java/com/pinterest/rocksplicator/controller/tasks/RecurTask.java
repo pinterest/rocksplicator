@@ -28,12 +28,15 @@ import javax.inject.Inject;
 
 /**
  * The task is used for tasks that happens every period of time.
+ * It also cleans up the finished recurring tasks order than 1 hour.
+ * (TODO: make the rolling window configurable)
  *
  * @author Shu Zhang (shu@pinterest.com)
  */
 public class RecurTask extends AbstractTask<RecurTask.Param>{
 
   private static final Logger LOG = LoggerFactory.getLogger(RecurTask.class);
+  private static final int RECUR_TASKS_STORAGE_ROLLING_WINDOW = 3600;
 
   @Inject
   private EmailSender emailSender;
@@ -131,6 +134,9 @@ public class RecurTask extends AbstractTask<RecurTask.Param>{
     } else if (state.state == LocalAckTaskQueue.State.StateName.DONE) {
       ackTask(new SuccessAcker(remoteTaskQueue), ctx, state.output);
     }
+    // delete old tasks
+    remoteTaskQueue.removeFinishedTasks(RECUR_TASKS_STORAGE_ROLLING_WINDOW,
+        ctx.getCluster().getNamespace(), ctx.getCluster().getName(), RecurTask.class.getName());
   }
 
   @Override

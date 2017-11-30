@@ -16,6 +16,7 @@
 
 package com.pinterest.rocksplicator.controller.mysql;
 
+import com.google.common.base.Strings;
 import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.Task;
 import com.pinterest.rocksplicator.controller.TaskBase;
@@ -357,7 +358,7 @@ public class MySQLTaskQueue extends MySQLBase implements TaskQueue {
     Query query;
     if (!cluster.getName().isEmpty() && !cluster.getNamespace().isEmpty() && state != null) {
       query = getEntityManager()
-        .createNamedQuery("task.peekTasksFromClusterWithState")
+        .createNamedQuery("task.peekTasksWithStateFromCluster")
         .setParameter("state", state)
         .setParameter("namespace", cluster.getNamespace()).setParameter("name", cluster.getName());
     } else if (!cluster.getNamespace().isEmpty() && cluster.getName().isEmpty() && state != null) {
@@ -414,12 +415,59 @@ public class MySQLTaskQueue extends MySQLBase implements TaskQueue {
   }
  
   @Override
-  public int removeFinishedTasks(final int secondsAgo) {
+  public int removeFinishedTasks(final int secondsAgo, final String namespace,
+                                 final String clusterName, final String taskName) {
     beginTransaction();
-    List<TaskEntity> finishedTasks = getEntityManager()
-        .createNamedQuery("task.peekTasksWithState")
-        .setParameter("state", TaskState.DONE.intValue())
-        .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+    List<TaskEntity> finishedTasks;
+    if (Strings.isNullOrEmpty(namespace)) {
+      if (Strings.isNullOrEmpty(taskName)) {
+        finishedTasks = getEntityManager()
+            .createNamedQuery("task.peekTasksWithState")
+            .setParameter("state", TaskState.DONE.intValue())
+            .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+      } else {
+        finishedTasks = getEntityManager()
+            .createNamedQuery("task.peekTasksWithStateAndName")
+            .setParameter("state", TaskState.DONE.intValue())
+            .setParameter("name", taskName)
+            .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+      }
+    } else {
+      if (Strings.isNullOrEmpty(clusterName)) {
+        if (Strings.isNullOrEmpty(taskName)) {
+          finishedTasks = getEntityManager()
+              .createNamedQuery("task.peekTasksWithStateFromNamespace")
+              .setParameter("state", TaskState.DONE.intValue())
+              .setParameter("namespace", namespace)
+              .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+        } else {
+          finishedTasks = getEntityManager()
+              .createNamedQuery("task.peekTasksWithStateAndNameFromNamespace")
+              .setParameter("state", TaskState.DONE.intValue())
+              .setParameter("namespace", namespace)
+              .setParameter("name", taskName)
+              .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+        }
+      } else {
+        if (Strings.isNullOrEmpty(taskName)) {
+          finishedTasks = getEntityManager()
+              .createNamedQuery("task.peekTasksWithStateFromCluster")
+              .setParameter("state", TaskState.DONE.intValue())
+              .setParameter("namespace", namespace)
+              .setParameter("name", clusterName)
+              .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+        } else {
+          finishedTasks = getEntityManager()
+              .createNamedQuery("task.peekTasksWithStateAndNameFromCluster")
+              .setParameter("state", TaskState.DONE.intValue())
+              .setParameter("namespace", namespace)
+              .setParameter("name", taskName)
+              .setParameter("clusterName", clusterName)
+              .setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
+        }
+      }
+    }
+
     List<TaskEntity> removingTasks = finishedTasks.stream().filter(t -> DateUtils.addSeconds(t
         .getCreatedAt(), secondsAgo).before(new Date())).collect(Collectors.toList());
     removingTasks.stream().forEach(t -> getEntityManager().remove(t));

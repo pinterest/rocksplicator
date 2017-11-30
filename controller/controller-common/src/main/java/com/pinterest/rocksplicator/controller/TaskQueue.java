@@ -160,9 +160,13 @@ public interface TaskQueue {
   /**
    * Remove finished tasks.
    * @param secondsAgo tasks finished seconds ago
+   * @param namespace cluster namespace, can be null or empty
+   * @param clusterName clusterName, can be null or empty
+   * @param taskName taskName
    * @return the number of finished tasks which are removed by this call.
    */
-  default int removeFinishedTasks(final int secondsAgo) {
+  default int removeFinishedTasks(final int secondsAgo, final String namespace,
+                                  final String clusterName, final String taskName) {
     return 0;
   }
 
