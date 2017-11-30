@@ -88,7 +88,7 @@
                     </tr>
                     </thead>
                     <tbody md-body>
-                    <tr md-row ng-repeat-start="task in vm.tasks">
+                    <tr md-row ng-repeat-start="task in vm.tasks | orderBy:'-'">
                         <td md-cell class="no-bottom-border">{{task.id}}</td>
                         <td md-cell class="no-bottom-border">{{task.name.split('.').reverse()[0]}}</td>
                         <td md-cell class="no-bottom-border">{{task.cluster.namespace}}/{{task.cluster.name}}</td>
