@@ -16,7 +16,6 @@
 
 package com.pinterest.rocksplicator.controller.mysql;
 
-import com.google.common.base.Strings;
 import com.pinterest.rocksplicator.controller.Cluster;
 import com.pinterest.rocksplicator.controller.Task;
 import com.pinterest.rocksplicator.controller.TaskBase;
@@ -25,6 +24,8 @@ import com.pinterest.rocksplicator.controller.bean.TaskState;
 import com.pinterest.rocksplicator.controller.mysql.entity.TagEntity;
 import com.pinterest.rocksplicator.controller.mysql.entity.TagId;
 import com.pinterest.rocksplicator.controller.mysql.entity.TaskEntity;
+
+import com.google.common.base.Strings;
 import org.apache.commons.lang3.time.DateUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
