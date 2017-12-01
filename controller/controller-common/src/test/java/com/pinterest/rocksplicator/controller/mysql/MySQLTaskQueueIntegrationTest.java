@@ -199,7 +199,7 @@ public class MySQLTaskQueueIntegrationTest {
   }
 
   @Test
-  public void testRemoveFinishedTasks() throws InterruptedException {
+  public void testRemoveFinishedTasksBasic() throws InterruptedException {
     Assert.assertTrue(
         queue.enqueueTask(createTaskBase("test-task-p0", 0, "test-task-body-p0"),
             cluster, 0));
@@ -212,7 +212,42 @@ public class MySQLTaskQueueIntegrationTest {
     Assert.assertTrue(queue.finishTask(task1.id, ""));
     Task task2 = queue.dequeueTask("worker");
     Assert.assertTrue(queue.finishTask(task2.id, ""));
-    Assert.assertEquals(queue.removeFinishedTasks(3), 1);
+    Assert.assertEquals(queue.removeFinishedTasks(3, null, null, null), 1);
+  }
+
+  @Test
+  public void testRemoveFinishedTasksWithTaskName() throws InterruptedException {
+    Assert.assertTrue(
+        queue.enqueueTask(createTaskBase("test-task-p0", 0, "test-task-body-p0"),
+            cluster, 0));
+    Thread.sleep(2000);
+    Assert.assertTrue(
+        queue.enqueueTask(createTaskBase("test-task-p2", 2, "test-task-body-p2"),
+            cluster, 0));
+    Thread.sleep(2000);
+    Task task1 = queue.dequeueTask("worker");
+    Assert.assertTrue(queue.finishTask(task1.id, ""));
+    Task task2 = queue.dequeueTask("worker");
+    Assert.assertTrue(queue.finishTask(task2.id, ""));
+    Assert.assertEquals(queue.removeFinishedTasks(1, null, null, "test-task-p0"), 1);
+  }
+
+  @Test
+  public void testRemoveFinishedTasksWithNameFromCluster() throws InterruptedException {
+    Assert.assertTrue(
+        queue.enqueueTask(createTaskBase("test-task-p0", 0, "test-task-body-p0"),
+            cluster, 0));
+    Thread.sleep(2000);
+    Assert.assertTrue(
+        queue.enqueueTask(createTaskBase("test-task-p2", 2, "test-task-body-p2"),
+            cluster, 0));
+    Thread.sleep(2000);
+    Task task1 = queue.dequeueTask("worker");
+    Assert.assertTrue(queue.finishTask(task1.id, ""));
+    Task task2 = queue.dequeueTask("worker");
+    Assert.assertTrue(queue.finishTask(task2.id, ""));
+    Assert.assertEquals(queue.removeFinishedTasks(
+        1, TEST_CLUSTER_NAMESPACE, TEST_CLUSTER_NAME, "test-task-p0"), 1);
   }
 
   @Test

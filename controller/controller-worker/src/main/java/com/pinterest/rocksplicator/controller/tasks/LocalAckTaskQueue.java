@@ -139,8 +139,9 @@ class LocalAckTaskQueue implements TaskQueue {
   }
 
   @Override
-  public int removeFinishedTasks(final int secondsAgo) {
-    return taskQueue.removeFinishedTasks(secondsAgo);
+  public int removeFinishedTasks(final int secondsAgo, final String namespace,
+                                 final String clusterName, final String taskName) {
+    return taskQueue.removeFinishedTasks(secondsAgo, namespace, clusterName, taskName);
   }
 
   @Override
