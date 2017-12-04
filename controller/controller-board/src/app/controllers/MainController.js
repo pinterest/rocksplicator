@@ -14,6 +14,10 @@
         vm.showSimpleToast = showSimpleToast;
         vm.toggleRightSidebar = toggleRightSidebar;
 
+        vm.gotoReplaceHost = function () {
+            $state.go('home.clusters');
+        }
+
         navService
             .loadAllItems()
             .then(function(menuItems) {

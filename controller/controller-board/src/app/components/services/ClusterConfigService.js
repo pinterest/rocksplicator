@@ -94,7 +94,7 @@
             },
 
             pullBlacklistedHosts : function () {
-                return $http.get('https://controllerhttp.pinadmin.com/v1/clusters/hosts/' + namespace + '/'+ clusterName);
+                return $http.get('https://controllerhttp.pinadmin.com/v1/clusters/blacklisted/' + namespace + '/'+ clusterName);
             },
 
             setBlacklistedHosts : function (hosts) {
@@ -116,6 +116,10 @@
 
             getClusterName : function () {
                 return clusterName;
+            },
+
+            getNamespace : function () {
+                return namespace;
             },
 
             getDataSegments : function(){
