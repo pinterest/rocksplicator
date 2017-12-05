@@ -23,6 +23,7 @@
         vm.showDetail = [];
         vm.tasks = [];
         var BAD_REQUEST = 400;
+        
         vm.getDate = function(data){
             return new Date(data).toString().split(' ').splice(1,4).join(' ');
         };
