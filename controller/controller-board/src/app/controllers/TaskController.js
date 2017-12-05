@@ -23,7 +23,7 @@
         vm.showDetail = [];
         vm.tasks = [];
         var BAD_REQUEST = 400;
-
+        
         vm.getDate = function(data){
             return new Date(data).toString().split(' ').splice(1,4).join(' ');
         };
@@ -86,7 +86,7 @@
             taskService.getTasks(vm.namespace, vm.clustername, vm.state)
                 .then(function(result) {
                     vm.taskStatusCode = result.status;
-                    vm.tasks = result.data;
+                    vm.tasks = result.data.reverse();
                     vm.showDetail = Array(vm.tasks.length).fill(false);
                     vm.taskloadComplete = true;
                 }, function (error){

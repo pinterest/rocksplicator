@@ -88,8 +88,8 @@
                     </tr>
                     </thead>
                     <tbody md-body>
-                    <tr md-row ng-repeat-start="task in vm.tasks | orderBy:'-'">
-                        <td md-cell class="no-bottom-border">{{task.id}}</td>
+                    <tr md-row ng-repeat-start="task in vm.tasks">
+                        <td md-cell class="no-bottom-border">{{vm.getDate(task.createdAt)}}</td>
                         <td md-cell class="no-bottom-border">{{task.name.split('.').reverse()[0]}}</td>
                         <td md-cell class="no-bottom-border">{{task.cluster.namespace}}/{{task.cluster.name}}</td>
                         <td md-cell class="no-bottom-border">
@@ -106,13 +106,11 @@
                             <md-tooltip md-direction="left" md-autohide=true>
                                 {{vm.getStateText(task.state)}}
                                 <br>
-                                Created At : {{vm.getDate(vm.tasks[$index].createdAt)}}
+                                Run After : {{vm.getDate(task.runAfter)}}
                                 <br>
-                                Run After : {{vm.getDate(vm.tasks[$index].runAfter)}}
+                                Last Alive At : {{vm.getDate(task.lastAliveAt)}}
                                 <br>
-                                Last Alive At : {{vm.getDate(vm.tasks[$index].lastAliveAt)}}
-                                <br>
-                                Claimed Worker : {{vm.tasks[$index].claimedWorker}}
+                                Claimed Worker : {{task.claimedWorker}}
                             </md-tooltip>
 
                         </td>
