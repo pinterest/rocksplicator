@@ -77,8 +77,8 @@
                     nameSet.add(name);
                   }
                 }
-                vm.clusterNamespaces = [...namespaceSet]
-                vm.clusterNames = [...nameSet]
+                vm.clusterNamespaces = Array.from(namespaceSet)
+                vm.clusterNames = Array.from(nameSet)
                 vm.clusterloadComplete = true;
             },function (error){
                 vm.statusCode = error.status;
