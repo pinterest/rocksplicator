@@ -16,7 +16,8 @@
         vm.clusterErrorMessage = 'UNDEFINED';
         vm.taskStatusCode = -1;
         vm.taskErrorMessage = 'UNDEFINED';
-        vm.namespaceClusters = [];
+        vm.clusterNamespaces = [];
+        vm.clusterNames = [];
         vm.namespace = 'UNDEFINED';
         vm.clustername = 'UNDEFINED';
         vm.state = 'UNDEFINED';
@@ -64,7 +65,20 @@
             .loadAllClusterNames()
             .then(function(result) {
                 vm.clusterStatusCode = result.status;
-                vm.namespaceClusters = result.data;
+                var namespaceSet = new Set();
+                var nameSet = new Set();
+                for (var i = 0; i < result.data.length; i ++) {
+                  var namespace = result.data[i].namespace;
+                  var name = result.data[i].name;
+                  if (!(namespace in namespaceSet)) {
+                    namespaceSet.add(namespace);
+                  }
+                  if (!(name in nameSet)) {
+                    nameSet.add(name);
+                  }
+                }
+                vm.clusterNamespaces = Array.from(namespaceSet)
+                vm.clusterNames = Array.from(nameSet)
                 vm.clusterloadComplete = true;
             },function (error){
                 vm.statusCode = error.status;

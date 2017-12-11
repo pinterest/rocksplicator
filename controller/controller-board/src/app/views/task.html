@@ -20,14 +20,14 @@
                     <td md-cell>
                         <md-input-container>
                             <md-select ng-model="vm.namespace" placeholder="Select a Data Segment">
-                                <md-option ng-value="namespaceCluster.namespace" ng-repeat="namespaceCluster in vm.namespaceClusters">{{ namespaceCluster.namespace }}</md-option>
+                                <md-option ng-value="clusterNamespace" ng-repeat="clusterNamespace in vm.clusterNamespaces">{{ clusterNamespace }}</md-option>
                             </md-select>
                         </md-input-container>
                     </td>
                     <td md-cell>
                         <md-input-container>
                             <md-select ng-model="vm.clustername" placeholder="Select a Cluster Name">
-                                <md-option ng-value="namespaceCluster.name" ng-repeat="namespaceCluster in vm.namespaceClusters">{{ namespaceCluster.name }}</md-option>
+                                <md-option ng-value="clusterName" ng-repeat="clusterName in vm.clusterNames">{{ clusterName }}</md-option>
                             </md-select>
                         </md-input-container>
                     </td>
