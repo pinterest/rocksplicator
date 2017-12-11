@@ -80,6 +80,17 @@ public class Clusters {
     return ZK_PREFIX + namespace + "/" + clusterName;
   }
 
+  private TaskBase buildHealthcheckTask(Boolean isConsistentHashRing,
+                                        Integer intervalSeconds,
+                                        Integer countAsFailure,
+                                        Integer muteMins) throws JsonProcessingException {
+    if (isConsistentHashRing) {
+      return new ConsistentHashRingHealthCheckTask(countAsFailure, muteMins).recur(intervalSeconds).getEntity();
+    } else {
+      return new HealthCheckTask(countAsFailure,  muteMins).recur(intervalSeconds).getEntity();
+    }
+  }
+
   /**
    * Retrieves cluster information by cluster name.
    *
@@ -148,16 +159,31 @@ public class Clusters {
   @Produces(MediaType.APPLICATION_JSON)
   public Response initialize(@PathParam("namespace") String namespace,
                              @PathParam("clusterName") String clusterName,
-                             @QueryParam("zkPrefix") Optional<String> zkPrefix) {
-    if (!taskQueue.createCluster(new Cluster(namespace, clusterName))) {
-      String message = String.format("Cluster %s is already existed", clusterName);
-      return Utils.buildResponse(HttpStatus.BAD_REQUEST_400, ImmutableMap.of("message", message));
+                             @QueryParam("zkPrefix") Optional<String> zkPrefix,
+                             @QueryParam("enableRecurHealthcheck") Optional<Boolean> enableRecurHealthcheck,
+                             @QueryParam("connHash") Optional<Boolean> isConsistentHashRing,
+                             @QueryParam("countAsFailure") Optional<Integer> countAsFailure,
+                             @QueryParam("muteMins") Optional<Integer> muteMins) {
+    try {
+      if (!taskQueue.createCluster(new Cluster(namespace, clusterName))) {
+        String message = String.format("Cluster %s is already existed", clusterName);
+        return Utils.buildResponse(HttpStatus.BAD_REQUEST_400, ImmutableMap.of("message", message));
+      }
+      if (!clusterManager.createCluster(new Cluster(namespace, clusterName))) {
+        String message = String.format("Cluster %s is already existed in cluster manager", clusterName);
+        return Utils.buildResponse(HttpStatus.BAD_REQUEST_400, ImmutableMap.of("message", message));
+      }
+      if (enableRecurHealthcheck.orElse(false)) {
+        taskQueue.enqueueTask(buildHealthcheckTask(isConsistentHashRing.orElse(false), 60,
+            countAsFailure.orElse(3), muteMins.orElse(30)),
+            new Cluster(namespace, clusterName), 0);
+      }
+      return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
+    } catch (JsonProcessingException e) {
+      String message = "Cannot serialize parameters";
+      return Utils.buildResponse(HttpStatus.INTERNAL_SERVER_ERROR_500,
+          ImmutableMap.of("message", message));
     }
-    if (!clusterManager.createCluster(new Cluster(namespace, clusterName))) {
-      String message = String.format("Cluster %s is already existed in cluster manager", clusterName);
-      return Utils.buildResponse(HttpStatus.BAD_REQUEST_400, ImmutableMap.of("message", message));
-    }
-    return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
   }
 
   /**
@@ -438,16 +464,9 @@ public class Clusters {
                               @QueryParam("countAsFailure") Optional<Integer> countAsFailure,
                               @QueryParam("muteMins") Optional<Integer> muteMins) {
     try {
-      TaskBase healthCheckTask;
-      if (isConsistentHashRing.isPresent() && isConsistentHashRing.get().equals(true)) {
-        healthCheckTask = new ConsistentHashRingHealthCheckTask(
-            countAsFailure.orElse(3), muteMins.orElse(30)).recur(
-            intervalSeconds.orElse(0)).getEntity();
-      } else {
-        healthCheckTask = new HealthCheckTask(countAsFailure.orElse(3), muteMins.orElse(30)).recur(
-            intervalSeconds.orElse(0)).getEntity();
-      }
-      taskQueue.enqueueTask(healthCheckTask, new Cluster(namespace, clusterName), 0);
+      taskQueue.enqueueTask(buildHealthcheckTask(isConsistentHashRing.orElse(false),
+          intervalSeconds.orElse(0), countAsFailure.orElse(3), muteMins.orElse(30)),
+          new Cluster(namespace, clusterName), 0);
       return Utils.buildResponse(HttpStatus.OK_200, ImmutableMap.of("data", true));
     } catch (JsonProcessingException e) {
       String message = "Cannot serialize parameters";
