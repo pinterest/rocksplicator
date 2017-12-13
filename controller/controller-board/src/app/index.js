@@ -13,7 +13,7 @@ angular.module('angularMaterialAdmin', ['ngAnimate', 'ngCookies',
                 abstract: true
             })
             .state('home.tasks', {
-                url: '/tasks',
+                url: '/tasks?namespace&clusterName',
                 controller: 'TaskController',
                 controllerAs: 'vm',
                 templateUrl: 'app/views/task.html'
@@ -41,7 +41,7 @@ angular.module('angularMaterialAdmin', ['ngAnimate', 'ngCookies',
                 controllerAs: 'vm'
             });
 
-        $urlRouterProvider.otherwise('/tasks');
+        $urlRouterProvider.otherwise('/clusters');
         $locationProvider.html5Mode(true);
 
         $mdThemingProvider

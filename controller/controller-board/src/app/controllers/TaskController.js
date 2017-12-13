@@ -5,10 +5,11 @@
         .controller('TaskController', [
             'taskService',
             'clusterConfigService',
+            '$stateParams',
             TaskController
         ]);
 
-    function TaskController(taskService, clusterConfigService) {
+    function TaskController(taskService, clusterConfigService, $stateParams) {
         var vm = this;
         vm.clusterloadComplete = false;
         vm.taskloadComplete = false;
@@ -18,8 +19,8 @@
         vm.taskErrorMessage = 'UNDEFINED';
         vm.clusterNamespaces = [];
         vm.clusterNames = [];
-        vm.namespace = 'UNDEFINED';
-        vm.clustername = 'UNDEFINED';
+        vm.namespace = $stateParams.namespace;
+        vm.clusterName = $stateParams.clusterName;
         vm.state = 'UNDEFINED';
         vm.showDetail = [];
         vm.tasks = [];
@@ -88,7 +89,7 @@
 
         vm.selectTask = function () {
             vm.taskloadComplete = false;
-            if (vm.state === 'UNDEFINED' || (vm.namespace === 'UNDEFINED' && vm.clustername !== 'UNDEFINED')) {
+            if (vm.state === 'UNDEFINED' || (vm.namespace === 'UNDEFINED' && vm.clusterName !== 'UNDEFINED')) {
                 vm.taskStatusCode = BAD_REQUEST;
                 vm.taskErrorMessage = vm.state === 'UNDEFINED' ?
                     "You have to specify the task state"
@@ -97,7 +98,7 @@
                 return;
             }
 
-            taskService.getTasks(vm.namespace, vm.clustername, vm.state)
+            taskService.getTasks(vm.namespace, vm.clusterName, vm.state)
                 .then(function(result) {
                     vm.taskStatusCode = result.status;
                     vm.tasks = result.data.reverse();

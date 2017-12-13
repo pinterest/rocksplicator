@@ -91,5 +91,13 @@
       vm.showCluster = function (namespace) {
           vm.namespaceSelected = namespace;
       }
+
+      vm.gotoTask = function (cluster) {
+          vm.clusterSelected = cluster;
+          $state.go('home.tasks', {
+              'namespace' : vm.namespaceSelected,
+              'clusterName': vm.clusterSelected
+          });
+      }
   }
 })();
