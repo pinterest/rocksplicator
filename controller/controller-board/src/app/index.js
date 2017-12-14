@@ -30,10 +30,6 @@ angular.module('angularMaterialAdmin', ['ngAnimate', 'ngCookies',
                 controllerAs: 'vm',
                 templateUrl: 'app/views/host.html'
             })
-            .state('home.admin', {
-                url: '/admin',
-                templateUrl: 'app/views/admin.html'
-            })
             .state('home.newTask', {
                 url: '/createtask',
                 templateUrl: 'app/views/newTask.html',

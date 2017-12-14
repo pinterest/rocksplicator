@@ -23,11 +23,6 @@
               name: 'New Task',
               icon: 'create',
               sref: '.newTask'
-          },
-          {
-              name: 'Admin',
-              icon: 'people',
-              sref: '.admin'
           }
     ];
 
