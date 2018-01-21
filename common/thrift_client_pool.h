@@ -44,6 +44,8 @@ DECLARE_int32(default_thrift_client_pool_threads);
 
 DECLARE_int32(min_channel_create_interval_seconds);
 
+DECLARE_int32(tcp_user_timeout_ms);
+
 namespace common {
 
 /*
@@ -204,6 +206,25 @@ class ThriftClientPool {
 
       if (should_new_channel) {
         auto socket = apache::thrift::async::TAsyncSocket::newSocket(evb_);
+
+#ifdef TCP_USER_TIMEOUT
+        // TCP_USER_TIMEOUT is not supported by Ubuntu 12.04.
+        if (FLAGS_tcp_user_timeout_ms > 0) {
+          unsigned int timeout_ms = FLAGS_tcp_user_timeout_ms;
+          const auto ret =
+            socket->setSockOpt(IPPROTO_TCP, TCP_USER_TIMEOUT, &timeout_ms);
+
+          if (ret == 0) {
+            LOG(INFO) << "Set TCP_USER_TIMEOUT to " << timeout_ms
+                      << " ms for " << addr;
+          } else {
+            LOG(ERROR) << "Failed to set TCP_USER_TIMEOUT to " << timeout_ms
+                       << " ms with errno " << errno << " : "
+                       << strerror(errno);
+          }
+        }
+#endif
+
         auto cb = std::make_unique<ClientStatusCallback>(addr);
         socket->connect(cb.get(), addr, connect_timeout_ms);
         channel = apache::thrift::HeaderClientChannel::newChannel(socket);

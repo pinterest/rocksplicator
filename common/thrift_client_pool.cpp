@@ -32,3 +32,7 @@ DEFINE_int32(default_thrift_client_pool_threads, sysconf(_SC_NPROCESSORS_ONLN),
 
 DEFINE_int32(min_channel_create_interval_seconds, 10,
              "The minimum time between two identical channel creation");
+
+DEFINE_int32(tcp_user_timeout_ms, 0,
+             "The max time allowed for unacked tcp data before closing the "
+             "corresponding TCP connection");
