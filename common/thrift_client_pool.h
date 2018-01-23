@@ -206,6 +206,8 @@ class ThriftClientPool {
 
       if (should_new_channel) {
         auto socket = apache::thrift::async::TAsyncSocket::newSocket(evb_);
+        auto cb = std::make_unique<ClientStatusCallback>(addr);
+        socket->connect(cb.get(), addr, connect_timeout_ms);
 
 #ifdef TCP_USER_TIMEOUT
         // TCP_USER_TIMEOUT is not supported by Ubuntu 12.04.
@@ -225,8 +227,6 @@ class ThriftClientPool {
         }
 #endif
 
-        auto cb = std::make_unique<ClientStatusCallback>(addr);
-        socket->connect(cb.get(), addr, connect_timeout_ms);
         channel = apache::thrift::HeaderClientChannel::newChannel(socket);
         if (FLAGS_channel_send_timeout_ms > 0) {
           channel->setTimeout(FLAGS_channel_send_timeout_ms);
