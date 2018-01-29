@@ -37,7 +37,7 @@
 #include "rocksdb/options.h"
 #include "rocksdb/utilities/backupable_db.h"
 #include "rocksdb_admin/utils.h"
-
+#include "thrift/lib/cpp2/protocol/Serializer.h"
 
 DEFINE_string(hdfs_name_node, "hdfs://hbasebak-infra-namenode-prod1c01-001:8020",
               "The hdfs name node used for backup");
@@ -67,6 +67,16 @@ namespace {
 
 const int kMB = 1024 * 1024;
 const int kS3UtilRecheckSec = 5;
+
+rocksdb::DB* OpenMetaDB() {
+  rocksdb::Options options;
+  options.create_if_missing = true;
+  rocksdb::DB* db;
+  auto s = rocksdb::DB::Open(options, FLAGS_rocksdb_dir + "meta_db", &db);
+  CHECK(s.ok()) << "Failed to open meta DB" << " with error " << s.ToString();
+
+  return db;
+}
 
 std::unique_ptr<rocksdb::DB> GetRocksdb(const std::string& dir,
                                         const rocksdb::Options& options) {
@@ -220,7 +230,10 @@ AdminHandler::AdminHandler(
     RocksDBOptionsGeneratorType rocksdb_options)
   : db_manager_(std::move(db_manager))
   , rocksdb_options_(std::move(rocksdb_options))
-  , db_admin_lock_() {
+  , db_admin_lock_()
+  , s3_util_()
+  , s3_util_lock_()
+  , meta_db_(OpenMetaDB()) {
   if (db_manager_ == nullptr) {
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
@@ -253,6 +266,44 @@ std::unique_ptr<rocksdb::DB> AdminHandler::removeDB(
   return db;
 }
 
+DBMetaData AdminHandler::getMetaData(const std::string& db_name) {
+  DBMetaData meta;
+  meta.db_name = db_name;
+
+  std::string buffer;
+  rocksdb::ReadOptions options;
+  auto s = meta_db_->Get(options, db_name, &buffer);
+  if (s.ok()) {
+    apache::thrift::CompactSerializer::deserialize(buffer, meta);
+  }
+
+  return meta;
+}
+
+bool AdminHandler::clearMetaData(const std::string& db_name) {
+  rocksdb::WriteOptions options;
+  options.sync = true;
+  auto s = meta_db_->Delete(options, db_name);
+  return s.ok();
+}
+
+bool AdminHandler::writeMetaData(const std::string& db_name,
+                                 const std::string& s3_bucket,
+                                 const std::string& s3_path) {
+  DBMetaData meta;
+  meta.db_name = db_name;
+  meta.set_s3_bucket(s3_bucket);
+  meta.set_s3_path(s3_path);
+
+  std::string buffer;
+  apache::thrift::CompactSerializer::serialize(meta, &buffer);
+
+  rocksdb::WriteOptions options;
+  options.sync = true;
+  auto s = meta_db_->Put(options, db_name, buffer);
+  return s.ok();
+}
+
 void AdminHandler::async_tm_addDB(
       std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
           AddDBResponse>>> callback,
@@ -283,6 +334,7 @@ void AdminHandler::async_tm_addDB(
   rocksdb::Status status;
   if (request->overwrite) {
     LOG(INFO) << "Clearing DB: " << request->db_name;
+    clearMetaData(request->db_name);
     status = rocksdb::DestroyDB(db_path, rocksdb_options_(segment));
     if (!OKOrSetException(status,
                           AdminErrorCode::DB_ADMIN_ERROR,
@@ -589,6 +641,7 @@ void AdminHandler::async_tm_clearDB(
   auto options = rocksdb_options_(admin::DbNameToSegment(request->db_name));
   auto db_path = FLAGS_rocksdb_dir + request->db_name;
   LOG(INFO) << "Clearing DB: " << request->db_name;
+  clearMetaData(request->db_name);
   auto status = rocksdb::DestroyDB(db_path, options);
   if (!OKOrSetException(status,
                         AdminErrorCode::DB_ADMIN_ERROR,
@@ -633,6 +686,14 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       AddS3SstFilesToDBResponse>>> callback,
     std::unique_ptr<AddS3SstFilesToDBRequest> request) {
+  auto meta = getMetaData(request->db_name);
+  if (meta.__isset.s3_bucket && meta.s3_bucket == request->s3_bucket &&
+      meta.__isset.s3_path && meta.s3_path == request->s3_path) {
+    LOG(INFO) << "Already hosting " << meta.s3_bucket << "/" << meta.s3_path;
+    callback->result(AddS3SstFilesToDBResponse());
+    return;
+  }
+
   // Though it is claimed that AWS s3 sdk is a light weight library. However,
   // we couldn't afford to create a new client for every SST file downloading
   // request, which is not even on any critical code path. Otherwise, we will
@@ -722,6 +783,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     return;
   }
 
+  clearMetaData(request->db_name);
   rocksdb::IngestExternalFileOptions ifo;
   ifo.move_files = true;
   /* if true, rocksdb will allow for overlapping keys */
@@ -735,6 +797,8 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
                << status.ToString();
     return;
   }
+
+  writeMetaData(request->db_name, request->s3_bucket, request->s3_path);
 
   if (FLAGS_compact_db_after_load_sst) {
     auto status = db->rocksdb()->CompactRange(nullptr, nullptr);
