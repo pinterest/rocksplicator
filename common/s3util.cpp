@@ -316,9 +316,11 @@ shared_ptr<S3Util> S3Util::BuildS3Util(
   Aws::Client::ClientConfiguration aws_config;
   aws_config.connectTimeoutMs = connect_timeout_ms;
   aws_config.requestTimeoutMs = request_timeout_ms;
-  aws_config.readRateLimiter = 
-    std::make_shared<DefaultRateLimiter<>>(
-          read_ratelimit_mb * 1024 * 1024);
+  if (read_ratelimit_mb > 0) {
+    aws_config.readRateLimiter =
+        std::make_shared<DefaultRateLimiter<>>(
+            read_ratelimit_mb * 1024 * 1024);
+  }
   SDKOptions options;
   Aws::InitAPI(options);
   return std::make_shared<S3Util>(
