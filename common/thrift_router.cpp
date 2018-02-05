@@ -24,7 +24,7 @@
 #include <vector>
 #include "common/jsoncpp/include/json/json.h"
 
-DEFINE_bool(always_prefer_local_host, false,
+DEFINE_bool(always_prefer_local_host, true,
             "Always prefer local host when ordering hosts");
 DEFINE_int32(min_client_reconnect_interval_seconds, 5,
              "min reconnect interval in seconds");
