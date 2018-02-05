@@ -621,12 +621,13 @@ TEST(ThriftRouterTest, HostOrderTest) {
   EXPECT_EQ(
     router.getClientsFor("user_pins", Role::ANY, Quantity::ALL, 2, &v),
     ReturnCode::OK);
+  // We expect to see the "us-east-1c" host first
   EXPECT_EQ(v.size(), 3);
   EXPECT_NO_THROW(v[0]->future_ping().get());
-  EXPECT_EQ(handlers[0]->nPings_.load(), 1);
+  EXPECT_EQ(handlers[1]->nPings_.load(), 1);
 
   EXPECT_NO_THROW(v[1]->future_ping().get());
-  EXPECT_EQ(handlers[1]->nPings_.load(), 1);
+  EXPECT_EQ(handlers[0]->nPings_.load(), 1);
 
   EXPECT_NO_THROW(v[2]->future_ping().get());
   EXPECT_EQ(handlers[2]->nPings_.load(), 1);
