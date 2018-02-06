@@ -686,14 +686,6 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       AddS3SstFilesToDBResponse>>> callback,
     std::unique_ptr<AddS3SstFilesToDBRequest> request) {
-  auto meta = getMetaData(request->db_name);
-  if (meta.__isset.s3_bucket && meta.s3_bucket == request->s3_bucket &&
-      meta.__isset.s3_path && meta.s3_path == request->s3_path) {
-    LOG(INFO) << "Already hosting " << meta.s3_bucket << "/" << meta.s3_path;
-    callback->result(AddS3SstFilesToDBResponse());
-    return;
-  }
-
   // Though it is claimed that AWS s3 sdk is a light weight library. However,
   // we couldn't afford to create a new client for every SST file downloading
   // request, which is not even on any critical code path. Otherwise, we will
@@ -723,6 +715,23 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
 
   db_admin_lock_.Lock(request->db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
+
+  auto db = getDB(request->db_name, nullptr);
+  if (db == nullptr) {
+    e.message = request->db_name + " doesnt exist.";
+    callback.release()->exceptionInThread(std::move(e));
+    LOG(ERROR) << "Could not add SST files to a non existing DB "
+               << request->db_name;
+    return;
+  }
+
+  auto meta = getMetaData(request->db_name);
+  if (meta.__isset.s3_bucket && meta.s3_bucket == request->s3_bucket &&
+      meta.__isset.s3_path && meta.s3_path == request->s3_path) {
+    LOG(INFO) << "Already hosting " << meta.s3_bucket << "/" << meta.s3_path;
+    callback->result(AddS3SstFilesToDBResponse());
+    return;
+  }
 
   auto local_path = FLAGS_rocksdb_dir + "s3_tmp/" + request->db_name + "/";
   boost::system::error_code remove_err;
@@ -774,16 +783,45 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     sst_file_paths.push_back(local_path + file_name);
   }
 
-  auto db = getDB(request->db_name, nullptr);
-  if (db == nullptr) {
-    e.message = request->db_name + " doesnt exist.";
-    callback.release()->exceptionInThread(std::move(e));
-    LOG(ERROR) << "Could not add SST files to a non existing DB "
-               << request->db_name;
-    return;
+  clearMetaData(request->db_name);
+  if (!FLAGS_rocksdb_allow_overlapping_keys) {
+    // clear DB if overlapping keys are not allowed
+    db.reset();
+    removeDB(request->db_name, nullptr);
+    auto options = rocksdb_options_(admin::DbNameToSegment(request->db_name));
+    auto db_path = FLAGS_rocksdb_dir + request->db_name;
+    LOG(INFO) << "Clearing DB: " << request->db_name;
+    auto status = rocksdb::DestroyDB(db_path, options);
+    if (!OKOrSetException(status,
+                          AdminErrorCode::DB_ADMIN_ERROR,
+                          &callback)) {
+      LOG(ERROR) << "Failed to clear DB " << request->db_name << " "
+                 << status.ToString();
+      return;
+    }
+
+    // reopen it
+    LOG(INFO) << "Open DB: " << request->db_name;
+    admin::AdminException e;
+    e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+    auto rocksdb_db = GetRocksdb(db_path, options);
+    if (rocksdb_db == nullptr) {
+      e.message = "Failed to open DB: " + request->db_name;
+      callback.release()->exceptionInThread(std::move(e));
+      return;
+    }
+
+    std::string err_msg;
+    if (!db_manager_->addDB(request->db_name, std::move(rocksdb_db),
+                            replicator::DBRole::MASTER, &err_msg)) {
+      e.message = std::move(err_msg);
+      callback.release()->exceptionInThread(std::move(e));
+      return;
+    }
+    LOG(INFO) << "Done open DB: " << request->db_name;
+    db = getDB(request->db_name, nullptr);
   }
 
-  clearMetaData(request->db_name);
   rocksdb::IngestExternalFileOptions ifo;
   ifo.move_files = true;
   /* if true, rocksdb will allow for overlapping keys */
