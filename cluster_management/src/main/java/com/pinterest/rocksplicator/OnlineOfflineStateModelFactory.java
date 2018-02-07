@@ -6,6 +6,9 @@ import com.pinterest.rocksdb_admin.thrift.Admin;
 import com.pinterest.rocksdb_admin.thrift.AdminException;
 import com.pinterest.rocksdb_admin.thrift.ClearDBRequest;
 import com.pinterest.rocksdb_admin.thrift.CloseDBRequest;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
@@ -90,10 +93,12 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
       }
 
       try {
-        zkClient.sync().forPath(getS3BucketLocation());
-        String s3Bucket = new String(zkClient.getData().forPath(getS3BucketLocation()));
-        zkClient.sync().forPath(getS3PathLocation());
-        String s3Path = new String(zkClient.getData().forPath(getS3PathLocation()));
+        zkClient.sync().forPath(getMetaLocation());
+        String meta = new String(zkClient.getData().forPath(getMetaLocation()));
+        JsonObject jsonObject = new JsonParser().parse(meta).getAsJsonObject();
+
+        String s3Path = jsonObject.get("s3_path").getAsString();
+        String s3Bucket = jsonObject.get("s3_bucket").getAsString();
 
         AddS3SstFilesToDBRequest req = new AddS3SstFilesToDBRequest(getDbName(),
             s3Bucket, s3Path);
@@ -167,12 +172,8 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
       LOG.error("From " + fromState + " to " + toState + " for " + partitionName);
     }
 
-    private String getS3BucketLocation() {
-      return "/metadata/" + this.cluster + "/" + this.resourceName + "/s3_bucket";
-    }
-
-    private String getS3PathLocation() {
-      return "/metadata/" + this.cluster + "/" + this.resourceName + "/s3_path";
+    private String getMetaLocation() {
+      return "/metadata/" + this.cluster + "/" + this.resourceName + "/resource_meta";
     }
 
     // partition name is in format: test_0
