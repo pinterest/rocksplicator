@@ -49,7 +49,7 @@ namespace {
 
 const int64_t kMinMetricValue = 0;
 const int64_t kMaxMetricValue = 200;
-const int64_t kFlushIntervalMS = 250;
+const int64_t kFlushIntervalMS = 1000;
 
 inline seconds GetTimeSinceEpochSeconds() {
   return duration_cast<seconds>(system_clock::now().time_since_epoch());
