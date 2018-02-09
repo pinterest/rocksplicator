@@ -16,6 +16,15 @@
 namespace cpp2 admin
 namespace java com.pinterest.rocksdb_admin.thrift
 
+# meta data maintained for each individual DB
+struct DBMetaData {
+  1: required string db_name,
+  # the s3 dataset (identified by s3_bucket + s3_path) that is currently being
+  # hosted by this DB.
+  2: optional string s3_bucket,
+  3: optional string s3_path,
+}
+
 enum AdminErrorCode {
   DB_NOT_FOUND = 1,
   DB_EXIST = 2,

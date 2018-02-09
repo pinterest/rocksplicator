@@ -68,7 +68,7 @@ class AdminHandler : virtual public AdminSvIf {
   void async_tm_checkDB(
       std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
           CheckDBResponse>>> callback,
-  std::unique_ptr<CheckDBRequest> request) override;
+      std::unique_ptr<CheckDBRequest> request) override;
 
   void async_tm_closeDB(
       std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
@@ -113,6 +113,12 @@ class AdminHandler : virtual public AdminSvIf {
   std::unique_ptr<rocksdb::DB> removeDB(const std::string& db_name,
                                         AdminException* ex);
 
+  DBMetaData getMetaData(const std::string& db_name);
+  bool clearMetaData(const std::string& db_name);
+  bool writeMetaData(const std::string& db_name,
+                     const std::string& s3_bucket,
+                     const std::string& s3_path);
+
   std::unique_ptr<ApplicationDBManager> db_manager_;
   RocksDBOptionsGeneratorType rocksdb_options_;
   // Lock to synchronize DB admin operations at per DB granularity
@@ -121,6 +127,8 @@ class AdminHandler : virtual public AdminSvIf {
   std::shared_ptr<common::S3Util> s3_util_;
   // Lock for protecting the s3 util
   mutable std::mutex s3_util_lock_;
+  // db that contains meta data for all local rocksdb instances
+  std::unique_ptr<rocksdb::DB> meta_db_;
 };
 
 }  // namespace admin
