@@ -42,7 +42,7 @@
 DEFINE_string(hdfs_name_node, "hdfs://hbasebak-infra-namenode-prod1c01-001:8020",
               "The hdfs name node used for backup");
 
-DEFINE_string(rocksdb_dir, "/data/xvdb/aperture/",
+DEFINE_string(rocksdb_dir, "/tmp/",
               "The dir for local rocksdb instances");
 
 DEFINE_int32(num_hdfs_access_threads, 8,
