@@ -97,7 +97,7 @@ void invokeClass(JNIEnv* env,
 
 }
 
-namespace common {
+namespace admin {
 
 void JoinCluster(const std::string& zk_connect_str,
                  const std::string& cluster,
@@ -117,4 +117,4 @@ void JoinCluster(const std::string& zk_connect_str,
   LOG(INFO) << "Launching JVM and starting Helix participant";
 }
 
-}
+}  // namespace admin
