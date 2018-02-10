@@ -20,7 +20,7 @@
 
 #include <string>
 
-namespace common {
+namespace admin {
 
 /*
  * Join a Helix managed cluster.
@@ -39,4 +39,4 @@ void JoinCluster(const std::string& zk_connect_str,
                  const std::string& state_model_type,
                  const std::string& domain);
 
-}  // namespace common
+}  // namespace admin
