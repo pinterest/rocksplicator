@@ -16,7 +16,7 @@
 // @author bol (bol@pinterest.com)
 //
 
-#include "common/helix_client.h"
+#include "rocksdb_admin/helix_client.h"
 
 #include "jni.h"
 
@@ -35,7 +35,7 @@ JNIEnv* createVM() {
   JNIEnv* env;
   JavaVMInitArgs args;
   JavaVMOption options[2];
-  
+
   args.version = JNI_VERSION_1_6;
   args.nOptions = 2;
   options[0].optionString =
