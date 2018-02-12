@@ -30,6 +30,7 @@ namespace admin {
  * @param state_model_type The Helix state model to use. e.g., "OnlineOffline"
  * @param domain This is for topology aware cluster management.
  *               e.g., "az=us-east-1a,pg=placement_group1"
+ * @param class_path The class path for cluster_management jar.
  *
  * @note the function will intentionally crash the calling process if it couldn't
  *  join the cluster successfully.
@@ -37,6 +38,7 @@ namespace admin {
 void JoinCluster(const std::string& zk_connect_str,
                  const std::string& cluster,
                  const std::string& state_model_type,
-                 const std::string& domain);
+                 const std::string& domain,
+                 const std::string& class_path);
 
 }  // namespace admin

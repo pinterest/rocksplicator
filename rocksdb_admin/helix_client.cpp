@@ -30,7 +30,7 @@ DECLARE_int32(port);
 
 namespace {
 
-JNIEnv* createVM() {
+JNIEnv* createVM(const std::string& class_path) {
   JavaVM* jvm;
   JNIEnv* env;
   JavaVMInitArgs args;
@@ -38,9 +38,10 @@ JNIEnv* createVM() {
 
   args.version = JNI_VERSION_1_6;
   args.nOptions = 2;
-  options[0].optionString =
-    "-Djava.class.path=./cluster_management-0.0.1-SNAPSHOT.jar:"
-    "./cluster_management-0.0.1-SNAPSHOT-jar-with-dependencies.jar";
+  auto class_opt = "-Djava.class.path=" + class_path +
+    "cluster_management-0.0.1-SNAPSHOT.jar:" + class_path +
+    "cluster_management-0.0.1-SNAPSHOT-jar-with-dependencies.jar";
+  options[0].optionString = const_cast<char*>(class_opt.c_str());
   options[1].optionString = "-verbose:jni";
 
   args.options = options;
@@ -92,6 +93,7 @@ void invokeClass(JNIEnv* env,
   env->CallStaticVoidMethod(ParticipantClass, mainMethod, args);
 
   // The participant main function should never exit
+  env->ExceptionDescribe();
   CHECK(false) << "Participant main() exited";
 }
 
@@ -102,13 +104,15 @@ namespace admin {
 void JoinCluster(const std::string& zk_connect_str,
                  const std::string& cluster,
                  const std::string& state_model_type,
-                 const std::string& domain) {
-  std::thread t([zk_connect_str, cluster, state_model_type, domain] () {
+                 const std::string& domain,
+                 const std::string& class_path) {
+  std::thread t([zk_connect_str, cluster, state_model_type, domain,
+                 class_path] () {
       // FIXME use a more reliable way to ensure the thread calling JoinCluster
       // has time to start the thrift server.
       std::this_thread::sleep_for(std::chrono::seconds(10));
 
-      auto env = createVM();
+      auto env = createVM(class_path);
       invokeClass(env, zk_connect_str, cluster, state_model_type, domain);
     });
 
