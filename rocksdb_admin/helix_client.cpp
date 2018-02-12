@@ -39,7 +39,6 @@ JNIEnv* createVM(const std::string& class_path) {
   args.version = JNI_VERSION_1_6;
   args.nOptions = 2;
   auto class_opt = "-Djava.class.path=" + class_path +
-    "cluster_management-0.0.1-SNAPSHOT.jar:" + class_path +
     "cluster_management-0.0.1-SNAPSHOT-jar-with-dependencies.jar";
   options[0].optionString = const_cast<char*>(class_opt.c_str());
   options[1].optionString = "-verbose:jni";
