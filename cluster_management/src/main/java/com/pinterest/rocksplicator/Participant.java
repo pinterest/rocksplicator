@@ -39,6 +39,7 @@ import org.apache.helix.model.builder.HelixConfigScopeBuilder;
 import org.apache.helix.participant.StateMachineEngine;
 import org.apache.helix.participant.statemachine.StateModel;
 import org.apache.helix.participant.statemachine.StateModelFactory;
+import org.apache.log4j.BasicConfigurator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -113,6 +114,7 @@ public class Participant {
    * @param args command line parameters
    */
   public static void main(String[] args) throws Exception {
+    BasicConfigurator.configure();
     CommandLine cmd = processCommandLineArgs(args);
     final String zkConnectString = cmd.getOptionValue(zkServer);
     final String clusterName = cmd.getOptionValue(cluster);

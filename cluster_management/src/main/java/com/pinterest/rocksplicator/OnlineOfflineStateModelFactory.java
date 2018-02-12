@@ -103,7 +103,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
       }
 
       try {
-        AddDBRequest req = new AddDBRequest(getDbName(), "localhost");
+        AddDBRequest req = new AddDBRequest(getDbName(), "127.0.0.1");
         client.addDB(req);
       } catch (Exception e) {
         // adding db is best-effort
@@ -119,7 +119,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
         String s3Bucket = jsonObject.get("s3_bucket").getAsString();
 
         AddS3SstFilesToDBRequest req = new AddS3SstFilesToDBRequest(getDbName(),
-            s3Bucket, s3Path);
+            s3Bucket, s3Path + getS3PartPrefix());
         client.addS3SstFilesToDB(req);
       } catch (Exception e) {
         LOG.error("Failed to add S3 files for " + partitionName, e);
@@ -198,7 +198,14 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
     // DB name is in format: test00000
     private String getDbName() {
       String[] parts = partitionName.split("_");
-      return String.format("%s%5d", parts[0], parts[1]);
+      return String.format("%s%5d", parts[0], Integer.parseInt(parts[1]));
+    }
+
+    // partition name is in format: test_0
+    // S3 part prefix is in format: part-00000-
+    private String getS3PartPrefix() {
+      String[] parts = partitionName.split("_");
+      return String.format("part-%5d-", Integer.parseInt(parts[1]));
     }
   }
 }
