@@ -198,14 +198,14 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
     // DB name is in format: test00000
     private String getDbName() {
       String[] parts = partitionName.split("_");
-      return String.format("%s%5d", parts[0], Integer.parseInt(parts[1]));
+      return String.format("%s%05d", parts[0], Integer.parseInt(parts[1]));
     }
 
     // partition name is in format: test_0
     // S3 part prefix is in format: part-00000-
     private String getS3PartPrefix() {
       String[] parts = partitionName.split("_");
-      return String.format("part-%5d-", Integer.parseInt(parts[1]));
+      return String.format("part-%05d-", Integer.parseInt(parts[1]));
     }
   }
 }
