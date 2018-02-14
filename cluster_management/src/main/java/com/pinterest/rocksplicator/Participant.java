@@ -28,6 +28,7 @@ import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.helix.HelixAdmin;
+import org.apache.helix.HelixConstants;
 import org.apache.helix.HelixManager;
 import org.apache.helix.HelixManagerFactory;
 import org.apache.helix.InstanceType;
@@ -36,6 +37,7 @@ import org.apache.helix.manager.zk.ZKHelixAdmin;
 import org.apache.helix.model.HelixConfigScope;
 import org.apache.helix.model.Message;
 import org.apache.helix.model.builder.HelixConfigScopeBuilder;
+import org.apache.helix.participant.HelixCustomCodeRunner;
 import org.apache.helix.participant.StateMachineEngine;
 import org.apache.helix.participant.statemachine.StateModel;
 import org.apache.helix.participant.statemachine.StateModelFactory;
@@ -52,6 +54,7 @@ public class Participant {
   private static final String hostAddress = "host";
   private static final String hostPort = "port";
   private static final String stateModel = "stateModelType";
+  private static final String configPostUrl = "configPostUrl";
 
   private HelixManager helixManager;
   private StateModelFactory<StateModel> stateModelFactory;
@@ -93,13 +96,20 @@ public class Participant {
     stateModelOption.setRequired(true);
     stateModelOption.setArgName("StateModel Type (Required)");
 
+    Option configPostUrlOption =
+        OptionBuilder.withLongOpt(configPostUrl).withDescription("URL to post config").create();
+    configPostUrlOption.setArgs(1);
+    configPostUrlOption.setRequired(true);
+    configPostUrlOption.setArgName("URL to post config (Required)");
+
     Options options = new Options();
     options.addOption(zkServerOption)
         .addOption(clusterOption)
         .addOption(domainOption)
         .addOption(hostOption)
         .addOption(portOption)
-        .addOption(stateModelOption);
+        .addOption(stateModelOption)
+        .addOption(configPostUrlOption);
     return options;
   }
 
@@ -122,11 +132,12 @@ public class Participant {
     final String host = cmd.getOptionValue(hostAddress);
     final String port = cmd.getOptionValue(hostPort);
     final String stateModelType = cmd.getOptionValue(stateModel);
+    final String postUrl = cmd.getOptionValue(configPostUrl);
     final String instanceName = host + "_" + port;
 
     LOG.info("Starting participant with ZK:" + zkConnectString);
     Participant participant = new Participant(zkConnectString, clusterName, instanceName,
-        stateModelType, Integer.parseInt(port));
+        stateModelType, Integer.parseInt(port), postUrl);
 
     HelixAdmin helixAdmin = new ZKHelixAdmin(zkConnectString);
     HelixConfigScope scope =
@@ -141,7 +152,7 @@ public class Participant {
   }
 
   public Participant(String zkConnectString, String clusterName, String instanceName,
-                     String stateModelType, int port) throws Exception {
+                     String stateModelType, int port, String postUrl) throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
     stateModelFactory = new OnlineOfflineStateModelFactory(port, zkConnectString, clusterName);
@@ -151,5 +162,13 @@ public class Participant {
     helixManager.getMessagingService().registerMessageHandlerFactory(
         Message.MessageType.STATE_TRANSITION.name(), stateMach);
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
+
+    // Add callback to create rocksplicator shard config
+    HelixCustomCodeRunner codeRunner = new HelixCustomCodeRunner(helixManager, zkConnectString)
+        .invoke(new OnlineOfflineConfigGenerator(clusterName, helixManager, postUrl))
+        .on(HelixConstants.ChangeType.EXTERNAL_VIEW)
+        .usingLeaderStandbyModel("ConfigWatcher" + clusterName);
+
+    codeRunner.start();
   }
 }

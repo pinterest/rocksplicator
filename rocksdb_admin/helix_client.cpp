@@ -55,7 +55,8 @@ void invokeClass(JNIEnv* env,
                  const std::string& zk_connect_str,
                  const std::string& cluster,
                  const std::string& state_model_type,
-                 const std::string& domain) {
+                 const std::string& domain,
+                 const std::string& config_post_url) {
   jclass ParticipantClass;
   jmethodID mainMethod;
   jobjectArray args;
@@ -70,7 +71,7 @@ void invokeClass(JNIEnv* env,
                                       "main",
                                       "([Ljava/lang/String;)V");
 
-  args = env->NewObjectArray(12, env->FindClass("java/lang/String"), nullptr);
+  args = env->NewObjectArray(14, env->FindClass("java/lang/String"), nullptr);
 
   env->SetObjectArrayElement(args, 0, env->NewStringUTF("--zkSvr"));
   env->SetObjectArrayElement(
@@ -88,6 +89,9 @@ void invokeClass(JNIEnv* env,
     args, 9, env->NewStringUTF(state_model_type.c_str()));
   env->SetObjectArrayElement(args, 10, env->NewStringUTF("--domain"));
   env->SetObjectArrayElement(args, 11, env->NewStringUTF(domain.c_str()));
+  env->SetObjectArrayElement(args, 12, env->NewStringUTF("--configPostUrl"));
+  env->SetObjectArrayElement(args, 13,
+                             env->NewStringUTF(config_post_url.c_str()));
 
   env->CallStaticVoidMethod(ParticipantClass, mainMethod, args);
 
@@ -104,15 +108,17 @@ void JoinCluster(const std::string& zk_connect_str,
                  const std::string& cluster,
                  const std::string& state_model_type,
                  const std::string& domain,
-                 const std::string& class_path) {
+                 const std::string& class_path,
+                 const std::string& config_post_url) {
   std::thread t([zk_connect_str, cluster, state_model_type, domain,
-                 class_path] () {
+                 class_path, config_post_url] () {
       // FIXME use a more reliable way to ensure the thread calling JoinCluster
       // has time to start the thrift server.
       std::this_thread::sleep_for(std::chrono::seconds(10));
 
       auto env = createVM(class_path);
-      invokeClass(env, zk_connect_str, cluster, state_model_type, domain);
+      invokeClass(env, zk_connect_str, cluster, state_model_type, domain,
+                  config_post_url);
     });
 
   t.detach();
