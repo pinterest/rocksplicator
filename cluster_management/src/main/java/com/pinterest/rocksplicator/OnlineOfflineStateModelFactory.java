@@ -158,18 +158,29 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
       LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
           + " for " + message.getPartitionName());
 
-      try {
-        Admin.Client client = getLocalAdminClient();
-        ClearDBRequest req = new ClearDBRequest(getDbName());
-        req.setReopen_db(false);
-        client.clearDB(req);
-      } catch (AdminException e) {
-        LOG.error("Failed to destroy DB", e);
-      } catch (TTransportException e) {
-        LOG.error("Failed to connect to local Admin port", e);
-      } catch (TException e) {
-        LOG.error("ClearDB() request failed", e);
-      }
+      clearDB();
+    }
+
+    /**
+     * Callback for ERROR to DROPPED transition.
+     * The callback simply clear the DB.
+     */
+    public void onBecomeDroppedFromError(Message message, NotificationContext context) {
+      checkSanity("ERROR", "DROPPED", message);
+      LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
+          + " for " + message.getPartitionName());
+
+      clearDB();
+    }
+
+    /**
+     * Callback for ERROR to OFFLINE transition.
+     * The callback does nothing
+     */
+    public void onBecomeOfflineFromError(Message message, NotificationContext context) {
+      checkSanity("ERROR", "OFFLINE", message);
+      LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
+          + " for " + message.getPartitionName());
     }
 
     private Admin.Client getLocalAdminClient() throws TTransportException {
@@ -206,6 +217,21 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
     private String getS3PartPrefix() {
       String[] parts = partitionName.split("_");
       return String.format("part-%05d-", Integer.parseInt(parts[1]));
+    }
+
+    private void clearDB() {
+      try {
+        Admin.Client client = getLocalAdminClient();
+        ClearDBRequest req = new ClearDBRequest(getDbName());
+        req.setReopen_db(false);
+        client.clearDB(req);
+      } catch (AdminException e) {
+        LOG.error("Failed to destroy DB", e);
+      } catch (TTransportException e) {
+        LOG.error("Failed to connect to local Admin port", e);
+      } catch (TException e) {
+        LOG.error("ClearDB() request failed", e);
+      }
     }
   }
 }
