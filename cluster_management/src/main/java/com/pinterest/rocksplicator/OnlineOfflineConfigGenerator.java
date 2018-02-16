@@ -82,7 +82,8 @@ public class OnlineOfflineConfigGenerator implements CustomCodeCallbackHandler {
 
       // compose resource config
       JSONObject resourceConfig = new JSONObject();
-      resourceConfig.put("num_shards", partitions.size());
+      String partitionsStr = externalView.getRecord().getSimpleField("NUM_PARTITIONS");
+      resourceConfig.put("num_shards", Integer.parseInt(partitionsStr));
 
       // build host to partition list map
       Map<String, List<String>> hostToPartitionList = new HashMap<String, List<String>>();
