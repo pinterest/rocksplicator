@@ -48,6 +48,7 @@ public class OnlineOfflineConfigGenerator implements CustomCodeCallbackHandler {
   private Map<String, String> hostToHostWithDomain;
   private final String postUrl;
   private JSONObject dataParameters;
+  private String lastPostedContent;
 
   public OnlineOfflineConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
     this.clusterName = clusterName;
@@ -59,6 +60,7 @@ public class OnlineOfflineConfigGenerator implements CustomCodeCallbackHandler {
     this.dataParameters.put("author", "OnlineOfflineConfigGenerator");
     this.dataParameters.put("comment", "new shard config");
     this.dataParameters.put("content", "{}");
+    this.lastPostedContent = null;
   }
 
   @Override
@@ -122,25 +124,33 @@ public class OnlineOfflineConfigGenerator implements CustomCodeCallbackHandler {
       config.put(resource, resourceConfig);
     }
 
+    // remove host that doesn't exist in the ExternalView from hostToHostWithDomain
+    hostToHostWithDomain.keySet().retainAll(existingHosts);
+
+    String newContent = config.toString();
+    if (lastPostedContent != null && lastPostedContent.equals(newContent)) {
+      LOG.info("Identical external view observed, skip updating config.");
+      return;
+    }
+
     // Write the config to ZK
     LOG.info("Generating a new shard config...");
-    LOG.info(config.toString());
 
     this.dataParameters.remove("content");
-    this.dataParameters.put("content", config.toString());
+    this.dataParameters.put("content", newContent);
     HttpPost httpPost = new HttpPost(this.postUrl);
     try {
       httpPost.setEntity(new StringEntity(this.dataParameters.toString()));
       HttpResponse response = new DefaultHttpClient().execute(httpPost);
-      if (response.getStatusLine().getStatusCode() != 200) {
+      if (response.getStatusLine().getStatusCode() == 200) {
+        lastPostedContent = newContent;
+        LOG.info("Succeed to generate a new shard config.");
+      } else {
         LOG.error(response.getStatusLine().getReasonPhrase());
       }
     } catch (Exception e) {
       LOG.error("Failed to post the new config", e);
     }
-
-    // remove host that doesn't exist in the ExternalView from hostToHostWithDomain
-    hostToHostWithDomain.keySet().retainAll(existingHosts);
   }
 
   private String getHostWithDomain(String host) {
