@@ -43,6 +43,7 @@ import org.apache.helix.participant.statemachine.StateModel;
 import org.apache.helix.participant.statemachine.StateModelFactory;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.ConsoleAppender;
+import org.apache.log4j.Level;
 import org.apache.log4j.PatternLayout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -126,6 +127,7 @@ public class Participant {
    * @param args command line parameters
    */
   public static void main(String[] args) throws Exception {
+    org.apache.log4j.Logger.getRootLogger().setLevel(Level.INFO);
     BasicConfigurator.configure(new ConsoleAppender(
         new PatternLayout("%d{HH:mm:ss.SSS} [%t] %-5p %30.30c - %m%n")
     ));
