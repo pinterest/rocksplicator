@@ -22,7 +22,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <aws/core/utils/ratelimiter/DefaultRateLimiter.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
@@ -39,6 +38,7 @@
 #include <fstream>
 #include "boost/algorithm/string.hpp"
 #include "boost/iostreams/stream.hpp"
+#include "common/aws_s3_rate_limiter.h"
 #include "glog/logging.h"
 
 using std::string;
@@ -47,7 +47,6 @@ using std::tuple;
 using Aws::S3::Model::GetObjectRequest;
 using Aws::S3::Model::ListObjectsRequest;
 using Aws::S3::Model::HeadObjectRequest;
-using Aws::Utils::RateLimits::DefaultRateLimiter;
 
 DEFINE_int32(direct_io_buffer_n_pages, 1,
              "Number of pages we need to set to direct io buffer");
@@ -318,7 +317,7 @@ shared_ptr<S3Util> S3Util::BuildS3Util(
   aws_config.requestTimeoutMs = request_timeout_ms;
   if (read_ratelimit_mb > 0) {
     aws_config.readRateLimiter =
-        std::make_shared<DefaultRateLimiter<>>(
+        std::make_shared<AwsS3RateLimiter>(
             read_ratelimit_mb * 1024 * 1024);
   }
   SDKOptions options;
