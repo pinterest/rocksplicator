@@ -25,6 +25,7 @@ import com.pinterest.rocksdb_admin.thrift.AdminException;
 import com.pinterest.rocksdb_admin.thrift.ClearDBRequest;
 import com.pinterest.rocksdb_admin.thrift.CloseDBRequest;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.apache.curator.framework.CuratorFramework;
@@ -117,9 +118,19 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
 
         String s3Path = jsonObject.get("s3_path").getAsString();
         String s3Bucket = jsonObject.get("s3_bucket").getAsString();
+        int s3_download_limit_mb = 64;
+        try {
+          JsonElement je = jsonObject.get("s3_download_limit_mb");
+          if (je != null) {
+            s3_download_limit_mb = je.getAsInt();
+          }
+        } catch (Exception e) {
+          LOG.error("Failed to parse s3_download_limit_mb", e);
+        }
 
         AddS3SstFilesToDBRequest req = new AddS3SstFilesToDBRequest(getDbName(),
             s3Bucket, s3Path + getS3PartPrefix());
+        req.setS3_download_limit_mb(s3_download_limit_mb);
         client.addS3SstFilesToDB(req);
       } catch (Exception e) {
         LOG.error("Failed to add S3 files for " + partitionName, e);
