@@ -29,6 +29,12 @@ namespace fs = boost::filesystem;
 
 using std::string;
 
+class MOckS3Util : public common::S3Util {
+ public:
+  MOckS3Util() : S3Util("", ClientConfiguration(), SDKOptions(), 0) {}
+  ~MOckS3Util() {}
+};
+
 TEST(S3UtilTest, ParseS3StringTest) {
   string test_path = "invalid/string";
   tuple<string, string> result = common::S3Util::parseFullS3Path(test_path);
@@ -140,6 +146,24 @@ TEST(S3UtilTest, DirectIOTest) {
   fs::remove(file_path);
 }
 
+TEST(S3UtilTest, CallDestructorOnlyOnce) {
+  SDKOptions options;
+  Aws::InitAPI(options);
+
+  EXPECT_EQ(0, common::S3Util::getInstanceCounter());
+  MOckS3Util* instance1 = new MOckS3Util();
+  EXPECT_EQ(1, common::S3Util::getInstanceCounter());
+  MOckS3Util* instance2 = new MOckS3Util();
+  EXPECT_EQ(2, common::S3Util::getInstanceCounter());
+  MOckS3Util* instance3 = new MOckS3Util();
+  EXPECT_EQ(3, common::S3Util::getInstanceCounter());
+  delete instance1;
+  EXPECT_EQ(2, common::S3Util::getInstanceCounter());
+  delete instance2;
+  EXPECT_EQ(1, common::S3Util::getInstanceCounter());
+  delete instance3;
+  EXPECT_EQ(0, common::S3Util::getInstanceCounter());
+}
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

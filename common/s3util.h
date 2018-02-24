@@ -28,6 +28,7 @@
 #include <aws/core/utils/Outcome.h>
 #include <boost/iostreams/categories.hpp>
 
+#include <atomic>
 #include <iosfwd>
 #include <map>
 #include <string>
@@ -175,6 +176,7 @@ class S3Util {
                   const uint32_t read_ratelimit_mb) :
     bucket_(std::move(bucket)), s3Client(client_config), options_(options),
     read_ratelimit_mb_(read_ratelimit_mb) {
+    ++counter_;
     Aws::StringStream ss;
     ss << Aws::Http::SchemeMapper::ToString(client_config.scheme) << "://";
 
@@ -187,7 +189,10 @@ class S3Util {
   }
 
   ~S3Util() {
-    Aws::ShutdownAPI(options_);
+    --counter_;
+    if (counter_.load() == 0) {
+      Aws::ShutdownAPI(options_);
+    }
   }
 
   // Download an S3 Object to a local file
@@ -245,6 +250,11 @@ class S3Util {
     return read_ratelimit_mb_;
   }
 
+  // For test only.
+  static uint32_t getInstanceCounter() {
+    return counter_.load();
+  }
+
  private:
   void listObjectsHelper(const string& prefix, const string& delimiter,
                          const string& marker, vector<string>* objects,
@@ -257,5 +267,9 @@ class S3Util {
   SDKOptions options_;
   std::string uri_;
   const uint32_t read_ratelimit_mb_;
+  // To track the number of S3Util instances. Only call Aws::ShutdownAPI() when
+  // there is no other instance exists.
+  static std::atomic<std::uint32_t> counter_;
 };
+
 }  // namespace common

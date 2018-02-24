@@ -54,6 +54,7 @@ DEFINE_int32(direct_io_buffer_n_pages, 1,
 
 namespace common {
 
+std::atomic<std::uint32_t> S3Util::counter_(0);
 const uint32_t kPageSize = getpagesize();
 
 DirectIOWritableFile::DirectIOWritableFile(const string& file_path)
