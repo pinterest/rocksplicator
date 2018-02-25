@@ -140,22 +140,6 @@ TEST(S3UtilTest, DirectIOTest) {
   fs::remove(file_path);
 }
 
-TEST(S3UtilTest, CallDestructorOnlyOnce) {
-  EXPECT_EQ(0, common::S3Util::getInstanceCounter());
-  auto instance1 = common::S3Util::BuildS3Util(0, "", 0, 0);
-  EXPECT_EQ(1, common::S3Util::getInstanceCounter());
-  auto instance2 = common::S3Util::BuildS3Util(0, "", 0, 0);
-  EXPECT_EQ(2, common::S3Util::getInstanceCounter());
-  auto instance3 = common::S3Util::BuildS3Util(0, "", 0, 0);
-  EXPECT_EQ(3, common::S3Util::getInstanceCounter());
-  instance1 = nullptr;
-  EXPECT_EQ(2, common::S3Util::getInstanceCounter());
-  instance2 = nullptr;
-  EXPECT_EQ(1, common::S3Util::getInstanceCounter());
-  instance3 = nullptr;
-  EXPECT_EQ(0, common::S3Util::getInstanceCounter());
-}
-
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

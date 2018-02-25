@@ -153,9 +153,6 @@ using GetObjectMetadataResponse = S3UtilResponse<map<string, string>>;
 
 
 class S3Util {
- private:
-   // Helper struct  to make S3Util::S3Util() constructore private.
-  struct ThisIsPrivate;
  public:
   /**
    * A wrapper of S3Client so we can control the HTTP request and
@@ -171,26 +168,6 @@ class S3Util {
       return MakeRequest(uri, request, method);
     }
   };
-
-  // Don't recommend using this directly. Using BuildS3Util instead.
-  // If you must, make sure to call Aws::InitAPI(options); before constructor
-  explicit S3Util(const ThisIsPrivate&,
-                  const string& bucket,
-                  const ClientConfiguration& client_config,
-                  const SDKOptions& options,
-                  const uint32_t read_ratelimit_mb) :
-      bucket_(std::move(bucket)), s3Client(client_config), options_(options),
-      read_ratelimit_mb_(read_ratelimit_mb) {
-    Aws::StringStream ss;
-    ss << Aws::Http::SchemeMapper::ToString(client_config.scheme) << "://";
-
-    if(client_config.endpointOverride.empty()) {
-      ss << ForRegion(client_config.region);
-    } else {
-      ss << client_config.endpointOverride;
-    }
-    uri_ = ss.str();
-  }
 
   ~S3Util() {
     TryAwsShutdownAPI(options_);
@@ -250,16 +227,23 @@ class S3Util {
     return read_ratelimit_mb_;
   }
 
-  // For test only.
-  static uint32_t getInstanceCounter() {
-    std::lock_guard<std::mutex> guard(counter_mutex_);
-    return instance_counter_;
-  }
-
  private:
-  struct ThisIsPrivate {
-    explicit ThisIsPrivate(int) {}
-  };
+  explicit S3Util(const string& bucket,
+                  const ClientConfiguration& client_config,
+                  const SDKOptions& options,
+                  const uint32_t read_ratelimit_mb) :
+      bucket_(std::move(bucket)), s3Client(client_config), options_(options),
+      read_ratelimit_mb_(read_ratelimit_mb) {
+    Aws::StringStream ss;
+    ss << Aws::Http::SchemeMapper::ToString(client_config.scheme) << "://";
+
+    if(client_config.endpointOverride.empty()) {
+      ss << ForRegion(client_config.region);
+    } else {
+      ss << client_config.endpointOverride;
+    }
+    uri_ = ss.str();
+  }
 
   void listObjectsHelper(const string& prefix, const string& delimiter,
                          const string& marker, vector<string>* objects,
