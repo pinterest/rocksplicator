@@ -28,8 +28,10 @@
 #include <aws/core/utils/Outcome.h>
 #include <boost/iostreams/categories.hpp>
 
+#include <atomic>
 #include <iosfwd>
 #include <map>
+#include <mutex>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -167,29 +169,9 @@ class S3Util {
     }
   };
 
-  // Don't recommend using this directly. Using BuildS3Util instead.
-  // If you must, make sure to call Aws::InitAPI(options); before constructor
-  explicit S3Util(const string& bucket,
-                  const ClientConfiguration& client_config,
-                  const SDKOptions& options,
-                  const uint32_t read_ratelimit_mb) :
-    bucket_(std::move(bucket)), s3Client(client_config), options_(options),
-    read_ratelimit_mb_(read_ratelimit_mb) {
-    Aws::StringStream ss;
-    ss << Aws::Http::SchemeMapper::ToString(client_config.scheme) << "://";
-
-    if(client_config.endpointOverride.empty()) {
-      ss << ForRegion(client_config.region);
-    } else {
-      ss << client_config.endpointOverride;
-    }
-    uri_ = ss.str();
-  }
-
   ~S3Util() {
-    Aws::ShutdownAPI(options_);
+    TryAwsShutdownAPI(options_);
   }
-
   // Download an S3 Object to a local file
   GetObjectResponse getObject(const string& key, const string& local_path,
                               const bool direct_io = false);
@@ -246,9 +228,45 @@ class S3Util {
   }
 
  private:
+  explicit S3Util(const string& bucket,
+                  const ClientConfiguration& client_config,
+                  const SDKOptions& options,
+                  const uint32_t read_ratelimit_mb) :
+      bucket_(std::move(bucket)), s3Client(client_config), options_(options),
+      read_ratelimit_mb_(read_ratelimit_mb) {
+    Aws::StringStream ss;
+    ss << Aws::Http::SchemeMapper::ToString(client_config.scheme) << "://";
+
+    if(client_config.endpointOverride.empty()) {
+      ss << ForRegion(client_config.region);
+    } else {
+      ss << client_config.endpointOverride;
+    }
+    uri_ = ss.str();
+  }
+
   void listObjectsHelper(const string& prefix, const string& delimiter,
                          const string& marker, vector<string>* objects,
                          string* next_marker, string* error_message);
+
+  // When there is no other S3Util instances, call Aws::InitAPI() to initialize
+  // aws environment.
+  static void TryAwsInitAPI(const SDKOptions& options) {
+    std::lock_guard<std::mutex> guard(counter_mutex_);
+    if (instance_counter_ == 0) {
+      Aws::InitAPI(options);
+    }
+    ++instance_counter_;
+  }
+  // When there is no other S3Util instance left, shutdown/cleanup aws
+  // environment.
+  static void TryAwsShutdownAPI(const SDKOptions& options) {
+    std::lock_guard<std::mutex> guard(counter_mutex_);
+    --instance_counter_;
+    if (instance_counter_ == 0) {
+      Aws::ShutdownAPI(options);
+    }
+  }
 
   const string bucket_;
   // S3Client is thread safe:
@@ -257,5 +275,10 @@ class S3Util {
   SDKOptions options_;
   std::string uri_;
   const uint32_t read_ratelimit_mb_;
+  // To track the number of S3Util instances. Only call Aws::ShutdownAPI() when
+  // there is no other instance exists.
+  static std::mutex counter_mutex_;
+  static uint32_t instance_counter_;
 };
+
 }  // namespace common
