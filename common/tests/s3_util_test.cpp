@@ -141,9 +141,6 @@ TEST(S3UtilTest, DirectIOTest) {
 }
 
 TEST(S3UtilTest, CallDestructorOnlyOnce) {
-  SDKOptions options;
-  Aws::InitAPI(options);
-
   EXPECT_EQ(0, common::S3Util::getInstanceCounter());
   auto instance1 = common::S3Util::BuildS3Util(0, "", 0, 0);
   EXPECT_EQ(1, common::S3Util::getInstanceCounter());
