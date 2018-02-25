@@ -54,7 +54,8 @@ DEFINE_int32(direct_io_buffer_n_pages, 1,
 
 namespace common {
 
-std::atomic<std::uint32_t> S3Util::counter_(0);
+std::mutex S3Util::counter_mutex_;
+std::uint32_t S3Util::instance_counter_(0);
 const uint32_t kPageSize = getpagesize();
 
 DirectIOWritableFile::DirectIOWritableFile(const string& file_path)
@@ -310,7 +311,7 @@ tuple<string, string> S3Util::parseFullS3Path(const string& s3_path) {
 
 shared_ptr<S3Util> S3Util::BuildS3Util(
     const uint32_t read_ratelimit_mb,
-    const string& bucket, 
+    const string& bucket,
     const uint32_t connect_timeout_ms,
     const uint32_t request_timeout_ms) {
   Aws::Client::ClientConfiguration aws_config;
@@ -322,9 +323,9 @@ shared_ptr<S3Util> S3Util::BuildS3Util(
             read_ratelimit_mb * 1024 * 1024);
   }
   SDKOptions options;
-  Aws::InitAPI(options);
+  TryAwsInitAPI(options);
   return std::make_shared<S3Util>(
-          bucket, aws_config, options, read_ratelimit_mb);
+          ThisIsPrivate{0}, bucket, aws_config, options, read_ratelimit_mb);
 }
 
 }  // namespace common

@@ -29,12 +29,6 @@ namespace fs = boost::filesystem;
 
 using std::string;
 
-class MOckS3Util : public common::S3Util {
- public:
-  MOckS3Util() : S3Util("", ClientConfiguration(), SDKOptions(), 0) {}
-  ~MOckS3Util() {}
-};
-
 TEST(S3UtilTest, ParseS3StringTest) {
   string test_path = "invalid/string";
   tuple<string, string> result = common::S3Util::parseFullS3Path(test_path);
@@ -151,17 +145,17 @@ TEST(S3UtilTest, CallDestructorOnlyOnce) {
   Aws::InitAPI(options);
 
   EXPECT_EQ(0, common::S3Util::getInstanceCounter());
-  MOckS3Util* instance1 = new MOckS3Util();
+  auto instance1 = common::S3Util::BuildS3Util(0, "", 0, 0);
   EXPECT_EQ(1, common::S3Util::getInstanceCounter());
-  MOckS3Util* instance2 = new MOckS3Util();
+  auto instance2 = common::S3Util::BuildS3Util(0, "", 0, 0);
   EXPECT_EQ(2, common::S3Util::getInstanceCounter());
-  MOckS3Util* instance3 = new MOckS3Util();
+  auto instance3 = common::S3Util::BuildS3Util(0, "", 0, 0);
   EXPECT_EQ(3, common::S3Util::getInstanceCounter());
-  delete instance1;
+  instance1 = nullptr;
   EXPECT_EQ(2, common::S3Util::getInstanceCounter());
-  delete instance2;
+  instance2 = nullptr;
   EXPECT_EQ(1, common::S3Util::getInstanceCounter());
-  delete instance3;
+  instance3 = nullptr;
   EXPECT_EQ(0, common::S3Util::getInstanceCounter());
 }
 

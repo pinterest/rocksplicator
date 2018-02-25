@@ -31,6 +31,7 @@
 #include <atomic>
 #include <iosfwd>
 #include <map>
+#include <mutex>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -152,6 +153,9 @@ using GetObjectMetadataResponse = S3UtilResponse<map<string, string>>;
 
 
 class S3Util {
+ private:
+   // Helper struct  to make S3Util::S3Util() constructore private.
+  struct ThisIsPrivate;
  public:
   /**
    * A wrapper of S3Client so we can control the HTTP request and
@@ -170,13 +174,13 @@ class S3Util {
 
   // Don't recommend using this directly. Using BuildS3Util instead.
   // If you must, make sure to call Aws::InitAPI(options); before constructor
-  explicit S3Util(const string& bucket,
+  explicit S3Util(const ThisIsPrivate&,
+                  const string& bucket,
                   const ClientConfiguration& client_config,
                   const SDKOptions& options,
                   const uint32_t read_ratelimit_mb) :
-    bucket_(std::move(bucket)), s3Client(client_config), options_(options),
-    read_ratelimit_mb_(read_ratelimit_mb) {
-    ++counter_;
+      bucket_(std::move(bucket)), s3Client(client_config), options_(options),
+      read_ratelimit_mb_(read_ratelimit_mb) {
     Aws::StringStream ss;
     ss << Aws::Http::SchemeMapper::ToString(client_config.scheme) << "://";
 
@@ -189,12 +193,8 @@ class S3Util {
   }
 
   ~S3Util() {
-    --counter_;
-    if (counter_.load() == 0) {
-      Aws::ShutdownAPI(options_);
-    }
+    TryAwsShutdownAPI(options_);
   }
-
   // Download an S3 Object to a local file
   GetObjectResponse getObject(const string& key, const string& local_path,
                               const bool direct_io = false);
@@ -252,13 +252,37 @@ class S3Util {
 
   // For test only.
   static uint32_t getInstanceCounter() {
-    return counter_.load();
+    std::lock_guard<std::mutex> guard(counter_mutex_);
+    return instance_counter_;
   }
 
  private:
+  struct ThisIsPrivate {
+    explicit ThisIsPrivate(int) {}
+  };
+
   void listObjectsHelper(const string& prefix, const string& delimiter,
                          const string& marker, vector<string>* objects,
                          string* next_marker, string* error_message);
+
+  // When there is no other S3Util instances, call Aws::InitAPI() to initialize
+  // aws environment.
+  static void TryAwsInitAPI(const SDKOptions& options) {
+    std::lock_guard<std::mutex> guard(counter_mutex_);
+    if (instance_counter_ == 0) {
+      Aws::InitAPI(options);
+    }
+    ++instance_counter_;
+  }
+  // When there is no other S3Util instance left, shutdown/cleanup aws
+  // environment.
+  static void TryAwsShutdownAPI(const SDKOptions& options) {
+    std::lock_guard<std::mutex> guard(counter_mutex_);
+    --instance_counter_;
+    if (instance_counter_ == 0) {
+      Aws::ShutdownAPI(options);
+    }
+  }
 
   const string bucket_;
   // S3Client is thread safe:
@@ -269,7 +293,8 @@ class S3Util {
   const uint32_t read_ratelimit_mb_;
   // To track the number of S3Util instances. Only call Aws::ShutdownAPI() when
   // there is no other instance exists.
-  static std::atomic<std::uint32_t> counter_;
+  static std::mutex counter_mutex_;
+  static uint32_t instance_counter_;
 };
 
 }  // namespace common
