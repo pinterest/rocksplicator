@@ -686,30 +686,6 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       AddS3SstFilesToDBResponse>>> callback,
     std::unique_ptr<AddS3SstFilesToDBRequest> request) {
-  // Though it is claimed that AWS s3 sdk is a light weight library. However,
-  // we couldn't afford to create a new client for every SST file downloading
-  // request, which is not even on any critical code path. Otherwise, we will
-  // see latency spike when uploading data to production clusters.
-  std::shared_ptr<common::S3Util> local_s3_util;
-  {
-    std::lock_guard<std::mutex> guard(s3_util_lock_);
-    if (s3_util_ == nullptr || should_new_s3_client(*s3_util_, request.get())) {
-      // Request with different ratelimit or bucket has to wait for old
-      // requests to drain.
-      while (s3_util_ != nullptr && s3_util_.use_count() > 1) {
-        LOG(INFO) << "There are other downloads happening, wait "
-                  << kS3UtilRecheckSec << " seconds";
-        std::this_thread::sleep_for(std::chrono::seconds(kS3UtilRecheckSec));
-      }
-      // Invoke destructor explicitly to make sure Aws::InitAPI()
-      // and Aps::ShutdownApi() appear in pairs.
-      s3_util_ = nullptr;
-      s3_util_ = common::S3Util::BuildS3Util(request->s3_download_limit_mb,
-                                             request->s3_bucket);
-    }
-    local_s3_util = s3_util_;
-  }
-
   admin::AdminException e;
   e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
 
@@ -743,6 +719,30 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     e.message = "Cannot remove/create dir: " + local_path;
     callback.release()->exceptionInThread(std::move(e));
     return;
+  }
+
+  // Though it is claimed that AWS s3 sdk is a light weight library. However,
+  // we couldn't afford to create a new client for every SST file downloading
+  // request, which is not even on any critical code path. Otherwise, we will
+  // see latency spike when uploading data to production clusters.
+  std::shared_ptr<common::S3Util> local_s3_util;
+  {
+    std::lock_guard<std::mutex> guard(s3_util_lock_);
+    if (s3_util_ == nullptr || should_new_s3_client(*s3_util_, request.get())) {
+      // Request with different ratelimit or bucket has to wait for old
+      // requests to drain.
+      while (s3_util_ != nullptr && s3_util_.use_count() > 1) {
+        LOG(INFO) << "There are other downloads happening, wait "
+                  << kS3UtilRecheckSec << " seconds";
+        std::this_thread::sleep_for(std::chrono::seconds(kS3UtilRecheckSec));
+      }
+      // Invoke destructor explicitly to make sure Aws::InitAPI()
+      // and Aps::ShutdownApi() appear in pairs.
+      s3_util_ = nullptr;
+      s3_util_ = common::S3Util::BuildS3Util(request->s3_download_limit_mb,
+                                             request->s3_bucket);
+    }
+    local_s3_util = s3_util_;
   }
 
   auto responses = local_s3_util->getObjects(request->s3_path,
