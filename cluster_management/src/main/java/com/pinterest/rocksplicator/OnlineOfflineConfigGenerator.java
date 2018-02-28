@@ -166,7 +166,7 @@ public class OnlineOfflineConfigGenerator implements CustomCodeCallbackHandler {
     String[] parts = domain.split(",");
     String az = parts[0].split("=")[1];
     String pg = parts[1].split("=")[1];
-    hostWithDomain = host.replace('_', ':') + ":" + az + pg;
+    hostWithDomain = host.replace('_', ':') + ":" + az + "_" + pg;
     hostToHostWithDomain.put(host, hostWithDomain);
     return hostWithDomain;
   }
