@@ -159,7 +159,7 @@ SdkGetObjectResponse S3Util::sdkGetObject(const string& key,
       );
     }
   }
-  auto getObjectResult = s3Client.GetObject(getObjectRequest);
+  auto getObjectResult = s3Client->GetObject(getObjectRequest);
   return getObjectResult;
 }
 
@@ -175,7 +175,7 @@ void S3Util::listObjectsHelper(const string& prefix, const string& delimiter,
   if (!marker.empty()) {
     listObjectRequest.SetMarker(marker);
   }
-  auto listObjectResult = s3Client.ListObjects(listObjectRequest);
+  auto listObjectResult = s3Client->ListObjects(listObjectRequest);
   if (listObjectResult.IsSuccess()) {
     if (!delimiter.empty()) {
       Aws::Vector<Aws::S3::Model::CommonPrefix> contents =
@@ -269,7 +269,7 @@ GetObjectMetadataResponse S3Util::getObjectMetadata(const string &key) {
   Aws::StringStream ss;
   ss << uri_ << "/" << headObjectRequest.GetBucket() << "/"
      << headObjectRequest.GetKey();
-  XmlOutcome headObjectOutcome = s3Client.MakeHttpRequest(
+  XmlOutcome headObjectOutcome = s3Client->MakeHttpRequest(
           ss.str(), headObjectRequest,HttpMethod::HTTP_HEAD);
   if (!headObjectOutcome.IsSuccess()) {
     return GetObjectMetadataResponse(
@@ -323,7 +323,6 @@ shared_ptr<S3Util> S3Util::BuildS3Util(
             read_ratelimit_mb * 1024 * 1024);
   }
   SDKOptions options;
-  TryAwsInitAPI(options);
   return std::shared_ptr<S3Util>(
       new S3Util(bucket, aws_config, options, read_ratelimit_mb));
 }

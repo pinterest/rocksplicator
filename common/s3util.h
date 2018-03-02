@@ -28,7 +28,6 @@
 #include <aws/core/utils/Outcome.h>
 #include <boost/iostreams/categories.hpp>
 
-#include <atomic>
 #include <iosfwd>
 #include <map>
 #include <mutex>
@@ -232,8 +231,12 @@ class S3Util {
                   const ClientConfiguration& client_config,
                   const SDKOptions& options,
                   const uint32_t read_ratelimit_mb) :
-      bucket_(std::move(bucket)), s3Client(client_config), options_(options),
+      bucket_(std::move(bucket)), options_(options),
       read_ratelimit_mb_(read_ratelimit_mb) {
+    TryAwsInitAPI(options);
+    // s3Client initialization must happen AFTER TryAwsInitAPI(), otherwise
+    // core dump may happen. 
+    s3Client = std::make_unique<CutomizedS3Client>(client_config);
     Aws::StringStream ss;
     ss << Aws::Http::SchemeMapper::ToString(client_config.scheme) << "://";
 
@@ -271,7 +274,7 @@ class S3Util {
   const string bucket_;
   // S3Client is thread safe:
   // https://github.com/aws/aws-sdk-cpp/issues/166
-  CutomizedS3Client s3Client;
+  std::unique_ptr<CutomizedS3Client> s3Client;
   SDKOptions options_;
   std::string uri_;
   const uint32_t read_ratelimit_mb_;
