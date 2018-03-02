@@ -140,6 +140,11 @@ TEST(S3UtilTest, DirectIOTest) {
   fs::remove(file_path);
 }
 
+TEST(S3UtilTest, CreateS3UtilNoCrash) {
+  auto s3util_ptr = common::S3Util::BuildS3Util(0, "", 0, 0);
+  s3util_ptr = nullptr;
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
