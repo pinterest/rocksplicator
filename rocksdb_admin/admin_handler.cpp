@@ -786,6 +786,8 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   clearMetaData(request->db_name);
   if (!FLAGS_rocksdb_allow_overlapping_keys) {
     // clear DB if overlapping keys are not allowed
+    auto db_role = db->IsSlave() ?
+      replicator::DBRole::SLAVE : replicator::DBRole::MASTER;
     db.reset();
     removeDB(request->db_name, nullptr);
     auto options = rocksdb_options_(admin::DbNameToSegment(request->db_name));
@@ -813,7 +815,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
 
     std::string err_msg;
     if (!db_manager_->addDB(request->db_name, std::move(rocksdb_db),
-                            replicator::DBRole::MASTER, &err_msg)) {
+                            db_role, &err_msg)) {
       e.message = std::move(err_msg);
       callback.release()->exceptionInThread(std::move(e));
       return;
