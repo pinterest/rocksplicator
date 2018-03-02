@@ -94,15 +94,15 @@ class ThriftClientPool {
       , peer_addr(addr) {}
 
     void channelClosed() override {
-      LOG(INFO) << peer_addr << " connection closed after "
-                << elapsedTime() << " seconds";
+      LOG_EVERY_N(INFO, 1000) << peer_addr << " connection closed after "
+                              << elapsedTime() << " seconds";
 
       is_good.store(false);
     }
 
     void connectSuccess() noexcept override {
-      LOG(INFO) << peer_addr << " connection established after "
-                << elapsedTime() << " seconds";
+      LOG_EVERY_N(INFO, 1000) << peer_addr << " connection established after "
+                              << elapsedTime() << " seconds";
     }
 
     void connectError(const apache::thrift::transport::TTransportException& ex)
@@ -217,8 +217,8 @@ class ThriftClientPool {
             socket->setSockOpt(IPPROTO_TCP, TCP_USER_TIMEOUT, &timeout_ms);
 
           if (ret == 0) {
-            LOG(INFO) << "Set TCP_USER_TIMEOUT to " << timeout_ms
-                      << " ms for " << addr;
+            LOG_EVERY_N(INFO, 1000) << "Set TCP_USER_TIMEOUT to " << timeout_ms
+                                    << " ms for " << addr;
           } else {
             LOG(ERROR) << "Failed to set TCP_USER_TIMEOUT to " << timeout_ms
                        << " ms with errno " << errno << " : "
