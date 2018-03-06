@@ -313,10 +313,12 @@ shared_ptr<S3Util> S3Util::BuildS3Util(
     const uint32_t read_ratelimit_mb,
     const string& bucket,
     const uint32_t connect_timeout_ms,
-    const uint32_t request_timeout_ms) {
+    const uint32_t request_timeout_ms,
+    const uint32_t max_connections) {
   Aws::Client::ClientConfiguration aws_config;
   aws_config.connectTimeoutMs = connect_timeout_ms;
   aws_config.requestTimeoutMs = request_timeout_ms;
+  aws_config.maxConnections = max_connections;
   if (read_ratelimit_mb > 0) {
     aws_config.readRateLimiter =
         std::make_shared<AwsS3RateLimiter>(
