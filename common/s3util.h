@@ -216,7 +216,8 @@ class S3Util {
       const uint32_t read_ratelimit_mb = 50,
       const string& bucket = "",
       const uint32_t connect_timeout_ms = 3000,
-      const uint32_t request_timeout_ms = 3000);
+      const uint32_t request_timeout_ms = 3000,
+      const uint32_t max_connections = 5);
 
   const string& getBucket() const {
     return bucket_;
