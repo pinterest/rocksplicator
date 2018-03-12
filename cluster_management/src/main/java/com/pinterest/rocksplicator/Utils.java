@@ -24,6 +24,7 @@ import com.pinterest.rocksdb_admin.thrift.AdminException;
 import com.pinterest.rocksdb_admin.thrift.ClearDBRequest;
 import com.pinterest.rocksdb_admin.thrift.CloseDBRequest;
 
+import org.apache.helix.model.Message;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.transport.TSocket;
@@ -111,5 +112,14 @@ public class Utils {
     } catch (TException e) {
       LOG.error("AddDB() request failed", e);
     }
+  }
+
+  /**
+   * Log transition meesage
+   * @param message
+   */
+  public static void logTransitionMessage(Message message) {
+    LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
+        + " for " + message.getPartitionName());
   }
 }

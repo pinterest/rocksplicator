@@ -87,8 +87,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
      */
     public void onBecomeOnlineFromOffline(Message message, NotificationContext context) {
       checkSanity("OFFLINE", "ONLINE", message);
-      LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
-          + " for " + message.getPartitionName());
+      Utils.logTransitionMessage(message);
 
       Utils.addDB(Utils.getDbName(partitionName), adminPort);
 
@@ -126,8 +125,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
      */
     public void onBecomeOfflineFromOnline(Message message, NotificationContext context) {
       checkSanity("ONLINE", "OFFLINE", message);
-      LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
-          + " for " + message.getPartitionName());
+      Utils.logTransitionMessage(message);
 
       Utils.closeDB(Utils.getDbName(partitionName), adminPort);
     }
@@ -138,8 +136,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
      */
     public void onBecomeDroppedFromOffline(Message message, NotificationContext context) {
       checkSanity("OFFLINE", "DROPPED", message);
-      LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
-          + " for " + message.getPartitionName());
+      Utils.logTransitionMessage(message);
 
       Utils.clearDB(Utils.getDbName(partitionName), adminPort);
     }
@@ -150,8 +147,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
      */
     public void onBecomeDroppedFromError(Message message, NotificationContext context) {
       checkSanity("ERROR", "DROPPED", message);
-      LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
-          + " for " + message.getPartitionName());
+      Utils.logTransitionMessage(message);
 
       Utils.clearDB(Utils.getDbName(partitionName), adminPort);
     }
@@ -162,8 +158,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
      */
     public void onBecomeOfflineFromError(Message message, NotificationContext context) {
       checkSanity("ERROR", "OFFLINE", message);
-      LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
-          + " for " + message.getPartitionName());
+      Utils.logTransitionMessage(message);
     }
 
     private Admin.Client getLocalAdminClient() throws TTransportException {
