@@ -47,6 +47,19 @@ namespace wangle {
 
 namespace replicator {
 
+/*
+ * An extractor to extract update time from an update
+ */
+struct LogExtractor : public rocksdb::WriteBatch::Handler {
+ public:
+  void LogData(const rocksdb::Slice& blob) override {
+    CHECK(blob.size() == sizeof(ms));
+    memcpy(&ms, blob.data(), sizeof(ms));
+  }
+
+  uint64_t ms;
+};
+
 enum class DBRole {
   MASTER,
   SLAVE,

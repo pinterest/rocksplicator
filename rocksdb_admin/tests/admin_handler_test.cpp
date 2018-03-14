@@ -21,8 +21,72 @@
 #define private public
 #include "rocksdb_admin/admin_handler.h"
 #undef private
+#include "rocksdb_admin/gen-cpp2/Admin.h"
+
+using admin::AdminAsyncClient;
+using admin::AdminException;
+using admin::AdminHandler;
+using admin::ApplicationDBManager;
+using admin::CheckDBRequest;
+using admin::CheckDBResponse;
+using apache::thrift::async::TAsyncSocket;
+using apache::thrift::HeaderClientChannel;
+using apache::thrift::ThriftServer;
+using std::chrono::seconds;
+using std::make_shared;
+using std::make_tuple;
+using std::make_unique;
+using std::string;
+using std::this_thread::sleep_for;
+using std::thread;
+using std::tuple;
 
 DECLARE_string(rocksdb_dir);
+
+std::unique_ptr<rocksdb::DB> GetTestDB(const std::string& dir) {
+  EXPECT_EQ(system(("rm -rf " + dir).c_str()), 0);
+
+  rocksdb::DB* db;
+  rocksdb::Options options;
+  options.create_if_missing = true;
+  options.WAL_ttl_seconds = 123;
+  EXPECT_TRUE(rocksdb::DB::Open(options, dir, &db).ok());
+
+  return std::unique_ptr<rocksdb::DB>(db);
+}
+
+tuple<shared_ptr<AdminHandler>,
+      shared_ptr<ThriftServer>,
+      shared_ptr<thread>>
+makeServer(uint16_t port) {
+  auto db_manager = std::make_unique<ApplicationDBManager>();
+  auto db = GetTestDB("/tmp/handler_test");
+  EXPECT_TRUE(db_manager->addDB("imp00001", std::move(db),
+                                replicator::DBRole::MASTER, nullptr));
+
+  db = GetTestDB("/tmp/handler_test_with_data");
+  EXPECT_TRUE(db_manager->addDB("imp00002", std::move(db),
+                                replicator::DBRole::MASTER, nullptr));
+
+  rocksdb::WriteBatch batch;
+  EXPECT_TRUE(batch.Delete("a").ok());
+  auto app_db = db_manager->getDB("imp00002", nullptr);
+  EXPECT_TRUE(app_db->Write(rocksdb::WriteOptions(), &batch).ok());
+
+  auto handler = make_shared<AdminHandler>(
+    std::move(db_manager), admin::RocksDBOptionsGeneratorType());
+
+  auto server = make_shared<ThriftServer>();
+  server->setPort(port);
+  server->setInterface(handler);
+  auto t = make_shared<thread>([server, port] {
+      LOG(INFO) << "Start routing server on port " << port;
+      server->serve();
+      LOG(INFO) << "Exit routing server on port " << port;
+    });
+  return make_tuple(handler, server, move(t));
+}
+
 
 TEST(AdminHandlerTest, MetaData) {
   EXPECT_EQ(std::system("rm -rf /tmp/meta_db"), 0);
@@ -54,6 +118,43 @@ TEST(AdminHandlerTest, MetaData) {
   EXPECT_EQ(meta.db_name, db_name);
   EXPECT_FALSE(meta.__isset.s3_bucket);
   EXPECT_FALSE(meta.__isset.s3_path);
+}
+
+TEST(AdminHandlerTest, CheckDB) {
+  EXPECT_EQ(std::system("rm -rf /tmp/meta_db"), 0);
+
+  shared_ptr<AdminHandler> handler;
+  shared_ptr<ThriftServer> server;
+  shared_ptr<thread> thread;
+  tie(handler, server, thread) = makeServer(8090);
+  sleep_for(seconds(1));
+
+  folly::EventBase evb;
+  shared_ptr<TAsyncSocket> socket(
+      TAsyncSocket::newSocket(&evb, "127.0.0.1", 8090));
+  AdminAsyncClient client(HeaderClientChannel::newChannel(socket));
+
+  CheckDBRequest req;
+  CheckDBResponse res;
+  req.db_name = "unknown_db";
+
+  EXPECT_THROW(client.sync_checkDB(res, req), AdminException);
+
+  req.db_name = "imp00001";
+  EXPECT_NO_THROW(client.sync_checkDB(res, req));
+  EXPECT_EQ(res.seq_num, 0);
+  EXPECT_EQ(res.wal_ttl_seconds, 123);
+  EXPECT_EQ(res.last_update_timestamp_ms, 0);
+
+  req.db_name = "imp00002";
+  EXPECT_NO_THROW(client.sync_checkDB(res, req));
+  EXPECT_EQ(res.seq_num, 1);
+  EXPECT_EQ(res.wal_ttl_seconds, 123);
+  // 1521000000 is 03/14/2018 @ 4:00am (UTC)
+  EXPECT_GT(res.last_update_timestamp_ms, 1521000000);
+
+  server->stop();
+  thread->join();
 }
 
 int main(int argc, char** argv) {

@@ -53,16 +53,6 @@ DECLARE_int32(replicator_idle_iter_timeout_ms);
 
 namespace {
 
-struct LogExtractor : public rocksdb::WriteBatch::Handler {
- public:
-  void LogData(const rocksdb::Slice& blob) override {
-    CHECK(blob.size() == sizeof(ms_));
-    memcpy(&ms_, blob.data(), sizeof(ms_));
-  }
-
-  uint64_t ms_;
-};
-
 uint64_t GetCurrentTimeMs() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
     std::chrono::system_clock::now().time_since_epoch()).count();
@@ -302,7 +292,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
             LogExtractor extractor;
             auto ret = result.writeBatchPtr->Iterate(&extractor);
             if (ret.ok()) {
-              update.timestamp = extractor.ms_;
+              update.timestamp = extractor.ms;
             } else {
               update.timestamp = 0;
               LOG(ERROR) << "Failed to extract timestamp for " << db->db_name_;
