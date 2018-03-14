@@ -37,6 +37,7 @@
 #include "rocksdb/options.h"
 #include "rocksdb/utilities/backupable_db.h"
 #include "rocksdb_admin/utils.h"
+#include "rocksdb_replicator/rocksdb_replicator.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
 
 DEFINE_string(hdfs_name_node, "hdfs://hbasebak-infra-namenode-prod1c01-001:8020",
@@ -527,7 +528,27 @@ void AdminHandler::async_tm_checkDB(
     callback.release()->exceptionInThread(std::move(e));
     return;
   }
-  callback->result(CheckDBResponse());
+
+  CheckDBResponse response;
+  response.set_seq_num(db->rocksdb()->GetLatestSequenceNumber());
+  response.set_wal_ttl_seconds(db->rocksdb()->GetOptions().WAL_ttl_seconds);
+
+  // If there is at least one update
+  if (response.seq_num != 0) {
+    std::unique_ptr<rocksdb::TransactionLogIterator> iter;
+    auto status = db->rocksdb()->GetUpdatesSince(response.seq_num, &iter);
+
+    if (status.ok() && iter && iter->Valid()) {
+      auto batch = iter->GetBatch();
+      replicator::LogExtractor extractor;
+      status = batch.writeBatchPtr->Iterate(&extractor);
+      if (status.ok()) {
+        response.set_last_update_timestamp_ms(extractor.ms);
+      }
+    }
+  }
+
+  callback->result(response);
 }
 
 void AdminHandler::async_tm_closeDB(

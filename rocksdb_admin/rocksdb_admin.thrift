@@ -91,12 +91,17 @@ struct CloseDBResponse {
 }
 
 struct CheckDBRequest {
-  # check to ensure this db exists
+  # the DB to check
   1: required string db_name,
 }
 
 struct CheckDBResponse {
-  # for future use
+  # the largest sequence number of the DB
+  1: optional i64 seq_num = 0,
+  # the WAL TTL configured for the DB
+  2: optional i64 wal_ttl_seconds = 0,
+  # the write timestamp in ms for the latest update
+  3: optional i64 last_update_timestamp_ms = 0,
 }
 
 struct ChangeDBRoleAndUpstreamRequest {
