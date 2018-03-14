@@ -18,12 +18,8 @@
 
 package com.pinterest.rocksplicator;
 
-import com.pinterest.rocksdb_admin.thrift.AddDBRequest;
 import com.pinterest.rocksdb_admin.thrift.AddS3SstFilesToDBRequest;
 import com.pinterest.rocksdb_admin.thrift.Admin;
-import com.pinterest.rocksdb_admin.thrift.AdminException;
-import com.pinterest.rocksdb_admin.thrift.ClearDBRequest;
-import com.pinterest.rocksdb_admin.thrift.CloseDBRequest;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -35,7 +31,6 @@ import org.apache.helix.NotificationContext;
 import org.apache.helix.model.Message;
 import org.apache.helix.participant.statemachine.StateModel;
 import org.apache.helix.participant.statemachine.StateModelFactory;
-import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransportException;
@@ -92,24 +87,9 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
      */
     public void onBecomeOnlineFromOffline(Message message, NotificationContext context) {
       checkSanity("OFFLINE", "ONLINE", message);
-      LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
-          + " for " + message.getPartitionName());
+      Utils.logTransitionMessage(message);
 
-      Admin.Client client;
-      try {
-        client = getLocalAdminClient();
-      } catch (TTransportException e) {
-        LOG.error("Failed to connect to local Admin port", e);
-        throw new RuntimeException(e);
-      }
-
-      try {
-        AddDBRequest req = new AddDBRequest(getDbName(), "127.0.0.1");
-        client.addDB(req);
-      } catch (Exception e) {
-        // adding db is best-effort
-        LOG.info("Failed to add " + partitionName, e);
-      }
+      Utils.addDB(Utils.getDbName(partitionName), adminPort);
 
       try {
         zkClient.sync().forPath(getMetaLocation());
@@ -128,9 +108,10 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
           LOG.error("Failed to parse s3_download_limit_mb", e);
         }
 
-        AddS3SstFilesToDBRequest req = new AddS3SstFilesToDBRequest(getDbName(),
+        AddS3SstFilesToDBRequest req = new AddS3SstFilesToDBRequest(Utils.getDbName(partitionName),
             s3Bucket, s3Path + getS3PartPrefix());
         req.setS3_download_limit_mb(s3_download_limit_mb);
+        Admin.Client client = Utils.getLocalAdminClient(adminPort);
         client.addS3SstFilesToDB(req);
       } catch (Exception e) {
         LOG.error("Failed to add S3 files for " + partitionName, e);
@@ -144,20 +125,9 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
      */
     public void onBecomeOfflineFromOnline(Message message, NotificationContext context) {
       checkSanity("ONLINE", "OFFLINE", message);
-      LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
-          + " for " + message.getPartitionName());
+      Utils.logTransitionMessage(message);
 
-      try {
-        Admin.Client client = getLocalAdminClient();
-        CloseDBRequest req = new CloseDBRequest(getDbName());
-        client.closeDB(req);
-      } catch (AdminException e) {
-        LOG.info(partitionName + " doesn't exist", e);
-      } catch (TTransportException e) {
-        LOG.error("Failed to connect to local Admin port", e);
-      } catch (TException e) {
-        LOG.error("CloseDB() request failed", e);
-      }
+      Utils.closeDB(Utils.getDbName(partitionName), adminPort);
     }
 
     /**
@@ -166,10 +136,9 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
      */
     public void onBecomeDroppedFromOffline(Message message, NotificationContext context) {
       checkSanity("OFFLINE", "DROPPED", message);
-      LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
-          + " for " + message.getPartitionName());
+      Utils.logTransitionMessage(message);
 
-      clearDB();
+      Utils.clearDB(Utils.getDbName(partitionName), adminPort);
     }
 
     /**
@@ -178,10 +147,9 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
      */
     public void onBecomeDroppedFromError(Message message, NotificationContext context) {
       checkSanity("ERROR", "DROPPED", message);
-      LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
-          + " for " + message.getPartitionName());
+      Utils.logTransitionMessage(message);
 
-      clearDB();
+      Utils.clearDB(Utils.getDbName(partitionName), adminPort);
     }
 
     /**
@@ -190,8 +158,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
      */
     public void onBecomeOfflineFromError(Message message, NotificationContext context) {
       checkSanity("ERROR", "OFFLINE", message);
-      LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
-          + " for " + message.getPartitionName());
+      Utils.logTransitionMessage(message);
     }
 
     private Admin.Client getLocalAdminClient() throws TTransportException {
@@ -217,32 +184,10 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
     }
 
     // partition name is in format: test_0
-    // DB name is in format: test00000
-    private String getDbName() {
-      String[] parts = partitionName.split("_");
-      return String.format("%s%05d", parts[0], Integer.parseInt(parts[1]));
-    }
-
-    // partition name is in format: test_0
     // S3 part prefix is in format: part-00000-
     private String getS3PartPrefix() {
       String[] parts = partitionName.split("_");
       return String.format("part-%05d-", Integer.parseInt(parts[1]));
-    }
-
-    private void clearDB() {
-      try {
-        Admin.Client client = getLocalAdminClient();
-        ClearDBRequest req = new ClearDBRequest(getDbName());
-        req.setReopen_db(false);
-        client.clearDB(req);
-      } catch (AdminException e) {
-        LOG.error("Failed to destroy DB", e);
-      } catch (TTransportException e) {
-        LOG.error("Failed to connect to local Admin port", e);
-      } catch (TException e) {
-        LOG.error("ClearDB() request failed", e);
-      }
     }
   }
 }
