@@ -19,6 +19,7 @@
 package com.pinterest.rocksplicator;
 
 import org.apache.helix.HelixAdmin;
+import org.apache.helix.HelixConstants;
 import org.apache.helix.HelixManager;
 import org.apache.helix.NotificationContext;
 import org.apache.helix.model.ExternalView;
@@ -40,8 +41,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class OnlineOfflineConfigGenerator implements CustomCodeCallbackHandler {
-  private static final Logger LOG = LoggerFactory.getLogger(OnlineOfflineConfigGenerator.class);
+public class ConfigGenerator implements CustomCodeCallbackHandler {
+  private static final Logger LOG = LoggerFactory.getLogger(ConfigGenerator.class);
 
   private final String clusterName;
   private HelixManager helixManager;
@@ -50,14 +51,14 @@ public class OnlineOfflineConfigGenerator implements CustomCodeCallbackHandler {
   private JSONObject dataParameters;
   private String lastPostedContent;
 
-  public OnlineOfflineConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
+  public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
     this.clusterName = clusterName;
     this.helixManager = helixManager;
     this.hostToHostWithDomain = new HashMap<String, String>();
     this.postUrl = configPostUrl;
     this.dataParameters = new JSONObject();
     this.dataParameters.put("config_version", "v3");
-    this.dataParameters.put("author", "OnlineOfflineConfigGenerator");
+    this.dataParameters.put("author", "ConfigGenerator");
     this.dataParameters.put("comment", "new shard config");
     this.dataParameters.put("content", "{}");
     this.lastPostedContent = null;
@@ -65,6 +66,16 @@ public class OnlineOfflineConfigGenerator implements CustomCodeCallbackHandler {
 
   @Override
   public void onCallback(NotificationContext notificationContext) {
+    LOG.info("Received notification: " + notificationContext.getChangeType());
+
+    if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
+      generateShardConfig();
+    } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.LIVE_INSTANCE) {
+      generateIdealState();
+    }
+  }
+
+  private void generateShardConfig() {
     HelixAdmin admin = helixManager.getClusterManagmentTool();
 
     List<String> resources = admin.getResourcesInCluster(clusterName);
@@ -94,7 +105,11 @@ public class OnlineOfflineConfigGenerator implements CustomCodeCallbackHandler {
             String.format("%05d", Integer.parseInt(partition.split("_")[1]));
         Map<String, String> hostToState = externalView.getStateMap(partition);
         for (Map.Entry<String, String> entry : hostToState.entrySet()) {
-          if (!entry.getValue().equalsIgnoreCase("ONLINE")) {
+          String state = entry.getValue();
+          if (!state.equalsIgnoreCase("ONLINE") &&
+              !state.equalsIgnoreCase("MASTER") &&
+              !state.equalsIgnoreCase("SLAVE")) {
+            // Only ONLINE, MASTER and SLAVE states are ready for serving traffic
             continue;
           }
 
@@ -106,7 +121,13 @@ public class OnlineOfflineConfigGenerator implements CustomCodeCallbackHandler {
             hostToPartitionList.put(hostWithDomain, partitionList);
           }
 
-          partitionList.add(partitionNumber);
+          if (state.equalsIgnoreCase("SLAVE")) {
+            partitionList.add(partitionNumber + ":S");
+          } else if (state.equalsIgnoreCase("MASTER")) {
+            partitionList.add(partitionNumber + ":M");
+          } else {
+            partitionList.add(partitionNumber);
+          }
         }
       }
 
@@ -169,5 +190,9 @@ public class OnlineOfflineConfigGenerator implements CustomCodeCallbackHandler {
     hostWithDomain = host.replace('_', ':') + ":" + az + "_" + pg;
     hostToHostWithDomain.put(host, hostWithDomain);
     return hostWithDomain;
+  }
+
+  private void generateIdealState() {
+    // TODO
   }
 }

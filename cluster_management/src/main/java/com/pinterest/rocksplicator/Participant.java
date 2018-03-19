@@ -161,7 +161,15 @@ public class Participant {
                      String stateModelType, int port, String postUrl) throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
-    stateModelFactory = new OnlineOfflineStateModelFactory(port, zkConnectString, clusterName);
+
+    if (stateModelType.equals("OnlineOffline")) {
+      stateModelFactory = new OnlineOfflineStateModelFactory(port, zkConnectString, clusterName);
+    } else if (stateModelType.equals("MasterSlave")) {
+      stateModelFactory = new MasterSlaveStateModelFactory(instanceName.split("_")[0],
+          port, zkConnectString, clusterName);
+    } else {
+      LOG.error("Unknown state model: " + stateModelType);
+    }
     StateMachineEngine stateMach = helixManager.getStateMachineEngine();
     stateMach.registerStateModelFactory(stateModelType, stateModelFactory);
     helixManager.connect();
@@ -171,7 +179,7 @@ public class Participant {
 
     // Add callback to create rocksplicator shard config
     HelixCustomCodeRunner codeRunner = new HelixCustomCodeRunner(helixManager, zkConnectString)
-        .invoke(new OnlineOfflineConfigGenerator(clusterName, helixManager, postUrl))
+        .invoke(new ConfigGenerator(clusterName, helixManager, postUrl))
         .on(HelixConstants.ChangeType.EXTERNAL_VIEW)
         .usingLeaderStandbyModel("ConfigWatcher" + clusterName);
 
