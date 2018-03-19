@@ -12,7 +12,7 @@
         <artifactId>thrift-maven-plugin</artifactId>
         <version>0.10.0</version>
         <configuration>
-            <thriftExecutable>/usr/local/bin/thrift</thriftExecutable>
+            <thriftExecutable>/usr/bin/thrift</thriftExecutable>
           <thriftSourceRoot>${basedir}/../rocksdb_admin</thriftSourceRoot>
         </configuration>
         <executions>
