@@ -70,8 +70,6 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
 
     if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
       generateShardConfig();
-    } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.LIVE_INSTANCE) {
-      generateIdealState();
     }
   }
 
@@ -191,9 +189,5 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
     hostWithDomain = host.replace('_', ':') + ":" + az + "_" + pg;
     hostToHostWithDomain.put(host, hostWithDomain);
     return hostWithDomain;
-  }
-
-  private void generateIdealState() {
-    // TODO
   }
 }

@@ -21,8 +21,15 @@ package com.pinterest.rocksplicator;
 import com.pinterest.rocksdb_admin.thrift.AddDBRequest;
 import com.pinterest.rocksdb_admin.thrift.Admin;
 import com.pinterest.rocksdb_admin.thrift.AdminException;
+import com.pinterest.rocksdb_admin.thrift.BackupDBRequest;
+import com.pinterest.rocksdb_admin.thrift.ChangeDBRoleAndUpstreamRequest;
+import com.pinterest.rocksdb_admin.thrift.CheckDBRequest;
+import com.pinterest.rocksdb_admin.thrift.CheckDBResponse;
 import com.pinterest.rocksdb_admin.thrift.ClearDBRequest;
 import com.pinterest.rocksdb_admin.thrift.CloseDBRequest;
+import com.pinterest.rocksdb_admin.thrift.GetSequenceNumberRequest;
+import com.pinterest.rocksdb_admin.thrift.GetSequenceNumberResponse;
+import com.pinterest.rocksdb_admin.thrift.RestoreDBRequest;
 
 import org.apache.helix.model.Message;
 import org.apache.thrift.TException;
@@ -39,9 +46,21 @@ public class Utils {
    * Build a thrift client to local adminPort
    * @param adminPort
    * @return a client object
+   * @throws TTransportException
    */
   public static Admin.Client getLocalAdminClient(int adminPort) throws TTransportException {
-    TSocket sock = new TSocket("localhost", adminPort);
+    return getAdminClient("localhost", adminPort);
+  }
+
+  /**
+   * Build a thrift client to host:adminPort
+   * @param host
+   * @param adminPort
+   * @return a client object
+   * @throws TTransportException
+   */
+  public static Admin.Client getAdminClient(String host, int adminPort) throws TTransportException {
+    TSocket sock = new TSocket(host, adminPort);
     sock.open();
     return new Admin.Client(new TBinaryProtocol(sock));
   }
@@ -121,5 +140,127 @@ public class Utils {
   public static void logTransitionMessage(Message message) {
     LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
         + " for " + message.getPartitionName());
+  }
+
+  /**
+   * Get the latest sequence number of the local DB
+   * @param dbName
+   * @return the latest sequence number
+   * @throws RuntimeException
+   */
+  public static long getLocalLatestSequenceNumber(String dbName, int adminPort)
+      throws RuntimeException {
+    long seqNum = getLatestSequenceNumber(dbName, "localhost", adminPort);
+    if (seqNum == -1) {
+      throw new RuntimeException("Failed to fetch local sequence number for DB: " + dbName);
+    }
+
+    return seqNum;
+  }
+
+  /**
+   * Get the latest sequence number of the DB on the host
+   * @param dbName
+   * @return the latest sequence number, -1 if fails to get it
+   */
+  public static long getLatestSequenceNumber(String dbName, String host, int adminPort) {
+    try {
+      Admin.Client client = getAdminClient(host, adminPort);
+
+      GetSequenceNumberRequest request = new GetSequenceNumberRequest(dbName);
+      GetSequenceNumberResponse response = client.getSequenceNumber(request);
+      return response.seq_num;
+    } catch (TException e) {
+      LOG.error("Failed to get sequence number", e);
+      return -1;
+    }
+  }
+
+  /**
+   * Change DB role and upstream on host:adminPort
+   * @param host
+   * @param adminPort
+   * @param dbName
+   * @param role
+   * @param upstreamIP
+   * @param upstreamPort
+   * @throws RuntimeException
+   */
+  public static void changeDBRoleAndUpStream(
+      String host, int adminPort, String dbName, String role, String upstreamIP, int upstreamPort)
+      throws RuntimeException {
+    try {
+      Admin.Client client = getAdminClient(host, adminPort);
+
+      ChangeDBRoleAndUpstreamRequest request = new ChangeDBRoleAndUpstreamRequest(dbName, role);
+      request.setUpstream_ip(upstreamIP);
+      request.setUpstream_port((short)upstreamPort);
+      client.changeDBRoleAndUpStream(request);
+    } catch (TException e) {
+      LOG.error("Failed to changeDBRoleAndUpStream", e);
+      throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * Check the status of a local DB
+   * @param dbName
+   * @param adminPort
+   * @return the DB status
+   * @throws RuntimeException
+   */
+  public static CheckDBResponse checkLocalDB(String dbName, int adminPort) throws RuntimeException {
+    try {
+      Admin.Client client = getLocalAdminClient(adminPort);
+
+      CheckDBRequest req = new CheckDBRequest(dbName);
+      return client.checkDB(req);
+    } catch (TException e) {
+      LOG.error("Failed to check DB: ", e.toString());
+      throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * Backup the DB on the host
+   * @param host
+   * @param adminPort
+   * @param dbName
+   * @param hdfsPath
+   * @throws RuntimeException
+   */
+  public static void backupDB(String host, int adminPort, String dbName, String hdfsPath)
+      throws RuntimeException {
+    try {
+      Admin.Client client = getAdminClient(host, adminPort);
+
+      BackupDBRequest req = new BackupDBRequest(dbName, hdfsPath);
+      client.backupDB(req);
+    } catch (TException e) {
+      LOG.error("Failed to backup DB: ", e.toString());
+      throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * Restore the local DB from HDFS
+   * @param adminPort
+   * @param dbName
+   * @param hdfsPath
+   * @throws RuntimeException
+   */
+  public static void restoreLocalDB(int adminPort, String dbName, String hdfsPath,
+                                    String upsreamHost, int upstreamPort)
+      throws RuntimeException {
+    try {
+      Admin.Client client = getLocalAdminClient(adminPort);
+
+      RestoreDBRequest req =
+          new RestoreDBRequest(dbName, hdfsPath, upsreamHost, (short)upstreamPort);
+      client.restoreDB(req);
+    } catch (TException e) {
+      LOG.error("Failed to restore DB: ", e.toString());
+      throw new RuntimeException(e);
+    }
   }
 }

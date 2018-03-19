@@ -167,6 +167,9 @@ public class Participant {
     } else if (stateModelType.equals("Cache")) {
       stateModelType = "OnlineOffline";
       stateModelFactory = new CacheStateModelFactory();
+    } else if (stateModelType.equals("MasterSlave")) {
+      stateModelFactory = new MasterSlaveStateModelFactory(instanceName.split("_")[0],
+          port, zkConnectString, clusterName);
     } else {
       LOG.error("Unknown state model: " + stateModelType);
     }
