@@ -105,6 +105,8 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
             String.format("%05d", Integer.parseInt(partition.split("_")[1]));
         Map<String, String> hostToState = externalView.getStateMap(partition);
         for (Map.Entry<String, String> entry : hostToState.entrySet()) {
+          existingHosts.add(entry.getKey());
+
           String state = entry.getValue();
           if (!state.equalsIgnoreCase("ONLINE") &&
               !state.equalsIgnoreCase("MASTER") &&
@@ -113,7 +115,6 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
             continue;
           }
 
-          existingHosts.add(entry.getKey());
           String hostWithDomain = getHostWithDomain(entry.getKey());
           List<String> partitionList = hostToPartitionList.get(hostWithDomain);
           if (partitionList == null) {
