@@ -164,9 +164,6 @@ public class Participant {
 
     if (stateModelType.equals("OnlineOffline")) {
       stateModelFactory = new OnlineOfflineStateModelFactory(port, zkConnectString, clusterName);
-    } else if (stateModelType.equals("MasterSlave")) {
-      stateModelFactory = new MasterSlaveStateModelFactory(instanceName.split("_")[0],
-          port, zkConnectString, clusterName);
     } else {
       LOG.error("Unknown state model: " + stateModelType);
     }
