@@ -290,7 +290,8 @@ class ThriftRouter {
         auto hosts_for_shard = filterByRoleAndSortByPreference(
           shard_to_hosts[shard], role, rotation_counter, segment);
         if (hosts_for_shard.empty()) {
-          LOG(ERROR) << "Could not find hosts for shard " << shard;
+          LOG_EVERY_N(ERROR, 1000)
+            << "Could not find hosts for shard " << shard;
           ret = ReturnCode::NOT_FOUND;
           continue;
         }
@@ -298,13 +299,15 @@ class ThriftRouter {
         filterBadHosts(&hosts_for_shard);
         if (sz != hosts_for_shard.size() && quantity == Quantity::ALL) {
           // exist some bad hosts, and we want all of them
-          LOG(ERROR) << "There is at least one bad host for shard " << shard;
+          LOG_EVERY_N(ERROR, 1000)
+            << "There is at least one bad host for shard " << shard;
           ret = ReturnCode::BAD_HOST;
           continue;
         }
 
         if (hosts_for_shard.empty()) {
-          LOG(ERROR) << "We could not find any good host for shard " << shard;
+          LOG_EVERY_N(ERROR, 1000)
+            << "We could not find any good host for shard " << shard;
           ret = ReturnCode::BAD_HOST;
           continue;
         }
