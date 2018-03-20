@@ -252,32 +252,13 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         // open the DB if it's currently not opened yet
         Utils.addDB(dbName, adminPort);
 
-        // Find upstream, prefer Master
+        // check if the local replica needs rebuild
         HelixAdmin admin = context.getManager().getClusterManagmentTool();
         ExternalView view = admin.getResourceExternalView(cluster, resourceName);
         Map<String, String> stateMap = view.getStateMap(partitionName);
 
-        String upstream = null;
-        for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
-          String role = instanceNameAndRole.getValue();
-          if (role.equalsIgnoreCase("MASTER")) {
-            upstream = instanceNameAndRole.getKey();
-            break;
-          } else if (role.equalsIgnoreCase("SLAVE")) {
-            upstream = instanceNameAndRole.getKey();
-          }
-        }
-
-        if (upstream == null) {
-          LOG.error("Couldn't find an upstream");
-          throw new RuntimeException("Couldn't find an upstream");
-        }
-
-        String upstreamHost = upstream.split("_")[0];
-        int upstreamPort = Integer.parseInt(upstream.split("_")[1]);
-
-        // check if the local replica needs rebuild
         CheckDBResponse localStatus = Utils.checkLocalDB(dbName, adminPort);
+
         boolean needRebuild = true;
         if (!stateMap.containsValue("MASTER") && !stateMap.containsValue("SLAVE")) {
           LOG.info("No other replicas, skip rebuild");
@@ -288,11 +269,28 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           needRebuild = false;
         }
 
+        String upstreamHost = null;
+        int upstreamPort = adminPort;
         if (needRebuild) {
-          // backup a snapshot from the upstream host, and restore it locally
+          // Find upstream, prefer Master
+          String upstream = null;
+          for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
+            String role = instanceNameAndRole.getValue();
+            if (role.equalsIgnoreCase("MASTER")) {
+              upstream = instanceNameAndRole.getKey();
+              break;
+            } else if (role.equalsIgnoreCase("SLAVE")) {
+              upstream = instanceNameAndRole.getKey();
+            }
+          }
+
+          upstreamHost = upstream.split("_")[0];
+          upstreamPort = Integer.parseInt(upstream.split("_")[1]);
+
           String hdfsPath = "/rocksplicator/" + cluster + "/" + dbName + "/" + upstream + "/"
               + String.valueOf(System.currentTimeMillis());
 
+          // backup a snapshot from the upstream host, and restore it locally
           LOG.info("Backup " + dbName + " from " + upstreamHost);
           Utils.backupDB(upstreamHost, upstreamPort, dbName, hdfsPath);
           LOG.info("Restore " + dbName + " from " + hdfsPath);
@@ -301,7 +299,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
 
         // setup upstream
         Utils.changeDBRoleAndUpStream("localhost", adminPort, dbName, "SLAVE",
-            upstreamHost, upstreamPort);
+            upstreamHost == null ? "127.0.0.1" : upstreamHost, upstreamPort);
       } catch (RuntimeException e) {
         throw e;
       } catch (Exception e) {
@@ -350,14 +348,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
      * 7) Error to Dropped
      */
     public void onBecomeDroppedFromError(Message message, NotificationContext context) {
-      Utils.logTransitionMessage(message);
-
-      try (Locker locker = new Locker(partitionMutex)) {
-        Utils.clearDB(Utils.getDbName(partitionName), adminPort);
-      } catch (Exception e) {
-        LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
-            e);
-      }
+      onBecomeDroppedFromOffline(message, context);
     }
 
     private static String getLockPath(String cluster, String resourceName, String partitionName) {
