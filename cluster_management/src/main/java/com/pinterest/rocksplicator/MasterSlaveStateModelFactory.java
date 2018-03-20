@@ -176,7 +176,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           Utils.changeDBRoleAndUpStream(
               "localhost", adminPort, dbName, "SLAVE", hostWithHighestSeq, adminPort);
 
-          // wait for 10 mins
+          // wait for up to 10 mins
           for (int i = 0; i < 600; ++i) {
             TimeUnit.SECONDS.sleep(1);
             localSeq = Utils.getLocalLatestSequenceNumber(dbName, adminPort);
@@ -184,6 +184,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
               LOG.info("Catched up!");
               break;
             }
+            LOG.info("Slept for " + String.valueOf(i + 1) + " seconds");
           }
 
           if (Long.compareUnsigned(highestSeq, localSeq) > 0) {
