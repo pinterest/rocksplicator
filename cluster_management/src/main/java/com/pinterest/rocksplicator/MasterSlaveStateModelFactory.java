@@ -295,6 +295,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           LOG.info("Backup " + dbName + " from " + upstreamHost);
           Utils.backupDB(upstreamHost, upstreamPort, dbName, hdfsPath);
           LOG.info("Restore " + dbName + " from " + hdfsPath);
+          Utils.closeDB(dbName, adminPort);
           Utils.restoreLocalDB(adminPort, dbName, hdfsPath, upstreamHost, upstreamPort);
         }
 
