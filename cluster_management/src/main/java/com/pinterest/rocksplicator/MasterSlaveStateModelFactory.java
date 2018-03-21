@@ -165,7 +165,8 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
             LOG.error("Failed to get latest sequence number from " + hostName + " for " + dbName);
             continue;
           }
-          if (Long.compareUnsigned(highestSeq, seq) < 0) {
+          // if (Long.compareUnsigned(highestSeq, seq) < 0) {
+          if (highestSeq < seq) {
             highestSeq = seq;
             hostWithHighestSeq = hostName;
           }
@@ -180,14 +181,16 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           for (int i = 0; i < 600; ++i) {
             TimeUnit.SECONDS.sleep(1);
             localSeq = Utils.getLocalLatestSequenceNumber(dbName, adminPort);
-            if (Long.compareUnsigned(highestSeq, localSeq) <= 0) {
+            // if (Long.compareUnsigned(highestSeq, localSeq) <= 0) {
+            if (highestSeq <= localSeq) {
               LOG.info("Catched up!");
               break;
             }
             LOG.info("Slept for " + String.valueOf(i + 1) + " seconds");
           }
 
-          if (Long.compareUnsigned(highestSeq, localSeq) > 0) {
+          // if (Long.compareUnsigned(highestSeq, localSeq) > 0) {
+          if (highestSeq > localSeq) {
             LOG.error("Couldn't catch up after 10 mins");
             throw new RuntimeException("Couldn't catch up after 10 mins");
           }
