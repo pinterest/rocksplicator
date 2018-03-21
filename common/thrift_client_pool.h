@@ -46,6 +46,8 @@ DECLARE_int32(min_channel_create_interval_seconds);
 
 DECLARE_int32(tcp_user_timeout_ms);
 
+DECLARE_bool(channel_enable_snappy);
+
 namespace common {
 
 /*
@@ -230,6 +232,9 @@ class ThriftClientPool {
         channel = apache::thrift::HeaderClientChannel::newChannel(socket);
         if (FLAGS_channel_send_timeout_ms > 0) {
           channel->setTimeout(FLAGS_channel_send_timeout_ms);
+        }
+        if (FLAGS_channel_enable_snappy) {
+          channel->setTransform(apache::thrift::transport::THeader::SNAPPY_TRANSFORM);
         }
         if (USE_BINARY_PROTOCOL) {
           channel->setProtocolId(apache::thrift::protocol::T_BINARY_PROTOCOL);
