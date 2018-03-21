@@ -139,12 +139,23 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
 
       try (Locker locker = new Locker(partitionMutex)) {
         HelixAdmin admin = context.getManager().getClusterManagmentTool();
-        ExternalView view = admin.getResourceExternalView(cluster, resourceName);
-        Map<String, String> stateMap = view.getStateMap(partitionName);
+        Map<String, String> stateMap = null;
 
-        // sanity check
-        if (stateMap.containsValue("MASTER")) {
-          throw new RuntimeException("Existing Master detected!");
+        // sanity check no existing Master for up to 59 seconds
+        for (int i = 0; i < 60; ++i) {
+          ExternalView view = admin.getResourceExternalView(cluster, resourceName);
+          stateMap = view.getStateMap(partitionName);
+
+          if (!stateMap.containsValue("MASTER")) {
+            break;
+          }
+
+          if (i == 59) {
+            throw new RuntimeException("Existing Master detected!");
+          }
+
+          TimeUnit.SECONDS.sleep(1);
+          LOG.info("Slept for " + String.valueOf(i + 1) + " seconds");
         }
 
         final String dbName = Utils.getDbName(partitionName);
