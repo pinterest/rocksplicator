@@ -36,3 +36,5 @@ DEFINE_int32(min_channel_create_interval_seconds, 10,
 DEFINE_int32(tcp_user_timeout_ms, 10000,
              "The max time allowed for unacked tcp data before closing the "
              "corresponding TCP connection");
+
+DEFINE_bool(channel_enable_snappy, false, "Enable snappy compression or not");
