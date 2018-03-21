@@ -38,8 +38,11 @@ JNIEnv* createVM(const std::string& class_path) {
 
   args.version = JNI_VERSION_1_6;
   args.nOptions = 2;
+  const std::string env_class_path = std::getenv("CLASSPATH");
   auto class_opt = "-Djava.class.path=" + class_path +
-    "cluster_management-0.0.1-SNAPSHOT-jar-with-dependencies.jar";
+      "cluster_management-0.0.1-SNAPSHOT-jar-with-dependencies.jar:" +
+      env_class_path;
+  LOG(INFO) << "classpath=" << class_opt;
   options[0].optionString = const_cast<char*>(class_opt.c_str());
   options[1].optionString = "-verbose:jni";
 
