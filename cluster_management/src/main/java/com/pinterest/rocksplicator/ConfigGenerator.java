@@ -99,8 +99,9 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
       // build host to partition list map
       Map<String, List<String>> hostToPartitionList = new HashMap<String, List<String>>();
       for (String partition : partitions) {
+        String[] parts = partition.split("_");
         String partitionNumber =
-            String.format("%05d", Integer.parseInt(partition.split("_")[1]));
+            String.format("%05d", Integer.parseInt(parts[parts.length - 1]));
         Map<String, String> hostToState = externalView.getStateMap(partition);
         for (Map.Entry<String, String> entry : hostToState.entrySet()) {
           existingHosts.add(entry.getKey());

@@ -187,7 +187,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
     // S3 part prefix is in format: part-00000-
     private String getS3PartPrefix() {
       String[] parts = partitionName.split("_");
-      return String.format("part-%05d-", Integer.parseInt(parts[1]));
+      return String.format("part-%05d-", Integer.parseInt(parts[parts.length - 1]));
     }
   }
 }
