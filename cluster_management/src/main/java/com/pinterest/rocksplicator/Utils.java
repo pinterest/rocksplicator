@@ -71,8 +71,9 @@ public class Utils {
    * @return e.g. "p2p100001"
    */
   public static String getDbName(String partitionName) {
-    String[] parts = partitionName.split("_");
-    return String.format("%s%05d", parts[0], Integer.parseInt(parts[1]));
+    int lastIdx= partitionName.lastIndexOf('_');
+    return String.format("%s%05d", partitionName.substring(0, lastIdx),
+        Integer.parseInt(partitionName.substring(lastIdx + 1)));
   }
 
   /**
