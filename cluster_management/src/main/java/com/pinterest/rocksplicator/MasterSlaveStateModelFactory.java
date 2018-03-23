@@ -68,6 +68,7 @@ import java.util.concurrent.TimeUnit;
  *    d) changeDBRoleAndUpStream(me, "Slave", "Master_ip_port") if Master exists
  *
  * 4) Slave to Offline
+ *    a) changeDBRoleAndUpStream(all_other_slaves_or_offlines, "Slave", "live_master_or_slave")
  *    a) closeDB()
  *
  * 5) Offline to Dropped
@@ -350,7 +351,63 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
       Utils.logTransitionMessage(message);
 
       try (Locker locker = new Locker(partitionMutex)) {
-        Utils.closeDB(Utils.getDbName(partitionName), adminPort);
+        // changeDBRoleAndUpStream(all_other_slaves_or_offlines, "Slave", "live_master_or_slave")
+        HelixAdmin admin = context.getManager().getClusterManagmentTool();
+        ExternalView view = admin.getResourceExternalView(cluster, resourceName);
+        Map<String, String> stateMap = view.getStateMap(partitionName);
+
+        // find upstream which is not me, and prefer master
+        String upstream = null;
+        String dbName = Utils.getDbName(partitionName);
+        for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
+          String hostPort = instanceNameAndRole.getKey();
+          String hostName = hostPort.split("_")[0];
+          int port = Integer.parseInt(hostPort.split("_")[1]);
+          if (this.host.equals(hostName) ||
+              Utils.getLatestSequenceNumber(dbName, hostName, port) == -1) {
+            // myself or dead
+            continue;
+          }
+
+          String role = instanceNameAndRole.getValue();
+          if (role.equalsIgnoreCase("MASTER")) {
+            upstream = hostPort;
+            break;
+          }
+
+          if (role.equalsIgnoreCase("SLAVE")) {
+            upstream = hostPort;
+          }
+        }
+
+        if (upstream != null) {
+          // setup upstream for all other slaves and offlines
+          String upstreamName = upstream.split("_")[0];
+          int upstreamPort = Integer.parseInt(upstream.split("_")[1]);
+
+          for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
+            String hostName = instanceNameAndRole.getKey().split("_")[0];
+            int port = Integer.parseInt(instanceNameAndRole.getKey().split("_")[1]);
+            if (this.host.equals(hostName) || upstreamName.equals(hostName)) {
+              //  mysel or upstream
+              continue;
+            }
+
+            try {
+              // setup upstream for Slaves and Offlines with best-efforts
+              if (instanceNameAndRole.getValue().equalsIgnoreCase("SLAVE") ||
+                  instanceNameAndRole.getValue().equalsIgnoreCase("OFFLINE")) {
+                Utils.changeDBRoleAndUpStream(
+                    hostName, port, dbName, "SLAVE", upstreamName, upstreamPort);
+              }
+            } catch (RuntimeException e) {
+              LOG.error("Failed to set upstream for " + dbName + " on " + hostName + e.toString());
+            }
+          }
+        }
+
+        // close DB
+        Utils.closeDB(dbName, adminPort);
       } catch (Exception e) {
         LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
             e);
@@ -375,7 +432,14 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
      * 6) Error to Offline
      */
     public void onBecomeOfflineFromError(Message message, NotificationContext context) {
-      onBecomeOfflineFromSlave(message, context);
+      Utils.logTransitionMessage(message);
+
+      try (Locker locker = new Locker(partitionMutex)) {
+        Utils.closeDB(Utils.getDbName(partitionName), adminPort);
+      } catch (Exception e) {
+        LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
+            e);
+      }
     }
 
     /**
