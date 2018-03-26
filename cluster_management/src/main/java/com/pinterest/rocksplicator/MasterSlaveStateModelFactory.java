@@ -48,8 +48,10 @@ import java.util.concurrent.TimeUnit;
  *                                                ERROR
  *
  * In every state transition handler function, we need to first acquire a global lock for the shard.
- * This is to ensure that there is no concurrent state transitions for the same shard. Helix has no
- * partition level throttling support yet.
+ * This guarantees 1) there is no concurrent transitions happening; 2) a partition state observed
+ * inside a transition handler is either the actual current state of the partition or the actual
+ * current state is one step away in the state machine graph from what's observed.
+ *
  *
  * 1) Slave to Master
  *    a) sanity check that there is no Master existing in the cluster
@@ -377,6 +379,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
 
           if (role.equalsIgnoreCase("SLAVE")) {
             upstream = hostPort;
+            // TODO: break from here if hostName is actually Master
           }
         }
 
