@@ -103,7 +103,7 @@ struct CheckDBResponse {
   # the write timestamp in ms for the latest update
   3: optional i64 last_update_timestamp_ms = 0,
   # if the DB is Master
-  4: optional bool is_master = false;
+  4: optional bool is_master = false,
 }
 
 struct ChangeDBRoleAndUpstreamRequest {
@@ -152,8 +152,8 @@ struct AddS3SstFilesToDBResponse {
 struct SetDBOptionsRequest {
   # For keys supported in this map, please refer to:
   # https://github.com/facebook/rocksdb/blob/master/util/cf_options.h#L161
-  1: required map<string, string> options;
-  2: required string db_name;
+  1: required map<string, string> options,
+  2: required string db_name,
 }
 
 struct SetDBOptionsResponse {
