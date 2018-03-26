@@ -379,7 +379,9 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
 
           if (role.equalsIgnoreCase("SLAVE")) {
             upstream = hostPort;
-            // TODO: break from here if hostName is actually Master
+            if (Utils.isMasterReplica(hostName, port, dbName)) {
+              break;
+            }
           }
         }
 
