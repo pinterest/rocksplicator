@@ -264,4 +264,24 @@ public class Utils {
       throw new RuntimeException(e);
     }
   }
+
+  /**
+   * Check if the DB on host:adminPort is Master. If the CheckDBRequest request fails, return false.
+   * @param host
+   * @param adminPort
+   * @param dbName
+   * @return
+   */
+  public static boolean isMasterReplica(String host, int adminPort, String dbName) {
+    try {
+      Admin.Client client = getAdminClient(host, adminPort);
+
+      CheckDBRequest req = new CheckDBRequest(dbName);
+      CheckDBResponse res = client.checkDB(req);
+      return res.is_master;
+    } catch (TException e) {
+      LOG.error("Failed to check DB: ", e.toString());
+      return false;
+    }
+  }
 }
