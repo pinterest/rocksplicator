@@ -532,6 +532,7 @@ void AdminHandler::async_tm_checkDB(
   CheckDBResponse response;
   response.set_seq_num(db->rocksdb()->GetLatestSequenceNumber());
   response.set_wal_ttl_seconds(db->rocksdb()->GetOptions().WAL_ttl_seconds);
+  response.set_is_master(!db->IsSlave());
 
   // If there is at least one update
   if (response.seq_num != 0) {
