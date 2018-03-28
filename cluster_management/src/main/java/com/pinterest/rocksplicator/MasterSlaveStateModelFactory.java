@@ -288,6 +288,11 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           String host = hostPort.split("_")[0];
           int port = Integer.parseInt(hostPort.split("_")[1]);
 
+          if (this.host.equals(host)) {
+            // myself
+            continue;
+          }
+
           if (Utils.getLatestSequenceNumber(dbName, host, port) != -1) {
             liveHostAndRole.put(hostPort, role);
           }
