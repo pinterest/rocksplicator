@@ -45,15 +45,15 @@ void logMetric(const std::string& metric_name, int64_t value,
                const std::string& db_name) {
   common::Stats::get()->AddMetric(metric_name, value);
   if (FLAGS_replicator_enable_per_db_stats && !db_name.empty()) {
-    common::Stats::get()->AddMetric(metric_name + "." + db_name, value);
+    common::Stats::get()->AddMetric(metric_name + " db=" + db_name, value);
   }
 }
 
 void incCounter(const std::string& counter_name, uint64_t value,
-               const std::string& db_name) {
+                const std::string& db_name) {
   common::Stats::get()->Incr(counter_name, value);
   if (FLAGS_replicator_enable_per_db_stats && !db_name.empty()) {
-    common::Stats::get()->Incr(counter_name + "." + db_name, value);
+    common::Stats::get()->Incr(counter_name + " db=" + db_name, value);
   }
 }
 
