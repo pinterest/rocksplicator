@@ -298,20 +298,6 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           }
         }
 
-
-        // check if the local replica needs rebuild
-        CheckDBResponse localStatus = Utils.checkLocalDB(dbName, adminPort);
-
-        boolean needRebuild = true;
-        if (liveHostAndRole.isEmpty()) {
-          LOG.info("No other live replicas, skip rebuild " + dbName);
-          needRebuild = false;
-        } else if (System.currentTimeMillis() <
-            localStatus.last_update_timestamp_ms + localStatus.wal_ttl_seconds * 1000) {
-          LOG.info("Replication lag is within the range, skip rebuild");
-          needRebuild = false;
-        }
-
         // Find upstream, prefer Master
         String upstream = null;
         for (Map.Entry<String, String> instanceNameAndRole : liveHostAndRole.entrySet()) {
@@ -326,6 +312,24 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         String upstreamHost = (upstream == null ? "127.0.0.1" : upstream.split("_")[0]);
         int upstreamPort =
             (upstream == null ? adminPort : Integer.parseInt(upstream.split("_")[1]));
+
+        // check if the local replica needs rebuild
+        CheckDBResponse localStatus = Utils.checkLocalDB(dbName, adminPort);
+
+        boolean needRebuild = true;
+        if (liveHostAndRole.isEmpty()) {
+          LOG.info("No other live replicas, skip rebuild " + dbName);
+          needRebuild = false;
+        } else if (System.currentTimeMillis() <
+            localStatus.last_update_timestamp_ms + localStatus.wal_ttl_seconds * 1000) {
+          LOG.info("Replication lag is within the range, skip rebuild " + dbName);
+          needRebuild = false;
+        } else if (localStatus.seq_num ==
+            Utils.getLatestSequenceNumber(dbName, upstreamHost, upstreamPort)) {
+          // this could happen if no update to the db for a long time
+          LOG.info("Upstream seq # is identical to local seq #, skip rebuild " + dbName);
+          needRebuild = false;
+        }
 
         // rebuild if needed
         if (needRebuild) {
