@@ -135,8 +135,7 @@ GetObjectResponse S3Util::getObject(
   }
 }
 
-GetObjectResponse S3Util::getObject(
-  const string& key, iostream* out) {
+GetObjectResponse S3Util::getObject(const string& key, iostream* out) {
   GetObjectRequest getObjectRequest;
   getObjectRequest.SetBucket(bucket_);
   getObjectRequest.SetKey(key);
