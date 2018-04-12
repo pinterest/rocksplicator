@@ -126,10 +126,26 @@ GetObjectResponse S3Util::getObject(
     const string& key, const string& local_path, const bool direct_io) {
   auto getObjectResult = sdkGetObject(key, local_path, direct_io);
   string err_msg_prefix =
-    "Failed to download from " + key + "to " + local_path + "error: ";
+    "Failed to download from " + key + " to " + local_path + " error: ";
   if (getObjectResult.IsSuccess()) {
     return GetObjectResponse(true, "");
   } else {
+    return GetObjectResponse(false,
+        std::move(err_msg_prefix + getObjectResult.GetError().GetMessage()));
+  }
+}
+
+GetObjectResponse S3Util::getObject(
+  const string& key, iostream* out) {
+  GetObjectRequest getObjectRequest;
+  getObjectRequest.SetBucket(bucket_);
+  getObjectRequest.SetKey(key);
+  auto getObjectResult = s3Client->GetObject(getObjectRequest);
+  if (getObjectResult.IsSuccess()) {
+    *out << getObjectResult.GetResult().GetBody().rdbuf();
+    return GetObjectResponse(true, "");
+  } else {
+    string err_msg_prefix = "Failed to get " + key + ", error: ";
     return GetObjectResponse(false,
         std::move(err_msg_prefix + getObjectResult.GetError().GetMessage()));
   }

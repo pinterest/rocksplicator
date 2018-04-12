@@ -29,6 +29,7 @@
 #include <boost/iostreams/categories.hpp>
 
 #include <iosfwd>
+#include <iostream>
 #include <map>
 #include <mutex>
 #include <string>
@@ -37,6 +38,7 @@
 
 #include "gflags/gflags.h"
 
+using std::iostream;
 using std::map;
 using std::string;
 using std::vector;
@@ -174,6 +176,8 @@ class S3Util {
   // Download an S3 Object to a local file
   GetObjectResponse getObject(const string& key, const string& local_path,
                               const bool direct_io = false);
+  // Get S3 object to given iostream
+  GetObjectResponse getObject(const string& key, iostream* out);
   // Get object using s3client
   SdkGetObjectResponse sdkGetObject(const string& key,
                                     const string& local_path = "",
