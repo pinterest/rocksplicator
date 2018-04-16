@@ -131,7 +131,7 @@ class AdminHandler : virtual public AdminSvIf {
   // db that contains meta data for all local rocksdb instances
   std::unique_ptr<rocksdb::DB> meta_db_;
   // segments which allow for overlapping keys when adding SST files
-  std::vector<std::string> overlapping_keys_segments_;
+  std::vector<std::string> allow_overlapping_keys_segments_;
 };
 
 }  // namespace admin

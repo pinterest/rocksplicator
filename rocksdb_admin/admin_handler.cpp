@@ -25,8 +25,6 @@
 #include <thread>
 #include <vector>
 
-#include "boost/algorithm/string/classification.hpp"
-#include "boost/algorithm/string/split.hpp"
 #include "boost/filesystem.hpp"
 #include "common/network_util.h"
 #include "common/rocksdb_glogger/rocksdb_glogger.h"
@@ -56,7 +54,10 @@ DEFINE_int32(port, 9090, "Port of the server");
 DEFINE_string(shard_config_path, "",
              "Local path of file storing shard mapping for Aperture");
 
-DEFINE_string(overlapping_keys_segments_, "",
+DEFINE_bool(rocksdb_allow_overlapping_keys, false,
+            "Allow overlapping keys in sst bulk load");
+
+DEFINE_string(allow_overlapping_keys_segments, "",
               "comma separated list of segments supporting overlapping keys");
 
 DEFINE_bool(compact_db_after_load_sst, false,
@@ -240,8 +241,8 @@ AdminHandler::AdminHandler(
   if (db_manager_ == nullptr) {
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
-  boost::split(overlapping_keys_segments_, FLAGS_overlapping_keys_segments_,
-               boost::is_any_of(","));
+  folly::split(",", FLAGS_allow_overlapping_keys_segments,
+               allow_overlapping_keys_segments_);
 }
 
 
@@ -810,11 +811,15 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   }
 
   clearMetaData(request->db_name);
+
   bool allow_overlapping_keys =
-      std::find(overlapping_keys_segments_.begin(),
-                overlapping_keys_segments_.end(),
+      std::find(allow_overlapping_keys_segments_.begin(),
+                allow_overlapping_keys_segments_.end(),
                 admin::DbNameToSegment(request->db_name)) !=
-      overlapping_keys_segments_.end();
+      allow_overlapping_keys_segments_.end();
+  // OR with the flag to make backwards compatibility
+  allow_overlapping_keys =
+      allow_overlapping_keys || FLAGS_rocksdb_allow_overlapping_keys;
   if (!allow_overlapping_keys) {
     // clear DB if overlapping keys are not allowed
     auto db_role = db->IsSlave() ?
