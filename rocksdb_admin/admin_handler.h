@@ -22,6 +22,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <unordered_set>
 
 #include "common/object_lock.h"
 #include "common/s3util.h"
@@ -129,6 +130,8 @@ class AdminHandler : virtual public AdminSvIf {
   mutable std::mutex s3_util_lock_;
   // db that contains meta data for all local rocksdb instances
   std::unique_ptr<rocksdb::DB> meta_db_;
+  // segments which allow for overlapping keys when adding SST files
+  std::vector<std::string> overlapping_keys_segments_;
 };
 
 }  // namespace admin

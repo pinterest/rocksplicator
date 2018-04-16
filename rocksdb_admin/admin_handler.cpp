@@ -25,6 +25,8 @@
 #include <thread>
 #include <vector>
 
+#include "boost/algorithm/string/classification.hpp"
+#include "boost/algorithm/string/split.hpp"
 #include "boost/filesystem.hpp"
 #include "common/network_util.h"
 #include "common/rocksdb_glogger/rocksdb_glogger.h"
@@ -54,8 +56,8 @@ DEFINE_int32(port, 9090, "Port of the server");
 DEFINE_string(shard_config_path, "",
              "Local path of file storing shard mapping for Aperture");
 
-DEFINE_bool(rocksdb_allow_overlapping_keys, false,
-            "Allow overlapping keys in sst bulk load");
+DEFINE_string(overlapping_keys_segments_, "",
+              "comma separated list of segments supporting overlapping keys");
 
 DEFINE_bool(compact_db_after_load_sst, false,
             "Compact DB after loading SST files");
@@ -238,6 +240,8 @@ AdminHandler::AdminHandler(
   if (db_manager_ == nullptr) {
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
+  boost::split(overlapping_keys_segments_, FLAGS_overlapping_keys_segments_,
+               boost::is_any_of(","));
 }
 
 
@@ -806,7 +810,12 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   }
 
   clearMetaData(request->db_name);
-  if (!FLAGS_rocksdb_allow_overlapping_keys) {
+  bool allow_overlapping_keys =
+      std::find(overlapping_keys_segments_.begin(),
+                overlapping_keys_segments_.end(),
+                admin::DbNameToSegment(request->db_name)) !=
+      overlapping_keys_segments_.end();
+  if (!allow_overlapping_keys) {
     // clear DB if overlapping keys are not allowed
     auto db_role = db->IsSlave() ?
       replicator::DBRole::SLAVE : replicator::DBRole::MASTER;
@@ -854,8 +863,8 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   rocksdb::IngestExternalFileOptions ifo;
   ifo.move_files = true;
   /* if true, rocksdb will allow for overlapping keys */
-  ifo.allow_global_seqno = FLAGS_rocksdb_allow_overlapping_keys;
-  ifo.allow_blocking_flush = FLAGS_rocksdb_allow_overlapping_keys;
+  ifo.allow_global_seqno = allow_overlapping_keys;
+  ifo.allow_blocking_flush = allow_overlapping_keys;
   auto status = db->rocksdb()->IngestExternalFile(sst_file_paths, ifo);
   if (!OKOrSetException(status,
                         AdminErrorCode::DB_ADMIN_ERROR,
