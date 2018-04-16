@@ -22,7 +22,6 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <unordered_set>
 
 #include "common/object_lock.h"
 #include "common/s3util.h"
