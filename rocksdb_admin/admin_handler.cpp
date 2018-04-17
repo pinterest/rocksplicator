@@ -54,6 +54,10 @@ DEFINE_int32(port, 9090, "Port of the server");
 DEFINE_string(shard_config_path, "",
              "Local path of file storing shard mapping for Aperture");
 
+// For rocksdb_allow_overlapping_keys and allow_overlapping_keys_segments,
+// we take the logical OR of the bool and if the set contains the segment
+// to determine whether or not to allow overlapping keys on ingesting sst files
+
 DEFINE_bool(rocksdb_allow_overlapping_keys, false,
             "Allow overlapping keys in sst bulk load");
 
@@ -241,8 +245,10 @@ AdminHandler::AdminHandler(
   if (db_manager_ == nullptr) {
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
-  folly::split(",", FLAGS_allow_overlapping_keys_segments,
-               allow_overlapping_keys_segments_);
+  folly::splitTo<std::string>(
+      ",", FLAGS_allow_overlapping_keys_segments,
+      std::inserter(allow_overlapping_keys_segments_,
+                    allow_overlapping_keys_segments_.begin()));
 }
 
 
@@ -812,11 +818,9 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
 
   clearMetaData(request->db_name);
 
-  bool allow_overlapping_keys =
-      std::find(allow_overlapping_keys_segments_.begin(),
-                allow_overlapping_keys_segments_.end(),
-                admin::DbNameToSegment(request->db_name)) !=
-      allow_overlapping_keys_segments_.end();
+  bool allow_overlapping_keys = allow_overlapping_keys_segments_.find(
+                                    admin::DbNameToSegment(request->db_name)) !=
+                                allow_overlapping_keys_segments_.end();
   // OR with the flag to make backwards compatibility
   allow_overlapping_keys =
       allow_overlapping_keys || FLAGS_rocksdb_allow_overlapping_keys;
