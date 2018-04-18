@@ -818,9 +818,10 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
 
   clearMetaData(request->db_name);
 
-  bool allow_overlapping_keys = allow_overlapping_keys_segments_.find(
-                                    admin::DbNameToSegment(request->db_name)) !=
-                                allow_overlapping_keys_segments_.end();
+  auto segment = admin::DbNameToSegment(request->db_name);
+  bool allow_overlapping_keys =
+      allow_overlapping_keys_segments_.find(segment) !=
+      allow_overlapping_keys_segments_.end();
   // OR with the flag to make backwards compatibility
   allow_overlapping_keys =
       allow_overlapping_keys || FLAGS_rocksdb_allow_overlapping_keys;
@@ -835,7 +836,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     }
     db.reset();
     removeDB(request->db_name, nullptr);
-    auto options = rocksdb_options_(admin::DbNameToSegment(request->db_name));
+    auto options = rocksdb_options_(segment);
     auto db_path = FLAGS_rocksdb_dir + request->db_name;
     LOG(INFO) << "Clearing DB: " << request->db_name;
     auto status = rocksdb::DestroyDB(db_path, options);
