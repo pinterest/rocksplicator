@@ -54,8 +54,15 @@ DEFINE_int32(port, 9090, "Port of the server");
 DEFINE_string(shard_config_path, "",
              "Local path of file storing shard mapping for Aperture");
 
+// For rocksdb_allow_overlapping_keys and allow_overlapping_keys_segments,
+// we take the logical OR of the bool and if the set contains the segment
+// to determine whether or not to allow overlapping keys on ingesting sst files
+
 DEFINE_bool(rocksdb_allow_overlapping_keys, false,
             "Allow overlapping keys in sst bulk load");
+
+DEFINE_string(allow_overlapping_keys_segments, "",
+              "comma separated list of segments supporting overlapping keys");
 
 DEFINE_bool(compact_db_after_load_sst, false,
             "Compact DB after loading SST files");
@@ -238,6 +245,10 @@ AdminHandler::AdminHandler(
   if (db_manager_ == nullptr) {
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
+  folly::splitTo<std::string>(
+      ",", FLAGS_allow_overlapping_keys_segments,
+      std::inserter(allow_overlapping_keys_segments_,
+                    allow_overlapping_keys_segments_.begin()));
 }
 
 
@@ -806,7 +817,15 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   }
 
   clearMetaData(request->db_name);
-  if (!FLAGS_rocksdb_allow_overlapping_keys) {
+
+  auto segment = admin::DbNameToSegment(request->db_name);
+  bool allow_overlapping_keys =
+      allow_overlapping_keys_segments_.find(segment) !=
+      allow_overlapping_keys_segments_.end();
+  // OR with the flag to make backwards compatibility
+  allow_overlapping_keys =
+      allow_overlapping_keys || FLAGS_rocksdb_allow_overlapping_keys;
+  if (!allow_overlapping_keys) {
     // clear DB if overlapping keys are not allowed
     auto db_role = db->IsSlave() ?
       replicator::DBRole::SLAVE : replicator::DBRole::MASTER;
@@ -817,7 +836,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     }
     db.reset();
     removeDB(request->db_name, nullptr);
-    auto options = rocksdb_options_(admin::DbNameToSegment(request->db_name));
+    auto options = rocksdb_options_(segment);
     auto db_path = FLAGS_rocksdb_dir + request->db_name;
     LOG(INFO) << "Clearing DB: " << request->db_name;
     auto status = rocksdb::DestroyDB(db_path, options);
@@ -854,8 +873,8 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   rocksdb::IngestExternalFileOptions ifo;
   ifo.move_files = true;
   /* if true, rocksdb will allow for overlapping keys */
-  ifo.allow_global_seqno = FLAGS_rocksdb_allow_overlapping_keys;
-  ifo.allow_blocking_flush = FLAGS_rocksdb_allow_overlapping_keys;
+  ifo.allow_global_seqno = allow_overlapping_keys;
+  ifo.allow_blocking_flush = allow_overlapping_keys;
   auto status = db->rocksdb()->IngestExternalFile(sst_file_paths, ifo);
   if (!OKOrSetException(status,
                         AdminErrorCode::DB_ADMIN_ERROR,
