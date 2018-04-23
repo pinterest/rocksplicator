@@ -112,6 +112,11 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
         for (Map.Entry<String, String> entry : hostToState.entrySet()) {
           existingHosts.add(entry.getKey());
 
+          if (disabledHosts.contains(entry.getKey())) {
+            // exclude disabled hosts from the shard map config
+            continue;
+          }
+
           String state = entry.getValue();
           if (!state.equalsIgnoreCase("ONLINE") &&
               !state.equalsIgnoreCase("MASTER") &&
@@ -209,11 +214,6 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
       // no changes
       LOG.info("No changes to disabled instances");
       return false;
-    }
-
-    LOG.info("Latest disabled instances:");
-    for (String instance : latestDisabledInstances) {
-      LOG.info(instance);
     }
 
     disabledHosts = latestDisabledInstances;
