@@ -40,6 +40,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 public class ConfigGenerator implements CustomCodeCallbackHandler {
   private static final Logger LOG = LoggerFactory.getLogger(ConfigGenerator.class);
@@ -183,6 +184,9 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
     } catch (Exception e) {
       LOG.error("Failed to post the new config", e);
     }
+
+    LOG.info("Sleep for 3 seconds before generating the next config");
+    TimeUnit.SECONDS.sleep(3);
   }
 
   private String getHostWithDomain(String host) {
