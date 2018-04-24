@@ -181,12 +181,12 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
       } else {
         LOG.error(response.getStatusLine().getReasonPhrase());
       }
+
+      LOG.info("Sleep for 3 seconds before generating the next config");
+      TimeUnit.SECONDS.sleep(3);
     } catch (Exception e) {
       LOG.error("Failed to post the new config", e);
     }
-
-    LOG.info("Sleep for 3 seconds before generating the next config");
-    TimeUnit.SECONDS.sleep(3);
   }
 
   private String getHostWithDomain(String host) {
