@@ -50,6 +50,7 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
   private final String postUrl;
   private JSONObject dataParameters;
   private String lastPostedContent;
+  private Set<String> disabledHosts;
 
   public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
     this.clusterName = clusterName;
@@ -62,6 +63,7 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
     this.dataParameters.put("comment", "new shard config");
     this.dataParameters.put("content", "{}");
     this.lastPostedContent = null;
+    this.disabledHosts = new HashSet<>();
   }
 
   @Override
@@ -70,6 +72,10 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
 
     if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
       generateShardConfig();
+    } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.INSTANCE_CONFIG) {
+      if (updateDisabledHosts()) {
+        generateShardConfig();
+      }
     }
   }
 
@@ -105,6 +111,11 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
         Map<String, String> hostToState = externalView.getStateMap(partition);
         for (Map.Entry<String, String> entry : hostToState.entrySet()) {
           existingHosts.add(entry.getKey());
+
+          if (disabledHosts.contains(entry.getKey())) {
+            // exclude disabled hosts from the shard map config
+            continue;
+          }
 
           String state = entry.getValue();
           if (!state.equalsIgnoreCase("ONLINE") &&
@@ -190,5 +201,22 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
     hostWithDomain = host.replace('_', ':') + ":" + az + "_" + pg;
     hostToHostWithDomain.put(host, hostWithDomain);
     return hostWithDomain;
+  }
+
+  // update disabledHosts, return true if there is any changes
+  private boolean updateDisabledHosts() {
+    HelixAdmin admin = helixManager.getClusterManagmentTool();
+
+    Set<String> latestDisabledInstances = new HashSet<>(
+        admin.getInstancesInClusterWithTag(clusterName, "disabled"));
+
+    if (disabledHosts.equals(latestDisabledInstances)) {
+      // no changes
+      LOG.info("No changes to disabled instances");
+      return false;
+    }
+
+    disabledHosts = latestDisabledInstances;
+    return true;
   }
 }
