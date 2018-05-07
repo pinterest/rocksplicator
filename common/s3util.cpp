@@ -50,7 +50,8 @@ using Aws::S3::Model::HeadObjectRequest;
 
 DEFINE_int32(direct_io_buffer_n_pages, 1,
              "Number of pages we need to set to direct io buffer");
-
+DEFINE_bool(disable_s3_download_stream_buffer, false,
+            "disable the stream buffer used by s3 downloading");
 
 namespace common {
 
@@ -160,7 +161,12 @@ SdkGetObjectResponse S3Util::sdkGetObject(const string& key,
     if (direct_io) {
       getObjectRequest.SetResponseStreamFactory(
         [=]() {
+          if (FLAGS_disable_s3_download_stream_buffer) {
+            return new boost::iostreams::stream<DirectIOFileSink>(
+              DirectIOFileSink(local_path), 0, 0);
+          } else {
             return new boost::iostreams::stream<DirectIOFileSink>(local_path);
+          }
         }
       );
     } else {
