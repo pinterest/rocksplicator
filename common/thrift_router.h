@@ -195,7 +195,7 @@ class ThriftRouter {
     const auto layout = getClusterLayout();
 
     if (UNLIKELY(layout == nullptr)) {
-      LOG_EVERY_N(ERROR, 100) << "empty layout found";
+      LOG_EVERY_N(ERROR, 100) << "Empty layout found";
       return 0;
     }
 
