@@ -127,7 +127,7 @@ public class Participant {
    * @param args command line parameters
    */
   public static void main(String[] args) throws Exception {
-    org.apache.log4j.Logger.getRootLogger().setLevel(Level.INFO);
+    org.apache.log4j.Logger.getRootLogger().setLevel(Level.WARN);
     BasicConfigurator.configure(new ConsoleAppender(
         new PatternLayout("%d{HH:mm:ss.SSS} [%t] %-5p %30.30c - %m%n")
     ));
