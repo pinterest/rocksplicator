@@ -195,11 +195,13 @@ class ThriftRouter {
     const auto layout = getClusterLayout();
 
     if (UNLIKELY(layout == nullptr)) {
+      LOG_EVERY_N(ERROR, 100) << "Empty layout found";
       return 0;
     }
 
     auto itor = layout->segments.find(segment);
     if (itor == layout->segments.end()) {
+      LOG_EVERY_N(ERROR, 100) << "Invalid segment found: " << segment;
       return 0;
     }
 
