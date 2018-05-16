@@ -79,7 +79,7 @@ bool parseShard(const std::string& str, common::detail::Role* role,
 namespace common {
 
 std::unique_ptr<const detail::ClusterLayout> parseConfig(
-    std::string content, const std::string& local_group) {
+    const std::string& content, const std::string& local_group) {
   auto cl = std::make_unique<detail::ClusterLayout>();
   Json::Reader reader;
   Json::Value root;

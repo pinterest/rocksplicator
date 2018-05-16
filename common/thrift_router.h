@@ -100,7 +100,7 @@ class ThriftRouter {
       const std::string& local_group,
       const std::string& config_path,
       std::function<std::unique_ptr<const ClusterLayout>(
-        std::string, const std::string&)> parser)
+        const std::string&, const std::string&)> parser)
       : config_path_(config_path)
       , parser_(std::move(parser))
       , layout_rwlock_()
@@ -110,10 +110,13 @@ class ThriftRouter {
       config_path_,
       [this, local_group] (std::string content) {
         std::shared_ptr<const ClusterLayout> new_layout(
-          parser_(std::move(content), local_group));
-        {
+          parser_(content, local_group));
+
+        if (new_layout) {
           folly::RWSpinLock::WriteHolder write_guard(layout_rwlock_);
           cluster_layout_.swap(new_layout);
+        } else {
+          LOG(ERROR) << "Failed to parse the config: " << content;
         }
       }))
     << "Failed to watch " << config_path_;
@@ -529,6 +532,6 @@ class ThriftRouter {
   "}";
  */
 std::unique_ptr<const detail::ClusterLayout> parseConfig(
-  std::string content, const std::string& local_group);
+  const std::string& content, const std::string& local_group);
 
 }  // namespace common
