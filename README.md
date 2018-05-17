@@ -2,12 +2,12 @@
 
 [![Build Status](https://travis-ci.org/pinterest/rocksplicator.svg)](https://travis-ci.org/pinterest/rocksplicator)
 
-Rocksplicator is a set of C++ libraries and tools for building large scale [RocksDB](http://rocksdb.org/) based stateful services. Its goal is to help application developers solve common difficulties of building large scale stateful services, such as data replication and cluster management. With Rocksplicator, application developers just need to focus on their application logics, and won't need to deal with data replication nor cluster management.
+Rocksplicator is a set of C++ libraries and tools for building large scale [RocksDB](http://rocksdb.org/) based stateful services. Its goal is to help application developers solve common difficulties of building large scale stateful services, such as data replication, request routing and cluster management. With Rocksplicator, application developers just need to focus on their application logics, and won't need to deal with data replication, request routing nor cluster management.
 
 Rocksplicator includes:
 
  1. RocksDB replicator (a library for RocksDB real-time data replication. It supports 3 different replication modes, i.e., async replication, semi-sync replication, and sync replication.)
- 2. Cluster management library and tool for RocksDB replicator based stateful services
+ 2. Helix powered automated cluster management and recovery
  3. Async fbthrift client pool and fbthrift request router
  4. A stats library for maintaining & reporting server stats
  5. A set of other small tool classes for building C++ services.
@@ -16,7 +16,7 @@ Rocksplicator includes:
 Introduction of Rocksplicator can be found in in our [presentation at 2016 Annual RocksDB meetup at FB HQ](https://www.facebook.com/TeCNoYoTTa/videos/oa.1126302657468247/10155683728004408) and [@Scale presentation](https://atscaleconference.com/videos/experimentation-at-scale-replicated-rocksdb-at-pinterest/) (starting from 17:30).
 
 ## Use cases
-Currently, we have 5 different online services based on rocksplicator running at Pinterest, which consist of nearly 20 clusters, over 1600 hosts and process tens of PB data per day.
+Currently, we have 9 different online services based on rocksplicator running at Pinterest, which consist of nearly 30 clusters, over 4000 hosts and process tens of PB data per day.
 
 ## Prerequisities
 
@@ -69,7 +69,10 @@ cd /rocksplicator && mkdir -p build && cd build && cmake .. && make -j && make t
 ## How to build your owner service based on RocksDB replicator & cluster management libraries.
 There is an example counter service under examples/counter_service/, which demonstrated a typical usage pattern for RocksDB replicator.
 
-## Commands for cluster management
+## Automated cluster management and recovery
+Please check cluster_management directory for Helix powered automated cluster management and recovery.
+
+## Commands for cluster management (The following is for script driven cluster management, which has been deprecated)
 The cluster mangement tool rocksdb_admin.py is under rocksdb_admin/tool/.
 
 Before using the tool, we need to generate python client code for Admin interface as follows.
@@ -113,7 +116,7 @@ python rocksdb_admin.py cluster_name rebalance
 python rocksdb_admin.py "cluster" load_sst "segment" "s3_bucket" "s3_prefix" --concurrency 64 --rate_limit_mb 64
 ```
 
-## Typical cluster management workflows
+## Typical cluster management workflows (This has been deprecated, please check the new Helix powered solution in the cluster_management directory)
 
 ### replacing a dead host
 ```sh
