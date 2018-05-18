@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
 
   if (helix_mode) {
       auto az = common::getAvailabilityZone();
-      auto pg = az; // put your own placement query function here if you want
+      std::string pg = az; // put your own placement query function here if you want
       CHECK(!az.empty()) << "Failed to get az";
       // e.g., "az=us-east-1a,pg=placement_group1"
       auto domain = "az=" + az + ",pg=" + (pg.empty() ? az : pg);
