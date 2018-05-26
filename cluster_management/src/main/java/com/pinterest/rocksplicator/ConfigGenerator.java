@@ -40,6 +40,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 public class ConfigGenerator implements CustomCodeCallbackHandler {
   private static final Logger LOG = LoggerFactory.getLogger(ConfigGenerator.class);
@@ -176,7 +177,8 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
       HttpResponse response = new DefaultHttpClient().execute(httpPost);
       if (response.getStatusLine().getStatusCode() == 200) {
         lastPostedContent = newContent;
-        LOG.info("Succeed to generate a new shard config.");
+        LOG.info("Succeed to generate a new shard config, sleep for 5 seconds");
+        TimeUnit.SECONDS.sleep(5);
       } else {
         LOG.error(response.getStatusLine().getReasonPhrase());
       }
