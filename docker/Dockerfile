@@ -1,5 +1,5 @@
 # The base OS
-FROM 998131032990.dkr.ecr.us-east-1.amazonaws.com/ubuntu14.04:latest
+FROM ubuntu:14.04
 
 MAINTAINER Bo Liu <bol@pinterest.com>
 
@@ -50,6 +50,9 @@ RUN apt-get -q -y update && \
       git \
       google-perftools \
       graphviz \
+      hadoop \
+      hadoop-hdfs \
+      hadoop-client \
       libapr1-dev \
       libboost-all-dev \
       libbz2-dev \
@@ -63,6 +66,8 @@ RUN apt-get -q -y update && \
       libgflags-dev \
       libgtest-dev \
       libhdf5-serial-dev \
+      libhdfs0 \
+      libhdfs0-dev \
       libiberty-dev \
       libkrb5-dev \
       libleveldb-dev \
@@ -253,15 +258,16 @@ RUN cd /opt/ && \
      sed -i -- 's/std::rindex/rindex/g' ./env/env_hdfs.cc && \
      sed -i -- '/"util\/string_util.h"/a #include "util\/logging.h"' ./env/env_hdfs.cc && \
      export CLASSPATH= && \
-     for f in `find /usr/local/hadoop/share/hadoop | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \
+     for f in `find /usr/lib/hadoop-hdfs | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \
+     for f in `find /usr/lib/hadoop | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \
+     for f in `find /usr/lib/hadoop/client | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \
      USE_SSE=1 \
      USE_HDFS=1 \
      JAVA_HOME=/usr/lib/jvm/java-6-openjdk-amd64 \
-     LD_LIBRARY_PATH=$JAVA_HOME/jre/lib/amd64/server:$JAVA_HOME/jre/lib/amd64 \
+     LD_LIBRARY_PATH=$JAVA_HOME/jre/lib/amd64/server:$JAVA_HOME/jre/lib/amd64:/usr/lib/hadoop/lib/native \
        JEMALLOC_LIB=" /usr/local/lib/libjemalloc.a" \
        JEMALLOC_INCLUDE=" -I /usr/local/include/" \
-       EXTRA_CXXFLAGS="-gdwarf-2 -std=c++1y -O3 -fno-omit-frame-pointer -I/usr/local/hadoop/include" \
-       EXTRA_LDFLAGS="-L/usr/local/hadoop/lib/native" \
+       EXTRA_CXXFLAGS="-gdwarf-2 -std=c++1y -O3 -fno-omit-frame-pointer" \
        make -j ${BUILD_JOBS}  shared_lib && \
      make install-shared && \
      ldconfig) && \
@@ -337,20 +343,4 @@ RUN cd /opt && \
       make install && \
       ldconfig) && \
     rm -rf /opt/yaml-cpp
-
-# install thrift
-RUN cd /opt && \
-    wget https://archive.apache.org/dist/thrift/0.9.3/thrift-0.9.3.tar.gz && \
-    tar zxvf thrift-0.9.3.tar.gz && \
-    cd thrift-0.9.3 && \
-    ./configure --enable-shared=no --prefix=/usr/local/thrift/ && \
-    make -j && \
-    make install
-
-# maven
-RUN apt-get -q -y update && \
-    apt-get -q -y install maven
-
-#  remove gtest in docker to avoid conflict
-RUN rm -rf /usr/local/include/gtest/*
 
