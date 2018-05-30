@@ -177,8 +177,8 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
       HttpResponse response = new DefaultHttpClient().execute(httpPost);
       if (response.getStatusLine().getStatusCode() == 200) {
         lastPostedContent = newContent;
-        LOG.info("Succeed to generate a new shard config, sleep for 5 seconds");
-        TimeUnit.SECONDS.sleep(5);
+        LOG.info("Succeed to generate a new shard config, sleep for 10 seconds");
+        TimeUnit.SECONDS.sleep(10);
       } else {
         LOG.error(response.getStatusLine().getReasonPhrase());
       }
