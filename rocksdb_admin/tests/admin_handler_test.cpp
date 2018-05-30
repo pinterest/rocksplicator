@@ -32,6 +32,7 @@ using admin::CheckDBResponse;
 using apache::thrift::async::TAsyncSocket;
 using apache::thrift::HeaderClientChannel;
 using apache::thrift::ThriftServer;
+using common::ThriftClientPool;
 using std::chrono::seconds;
 using std::make_shared;
 using std::make_tuple;
@@ -129,25 +130,24 @@ TEST(AdminHandlerTest, CheckDB) {
   tie(handler, server, thread) = makeServer(8090);
   sleep_for(seconds(1));
 
-  folly::EventBase evb;
-  shared_ptr<TAsyncSocket> socket(
-      TAsyncSocket::newSocket(&evb, "127.0.0.1", 8090));
-  AdminAsyncClient client(HeaderClientChannel::newChannel(socket));
+
+  ThriftClientPool<AdminAsyncClient> pool(1);
+  auto client = pool.getClient("127.0.0.1", 8090);
 
   CheckDBRequest req;
   CheckDBResponse res;
   req.db_name = "unknown_db";
 
-  EXPECT_THROW(client.sync_checkDB(res, req), AdminException);
+  EXPECT_THROW(res = client->future_checkDB(req).get(), AdminException);
 
   req.db_name = "imp00001";
-  EXPECT_NO_THROW(client.sync_checkDB(res, req));
+  EXPECT_NO_THROW(res = client->future_checkDB(req).get());
   EXPECT_EQ(res.seq_num, 0);
   EXPECT_EQ(res.wal_ttl_seconds, 123);
   EXPECT_EQ(res.last_update_timestamp_ms, 0);
 
   req.db_name = "imp00002";
-  EXPECT_NO_THROW(client.sync_checkDB(res, req));
+  EXPECT_NO_THROW(res = client->future_checkDB(req).get());
   EXPECT_EQ(res.seq_num, 1);
   EXPECT_EQ(res.wal_ttl_seconds, 123);
   // 1521000000 is 03/14/2018 @ 4:00am (UTC)
