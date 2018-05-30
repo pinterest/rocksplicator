@@ -16,8 +16,11 @@ RUN apt-get -q -y update && \
       git \
       software-properties-common
 
-# For gcc-5
+# For gcc 6
 RUN add-apt-repository -y ppa:ubuntu-toolchain-r/test
+
+# For open jdk 8
+RUN add-apt-repository ppa:openjdk-r/ppa && apt-get update
 
 # For HDFS debian libs
 RUN wget 'https://archive.cloudera.com/cdh5/ubuntu/trusty/amd64/cdh/cloudera.list' \
@@ -37,12 +40,7 @@ RUN apt-get -q -y update && \
       binutils-dev \
       bison \
       curl \
-      default-jdk \
       flex \
-      g++-4.7 \
-      gcc-4.7 \
-      gcc-5 \
-      g++-5 \
       gcc-6 \
       g++-6 \
       gdb \
@@ -82,7 +80,7 @@ RUN apt-get -q -y update && \
       libtool \
       linux-tools-generic \
       make \
-      openjdk-6-jdk \
+      openjdk-8-jdk \
       python-setuptools \
       python-pip \
       scons \
@@ -137,7 +135,7 @@ RUN cd /opt && \
 RUN apt-get update && apt-get install --force-yes -q -y libunwind8-dev
 
 # Adding Java lib path ld.so searching path configuration
-RUN JAVA_HOME=/usr/lib/jvm/java-6-openjdk-amd64 && \
+RUN JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 && \
     echo $JAVA_HOME/jre/lib/amd64/ >> /etc/ld.so.conf.d/realpin.conf && \
     echo $JAVA_HOME/jre/lib/amd64/server >> /etc/ld.so.conf.d/realpin.conf && \
     echo $JAVA_HOME/jre/lib/amd64/jamvm >> /etc/ld.so.conf.d/realpin.conf
@@ -201,7 +199,7 @@ RUN cd /opt && \
      git reset --hard b59ee6802a2454e854a52535d31598aa967e33c0 && \
      cd folly && \
      autoreconf -ivf && \
-     ./configure LDFLAGS='-ljemalloc' CC=/usr/bin/gcc-5 CXX=/usr/bin/g++-5 \
+     ./configure LDFLAGS='-ljemalloc' CC=/usr/bin/gcc-6 CXX=/usr/bin/g++-6 \
      CXXFLAGS='-gdwarf-2 -O3 -fno-omit-frame-pointer' && \
      make -j ${BUILD_JOBS}  && \
      make install && \
@@ -212,7 +210,7 @@ RUN cd /opt && \
 RUN cd /opt && \
     git clone https://github.com/facebook/wangle && \
     (cd wangle && git reset --hard 52f08ff480931fcba1b7fa9b3eebd45d220a68de) && \
-    (cd wangle/wangle && CC=/usr/bin/gcc-5 CXX=/usr/bin/g++-5 cmake . && \
+    (cd wangle/wangle && CC=/usr/bin/gcc-6 CXX=/usr/bin/g++-6 cmake . && \
       make -j ${BUILD_JOBS} && \
       make install && \
       ldconfig) && \
@@ -237,7 +235,7 @@ RUN cd /opt && \
      sed 's/PKG_CHECK_MODULES.*$/true/g' -i configure.ac && \
      (cd compiler && ln -sf thrifty.h thrifty.hh) && \
      autoreconf --install && \
-     LDFLAGS="-ljemalloc" CC=/usr/bin/gcc-5 CXX=/usr/bin/g++-5 \
+     LDFLAGS="-ljemalloc" CC=/usr/bin/gcc-6 CXX=/usr/bin/g++-6 \
        CPPFLAGS="-gdwarf-2 -O3 -fno-omit-frame-pointer" \
        ./configure && \
      (cd compiler && make) && \
@@ -263,7 +261,7 @@ RUN cd /opt/ && \
      for f in `find /usr/lib/hadoop/client | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \
      USE_SSE=1 \
      USE_HDFS=1 \
-     JAVA_HOME=/usr/lib/jvm/java-6-openjdk-amd64 \
+     JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 \
      LD_LIBRARY_PATH=$JAVA_HOME/jre/lib/amd64/server:$JAVA_HOME/jre/lib/amd64:/usr/lib/hadoop/lib/native \
        JEMALLOC_LIB=" /usr/local/lib/libjemalloc.a" \
        JEMALLOC_INCLUDE=" -I /usr/local/include/" \

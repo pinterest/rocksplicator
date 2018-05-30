@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 
 add_executable(non_blocking_condition_variable_test non_blocking_condition_variable_test.cpp)
-target_link_libraries(non_blocking_condition_variable_test folly wangle gtest)
+target_link_libraries(non_blocking_condition_variable_test folly wangle gtest glog)
 add_test(NAME non_blocking_condition_variable_test COMMAND non_blocking_condition_variable_test)
 
 add_executable(rocksdb_replicator_test rocksdb_replicator_test.cpp)
