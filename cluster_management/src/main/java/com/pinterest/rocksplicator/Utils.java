@@ -20,6 +20,7 @@ package com.pinterest.rocksplicator;
 
 import com.pinterest.rocksdb_admin.thrift.AddDBRequest;
 import com.pinterest.rocksdb_admin.thrift.Admin;
+import com.pinterest.rocksdb_admin.thrift.AdminErrorCode;
 import com.pinterest.rocksdb_admin.thrift.AdminException;
 import com.pinterest.rocksdb_admin.thrift.BackupDBRequest;
 import com.pinterest.rocksdb_admin.thrift.ChangeDBRoleAndUpstreamRequest;
@@ -116,17 +117,27 @@ public class Utils {
   }
 
   /**
-   * Add a DB as a Slave, and set it upstream to be itself
+   * Add a DB as a Slave, and set it upstream to be itself. Do nothing if the DB already exists
    * @param dbName
    * @param adminPort
    */
   public static void addDB(String dbName, int adminPort) {
+    Admin.Client client = null;
+    AddDBRequest req = null;
     try {
-      Admin.Client client = getLocalAdminClient(adminPort);
-      AddDBRequest req = new AddDBRequest(dbName, "127.0.0.1");
-      client.addDB(req);
-    } catch (AdminException e) {
-      LOG.info("Failed to open " + dbName, e);
+      try {
+        client = getLocalAdminClient(adminPort);
+        req = new AddDBRequest(dbName, "127.0.0.1");
+        client.addDB(req);
+      } catch (AdminException e) {
+        if (e.errorCode == AdminErrorCode.DB_EXIST) {
+          return;
+        }
+
+        LOG.error("Failed to open " + dbName + " trying to overwrite open it", e);
+        req.setOverwrite(true);
+        client.addDB(req);
+      }
     } catch (TTransportException e) {
       LOG.error("Failed to connect to local Admin port", e);
     } catch (TException e) {
