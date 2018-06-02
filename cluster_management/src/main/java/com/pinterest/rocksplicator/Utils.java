@@ -131,6 +131,7 @@ public class Utils {
         client.addDB(req);
       } catch (AdminException e) {
         if (e.errorCode == AdminErrorCode.DB_EXIST) {
+          LOG.error(dbName + " already exists");
           return;
         }
 
