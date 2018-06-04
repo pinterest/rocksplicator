@@ -30,7 +30,7 @@ public class CacheStateModelFactory extends StateModelFactory<StateModel> {
 
   @Override
   public StateModel createNewStateModel(String resourceName, String partitionName) {
-    LOG.info("Create a new CACHE state for " + partitionName);
+    LOG.error("Create a new CACHE state for " + partitionName);
     return new CacheStateModel(resourceName, partitionName);
   }
 
