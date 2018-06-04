@@ -102,7 +102,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
 
   @Override
   public StateModel createNewStateModel(String resourceName, String partitionName) {
-    LOG.info("Create a new state for " + partitionName);
+    LOG.error("Create a new state for " + partitionName);
     return new MasterSlaveStateModel(
         resourceName, partitionName, host, adminPort, cluster, zkClient);
   }
@@ -159,7 +159,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           }
 
           TimeUnit.SECONDS.sleep(1);
-          LOG.info("Slept for " + String.valueOf(i + 1) + " seconds");
+          LOG.error("Slept for " + String.valueOf(i + 1) + " seconds");
         }
 
         final String dbName = Utils.getDbName(partitionName);
@@ -187,7 +187,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         }
 
         if (hostWithHighestSeq != null) {
-          LOG.info("Found another host with higher sequence number: " + hostWithHighestSeq);
+          LOG.error("Found another host with higher sequence number: " + hostWithHighestSeq);
           Utils.changeDBRoleAndUpStream(
               "localhost", adminPort, dbName, "SLAVE", hostWithHighestSeq, adminPort);
 
@@ -196,10 +196,10 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
             TimeUnit.SECONDS.sleep(1);
             localSeq = Utils.getLocalLatestSequenceNumber(dbName, adminPort);
             if (highestSeq <= localSeq) {
-              LOG.info("Catched up!");
+              LOG.error("Catched up!");
               break;
             }
-            LOG.info("Slept for " + String.valueOf(i + 1) + " seconds");
+            LOG.error("Slept for " + String.valueOf(i + 1) + " seconds");
           }
 
           if (highestSeq > localSeq) {
@@ -318,16 +318,16 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
 
         boolean needRebuild = true;
         if (liveHostAndRole.isEmpty()) {
-          LOG.info("No other live replicas, skip rebuild " + dbName);
+          LOG.error("No other live replicas, skip rebuild " + dbName);
           needRebuild = false;
         } else if (System.currentTimeMillis() <
             localStatus.last_update_timestamp_ms + localStatus.wal_ttl_seconds * 1000) {
-          LOG.info("Replication lag is within the range, skip rebuild " + dbName);
+          LOG.error("Replication lag is within the range, skip rebuild " + dbName);
           needRebuild = false;
         } else if (localStatus.seq_num ==
             Utils.getLatestSequenceNumber(dbName, upstreamHost, upstreamPort)) {
           // this could happen if no update to the db for a long time
-          LOG.info("Upstream seq # is identical to local seq #, skip rebuild " + dbName);
+          LOG.error("Upstream seq # is identical to local seq #, skip rebuild " + dbName);
           needRebuild = false;
         }
 
@@ -337,9 +337,9 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
               + String.valueOf(System.currentTimeMillis());
 
           // backup a snapshot from the upstream host, and restore it locally
-          LOG.info("Backup " + dbName + " from " + upstreamHost);
+          LOG.error("Backup " + dbName + " from " + upstreamHost);
           Utils.backupDB(upstreamHost, upstreamPort, dbName, hdfsPath);
-          LOG.info("Restore " + dbName + " from " + hdfsPath);
+          LOG.error("Restore " + dbName + " from " + hdfsPath);
           Utils.closeDB(dbName, adminPort);
           Utils.restoreLocalDB(adminPort, dbName, hdfsPath, upstreamHost, upstreamPort);
         }

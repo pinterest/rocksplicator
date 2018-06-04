@@ -107,7 +107,7 @@ public class Utils {
       CloseDBRequest req = new CloseDBRequest(dbName);
       client.closeDB(req);
     } catch (AdminException e) {
-      LOG.info(dbName + " doesn't exist", e);
+      LOG.error(dbName + " doesn't exist", e);
     } catch (TTransportException e) {
       LOG.error("Failed to connect to local Admin port", e);
     } catch (TException e) {
@@ -126,7 +126,7 @@ public class Utils {
       AddDBRequest req = new AddDBRequest(dbName, "127.0.0.1");
       client.addDB(req);
     } catch (AdminException e) {
-      LOG.info("Failed to open " + dbName, e);
+      LOG.error("Failed to open " + dbName, e);
     } catch (TTransportException e) {
       LOG.error("Failed to connect to local Admin port", e);
     } catch (TException e) {
@@ -139,7 +139,7 @@ public class Utils {
    * @param message
    */
   public static void logTransitionMessage(Message message) {
-    LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
+    LOG.error("Switching from " + message.getFromState() + " to " + message.getToState()
         + " for " + message.getPartitionName());
   }
 

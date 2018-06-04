@@ -69,7 +69,7 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
 
   @Override
   public void onCallback(NotificationContext notificationContext) {
-    LOG.info("Received notification: " + notificationContext.getChangeType());
+    LOG.error("Received notification: " + notificationContext.getChangeType());
 
     if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
       generateShardConfig();
@@ -162,12 +162,12 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
 
     String newContent = config.toString();
     if (lastPostedContent != null && lastPostedContent.equals(newContent)) {
-      LOG.info("Identical external view observed, skip updating config.");
+      LOG.error("Identical external view observed, skip updating config.");
       return;
     }
 
     // Write the config to ZK
-    LOG.info("Generating a new shard config...");
+    LOG.error("Generating a new shard config...");
 
     this.dataParameters.remove("content");
     this.dataParameters.put("content", newContent);
@@ -177,7 +177,7 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
       HttpResponse response = new DefaultHttpClient().execute(httpPost);
       if (response.getStatusLine().getStatusCode() == 200) {
         lastPostedContent = newContent;
-        LOG.info("Succeed to generate a new shard config, sleep for 10 seconds");
+        LOG.error("Succeed to generate a new shard config, sleep for 10 seconds");
         TimeUnit.SECONDS.sleep(10);
       } else {
         LOG.error(response.getStatusLine().getReasonPhrase());
@@ -214,7 +214,7 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
 
     if (disabledHosts.equals(latestDisabledInstances)) {
       // no changes
-      LOG.info("No changes to disabled instances");
+      LOG.error("No changes to disabled instances");
       return false;
     }
 
