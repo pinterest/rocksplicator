@@ -123,7 +123,7 @@ public class Utils {
    */
   public static void addDB(String dbName, int adminPort) {
     Admin.Client client = null;
-    AddDBRequest req 
+    AddDBRequest req = null;
     try {
       try {
         client = getLocalAdminClient(adminPort);
