@@ -194,11 +194,13 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           // wait for up to 10 mins
           for (int i = 0; i < 600; ++i) {
             TimeUnit.SECONDS.sleep(1);
-            localSeq = Utils.getLocalLatestSequenceNumber(dbName, adminPort);
-            if (highestSeq <= localSeq) {
+            long newLocalSeq = Utils.getLocalLatestSequenceNumber(dbName, adminPort);
+            if (highestSeq <= newLocalSeq) {
               LOG.error("Catched up!");
               break;
             }
+            LOG.error("Replicated from " + String.valueOf(localSeq) + " to " + String.valueOf(newLocalSeq));
+            localSeq = newLocalSeq;
             LOG.error("Slept for " + String.valueOf(i + 1) + " seconds");
           }
 
