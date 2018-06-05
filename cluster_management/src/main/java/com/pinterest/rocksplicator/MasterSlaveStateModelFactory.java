@@ -187,7 +187,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         }
 
         if (hostWithHighestSeq != null) {
-          LOG.error("Found another host with higher sequence number: " + hostWithHighestSeq);
+          LOG.error("Found another host " + hostWithHighestSeq + " with higher seq num: " + String.valueOf(highestSeq));
           Utils.changeDBRoleAndUpStream(
               "localhost", adminPort, dbName, "SLAVE", hostWithHighestSeq, adminPort);
 
