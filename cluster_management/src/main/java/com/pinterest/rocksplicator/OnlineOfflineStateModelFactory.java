@@ -54,7 +54,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
 
   @Override
   public StateModel createNewStateModel(String resourceName, String partitionName) {
-    LOG.info("Create a new state for " + partitionName);
+    LOG.error("Create a new state for " + partitionName);
     return new OnlineOfflineStateModel(resourceName, partitionName, adminPort, cluster, zkClient);
   }
 

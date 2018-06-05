@@ -141,7 +141,7 @@ public class Participant {
     final String postUrl = cmd.getOptionValue(configPostUrl);
     final String instanceName = host + "_" + port;
 
-    LOG.info("Starting participant with ZK:" + zkConnectString);
+    LOG.error("Starting participant with ZK:" + zkConnectString);
     Participant participant = new Participant(zkConnectString, clusterName, instanceName,
         stateModelType, Integer.parseInt(port), postUrl);
 

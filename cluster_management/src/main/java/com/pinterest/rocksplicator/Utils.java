@@ -108,7 +108,7 @@ public class Utils {
       CloseDBRequest req = new CloseDBRequest(dbName);
       client.closeDB(req);
     } catch (AdminException e) {
-      LOG.info(dbName + " doesn't exist", e);
+      LOG.error(dbName + " doesn't exist", e);
     } catch (TTransportException e) {
       LOG.error("Failed to connect to local Admin port", e);
     } catch (TException e) {
@@ -123,7 +123,7 @@ public class Utils {
    */
   public static void addDB(String dbName, int adminPort) {
     Admin.Client client = null;
-    AddDBRequest req = null;
+    AddDBRequest req 
     try {
       try {
         client = getLocalAdminClient(adminPort);
@@ -154,7 +154,7 @@ public class Utils {
    * @param message
    */
   public static void logTransitionMessage(Message message) {
-    LOG.info("Switching from " + message.getFromState() + " to " + message.getToState()
+    LOG.error("Switching from " + message.getFromState() + " to " + message.getToState()
         + " for " + message.getPartitionName());
   }
 
