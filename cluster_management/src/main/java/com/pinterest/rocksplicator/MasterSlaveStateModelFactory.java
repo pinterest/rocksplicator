@@ -187,18 +187,20 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         }
 
         if (hostWithHighestSeq != null) {
-          LOG.error("Found another host with higher sequence number: " + hostWithHighestSeq);
+          LOG.error("Found another host " + hostWithHighestSeq + " with higher seq num: " + String.valueOf(highestSeq));
           Utils.changeDBRoleAndUpStream(
               "localhost", adminPort, dbName, "SLAVE", hostWithHighestSeq, adminPort);
 
           // wait for up to 10 mins
           for (int i = 0; i < 600; ++i) {
             TimeUnit.SECONDS.sleep(1);
-            localSeq = Utils.getLocalLatestSequenceNumber(dbName, adminPort);
-            if (highestSeq <= localSeq) {
+            long newLocalSeq = Utils.getLocalLatestSequenceNumber(dbName, adminPort);
+            if (highestSeq <= newLocalSeq) {
               LOG.error("Catched up!");
               break;
             }
+            LOG.error("Replicated from " + String.valueOf(localSeq) + " to " + String.valueOf(newLocalSeq));
+            localSeq = newLocalSeq;
             LOG.error("Slept for " + String.valueOf(i + 1) + " seconds");
           }
 
@@ -323,6 +325,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         } else if (System.currentTimeMillis() <
             localStatus.last_update_timestamp_ms + localStatus.wal_ttl_seconds * 1000) {
           LOG.error("Replication lag is within the range, skip rebuild " + dbName);
+          LOG.error("Last update timestamp in ms: " + String.valueOf(localStatus.last_update_timestamp_ms));
           needRebuild = false;
         } else if (localStatus.seq_num ==
             Utils.getLatestSequenceNumber(dbName, upstreamHost, upstreamPort)) {
