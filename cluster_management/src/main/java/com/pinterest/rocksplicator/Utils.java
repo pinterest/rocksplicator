@@ -135,9 +135,12 @@ public class Utils {
           return;
         }
 
-        LOG.error("Failed to open " + dbName + " trying to overwrite open it", e);
-        req.setOverwrite(true);
-        client.addDB(req);
+        LOG.error("Failed to open " + dbName, e);
+        if (e.errorCode == AdminErrorCode.DB_ERROR) {
+          LOG.error("Trying to overwrite open " + dbName);
+          req.setOverwrite(true);
+          client.addDB(req);
+        }
       }
     } catch (TTransportException e) {
       LOG.error("Failed to connect to local Admin port", e);
