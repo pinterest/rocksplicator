@@ -84,6 +84,7 @@ public class Utils {
    */
   public static void clearDB(String dbName, int adminPort) {
     try {
+      LOG.error("Clear local DB: " + dbName);
       Admin.Client client = getLocalAdminClient(adminPort);
       ClearDBRequest req = new ClearDBRequest(dbName);
       req.setReopen_db(false);
@@ -104,6 +105,7 @@ public class Utils {
    */
   public static void closeDB(String dbName, int adminPort) {
     try {
+      LOG.error("Close local DB: " + dbName);
       Admin.Client client = getLocalAdminClient(adminPort);
       CloseDBRequest req = new CloseDBRequest(dbName);
       client.closeDB(req);
@@ -122,6 +124,7 @@ public class Utils {
    * @param adminPort
    */
   public static void addDB(String dbName, int adminPort) {
+    LOG.error("Add local DB: " + dbName);
     Admin.Client client = null;
     AddDBRequest req = null;
     try {
@@ -166,11 +169,12 @@ public class Utils {
    */
   public static long getLocalLatestSequenceNumber(String dbName, int adminPort)
       throws RuntimeException {
+    LOG.error("Get local seq number");
     long seqNum = getLatestSequenceNumber(dbName, "localhost", adminPort);
     if (seqNum == -1) {
       throw new RuntimeException("Failed to fetch local sequence number for DB: " + dbName);
     }
-
+    LOG.error("Local seq number: " + String.valueOf(seqNum));
     return seqNum;
   }
 
@@ -180,11 +184,13 @@ public class Utils {
    * @return the latest sequence number, -1 if fails to get it
    */
   public static long getLatestSequenceNumber(String dbName, String host, int adminPort) {
+    LOG.error("Get seq number from " + host + " for " + dbName);
     try {
       Admin.Client client = getAdminClient(host, adminPort);
 
       GetSequenceNumberRequest request = new GetSequenceNumberRequest(dbName);
       GetSequenceNumberResponse response = client.getSequenceNumber(request);
+      LOG.error("Seq number for " + dbName + " on " + host + ": " + String.valueOf(response.seq_num));
       return response.seq_num;
     } catch (TException e) {
       LOG.error("Failed to get sequence number", e);
@@ -205,6 +211,7 @@ public class Utils {
   public static void changeDBRoleAndUpStream(
       String host, int adminPort, String dbName, String role, String upstreamIP, int upstreamPort)
       throws RuntimeException {
+    LOG.error("Change " + dbName + " on " + host + " to " + role + " with upstream " + upstreamIP);
     try {
       Admin.Client client = getAdminClient(host, adminPort);
 
@@ -247,6 +254,7 @@ public class Utils {
    */
   public static void backupDB(String host, int adminPort, String dbName, String hdfsPath)
       throws RuntimeException {
+    LOG.error("Backup " + dbName + " from " + host + " to " + hdfsPath);
     try {
       Admin.Client client = getAdminClient(host, adminPort);
 
@@ -268,6 +276,7 @@ public class Utils {
   public static void restoreLocalDB(int adminPort, String dbName, String hdfsPath,
                                     String upsreamHost, int upstreamPort)
       throws RuntimeException {
+    LOG.error("Restore " + dbName + " from " + hdfsPath + " with upstream " + upsreamHost);
     try {
       Admin.Client client = getLocalAdminClient(adminPort);
 

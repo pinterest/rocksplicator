@@ -159,7 +159,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           }
 
           TimeUnit.SECONDS.sleep(1);
-          LOG.error("Slept for " + String.valueOf(i + 1) + " seconds");
+          LOG.error("Slept for " + String.valueOf(i + 1) + " seconds for 0 Master");
         }
 
         final String dbName = Utils.getDbName(partitionName);
@@ -187,7 +187,8 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         }
 
         if (hostWithHighestSeq != null) {
-          LOG.error("Found another host " + hostWithHighestSeq + " with higher seq num: " + String.valueOf(highestSeq));
+          LOG.error("Found another host " + hostWithHighestSeq + " with higher seq num: " +
+              String.valueOf(highestSeq) + " for " + dbName);
           Utils.changeDBRoleAndUpStream(
               "localhost", adminPort, dbName, "SLAVE", hostWithHighestSeq, adminPort);
 
@@ -195,17 +196,18 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           for (int i = 0; i < 600; ++i) {
             TimeUnit.SECONDS.sleep(1);
             long newLocalSeq = Utils.getLocalLatestSequenceNumber(dbName, adminPort);
-            LOG.error("Replicated from " + String.valueOf(localSeq) + " to " + String.valueOf(newLocalSeq));
+            LOG.error("Replicated [" + String.valueOf(localSeq) + ", " + String.valueOf(newLocalSeq) +
+              ") from " + hostWithHighestSeq + " for " + dbName);
             localSeq = newLocalSeq;
             if (highestSeq <= localSeq) {
-              LOG.error("Catched up!");
+              LOG.error(dbName + " catched up!");
               break;
             }
-            LOG.error("Slept for " + String.valueOf(i + 1) + " seconds");
+            LOG.error("Slept for " + String.valueOf(i + 1) + " seconds for replicating " + dbName);
           }
 
           if (highestSeq > localSeq) {
-            LOG.error("Couldn't catch up after 10 mins");
+            LOG.error("Couldn't catch up after 10 mins for " + dbName);
             throw new RuntimeException("Couldn't catch up after 10 mins");
           }
         }
