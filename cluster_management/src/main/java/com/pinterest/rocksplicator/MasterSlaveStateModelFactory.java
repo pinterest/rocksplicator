@@ -325,6 +325,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         } else if (System.currentTimeMillis() <
             localStatus.last_update_timestamp_ms + localStatus.wal_ttl_seconds * 1000) {
           LOG.error("Replication lag is within the range, skip rebuild " + dbName);
+          LOG.error("Last update timestamp in ms: " + String.valueOf(localStatus.last_update_timestamp_ms));
           needRebuild = false;
         } else if (localStatus.seq_num ==
             Utils.getLatestSequenceNumber(dbName, upstreamHost, upstreamPort)) {
