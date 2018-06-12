@@ -161,7 +161,7 @@ TEST_F(GracefulShutdownTest, NewRequestAfterPostShutdownTest) {
   std::raise(SIGUSR1);
   sleep(1);
   EXPECT_THROW(client->future_getSomething(options, 456).get(),
-               TApplicationException);
+               std::exception);
 
   handler_->baton_.post();
   EXPECT_EQ(successful_result.get(), 123);
