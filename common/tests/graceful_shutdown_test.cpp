@@ -69,6 +69,7 @@ class GracefulShutdownTest : public ::testing::Test {
   void SetUp() override {
     handler_ = std::make_shared<LatchServiceHandler>();
     server_ = std::make_shared<apache::thrift::ThriftServer>();
+    server_->setUseClientTimeout(true);
     server_->setPort(port_);
     server_->setInterface(handler_);
   }
