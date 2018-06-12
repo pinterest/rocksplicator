@@ -157,6 +157,7 @@ TEST_F(GracefulShutdownTest, NewRequestAfterPostShutdownTest) {
   RpcOptions options;
   options.setTimeout(seconds(5));
   auto successful_result = client->future_getSomething(options, 123);
+  sleep(1);
   // signal shutdown
   std::raise(SIGUSR1);
   sleep(1);
