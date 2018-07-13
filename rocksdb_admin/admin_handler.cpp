@@ -71,6 +71,9 @@ DECLARE_int32(rocksdb_replicator_port);
 
 DEFINE_bool(s3_direct_io, false, "Whether to enable direct I/O for s3 client");
 
+DEFINE_int32(max_s3_sst_loading_concurrency, 999,
+             "Max S3 SST loading concurrency");
+
 namespace {
 
 const int kMB = 1024 * 1024;
@@ -241,7 +244,9 @@ AdminHandler::AdminHandler(
   , db_admin_lock_()
   , s3_util_()
   , s3_util_lock_()
-  , meta_db_(OpenMetaDB()) {
+  , meta_db_(OpenMetaDB())
+  , allow_overlapping_keys_segments_()
+  , s3_sst_loading_sem_() {
   if (db_manager_ == nullptr) {
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
@@ -249,6 +254,13 @@ AdminHandler::AdminHandler(
       ",", FLAGS_allow_overlapping_keys_segments,
       std::inserter(allow_overlapping_keys_segments_,
                     allow_overlapping_keys_segments_.begin()));
+
+  CHECK(FLAGS_max_s3_sst_loading_concurrency > 0)
+    << "Invalid FLAGS_max_s3_sst_loading_concurrency: "
+    << FLAGS_max_s3_sst_loading_concurrency;
+  int ret = sem_init(&s3_sst_loading_sem_, 0,
+                     FLAGS_max_s3_sst_loading_concurrency);
+  CHECK(ret == 0) << "Failed to sem_init() s3_sst_loading_sem_: " << ret;
 }
 
 
@@ -741,6 +753,24 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     callback->result(AddS3SstFilesToDBResponse());
     return;
   }
+
+  // The local data is not the latest, so we need to download the latest data
+  // from S3 and load it into the DB. This is to limit the allowed concurrent
+  // loadings.
+  int rv = sem_wait(&s3_sst_loading_sem_);
+  if (rv != 0) {
+    e.message = "Failed to wait for the sst loading semaphore";
+    callback.release()->exceptionInThread(std::move(e));
+    LOG(ERROR) << "Failed to sem_wait() for s3_sst_loading_sem_: " << rv;
+    return;
+  }
+
+  SCOPE_EXIT {
+    int rv = sem_post(&s3_sst_loading_sem_);
+    if (rv != 0) {
+      LOG(ERROR) << "Failed to sem_post() for s3_sst_loading_sem_" << rv;
+    }
+  };
 
   auto local_path = FLAGS_rocksdb_dir + "s3_tmp/" + request->db_name + "/";
   boost::system::error_code remove_err;
