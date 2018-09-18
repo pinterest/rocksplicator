@@ -32,7 +32,6 @@
 #include "common/network_util.h"
 #include "common/thrift_client_pool.h"
 #include "folly/Hash.h"
-#include "folly/RWSpinLock.h"
 #include "folly/SocketAddress.h"
 #include "folly/ThreadLocal.h"
 
