@@ -39,6 +39,7 @@
 DECLARE_bool(always_prefer_local_host);
 DECLARE_int32(min_client_reconnect_interval_seconds);
 DECLARE_int64(client_connect_timeout_millis);
+DECLARE_int32(max_num_hosts_to_fetch);
 
 namespace common {
 
@@ -266,22 +267,9 @@ class ThriftRouter {
         LOG(ERROR) << "Unknown segment: " << segment;
         return ReturnCode::UNKNOWN_SEGMENT;
       }
-      // get all hosts involved, and create or fix clients for them.
-      std::set<const Host*> hosts;
       thread_local unsigned rotation_counter = 0;
       rotation_counter++;
       auto& shard_to_hosts = itor->second.shard_to_hosts;
-      for (const auto& s_c : *shard_to_clients) {
-        if (s_c.first >= shard_to_hosts.size()) {
-          LOG(ERROR) << "Unknown shard: " << s_c.first;
-          return ReturnCode::UNKNOWN_SHARD;
-        }
-
-        for (const auto& p : shard_to_hosts[s_c.first]) {
-          hosts.insert(p.first);
-        }
-      }
-      createOrFixClientsFor(hosts);
       // Trying to fill clients for as many shards as possible.
       // If all shards are successfully fulfilled with the required clients,
       // OK is returned.
@@ -293,13 +281,14 @@ class ThriftRouter {
         auto& clients = s_c.second;
         clients.clear();
         auto hosts_for_shard = filterByRoleAndSortByPreference(
-          shard_to_hosts[shard], role, rotation_counter, segment);
+          shard_to_hosts[shard], role, rotation_counter, segment, quantity);
         if (hosts_for_shard.empty()) {
           LOG_EVERY_N(ERROR, 1000)
             << "Could not find hosts for shard " << shard;
           ret = ReturnCode::NOT_FOUND;
           continue;
         }
+        createOrFixClientsFor(hosts_for_shard);
         auto sz = hosts_for_shard.size();
         filterBadHosts(&hosts_for_shard);
         if (sz != hosts_for_shard.size() && quantity == Quantity::ALL) {
@@ -370,7 +359,8 @@ class ThriftRouter {
         const std::vector<std::pair<const Host*, Role>>& host_info,
         const Role role,
         const unsigned rotation_counter,
-        const std::string& segment) {
+        const std::string& segment,
+        const Quantity quantity) {
       std::vector<const Host*> v;
       if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
         // prefer MASTER, then prefer groups with longer common prefix length
@@ -382,25 +372,33 @@ class ThriftRouter {
             v.push_back(hi.first);
           }
         }
-        RankHostsByGroupPrefixLength(&v, rotation_counter, segment);
-        RankHostsByGroupPrefixLength(&v_s, rotation_counter, segment);
+        RankHostsByGroupPrefixLength(&v, rotation_counter, segment, quantity);
+        RankHostsByGroupPrefixLength(&v_s, rotation_counter, segment, quantity);
         v.insert(v.end(), v_s.begin(), v_s.end());
       } else {
         // prefer local
+        v.reserve(host_info.size());
         for (const auto& hi : host_info) {
           if (role == Role::ANY || hi.second == role) {
             v.push_back(hi.first);
           }
         }
-        RankHostsByGroupPrefixLength(&v, rotation_counter, segment);
+        RankHostsByGroupPrefixLength(&v, rotation_counter, segment, quantity);
       }
-      return v;
+      if (quantity != Quantity::ALL &&
+          FLAGS_max_num_hosts_to_fetch > 0 &&
+          FLAGS_max_num_hosts_to_fetch < v.size()) {
+        return std::vector<const Host*>(v.begin(), v.begin() + FLAGS_max_num_hosts_to_fetch);
+      } else {
+        return v;
+      }
     }
 
     void RankHostsByGroupPrefixLength(
         std::vector<const Host*>* v,
         const unsigned rotation_counter,
-        const std::string& segment) {
+        const std::string& segment,
+        const Quantity quantity) {
       auto comparator = [this, &segment, rotation_counter]
         (const Host* h1, const Host* h2) -> bool {
         // Descending order
@@ -416,7 +414,14 @@ class ThriftRouter {
           return s1 > s2;
         }
       };
-      std::sort(v->begin(), v->end(), comparator);
+      if (quantity != Quantity::ALL &&
+          FLAGS_max_num_hosts_to_fetch > 0 &&
+          FLAGS_max_num_hosts_to_fetch < v->size()) {
+        std::nth_element(v->begin(), v->begin() + FLAGS_max_num_hosts_to_fetch,
+            v->end());
+      } else {
+        std::sort(v->begin(), v->end(), comparator);
+      }
     }
 
     // TODO(bol) In theory, there is data race in this function. Because the IO
@@ -437,7 +442,7 @@ class ThriftRouter {
       return socket->good();
     }
 
-    void createOrFixClientsFor(const std::set<const Host*>& hosts) {
+    void createOrFixClientsFor(const std::vector<const Host*>& hosts) {
       for (auto host : hosts) {
         auto itor = clients_->find(host->addr);
         if (itor != clients_->end() &&

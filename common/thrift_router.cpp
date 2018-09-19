@@ -30,6 +30,8 @@ DEFINE_int32(min_client_reconnect_interval_seconds, 5,
              "min reconnect interval in seconds");
 DEFINE_int64(client_connect_timeout_millis, 100,
              "Timeout for establishing client connection.");
+DEFINE_int32(max_num_hosts_to_fetch, -1, "Maximum number of hosts to fetch for "
+             "each routing request. -1 means unlimited.");
 
 namespace {
 
