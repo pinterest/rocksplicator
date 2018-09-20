@@ -385,6 +385,9 @@ class ThriftRouter {
         RankHostsByGroupPrefixLengthAndShrinkTo(&v, rotation_counter, segment, shrink_target);
         RankHostsByGroupPrefixLengthAndShrinkTo(&v_s, rotation_counter, segment, shrink_target);
         v.insert(v.end(), v_s.begin(), v_s.end());
+        if (shrink_target < v.size()) {
+          v.resize(shrink_target);
+        }
       } else {
         // prefer local
         v.reserve(host_info.size());
@@ -419,7 +422,7 @@ class ThriftRouter {
         }
       };
       if (shrink_target < v->size()) {
-        std::nth_element(v->begin(), v->begin() + shrink_target, v->end(),
+        std::partial_sort(v->begin(), v->begin() + shrink_target, v->end(),
             comparator);
         v->resize(shrink_target);
       } else {
