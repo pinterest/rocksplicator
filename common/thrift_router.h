@@ -39,7 +39,7 @@
 DECLARE_bool(always_prefer_local_host);
 DECLARE_int32(min_client_reconnect_interval_seconds);
 DECLARE_int64(client_connect_timeout_millis);
-DECLARE_int32(max_num_hosts_to_fetch);
+DECLARE_int32(thrift_router_max_num_hosts_to_consider);
 
 namespace common {
 
@@ -276,12 +276,22 @@ class ThriftRouter {
       // Otherwise, the error code for the last failure shard is returned.
       auto ret = ReturnCode::OK;
       for (auto& s_c : *shard_to_clients) {
+        if (s_c.first >= shard_to_hosts.size()) {
+          LOG(ERROR) << "Unknown shard: " << s_c.first;
+          return ReturnCode::UNKNOWN_SHARD;
+        }
         // find clients for shard
         auto shard = s_c.first;
         auto& clients = s_c.second;
         clients.clear();
-        auto hosts_for_shard = filterByRoleAndSortByPreference(
-          shard_to_hosts[shard], role, rotation_counter, segment, quantity);
+        int shrink_target = shard_to_hosts[shard].size();
+        if (quantity != Quantity::ALL &&
+            FLAGS_thrift_router_max_num_hosts_to_consider > 0 &&
+            FLAGS_thrift_router_max_num_hosts_to_consider < shrink_target) {
+          shrink_target = FLAGS_thrift_router_max_num_hosts_to_consider;
+        }
+        auto hosts_for_shard = filterByRoleAndSortByPreferenceAndShrinkTo(
+          shard_to_hosts[shard], role, rotation_counter, segment, shrink_target);
         if (hosts_for_shard.empty()) {
           LOG_EVERY_N(ERROR, 1000)
             << "Could not find hosts for shard " << shard;
@@ -355,12 +365,12 @@ class ThriftRouter {
      * If two hosts equal according to the sorting criteria, we randomly order
      * them
      */
-    auto filterByRoleAndSortByPreference(
+    auto filterByRoleAndSortByPreferenceAndShrinkTo(
         const std::vector<std::pair<const Host*, Role>>& host_info,
         const Role role,
         const unsigned rotation_counter,
         const std::string& segment,
-        const Quantity quantity) {
+        const int shrink_target) {
       std::vector<const Host*> v;
       if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
         // prefer MASTER, then prefer groups with longer common prefix length
@@ -372,8 +382,8 @@ class ThriftRouter {
             v.push_back(hi.first);
           }
         }
-        RankHostsByGroupPrefixLength(&v, rotation_counter, segment, quantity);
-        RankHostsByGroupPrefixLength(&v_s, rotation_counter, segment, quantity);
+        RankHostsByGroupPrefixLengthAndShrinkTo(&v, rotation_counter, segment, shrink_target);
+        RankHostsByGroupPrefixLengthAndShrinkTo(&v_s, rotation_counter, segment, shrink_target);
         v.insert(v.end(), v_s.begin(), v_s.end());
       } else {
         // prefer local
@@ -383,22 +393,16 @@ class ThriftRouter {
             v.push_back(hi.first);
           }
         }
-        RankHostsByGroupPrefixLength(&v, rotation_counter, segment, quantity);
+        RankHostsByGroupPrefixLengthAndShrinkTo(&v, rotation_counter, segment, shrink_target);
       }
-      if (quantity != Quantity::ALL &&
-          FLAGS_max_num_hosts_to_fetch > 0 &&
-          FLAGS_max_num_hosts_to_fetch < v.size()) {
-        return std::vector<const Host*>(v.begin(), v.begin() + FLAGS_max_num_hosts_to_fetch);
-      } else {
-        return v;
-      }
+      return v;
     }
 
-    void RankHostsByGroupPrefixLength(
+    void RankHostsByGroupPrefixLengthAndShrinkTo(
         std::vector<const Host*>* v,
         const unsigned rotation_counter,
         const std::string& segment,
-        const Quantity quantity) {
+        const int shrink_target) {
       auto comparator = [this, &segment, rotation_counter]
         (const Host* h1, const Host* h2) -> bool {
         // Descending order
@@ -414,11 +418,10 @@ class ThriftRouter {
           return s1 > s2;
         }
       };
-      if (quantity != Quantity::ALL &&
-          FLAGS_max_num_hosts_to_fetch > 0 &&
-          FLAGS_max_num_hosts_to_fetch < v->size()) {
-        std::nth_element(v->begin(), v->begin() + FLAGS_max_num_hosts_to_fetch,
-            v->end(), comparator);
+      if (shrink_target < v->size()) {
+        std::nth_element(v->begin(), v->begin() + shrink_target, v->end(),
+            comparator);
+        v->resize(shrink_target);
       } else {
         std::sort(v->begin(), v->end(), comparator);
       }
