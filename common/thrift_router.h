@@ -418,7 +418,7 @@ class ThriftRouter {
           FLAGS_max_num_hosts_to_fetch > 0 &&
           FLAGS_max_num_hosts_to_fetch < v->size()) {
         std::nth_element(v->begin(), v->begin() + FLAGS_max_num_hosts_to_fetch,
-            v->end());
+            v->end(), comparator);
       } else {
         std::sort(v->begin(), v->end(), comparator);
       }
