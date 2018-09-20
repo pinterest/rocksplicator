@@ -32,7 +32,6 @@
 #include "common/network_util.h"
 #include "common/thrift_client_pool.h"
 #include "folly/Hash.h"
-#include "folly/RWSpinLock.h"
 #include "folly/SocketAddress.h"
 #include "folly/ThreadLocal.h"
 
@@ -104,7 +103,6 @@ class ThriftRouter {
         const std::string&, const std::string&)> parser)
       : config_path_(config_path)
       , parser_(std::move(parser))
-      , layout_rwlock_()
       , cluster_layout_()
       , local_client_map_() {
     CHECK(common::FileWatcher::Instance()->AddFile(
@@ -114,8 +112,7 @@ class ThriftRouter {
           parser_(content, local_group));
 
         if (new_layout) {
-          folly::RWSpinLock::WriteHolder write_guard(layout_rwlock_);
-          cluster_layout_.swap(new_layout);
+          std::atomic_store_explicit(&cluster_layout_, new_layout, std::memory_order_release);
         } else {
           LOG(ERROR) << "Failed to parse the config: " << content;
         }
@@ -241,8 +238,7 @@ class ThriftRouter {
 
  private:
   std::shared_ptr<const ClusterLayout> getClusterLayout() {
-    folly::RWSpinLock::ReadHolder read_guard(layout_rwlock_);
-    return cluster_layout_;
+    return std::atomic_load_explicit(&cluster_layout_, std::memory_order_acquire);
   }
 
   void updateClusterLayout() {
@@ -505,8 +501,6 @@ class ThriftRouter {
   std::function<std::unique_ptr<const ClusterLayout>(
     std::string, const std::string&)> parser_;
 
-  // TODO(bol) use atomic<shared_ptr<>> once move to gcc 5.1
-  folly::RWSpinLock layout_rwlock_;
   std::shared_ptr<const ClusterLayout> cluster_layout_;
   ThreadLocalClientMap local_client_map_;
 };
