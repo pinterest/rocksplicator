@@ -104,6 +104,8 @@ struct CheckDBResponse {
   3: optional i64 last_update_timestamp_ms = 0,
   # if the DB is Master
   4: optional bool is_master = false,
+  # the dbs current metadata
+  5: optional DBMetaData db_meta_data,
 }
 
 struct ChangeDBRoleAndUpstreamRequest {

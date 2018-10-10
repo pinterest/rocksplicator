@@ -161,13 +161,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
       Utils.logTransitionMessage(message);
     }
 
-    private Admin.Client getLocalAdminClient() throws TTransportException {
-      TSocket sock = new TSocket("localhost", adminPort);
-      sock.open();
-      return new Admin.Client(new TBinaryProtocol(sock));
-    }
-
-    private void checkSanity(String fromState, String toState, Message message) {
+    public void checkSanity(String fromState, String toState, Message message) {
       if (fromState.equalsIgnoreCase(message.getFromState())
           && toState.equalsIgnoreCase(message.getToState())
           && resourceName.equalsIgnoreCase(message.getResourceName())
@@ -175,8 +169,14 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
         return;
       }
 
-      LOG.error("Invalid meesage: " + message.toString());
+      LOG.error("Invalid message: " + message.toString());
       LOG.error("From " + fromState + " to " + toState + " for " + partitionName);
+    }
+
+    private Admin.Client getLocalAdminClient() throws TTransportException {
+      TSocket sock = new TSocket("localhost", adminPort);
+      sock.open();
+      return new Admin.Client(new TBinaryProtocol(sock));
     }
 
     private String getMetaLocation() {
