@@ -13,7 +13,7 @@
 /// limitations under the License.
 
 //
-// @author bol (bol@pinterest.com)
+// @author cdonaghy (cdonaghy@pinterest.com)
 //
 
 package com.pinterest.rocksplicator;
