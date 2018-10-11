@@ -170,6 +170,9 @@ public class Participant {
     } else if (stateModelType.equals("MasterSlave")) {
       stateModelFactory = new MasterSlaveStateModelFactory(instanceName.split("_")[0],
           port, zkConnectString, clusterName);
+    } else if stateModelType.equals("BulkIngestion") {
+      stateModelFactory = new BulkIngestionStateModelFactory(instanceName.split("_")[0],
+          port, zkConnectString, clusterName);
     } else {
       LOG.error("Unknown state model: " + stateModelType);
     }
