@@ -34,10 +34,10 @@ JNIEnv* createVM(const std::string& class_path) {
   JavaVM* jvm;
   JNIEnv* env;
   JavaVMInitArgs args;
-  JavaVMOption options[2];
+  JavaVMOption options[3];
 
   args.version = JNI_VERSION_1_6;
-  args.nOptions = 2;
+  args.nOptions = 3;
   const std::string env_class_path = std::getenv("CLASSPATH");
   auto class_opt = "-Djava.class.path=" + class_path +
       "cluster_management-0.0.1-SNAPSHOT-jar-with-dependencies.jar" +
@@ -45,6 +45,8 @@ JNIEnv* createVM(const std::string& class_path) {
   LOG(INFO) << "classpath=" << class_opt;
   options[0].optionString = const_cast<char*>(class_opt.c_str());
   options[1].optionString = "-verbose:jni";
+  // use -Xrs to block JVM signal handling
+  options[2].optionString = "-Xrs";
 
   args.options = options;
   args.ignoreUnrecognized = false;
