@@ -34,7 +34,7 @@ JNIEnv* createVM(const std::string& class_path) {
   JavaVM* jvm;
   JNIEnv* env;
   JavaVMInitArgs args;
-  JavaVMOption options[2];
+  JavaVMOption options[3];
 
   args.version = JNI_VERSION_1_6;
   args.nOptions = 2;
@@ -45,6 +45,8 @@ JNIEnv* createVM(const std::string& class_path) {
   LOG(INFO) << "classpath=" << class_opt;
   options[0].optionString = const_cast<char*>(class_opt.c_str());
   options[1].optionString = "-verbose:jni";
+  // use -Xrs to block JVM signal handling, so graceful shutdown still works
+  options[2].optionString = "-Xrs";
 
   args.options = options;
   args.ignoreUnrecognized = false;
