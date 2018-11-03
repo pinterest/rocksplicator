@@ -107,6 +107,10 @@ class ApplicationDB {
     return upstream_addr_.get();
   }
 
+  // Get int property from the DB
+  // Return true on success
+  bool GetIntProperty(const rocksdb::Slice& property, uint64_t* value);
+
   ~ApplicationDB();
 
  private:

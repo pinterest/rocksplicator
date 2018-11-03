@@ -73,6 +73,10 @@ class ApplicationDBManager {
   // Return non-null pointer on success
   std::unique_ptr<rocksdb::DB> removeDB(const std::string& db_name,
                                         std::string* error_message);
+
+  // Dump stats for all DBs as a text string
+  std::string DumpDBStatsAsText();
+
   ~ApplicationDBManager();
 
  private:
