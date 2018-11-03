@@ -135,9 +135,4 @@ rocksdb::Status ApplicationDB::CompactRange(
   return db_->CompactRange(options, begin, end);
 }
 
-bool ApplicationDB::GetIntProperty(const rocksdb::Slice& property,
-                                   uint64_t* value) {
-  return db_->GetIntProperty(property, value);
-}
-
 }  // namespace admin

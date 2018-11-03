@@ -75,7 +75,7 @@ class ApplicationDBManager {
                                         std::string* error_message);
 
   // Dump stats for all DBs as a text string
-  std::string DumpDBStatsAsText();
+  std::string DumpDBStatsAsText() const;
 
   ~ApplicationDBManager();
 

@@ -94,7 +94,7 @@ std::unique_ptr<rocksdb::DB> ApplicationDBManager::removeDB(
   return std::unique_ptr<rocksdb::DB>(ret->db_.get());
 }
 
-std::string ApplicationDBManager::DumpDBStatsAsText() {
+std::string ApplicationDBManager::DumpDBStatsAsText() const {
   std::vector<std::shared_ptr<ApplicationDB>> dbs;
   {
     folly::RWSpinLock::ReadHolder read_guard(dbs_lock_);
@@ -110,7 +110,8 @@ std::string ApplicationDBManager::DumpDBStatsAsText() {
   // total_sst_file_size db=abc00002: 54321
   uint64_t sz;
   for (const auto& db : dbs) {
-    if (!db->GetIntProperty(rocksdb::DB::Properties::kTotalSstFilesSize, &sz)) {
+    if (!db->rocksdb()->GetIntProperty(
+          rocksdb::DB::Properties::kTotalSstFilesSize, &sz)) {
       LOG(ERROR) << "Failed to get kTotalSstFilesSize for " << db->db_name();
       sz = 0;
     }
