@@ -116,7 +116,7 @@ std::string ApplicationDBManager::DumpDBStatsAsText() const {
       sz = 0;
     }
 
-    stats += folly::stringPrintf("total_sst_file_size db=%s: %" PRIu64 "\n",
+    stats += folly::stringPrintf("  total_sst_file_size db=%s: %" PRIu64 "\n",
                                  db->db_name().c_str(), sz);
   }
 
