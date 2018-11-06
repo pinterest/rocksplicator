@@ -974,4 +974,8 @@ void AdminHandler::async_tm_compactDB(
   callback.release()->result(CompactDBResponse());
 }
 
+std::string AdminHandler::DumpDBStatsAsText() const {
+  return db_manager_->DumpDBStatsAsText();
+}
+
 }  // namespace admin
