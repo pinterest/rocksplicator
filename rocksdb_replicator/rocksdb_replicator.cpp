@@ -45,10 +45,13 @@ RocksDBReplicator::RocksDBReplicator()
     , cleaner_() {
   executor_ = std::make_unique<wangle::CPUThreadPoolExecutor>(
     std::max(FLAGS_rocksdb_replicator_executor_threads, 16),
-    std::make_shared<wangle::NamedThreadFactory>("Replicator"));
+    std::make_shared<wangle::NamedThreadFactory>("rptor-worker-"));
 
   server_.setInterface(std::make_unique<ReplicatorHandler>(&db_map_));
   server_.setPort(FLAGS_rocksdb_replicator_port);
+  auto io_thread_pool = std::make_shared<wangle::IOThreadPoolExecutor>(
+    0, std::make_shared<wangle::NamedThreadFactory>("rptor-svr-io-"));
+  server_.setIOThreadPool(std::move(io_thread_pool));
   // TODO(bol) share io threads between server_ and client_pool_
   server_.setNWorkerThreads(FLAGS_num_replicator_io_threads);
 

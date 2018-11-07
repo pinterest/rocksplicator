@@ -145,11 +145,15 @@ class ThriftClientPool {
     EventLoop() {
       auto evb = std::make_unique<folly::EventBase>();
       thread_ = std::make_unique<std::thread>([evb = evb.get()] {
-          if (!folly::setThreadName("ThriftClientIO")) {
+          static std::atomic<int> thread_id(0);
+          auto name =
+            folly::stringPrintf("client-io-%d", thread_id.fetch_add(1));
+          if (!folly::setThreadName(name)) {
             LOG(ERROR) << "Failed to set thread name for thrift IO thread";
           }
           LOG(INFO) << "Started " << folly::demangle(typeid(T).name())
-                    << " thrift client IO thread";
+                    << " thrift client IO thread with name "
+                    << name;
 
           evb->loopForever();
         });
