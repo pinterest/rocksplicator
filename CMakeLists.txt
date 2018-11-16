@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.1)
 
 project(rocksplicator)
 
-set(CMAKE_CXX_FLAGS "-std=c++1y -gdwarf-2 -O3 -Wall -fPIC -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS "-std=c++17 -gdwarf-2 -O3 -Wall -fPIC -fno-omit-frame-pointer")
 
 include_directories(/usr/local/include)
 include_directories(/usr/lib/jvm/java-8-openjdk-amd64/include)

@@ -42,7 +42,7 @@ bool ApplicationDBManager::addDB(const std::string& db_name,
                                  replicator::DBRole role,
                                  std::unique_ptr<folly::SocketAddress> up_addr,
                                  std::string* error_message) {
-  folly::RWSpinLock::UpgradedHolder upgraded_guard(dbs_lock_);
+  std::unique_lock<std::shared_mutex> lock(dbs_lock_);
   if (dbs_.find(db_name) != dbs_.end()) {
     if (error_message) {
       *error_message = db_name + " has already been added";
@@ -54,7 +54,6 @@ bool ApplicationDBManager::addDB(const std::string& db_name,
   auto application_db_ptr = std::make_shared<ApplicationDB>(db_name,
     std::move(rocksdb_ptr), role, std::move(up_addr));
 
-  folly::RWSpinLock::WriteHolder write_guard(std::move(upgraded_guard));
   dbs_.emplace(db_name, std::move(application_db_ptr));
   return true;
 }
@@ -62,7 +61,7 @@ bool ApplicationDBManager::addDB(const std::string& db_name,
 const std::shared_ptr<ApplicationDB> ApplicationDBManager::getDB(
     const std::string& db_name,
     std::string* error_message) {
-  folly::RWSpinLock::ReadHolder read_guard(dbs_lock_);
+  std::shared_lock<std::shared_mutex> lock(dbs_lock_);
   auto itor = dbs_.find(db_name);
   if (itor == dbs_.end()) {
     if (error_message) {
@@ -77,19 +76,21 @@ std::unique_ptr<rocksdb::DB> ApplicationDBManager::removeDB(
     const std::string& db_name,
     std::string* error_message) {
   std::shared_ptr<ApplicationDB> ret;
-  folly::RWSpinLock::UpgradedHolder upgraded_guard(dbs_lock_);
-  auto itor = dbs_.find(db_name);
-  if (itor == dbs_.end()) {
-    if (error_message) {
-      *error_message = db_name + " does not exist";
-    }
-    return nullptr;
-  }
+
   {
-    folly::RWSpinLock::WriteHolder write_guard(std::move(upgraded_guard));
+    std::unique_lock<std::shared_mutex> lock(dbs_lock_);
+    auto itor = dbs_.find(db_name);
+    if (itor == dbs_.end()) {
+      if (error_message) {
+        *error_message = db_name + " does not exist";
+      }
+      return nullptr;
+    }
+  
     ret = std::move(itor->second);
     dbs_.erase(itor);
   }
+
   waitOnApplicationDBRef(ret);
   return std::unique_ptr<rocksdb::DB>(ret->db_.get());
 }
@@ -97,7 +98,7 @@ std::unique_ptr<rocksdb::DB> ApplicationDBManager::removeDB(
 std::string ApplicationDBManager::DumpDBStatsAsText() const {
   std::vector<std::shared_ptr<ApplicationDB>> dbs;
   {
-    folly::RWSpinLock::ReadHolder read_guard(dbs_lock_);
+    std::shared_lock<std::shared_mutex> lock(dbs_lock_);
     dbs.reserve(dbs_.size());
     for (const auto& db : dbs_) {
       dbs.push_back(db.second);

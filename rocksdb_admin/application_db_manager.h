@@ -16,9 +16,9 @@
 #pragma once
 
 #include <map>
+#include <shared_mutex>
 #include <string>
 
-#include "folly/RWSpinLock.h"
 #include "rocksdb/db.h"
 #include "rocksdb_admin/application_db.h"
 
@@ -81,7 +81,7 @@ class ApplicationDBManager {
 
  private:
   std::unordered_map<std::string, std::shared_ptr<ApplicationDB>> dbs_;
-  mutable folly::RWSpinLock dbs_lock_;
+  mutable std::shared_mutex dbs_lock_;
 
   void waitOnApplicationDBRef(const std::shared_ptr<ApplicationDB>& db);
 };
