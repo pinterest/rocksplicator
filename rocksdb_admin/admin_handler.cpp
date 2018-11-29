@@ -246,7 +246,7 @@ AdminHandler::AdminHandler(
   , s3_util_lock_()
   , meta_db_(OpenMetaDB())
   , allow_overlapping_keys_segments_()
-  , s3_sst_loading_sem_() {
+  , num_current_s3_sst_downloadings_(0) {
   if (db_manager_ == nullptr) {
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
@@ -258,9 +258,6 @@ AdminHandler::AdminHandler(
   CHECK(FLAGS_max_s3_sst_loading_concurrency > 0)
     << "Invalid FLAGS_max_s3_sst_loading_concurrency: "
     << FLAGS_max_s3_sst_loading_concurrency;
-  int ret = sem_init(&s3_sst_loading_sem_, 0,
-                     FLAGS_max_s3_sst_loading_concurrency);
-  CHECK(ret == 0) << "Failed to sem_init() s3_sst_loading_sem_: " << ret;
 }
 
 
@@ -757,20 +754,21 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   // The local data is not the latest, so we need to download the latest data
   // from S3 and load it into the DB. This is to limit the allowed concurrent
   // loadings.
-  int rv = sem_wait(&s3_sst_loading_sem_);
-  if (rv != 0) {
-    e.message = "Failed to wait for the sst loading semaphore";
+  auto n = num_current_s3_sst_downloadings_.fetch_add(1);
+  SCOPE_EXIT {
+    num_current_s3_sst_downloadings_.fetch_sub(1);
+  };
+
+  if (n >= FLAGS_max_s3_sst_loading_concurrency) {
+    auto err_str =
+      folly::stringPrintf("Concurrent downloading limit hits %d by %s",
+                          n, request->db_name.c_str());
+
+    e.message = err_str;
     callback.release()->exceptionInThread(std::move(e));
-    LOG(ERROR) << "Failed to sem_wait() for s3_sst_loading_sem_: " << rv;
+    LOG(ERROR) << err_str;
     return;
   }
-
-  SCOPE_EXIT {
-    int rv = sem_post(&s3_sst_loading_sem_);
-    if (rv != 0) {
-      LOG(ERROR) << "Failed to sem_post() for s3_sst_loading_sem_" << rv;
-    }
-  };
 
   auto local_path = FLAGS_rocksdb_dir + "s3_tmp/" + request->db_name + "/";
   boost::system::error_code remove_err;
