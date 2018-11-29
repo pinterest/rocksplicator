@@ -26,6 +26,9 @@
 DEFINE_int32(global_worker_threads, sysconf(_SC_NPROCESSORS_ONLN),
              "The number of threads for global CPU executor.");
 
+DEFINE_bool(block_on_global_cpu_pool_full, true,
+            "Block on enqueuing when the global cpu pool is full.");
+
 namespace {
 
 uint16_t GetThreadsCount() {
@@ -52,13 +55,23 @@ int GetQueueSize() {
 namespace common {
 
 wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor() {
-  static wangle::CPUThreadPoolExecutor g_executor(
-    GetThreadsCount(),
-    std::make_unique<
-      wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
-      wangle::QueueBehaviorIfFull::BLOCK>>(GetQueueSize()));
+  if (FLAGS_block_on_global_cpu_pool_full) {
+    static wangle::CPUThreadPoolExecutor g_executor(
+      GetThreadsCount(),
+      std::make_unique<
+        wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
+        wangle::QueueBehaviorIfFull::BLOCK>>(GetQueueSize()));
 
-  return &g_executor;
+    return &g_executor;
+  } else {
+    static wangle::CPUThreadPoolExecutor g_executor(
+      GetThreadsCount(),
+      std::make_unique<
+        wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
+        wangle::QueueBehaviorIfFull::THROW>>(GetQueueSize()));
+
+    return &g_executor;
+  }
 }
 
 }  // namespace common

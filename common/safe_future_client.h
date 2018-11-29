@@ -104,12 +104,24 @@ class SafeFutureClient {
           process_response<T>(&p, &ws);
         } else {
           timer.reset(new common::Timer(executor_pending_ms_metrics_name));
-          common::getGlobalCPUExecutor()->add(
-              [p = std::move(p), ws = std::move(ws),
-               timer = std::move(timer)] () mutable {
+          auto process_response_op = [p = std::move(p), ws = std::move(ws),
+                                      timer = std::move(timer)] () mutable {
             timer.reset(nullptr);
             process_response<T>(&p, &ws);
-          });
+          };
+
+          try {
+            common::getGlobalCPUExecutor()->add(std::move(process_response_op));
+          } catch (const wangle::QueueFullException& e) {
+            // If add() throws, process_response_op is ok to use here.
+            // Remember that std::move() is just a typecast that doesn't
+            // actually move anything. And Executor won't consume it if add()
+            // fails
+            process_response_op();
+            LOG(ERROR) << "Failed to enqueue process_response into global cpu "
+                       << " pool, did it in IO thread";
+            common::Stats::get()->Incr(executor_enqueue_fail_times);
+          }
 
           auto stats = common::getGlobalCPUExecutor()->getPoolStats();
           common::Stats::get()->AddMetric(
@@ -173,11 +185,17 @@ class SafeFutureClient {
   }
 
   std::shared_ptr<ClientType> client_;
+  static const std::string executor_enqueue_fail_times;
   static const std::string executor_pending_ms_metrics_name;
   static const std::string executor_pending_task_count_metrics_name;
   static const std::string jump_in_evb_ms_metrics_name;
   static const std::string evb_queue_size_metrics_name;
 };
+
+template <typename ClientType>
+const std::string
+SafeFutureClient<ClientType>::executor_enqueue_fail_times =
+  "executor_enqueue_fail_times";
 
 template <typename ClientType>
 const std::string
