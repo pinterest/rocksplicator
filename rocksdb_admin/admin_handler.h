@@ -18,8 +18,7 @@
 
 #pragma once
 
-#include <semaphore.h>
-
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -137,8 +136,8 @@ class AdminHandler : virtual public AdminSvIf {
   std::unique_ptr<rocksdb::DB> meta_db_;
   // segments which allow for overlapping keys when adding SST files
   std::unordered_set<std::string> allow_overlapping_keys_segments_;
-  // semaphore to limit concurrent S3 SST file loadings
-  sem_t s3_sst_loading_sem_;
+  // number of the current concurrenty s3 downloadings
+  std::atomic<int> num_current_s3_sst_downloadings_;
 };
 
 }  // namespace admin
