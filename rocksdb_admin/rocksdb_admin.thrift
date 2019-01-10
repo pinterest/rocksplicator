@@ -247,4 +247,4 @@ SetDBOptionsResponse setDBOptions(1:SetDBOptionsRequest request)
  */
 CompactDBResponse compactDB(1:CompactDBRequest request)
   throws (1:AdminException e)
-}
+} (priority = 'HIGH')
