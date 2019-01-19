@@ -114,6 +114,19 @@ StatusServer::StatusServer(uint16_t port, EndPointToOPMap op_map,
                     return strerror(ret);
                   });
 
+  op_map_.emplace("/gflags.txt",
+                  [] (const std::vector<std::pair<std::string, std::string>>*) {
+                    std::stringstream ss;
+                    ss << "flag:value [default_value]" << std::endl;
+                    std::vector<google::CommandLineFlagInfo> flag_infos;
+                    google::GetAllFlags(&flag_infos);
+                    for (const auto& flag_info : flag_infos) {
+                      ss << flag_info.name << ":" << flag_info.current_value << " ["
+                         << flag_info.default_value << "]" << std::endl;
+                    }
+                    return ss.str();
+                  });
+
   if (!this->Serve()) {
     LOG(INFO) << "Failed to start status server at " << port;
     LOG(INFO) << strerror(errno);
