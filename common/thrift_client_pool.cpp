@@ -38,3 +38,7 @@ DEFINE_int32(tcp_user_timeout_ms, 10000,
              "corresponding TCP connection");
 
 DEFINE_bool(channel_enable_snappy, false, "Enable snappy compression or not");
+
+DEFINE_string(tls_certfile, "", "Certificate file path location for TLS");
+
+DEFINE_string(tls_keyfile, "", "Key file path location for TLS");
