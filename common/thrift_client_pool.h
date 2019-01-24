@@ -226,8 +226,7 @@ class ThriftClientPool {
         if (skip_tls) {
           socket = apache::thrift::async::TAsyncSocket::newSocket(evb_);
         } else {
-          std::shared_ptr<folly::SSLContext> ctx =
-              std::make_shared<folly::SSLContext>();
+          auto ctx = std::make_shared<folly::SSLContext>();
           ctx->loadCertificate(FLAGS_tls_certfile.c_str());
           if (!ctx->getErrors().empty()) {
             LOG(ERROR) << "Got errors loading certificate : "
