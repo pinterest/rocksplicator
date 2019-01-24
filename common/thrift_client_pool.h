@@ -52,6 +52,8 @@ DECLARE_bool(channel_enable_snappy);
 
 DECLARE_string(tls_certfile);
 
+DECLARE_string(tls_trusted_certfile);
+
 DECLARE_string(tls_keyfile);
 
 namespace common {
@@ -218,17 +220,27 @@ class ThriftClientPool {
 
       if (should_new_channel) {
         std::shared_ptr<apache::thrift::async::TAsyncSocket> socket;
-        if (FLAGS_tls_certfile.empty() || FLAGS_tls_keyfile.empty()) {
+        bool skip_tls = FLAGS_tls_certfile.empty() ||
+                        FLAGS_tls_keyfile.empty() ||
+                        FLAGS_tls_trusted_certfile.empty();
+        if (skip_tls) {
           socket = apache::thrift::async::TAsyncSocket::newSocket(evb_);
         } else {
           std::shared_ptr<folly::SSLContext> ctx;
           ctx->loadCertificate(FLAGS_tls_certfile.c_str());
           if (!ctx->getErrors().empty()) {
-            LOG(ERROR) << "Got errors loading certificate : " << ctx->getErrors();
+            LOG(ERROR) << "Got errors loading certificate : "
+                       << ctx->getErrors();
           }
           ctx->loadPrivateKey(FLAGS_tls_keyfile.c_str());
           if (!ctx->getErrors().empty()) {
-            LOG(ERROR) << "Got errors loading private key : " << ctx->getErrors();
+            LOG(ERROR) << "Got errors loading private key : "
+                       << ctx->getErrors();
+          }
+          ctx->loadTrustedCertificates(FLAGS_tls_trusted_certfile.c_str());
+          if (!ctx->getErrors().empty()) {
+            LOG(ERROR) << "Got errors loading trusted certificate : "
+                       << ctx->getErrors();
           }
           socket = apache::thrift::async::TAsyncSSLSocket::newSocket(ctx, evb_);
         }

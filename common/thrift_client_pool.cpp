@@ -41,4 +41,7 @@ DEFINE_bool(channel_enable_snappy, false, "Enable snappy compression or not");
 
 DEFINE_string(tls_certfile, "", "Certificate file path location for TLS");
 
+DEFINE_string(tls_trusted_certfile, "",
+              "Trusted certificate file path location for TLS");
+
 DEFINE_string(tls_keyfile, "", "Key file path location for TLS");
