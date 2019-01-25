@@ -28,8 +28,10 @@
 
 #include "folly/futures/Promise.h"
 #include "folly/io/async/EventBase.h"
+#include "folly/io/async/SSLContext.h"
 #include "folly/SocketAddress.h"
 #include "thrift/lib/cpp/async/TAsyncSocket.h"
+#include "thrift/lib/cpp/async/TAsyncSSLSocket.h"
 #include "thrift/lib/cpp/transport/THeader.h"
 #include "thrift/lib/cpp2/async/HeaderClientChannel.h"
 #include "thrift/lib/cpp2/protocol/BinaryProtocol.h"
@@ -47,6 +49,12 @@ DECLARE_int32(min_channel_create_interval_seconds);
 DECLARE_int32(tcp_user_timeout_ms);
 
 DECLARE_bool(channel_enable_snappy);
+
+DECLARE_string(tls_certfile);
+
+DECLARE_string(tls_trusted_certfile);
+
+DECLARE_string(tls_keyfile);
 
 namespace common {
 
@@ -211,7 +219,31 @@ class ThriftClientPool {
       }
 
       if (should_new_channel) {
-        auto socket = apache::thrift::async::TAsyncSocket::newSocket(evb_);
+        std::shared_ptr<apache::thrift::async::TAsyncSocket> socket;
+        bool skip_tls = FLAGS_tls_certfile.empty() ||
+                        FLAGS_tls_keyfile.empty() ||
+                        FLAGS_tls_trusted_certfile.empty();
+        if (skip_tls) {
+          socket = apache::thrift::async::TAsyncSocket::newSocket(evb_);
+        } else {
+          auto ctx = std::make_shared<folly::SSLContext>();
+          ctx->loadCertificate(FLAGS_tls_certfile.c_str());
+          if (!ctx->getErrors().empty()) {
+            LOG(ERROR) << "Got errors loading certificate : "
+                       << ctx->getErrors();
+          }
+          ctx->loadPrivateKey(FLAGS_tls_keyfile.c_str());
+          if (!ctx->getErrors().empty()) {
+            LOG(ERROR) << "Got errors loading private key : "
+                       << ctx->getErrors();
+          }
+          ctx->loadTrustedCertificates(FLAGS_tls_trusted_certfile.c_str());
+          if (!ctx->getErrors().empty()) {
+            LOG(ERROR) << "Got errors loading trusted certificate : "
+                       << ctx->getErrors();
+          }
+          socket = apache::thrift::async::TAsyncSSLSocket::newSocket(ctx, evb_);
+        }
         auto cb = std::make_unique<ClientStatusCallback>(addr);
         socket->connect(cb.get(), addr, connect_timeout_ms);
 

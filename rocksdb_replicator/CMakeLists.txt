@@ -6,7 +6,7 @@ list(REMOVE_ITEM SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/performance.cpp)
 
 add_library(rocksdb_replicator ${SRC_FILES})
 
-target_link_libraries(rocksdb_replicator replicator_thrift jemalloc glog gflags folly thriftcpp2 thrift rocksdb pthread stats boost_system common thriftprotocol)
+target_link_libraries(rocksdb_replicator replicator_thrift jemalloc glog gflags folly thriftcpp2 thrift rocksdb pthread ssl stats boost_system common thriftprotocol)
 
 # Build performance
 add_executable(performance ./performance.cpp)
