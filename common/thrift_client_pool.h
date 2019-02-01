@@ -196,7 +196,8 @@ class ThriftClientPool {
     getChannelFor(const folly::SocketAddress& addr,
                   const uint32_t connect_timeout_ms,
                   const std::atomic<bool>** is_good,
-                  const bool aggressively) {
+                  const bool aggressively,
+                  const bool use_tls) {
       std::shared_ptr<apache::thrift::HeaderClientChannel> channel;
       auto itor = channels_.find(addr);
       bool should_new_channel = false;
@@ -220,10 +221,7 @@ class ThriftClientPool {
 
       if (should_new_channel) {
         std::shared_ptr<apache::thrift::async::TAsyncSocket> socket;
-        bool skip_tls = FLAGS_tls_certfile.empty() ||
-                        FLAGS_tls_keyfile.empty() ||
-                        FLAGS_tls_trusted_certfile.empty();
-        if (skip_tls) {
+        if (!use_tls) {
           socket = apache::thrift::async::TAsyncSocket::newSocket(evb_);
         } else {
           auto ctx = std::make_shared<folly::SSLContext>();
@@ -382,7 +380,8 @@ class ThriftClientPool {
   auto getClient(const folly::SocketAddress& addr,
                  const uint32_t connect_timeout_ms = 0,
                  const std::atomic<bool>** is_good = nullptr,
-                 const bool aggressively = true) {
+                 const bool aggressively = true,
+                 const bool use_tls = false) {
     auto idx = nextEvbIdx_.fetch_add(1) % event_loops_.size();
 
     // We can't use lambda for std::unique_ptr deleter. Otherwise, we won't be
@@ -406,9 +405,10 @@ class ThriftClientPool {
     std::unique_ptr<T, Deleter> client(nullptr, deleter);
     event_loops_[idx].evb_->runInEventBaseThreadAndWait(
         [&client, &event_loop = event_loops_[idx], &addr, &is_good,
-         connect_timeout_ms, aggressively] () mutable {
+         connect_timeout_ms, aggressively, use_tls] () mutable {
           auto channel = event_loop.getChannelFor(addr, connect_timeout_ms,
-                                                  is_good, aggressively);
+                                                  is_good, aggressively,
+                                                  use_tls);
 
           event_loop.cleanupStaleChannels(addr);
 
@@ -433,9 +433,10 @@ class ThriftClientPool {
   auto getClient(const std::string& ip, const uint16_t port,
                  const uint32_t connect_timeout_ms = 0,
                  const std::atomic<bool>** is_good = nullptr,
-                 const bool aggressively = true) {
+                 const bool aggressively = true,
+                 const bool use_tls = false) {
     return getClient(folly::SocketAddress(ip, port), connect_timeout_ms,
-                     is_good, aggressively);
+                     is_good, aggressively, use_tls);
   }
 
   // no copy or move
