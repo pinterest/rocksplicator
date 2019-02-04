@@ -227,21 +227,6 @@ class ThriftClientPool {
         if (ssl_ctx == nullptr) {
           socket = apache::thrift::async::TAsyncSocket::newSocket(evb_);
         } else {
-          ssl_ctx->loadCertificate(FLAGS_tls_certfile.c_str());
-          if (!ssl_ctx->getErrors().empty()) {
-            LOG(ERROR) << "Got errors loading certificate : "
-                       << ssl_ctx->getErrors();
-          }
-          ssl_ctx->loadPrivateKey(FLAGS_tls_keyfile.c_str());
-          if (!ssl_ctx->getErrors().empty()) {
-            LOG(ERROR) << "Got errors loading private key : "
-                       << ssl_ctx->getErrors();
-          }
-          ssl_ctx->loadTrustedCertificates(FLAGS_tls_trusted_certfile.c_str());
-          if (!ssl_ctx->getErrors().empty()) {
-            LOG(ERROR) << "Got errors loading trusted certificate : "
-                       << ssl_ctx->getErrors();
-          }
           socket = apache::thrift::async::TAsyncSSLSocket::newSocket(ssl_ctx, evb_);
         }
         auto cb = std::make_unique<ClientStatusCallback>(addr);
