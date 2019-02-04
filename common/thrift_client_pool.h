@@ -395,11 +395,13 @@ class ThriftClientPool {
 
     Deleter deleter(event_loops_[idx].evb_);
     std::unique_ptr<T, Deleter> client(nullptr, deleter);
+    auto ssl_ctx =
+        std::atomic_load_explicit(&ssl_ctx_, std::memory_order_acquire);
     event_loops_[idx].evb_->runInEventBaseThreadAndWait(
-        [this, &client, &event_loop = event_loops_[idx], &addr, &is_good,
-         connect_timeout_ms, aggressively] () mutable {
+        [&client, &event_loop = event_loops_[idx], &addr, &is_good,
+         connect_timeout_ms, aggressively, ssl_ctx] () mutable {
           auto channel = event_loop.getChannelFor(addr, connect_timeout_ms,
-                                                  is_good, aggressively, ssl_ctx_);
+                                                  is_good, aggressively, ssl_ctx);
 
           event_loop.cleanupStaleChannels(addr);
 
