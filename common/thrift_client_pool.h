@@ -202,7 +202,7 @@ class ThriftClientPool {
                   const uint32_t connect_timeout_ms,
                   const std::atomic<bool>** is_good,
                   const bool aggressively,
-                  std::shared_ptr<folly::SSLContext> ssl_ctx) {
+                  const std::shared_ptr<folly::SSLContext>& ssl_ctx) {
       std::shared_ptr<apache::thrift::HeaderClientChannel> channel;
       auto itor = channels_.find(addr);
       bool should_new_channel = false;
@@ -331,7 +331,7 @@ class ThriftClientPool {
   explicit ThriftClientPool(
       const uint16_t n_io_threads =
           static_cast<uint16_t>(FLAGS_default_thrift_client_pool_threads),
-      const std::shared_ptr<folly::SSLContext>& ssl_ctx = nullptr)
+      const std::shared_ptr<folly::SSLContext>& ssl_ctx = std::shared_ptr<folly::SSLContext>(nullptr))
       : event_loops_(n_io_threads), ssl_ctx_(ssl_ctx) {
     LOG(ERROR) << " The ctx : " << ssl_ctx << " the n_io " << n_io_threads << " and the member variable is " << ssl_ctx_;
     CHECK_GT(n_io_threads, 0);
@@ -342,7 +342,7 @@ class ThriftClientPool {
   // the threads driving them outlive the pool object.
   explicit ThriftClientPool(
       const std::vector<folly::EventBase*>& evbs,
-      const std::shared_ptr<folly::SSLContext>& ssl_ctx = nullptr)
+      const std::shared_ptr<folly::SSLContext>& ssl_ctx = std::shared_ptr<folly::SSLContext>(nullptr))
       : ssl_ctx_(ssl_ctx) {
     CHECK(!evbs.empty());
     event_loops_.reserve(evbs.size());
@@ -355,7 +355,7 @@ class ThriftClientPool {
   // and event bases with *this
   template <typename U>
   std::unique_ptr<ThriftClientPool<U>> shareIOThreads(
-      const std::shared_ptr<folly::SSLContext>& ssl_ctx = nullptr) const {
+      const std::shared_ptr<folly::SSLContext>& ssl_ctx = std::shared_ptr<folly::SSLContext>(nullptr)) const {
     std::vector<folly::EventBase*> evbs;
     evbs.reserve(event_loops_.size());
     for (const auto& event_loop : event_loops_) {
@@ -404,11 +404,10 @@ class ThriftClientPool {
     LOG(ERROR) << "BEfore load we have " << ssl_ctx_;
     auto ssl_ctx =
         std::atomic_load_explicit(&ssl_ctx_, std::memory_order_acquire);
-    LOG(ERROR) << "After load we have " << ssl_ctx;
+    LOG(ERROR) << "After load we have " << ssl_ctx_;
     event_loops_[idx].evb_->runInEventBaseThreadAndWait(
         [&client, &event_loop = event_loops_[idx], &addr, &is_good,
-         connect_timeout_ms, aggressively,
-         ssl_ctx = std::move(ssl_ctx)] () mutable {
+         connect_timeout_ms, aggressively, ssl_ctx = std::move(ssl_ctx)] () mutable {
           auto channel = event_loop.getChannelFor(addr, connect_timeout_ms,
                                                   is_good, aggressively, std::move(ssl_ctx));
 
@@ -427,7 +426,7 @@ class ThriftClientPool {
             client.reset(new T(channel));
           }
         });
-
+    LOG(ERROR) << " After the event_loops_ call we have  " << ssl_ctx_;
     return client;
   }
 

@@ -114,7 +114,6 @@ void testBasics(ThriftClientPool<DummyServiceAsyncClient>* pool) {
   const std::atomic<bool>* is_good;
   LOG(ERROR) << " Here ";
   auto client = pool->getClient(gLocalIp, gPort, 0, &is_good);
-  LOG(ERROR) << " Here ";
 
   EXPECT_TRUE(client != nullptr);
   sleep_for(milliseconds(100));
