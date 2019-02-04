@@ -192,12 +192,15 @@ class ThriftClientPool {
     //
     // a nullptr or bad channel can be returned if it's too soon to create a new
     // channel and aggressively is set to false
+    //
+    // the caller of the getChannelFor() is responsible for keep the ssl_ctx
+    // valid, otherwise the established socket will be invalid
     std::shared_ptr<apache::thrift::HeaderClientChannel>
     getChannelFor(const folly::SocketAddress& addr,
                   const uint32_t connect_timeout_ms,
                   const std::atomic<bool>** is_good,
                   const bool aggressively,
-                  const bool use_tls) {
+                  const std::shared_ptr<folly::SSLContext> ssl_ctx) {
       std::shared_ptr<apache::thrift::HeaderClientChannel> channel;
       auto itor = channels_.find(addr);
       bool should_new_channel = false;
@@ -221,26 +224,25 @@ class ThriftClientPool {
 
       if (should_new_channel) {
         std::shared_ptr<apache::thrift::async::TAsyncSocket> socket;
-        if (!use_tls) {
+        if (ssl_ctx == nullptr) {
           socket = apache::thrift::async::TAsyncSocket::newSocket(evb_);
         } else {
-          auto ctx = std::make_shared<folly::SSLContext>();
-          ctx->loadCertificate(FLAGS_tls_certfile.c_str());
-          if (!ctx->getErrors().empty()) {
+          ssl_ctx->loadCertificate(FLAGS_tls_certfile.c_str());
+          if (!ssl_ctx->getErrors().empty()) {
             LOG(ERROR) << "Got errors loading certificate : "
-                       << ctx->getErrors();
+                       << ssl_ctx->getErrors();
           }
-          ctx->loadPrivateKey(FLAGS_tls_keyfile.c_str());
-          if (!ctx->getErrors().empty()) {
+          ssl_ctx->loadPrivateKey(FLAGS_tls_keyfile.c_str());
+          if (!ssl_ctx->getErrors().empty()) {
             LOG(ERROR) << "Got errors loading private key : "
-                       << ctx->getErrors();
+                       << ssl_ctx->getErrors();
           }
-          ctx->loadTrustedCertificates(FLAGS_tls_trusted_certfile.c_str());
-          if (!ctx->getErrors().empty()) {
+          ssl_ctx->loadTrustedCertificates(FLAGS_tls_trusted_certfile.c_str());
+          if (!ssl_ctx->getErrors().empty()) {
             LOG(ERROR) << "Got errors loading trusted certificate : "
-                       << ctx->getErrors();
+                       << ssl_ctx->getErrors();
           }
-          socket = apache::thrift::async::TAsyncSSLSocket::newSocket(ctx, evb_);
+          socket = apache::thrift::async::TAsyncSSLSocket::newSocket(ssl_ctx, evb_);
         }
         auto cb = std::make_unique<ClientStatusCallback>(addr);
         socket->connect(cb.get(), addr, connect_timeout_ms);
@@ -381,7 +383,7 @@ class ThriftClientPool {
                  const uint32_t connect_timeout_ms = 0,
                  const std::atomic<bool>** is_good = nullptr,
                  const bool aggressively = true,
-                 const bool use_tls = false) {
+                 const std::shared_ptr<folly::SSLContext> ssl_ctx = nullptr) {
     auto idx = nextEvbIdx_.fetch_add(1) % event_loops_.size();
 
     // We can't use lambda for std::unique_ptr deleter. Otherwise, we won't be
@@ -405,10 +407,10 @@ class ThriftClientPool {
     std::unique_ptr<T, Deleter> client(nullptr, deleter);
     event_loops_[idx].evb_->runInEventBaseThreadAndWait(
         [&client, &event_loop = event_loops_[idx], &addr, &is_good,
-         connect_timeout_ms, aggressively, use_tls] () mutable {
+         connect_timeout_ms, aggressively, ssl_ctx] () mutable {
           auto channel = event_loop.getChannelFor(addr, connect_timeout_ms,
                                                   is_good, aggressively,
-                                                  use_tls);
+                                                  ssl_ctx);
 
           event_loop.cleanupStaleChannels(addr);
 
@@ -434,9 +436,9 @@ class ThriftClientPool {
                  const uint32_t connect_timeout_ms = 0,
                  const std::atomic<bool>** is_good = nullptr,
                  const bool aggressively = true,
-                 const bool use_tls = false) {
+                 const std::shared_ptr<folly::SSLContext> ssl_ctx = nullptr) {
     return getClient(folly::SocketAddress(ip, port), connect_timeout_ms,
-                     is_good, aggressively, use_tls);
+                     is_good, aggressively, ssl_ctx);
   }
 
   // no copy or move
