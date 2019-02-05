@@ -112,9 +112,7 @@ makeServer(uint16_t port, uint32_t delayMs) {
 
 void testBasics(ThriftClientPool<DummyServiceAsyncClient>* pool) {
   const std::atomic<bool>* is_good;
-  LOG(ERROR) << " Here ";
   auto client = pool->getClient(gLocalIp, gPort, 0, &is_good);
-
   EXPECT_TRUE(client != nullptr);
   sleep_for(milliseconds(100));
   EXPECT_FALSE(is_good->load());
@@ -123,18 +121,12 @@ void testBasics(ThriftClientPool<DummyServiceAsyncClient>* pool) {
   EXPECT_THROW(client->future_ping().get(), TTransportException);
   EXPECT_THROW(client->future_ping().get(), TTransportException);
 
-  LOG(ERROR) << " Here ";
   // re-get client, server is still not available
-  LOG(ERROR) << " Here ";
-
   client = pool->getClient(gLocalIp, gPort, 0, &is_good);
-  LOG(ERROR) << " Here ";
-
   sleep_for(milliseconds(100));
   EXPECT_TRUE(client != nullptr);
   EXPECT_THROW(client->future_ping().get(), TTransportException);
   EXPECT_FALSE(is_good->load());
-  LOG(ERROR) << " Here ";
 
   // start the server
   shared_ptr<DummyServiceTestHandler> handler;
@@ -149,11 +141,7 @@ void testBasics(ThriftClientPool<DummyServiceAsyncClient>* pool) {
   EXPECT_EQ(handler->nPings_.load(), 0);
 
   // create a new connection, and it should work now
-  LOG(ERROR) << " Here ";
-
   client = pool->getClient(gLocalIp, gPort, 0, &is_good);
-  LOG(ERROR) << " Here ";
-
   sleep_for(milliseconds(100));
   EXPECT_TRUE(client != nullptr);
   EXPECT_TRUE(is_good->load());
@@ -161,12 +149,7 @@ void testBasics(ThriftClientPool<DummyServiceAsyncClient>* pool) {
   EXPECT_EQ(handler->nPings_.load(), 1);
 
   // create a new connection again, and it should work
-  LOG(ERROR) << " Here ";
-
   client = pool->getClient(gLocalIp, gPort, 0, &is_good);
-
-  LOG(ERROR) << " Here ";
-
   sleep_for(milliseconds(100));
   EXPECT_TRUE(client != nullptr);
   EXPECT_TRUE(is_good->load());
@@ -224,12 +207,7 @@ void testBasics(ThriftClientPool<DummyServiceAsyncClient>* pool) {
   }
 
   // create a new client, and it should not work
-  LOG(ERROR) << " Here ";
-
   client = pool->getClient(gLocalIp, gPort, 0, &is_good);
-
-  LOG(ERROR) << " Here ";
-
   sleep_for(milliseconds(100));
   EXPECT_THROW(client->future_ping().get(), TTransportException);
   EXPECT_FALSE(is_good->load());
@@ -239,30 +217,20 @@ void testBasics(ThriftClientPool<DummyServiceAsyncClient>* pool) {
 
 TEST(ThriftClientTest, Basics) {
   ThriftClientPool<DummyServiceAsyncClient> pool_default;
-  LOG(ERROR) << "here";
   testBasics(&pool_default);
-  LOG(ERROR) << "here";
 
   auto pool_default_shared_1 =
     pool_default.shareIOThreads<DummyServiceAsyncClient>();
-  LOG(ERROR) << "here";
-
   testBasics(pool_default_shared_1.get());
-  LOG(ERROR) << "here";
 
   auto pool_default_shared_2 =
     pool_default_shared_1->shareIOThreads<DummyServiceAsyncClient>();
-  LOG(ERROR) << "here";
   testBasics(pool_default_shared_2.get());
-  LOG(ERROR) << "here";
 
   ThriftClientPool<DummyServiceAsyncClient> pool_1(1);
-  LOG(ERROR) << "here";
   testBasics(&pool_1);
 
-  LOG(ERROR) << "here";
   ThriftClientPool<DummyServiceAsyncClient> pool_100(100);
-  LOG(ERROR) << "here";
   testBasics(&pool_100);
 }
 
