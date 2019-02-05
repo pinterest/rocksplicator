@@ -50,12 +50,6 @@ DECLARE_int32(tcp_user_timeout_ms);
 
 DECLARE_bool(channel_enable_snappy);
 
-DECLARE_string(tls_certfile);
-
-DECLARE_string(tls_trusted_certfile);
-
-DECLARE_string(tls_keyfile);
-
 namespace common {
 
 /*
@@ -66,6 +60,11 @@ namespace common {
  * event bases. Each IO Thread drives one event base. A pool can have at most N
  * connections to a destination.
  * IO threads will be used in a round-robin way for creating new client.
+ *
+ * If a shared_ptr to a folly::SSLContext is provided, the clientpool will make
+ * a TAsyncSSLSocket using this context whenever getChannelFor() is called.
+ * The caller is responsible for safely modifying the context and keeping it
+ * valid.
  *
  * ThriftClientPool is designed to be used as a shared global object. i.e.,
  * create a pool and use it for the entire process life.
@@ -196,7 +195,8 @@ class ThriftClientPool {
     getChannelFor(const folly::SocketAddress& addr,
                   const uint32_t connect_timeout_ms,
                   const std::atomic<bool>** is_good,
-                  const bool aggressively) {
+                  const bool aggressively,
+                  const std::shared_ptr<folly::SSLContext>& ssl_ctx) {
       std::shared_ptr<apache::thrift::HeaderClientChannel> channel;
       auto itor = channels_.find(addr);
       bool should_new_channel = false;
@@ -220,29 +220,10 @@ class ThriftClientPool {
 
       if (should_new_channel) {
         std::shared_ptr<apache::thrift::async::TAsyncSocket> socket;
-        bool skip_tls = FLAGS_tls_certfile.empty() ||
-                        FLAGS_tls_keyfile.empty() ||
-                        FLAGS_tls_trusted_certfile.empty();
-        if (skip_tls) {
+        if (ssl_ctx == nullptr) {
           socket = apache::thrift::async::TAsyncSocket::newSocket(evb_);
         } else {
-          auto ctx = std::make_shared<folly::SSLContext>();
-          ctx->loadCertificate(FLAGS_tls_certfile.c_str());
-          if (!ctx->getErrors().empty()) {
-            LOG(ERROR) << "Got errors loading certificate : "
-                       << ctx->getErrors();
-          }
-          ctx->loadPrivateKey(FLAGS_tls_keyfile.c_str());
-          if (!ctx->getErrors().empty()) {
-            LOG(ERROR) << "Got errors loading private key : "
-                       << ctx->getErrors();
-          }
-          ctx->loadTrustedCertificates(FLAGS_tls_trusted_certfile.c_str());
-          if (!ctx->getErrors().empty()) {
-            LOG(ERROR) << "Got errors loading trusted certificate : "
-                       << ctx->getErrors();
-          }
-          socket = apache::thrift::async::TAsyncSSLSocket::newSocket(ctx, evb_);
+          socket = apache::thrift::async::TAsyncSSLSocket::newSocket(ssl_ctx, evb_);
         }
         auto cb = std::make_unique<ClientStatusCallback>(addr);
         socket->connect(cb.get(), addr, connect_timeout_ms);
@@ -339,15 +320,19 @@ class ThriftClientPool {
   // pool.
   explicit ThriftClientPool(
       const uint16_t n_io_threads =
-      static_cast<uint16_t>(FLAGS_default_thrift_client_pool_threads))
-        : event_loops_(n_io_threads) {
+          static_cast<uint16_t>(FLAGS_default_thrift_client_pool_threads),
+      const std::shared_ptr<folly::SSLContext>* ssl_ctx = nullptr)
+      : event_loops_(n_io_threads), ssl_ctx_(ssl_ctx) {
     CHECK_GT(n_io_threads, 0);
   }
 
   // Create a new pool by using the evbs, which are supposed to be driven by
   // some other threads. It's users' responsibility to ensure that evbs and
   // the threads driving them outlive the pool object.
-  explicit ThriftClientPool(const std::vector<folly::EventBase*>& evbs) {
+  explicit ThriftClientPool(
+      const std::vector<folly::EventBase*>& evbs,
+      const std::shared_ptr<folly::SSLContext>* ssl_ctx = nullptr)
+      : event_loops_(), ssl_ctx_(ssl_ctx) {
     CHECK(!evbs.empty());
     event_loops_.reserve(evbs.size());
     for (const auto& evb : evbs) {
@@ -358,14 +343,15 @@ class ThriftClientPool {
   // Create a new pool of clients of type U, which share the same IO threads
   // and event bases with *this
   template <typename U>
-  std::unique_ptr<ThriftClientPool<U>> shareIOThreads() const {
+  std::unique_ptr<ThriftClientPool<U>> shareIOThreads(
+      const std::shared_ptr<folly::SSLContext>* ssl_ctx = nullptr) const {
     std::vector<folly::EventBase*> evbs;
     evbs.reserve(event_loops_.size());
     for (const auto& event_loop : event_loops_) {
       evbs.push_back(event_loop.evb_);
     }
 
-    return std::make_unique<ThriftClientPool<U>>(evbs);
+    return std::make_unique<ThriftClientPool<U>>(evbs, ssl_ctx);
   }
 
   // Get unique_ptr pointing to a thrift client object of type T, which can be
@@ -404,11 +390,13 @@ class ThriftClientPool {
 
     Deleter deleter(event_loops_[idx].evb_);
     std::unique_ptr<T, Deleter> client(nullptr, deleter);
+    auto ssl_ctx =
+        ssl_ctx_ == nullptr ? nullptr : std::atomic_load_explicit(ssl_ctx_, std::memory_order_acquire);
     event_loops_[idx].evb_->runInEventBaseThreadAndWait(
         [&client, &event_loop = event_loops_[idx], &addr, &is_good,
-         connect_timeout_ms, aggressively] () mutable {
+         connect_timeout_ms, aggressively, ssl_ctx = std::move(ssl_ctx)] () mutable {
           auto channel = event_loop.getChannelFor(addr, connect_timeout_ms,
-                                                  is_good, aggressively);
+                                                  is_good, aggressively, std::move(ssl_ctx));
 
           event_loop.cleanupStaleChannels(addr);
 
@@ -425,7 +413,6 @@ class ThriftClientPool {
             client.reset(new T(channel));
           }
         });
-
     return client;
   }
 
@@ -446,11 +433,11 @@ class ThriftClientPool {
 
  private:
   std::vector<EventLoop> event_loops_;
+  const std::shared_ptr<folly::SSLContext>* ssl_ctx_;
 
   // The evb to be used for the next new client
   static std::atomic<uint32_t> nextEvbIdx_;
 };
-
 template <typename T, bool USE_BINARY_PROTOCOL>
 std::atomic<uint32_t> ThriftClientPool<T, USE_BINARY_PROTOCOL>::nextEvbIdx_ {0};
 }  // namespace common
