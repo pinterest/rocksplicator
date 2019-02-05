@@ -50,12 +50,6 @@ DECLARE_int32(tcp_user_timeout_ms);
 
 DECLARE_bool(channel_enable_snappy);
 
-DECLARE_string(tls_certfile);
-
-DECLARE_string(tls_trusted_certfile);
-
-DECLARE_string(tls_keyfile);
-
 namespace common {
 
 /*
@@ -338,7 +332,7 @@ class ThriftClientPool {
   explicit ThriftClientPool(
       const std::vector<folly::EventBase*>& evbs,
       const std::shared_ptr<folly::SSLContext>* ssl_ctx = nullptr)
-      : ssl_ctx_(ssl_ctx) {
+      : event_loops_(), ssl_ctx_(ssl_ctx) {
     CHECK(!evbs.empty());
     event_loops_.reserve(evbs.size());
     for (const auto& evb : evbs) {
@@ -400,9 +394,9 @@ class ThriftClientPool {
         ssl_ctx_ == nullptr ? nullptr : std::atomic_load_explicit(ssl_ctx_, std::memory_order_acquire);
     event_loops_[idx].evb_->runInEventBaseThreadAndWait(
         [&client, &event_loop = event_loops_[idx], &addr, &is_good,
-         connect_timeout_ms, aggressively, ssl_ctx] () mutable {
+         connect_timeout_ms, aggressively, ssl_ctx = std::move(ssl_ctx)] () mutable {
           auto channel = event_loop.getChannelFor(addr, connect_timeout_ms,
-                                                  is_good, aggressively, ssl_ctx);
+                                                  is_good, aggressively, std::move(ssl_ctx));
 
           event_loop.cleanupStaleChannels(addr);
 
