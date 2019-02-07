@@ -28,6 +28,7 @@
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/ListObjectsResult.h>
 #include <aws/s3/model/Object.h>
+#include <aws/s3/model/PutObjectRequest.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -47,6 +48,7 @@ using std::tuple;
 using Aws::S3::Model::GetObjectRequest;
 using Aws::S3::Model::ListObjectsRequest;
 using Aws::S3::Model::HeadObjectRequest;
+using Aws::S3::Model::PutObjectRequest;
 
 DEFINE_int32(direct_io_buffer_n_pages, 1,
              "Number of pages we need to set to direct io buffer");
@@ -310,6 +312,35 @@ GetObjectMetadataResponse S3Util::getObjectMetadata(const string &key) {
   return GetObjectMetadataResponse(std::move(metadata), "");
 }
 
+PutObjectResponse S3Util::putObject(const string& key, const string& local_path) {
+  PutObjectRequest object_request;
+  object_request.WithBucket(bucket_).WithKey(key);
+  auto input_data = Aws::MakeShared<Aws::FStream>("PutObjectInputStream",
+                                                  local_path.c_str(),
+                                                  std::ios_base::in | std::ios_base::binary);
+  object_request.SetBody(input_data);
+  auto put_result = s3Client->PutObject(object_request);
+
+  if (put_result.IsSuccess()) {
+    return PutObjectResponse(true, "");
+  } else {
+    string err_msg_prefix = "Failed to upload file " + local_path + " to " + key + ", error: ";
+    return PutObjectResponse(false,
+                             std::move(err_msg_prefix + put_result.GetError().GetMessage()));
+  }
+}
+
+Aws::S3::Model::PutObjectOutcomeCallable
+S3Util::putObjectCallable(const string& key, const string& local_path) {
+  PutObjectRequest object_request;
+  object_request.WithBucket(bucket_).WithKey(key);
+  auto input_data = Aws::MakeShared<Aws::FStream>("PutObjectInputStream",
+                                                  local_path.c_str(),
+                                                  std::ios_base::in | std::ios_base::binary);
+  object_request.SetBody(input_data);
+  return s3Client->PutObjectCallable(object_request);
+}
+
 tuple<string, string> S3Util::parseFullS3Path(const string& s3_path) {
   string bucket;
   string object_path;
@@ -335,7 +366,8 @@ shared_ptr<S3Util> S3Util::BuildS3Util(
     const string& bucket,
     const uint32_t connect_timeout_ms,
     const uint32_t request_timeout_ms,
-    const uint32_t max_connections) {
+    const uint32_t max_connections,
+    const uint32_t write_ratelimit_mb) {
   Aws::Client::ClientConfiguration aws_config;
   aws_config.connectTimeoutMs = connect_timeout_ms;
   aws_config.requestTimeoutMs = request_timeout_ms;
@@ -345,9 +377,14 @@ shared_ptr<S3Util> S3Util::BuildS3Util(
         std::make_shared<AwsS3RateLimiter>(
             read_ratelimit_mb * 1024 * 1024);
   }
+  if (write_ratelimit_mb > 0) {
+    aws_config.writeRateLimiter =
+        std::make_shared<AwsS3RateLimiter>(
+            write_ratelimit_mb * 1024 * 1024);
+  }
   SDKOptions options;
   return std::shared_ptr<S3Util>(
-      new S3Util(bucket, aws_config, options, read_ratelimit_mb));
+      new S3Util(bucket, aws_config, options, read_ratelimit_mb, write_ratelimit_mb));
 }
 
 }  // namespace common
