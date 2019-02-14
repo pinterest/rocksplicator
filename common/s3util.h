@@ -146,6 +146,7 @@ class ListObjectsResponseV2Body {
 };
 
 using GetObjectResponse = S3UtilResponse<bool>;
+using PutObjectResponse = S3UtilResponse<bool>;
 using SdkGetObjectResponse = Aws::S3::Model::GetObjectOutcome;
 using ListObjectsResponse = S3UtilResponse<vector<string>>;
 using ListObjectsResponseV2 = S3UtilResponse<ListObjectsResponseV2Body>;
@@ -211,6 +212,14 @@ class S3Util {
   // Now contains md5 and content-length of the s3 object
   GetObjectMetadataResponse getObjectMetadata(const string& key);
 
+  // Upload a local file to S3.
+  PutObjectResponse putObject(const string& key, const string& local_path);
+
+  // Upload a local file to S3 in async mode and return a future to the operation.
+  Aws::S3::Model::PutObjectOutcomeCallable
+  putObjectCallable(const string& key, const string& local_path);
+
+
   // Some utility methods
   // Given an s3 full path like "s3://<bucket>/<path>",
   // return a tuple of bucketname and file path.
@@ -221,7 +230,8 @@ class S3Util {
       const string& bucket = "",
       const uint32_t connect_timeout_ms = 3000,
       const uint32_t request_timeout_ms = 3000,
-      const uint32_t max_connections = 5);
+      const uint32_t max_connections = 5,
+      const uint32_t write_ratelimit_mb = 50);
 
   const string& getBucket() const {
     return bucket_;
@@ -235,9 +245,11 @@ class S3Util {
   explicit S3Util(const string& bucket,
                   const ClientConfiguration& client_config,
                   const SDKOptions& options,
-                  const uint32_t read_ratelimit_mb) :
+                  const uint32_t read_ratelimit_mb,
+                  const uint32_t write_ratelimit_mb) :
       bucket_(std::move(bucket)), options_(options),
-      read_ratelimit_mb_(read_ratelimit_mb) {
+      read_ratelimit_mb_(read_ratelimit_mb),
+      write_ratelimit_mb_(write_ratelimit_mb) {
     TryAwsInitAPI(options);
     // s3Client initialization must happen AFTER TryAwsInitAPI(), otherwise
     // core dump may happen. 
@@ -283,6 +295,7 @@ class S3Util {
   SDKOptions options_;
   std::string uri_;
   const uint32_t read_ratelimit_mb_;
+  const uint32_t write_ratelimit_mb_;
   // To track the number of S3Util instances. Only call Aws::ShutdownAPI() when
   // there is no other instance exists.
   static std::mutex counter_mutex_;
