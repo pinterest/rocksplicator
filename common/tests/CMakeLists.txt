@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.1)
 
-FILE(GLOB TEST_SOURCES ./*.cpp)
+FILE(GLOB TEST_SOURCES *.cpp)
+LIST(REMOVE_ITEM TEST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/detector_benchmark.cpp)
 
 foreach(testsourcefile ${TEST_SOURCES})
   get_filename_component(testname ${testsourcefile} NAME_WE)
