@@ -269,7 +269,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
       Utils.logTransitionMessage(message);
       String dbName = Utils.getDbName(partitionName);
       String snapshotHost = null;
-      String snapshotPort = null;
+      int snapshotPort = 0;
       int checkTimes = 0;
       while (true) {
         ++checkTimes;
@@ -366,7 +366,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         // before we call backupDB() below. In that case, we will throw and let Helix mark the
         // local partition as error.
         String hdfsPath = "/rocksplicator/" + cluster + "/" + dbName + "/" + snapshotHost + "_"
-            + snapshotPort + "/" + String.valueOf(System.currentTimeMillis());
+            + String.valueOf(snapshotPort) + "/" + String.valueOf(System.currentTimeMillis());
 
         // backup a snapshot from the upstream host, and restore it locally
         LOG.error("Backup " + dbName + " from " + snapshotHost);
