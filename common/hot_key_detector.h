@@ -72,10 +72,6 @@ class HotKeyDetector {
     , total_recorded_load_(0)
     , last_decay_time_(std::chrono::steady_clock::now())
     , mtx_() {
-    for (int i = 0; i < kBucketNumber; ++i) {
-      keys_[i] = K();
-      load_[i] = 0;
-    }
   }
 
   /**
