@@ -267,96 +267,115 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
      */
     public void onBecomeSlaveFromOffline(Message message, NotificationContext context) {
       Utils.logTransitionMessage(message);
+      String dbName = Utils.getDbName(partitionName);
+      String snapshotHost = null;
+      int snapshotPort = 0;
+      int checkTimes = 0;
+      while (true) {
+        ++checkTimes;
+        LOG.error("Finding upstream for " + dbName + " (" + String.valueOf(checkTimes) + ")");
+        try (Locker locker = new Locker(partitionMutex)) {
+          // open the DB if it's currently not opened yet
+          Utils.addDB(dbName, adminPort);
 
-      try (Locker locker = new Locker(partitionMutex)) {
-        String dbName = Utils.getDbName(partitionName);
+          HelixAdmin admin = context.getManager().getClusterManagmentTool();
+          ExternalView view = admin.getResourceExternalView(cluster, resourceName);
+          Map<String, String> stateMap = view.getStateMap(partitionName);
 
-        // open the DB if it's currently not opened yet
-        Utils.addDB(dbName, adminPort);
+          // find live replicas
+          Map<String, String> liveHostAndRole = new HashMap<>();
+          for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
+            String role = instanceNameAndRole.getValue();
+            if (!role.equalsIgnoreCase("MASTER") &&
+                !role.equalsIgnoreCase("SLAVE") &&
+                !role.equalsIgnoreCase("OFFLINE")) {
+              continue;
+            }
 
-        HelixAdmin admin = context.getManager().getClusterManagmentTool();
-        ExternalView view = admin.getResourceExternalView(cluster, resourceName);
-        Map<String, String> stateMap = view.getStateMap(partitionName);
+            String hostPort = instanceNameAndRole.getKey();
+            String host = hostPort.split("_")[0];
+            int port = Integer.parseInt(hostPort.split("_")[1]);
 
-        // find live replicas
-        Map<String, String> liveHostAndRole = new HashMap<>();
-        for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
-          String role = instanceNameAndRole.getValue();
-          if (!role.equalsIgnoreCase("MASTER") &&
-              !role.equalsIgnoreCase("SLAVE") &&
-              !role.equalsIgnoreCase("OFFLINE")) {
-            continue;
+            if (this.host.equals(host)) {
+              // myself
+              continue;
+            }
+
+            if (Utils.getLatestSequenceNumber(dbName, host, port) != -1) {
+              liveHostAndRole.put(hostPort, role);
+            }
           }
 
-          String hostPort = instanceNameAndRole.getKey();
-          String host = hostPort.split("_")[0];
-          int port = Integer.parseInt(hostPort.split("_")[1]);
+          // Find upstream, prefer Master
+          String upstream = null;
+          for (Map.Entry<String, String> instanceNameAndRole : liveHostAndRole.entrySet()) {
+            String role = instanceNameAndRole.getValue();
+            if (role.equalsIgnoreCase("MASTER")) {
+              upstream = instanceNameAndRole.getKey();
+              break;
+            } else {
+              upstream = instanceNameAndRole.getKey();
+            }
+          }
+          String upstreamHost = (upstream == null ? "127.0.0.1" : upstream.split("_")[0]);
+          snapshotHost = upstreamHost;
+          int upstreamPort =
+              (upstream == null ? adminPort : Integer.parseInt(upstream.split("_")[1]));
+          snapshotPort = upstreamPort;
 
-          if (this.host.equals(host)) {
-            // myself
-            continue;
+          // check if the local replica needs rebuild
+          CheckDBResponse localStatus = Utils.checkLocalDB(dbName, adminPort);
+
+          boolean needRebuild = true;
+          if (liveHostAndRole.isEmpty()) {
+            LOG.error("No other live replicas, skip rebuild " + dbName);
+            needRebuild = false;
+          } else if (System.currentTimeMillis() <
+              localStatus.last_update_timestamp_ms + localStatus.wal_ttl_seconds * 1000) {
+            LOG.error("Replication lag is within the range, skip rebuild " + dbName);
+            LOG.error("Last update timestamp in ms: " + String
+                .valueOf(localStatus.last_update_timestamp_ms));
+            needRebuild = false;
+          } else if (localStatus.seq_num ==
+              Utils.getLatestSequenceNumber(dbName, upstreamHost, upstreamPort)) {
+            // this could happen if no update to the db for a long time
+            LOG.error("Upstream seq # is identical to local seq #, skip rebuild " + dbName);
+            needRebuild = false;
           }
 
-          if (Utils.getLatestSequenceNumber(dbName, host, port) != -1) {
-            liveHostAndRole.put(hostPort, role);
+          // if rebuild is not needed, setup upstream and return
+          if (!needRebuild) {
+            Utils.changeDBRoleAndUpStream("localhost", adminPort, dbName, "SLAVE",
+                upstreamHost, upstreamPort);
+
+            return;
           }
+        } catch (RuntimeException e) {
+          throw e;
+        } catch (Exception e) {
+          LOG.error(
+              "Failed to release the mutex for partition " + resourceName + "/" + partitionName,
+              e);
+          // we may or may not have finished the transition successfully when we get to here.
+          // still want to mark the partition as ERROR for safety
+          throw new RuntimeException(e);
         }
 
-        // Find upstream, prefer Master
-        String upstream = null;
-        for (Map.Entry<String, String> instanceNameAndRole : liveHostAndRole.entrySet()) {
-          String role = instanceNameAndRole.getValue();
-          if (role.equalsIgnoreCase("MASTER")) {
-            upstream = instanceNameAndRole.getKey();
-            break;
-          } else {
-            upstream = instanceNameAndRole.getKey();
-          }
-        }
-        String upstreamHost = (upstream == null ? "127.0.0.1" : upstream.split("_")[0]);
-        int upstreamPort =
-            (upstream == null ? adminPort : Integer.parseInt(upstream.split("_")[1]));
+        // rebuild is needed
+        // We don't want to hold the lock while backup and restore the DB as it can a while to
+        // finish.
+        // There is a small chance that snapshotHost removes the db after we release the lock and
+        // before we call backupDB() below. In that case, we will throw and let Helix mark the
+        // local partition as error.
+        String hdfsPath = "/rocksplicator/" + cluster + "/" + dbName + "/" + snapshotHost + "_"
+            + String.valueOf(snapshotPort) + "/" + String.valueOf(System.currentTimeMillis());
 
-        // check if the local replica needs rebuild
-        CheckDBResponse localStatus = Utils.checkLocalDB(dbName, adminPort);
-
-        boolean needRebuild = true;
-        if (liveHostAndRole.isEmpty()) {
-          LOG.error("No other live replicas, skip rebuild " + dbName);
-          needRebuild = false;
-        } else if (System.currentTimeMillis() <
-            localStatus.last_update_timestamp_ms + localStatus.wal_ttl_seconds * 1000) {
-          LOG.error("Replication lag is within the range, skip rebuild " + dbName);
-          LOG.error("Last update timestamp in ms: " + String.valueOf(localStatus.last_update_timestamp_ms));
-          needRebuild = false;
-        } else if (localStatus.seq_num ==
-            Utils.getLatestSequenceNumber(dbName, upstreamHost, upstreamPort)) {
-          // this could happen if no update to the db for a long time
-          LOG.error("Upstream seq # is identical to local seq #, skip rebuild " + dbName);
-          needRebuild = false;
-        }
-
-        // rebuild if needed
-        if (needRebuild) {
-          String hdfsPath = "/rocksplicator/" + cluster + "/" + dbName + "/" + upstream + "/"
-              + String.valueOf(System.currentTimeMillis());
-
-          // backup a snapshot from the upstream host, and restore it locally
-          LOG.error("Backup " + dbName + " from " + upstreamHost);
-          Utils.backupDB(upstreamHost, upstreamPort, dbName, hdfsPath);
-          LOG.error("Restore " + dbName + " from " + hdfsPath);
-          Utils.closeDB(dbName, adminPort);
-          Utils.restoreLocalDB(adminPort, dbName, hdfsPath, upstreamHost, upstreamPort);
-        }
-
-        // setup upstream
-        Utils.changeDBRoleAndUpStream("localhost", adminPort, dbName, "SLAVE",
-            upstreamHost, upstreamPort);
-      } catch (RuntimeException e) {
-        throw e;
-      } catch (Exception e) {
-        LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
-            e);
+        // backup a snapshot from the upstream host, and restore it locally
+        LOG.error("Backup " + dbName + " from " + snapshotHost);
+        Utils.backupDB(snapshotHost, snapshotPort, dbName, hdfsPath);
+        LOG.error("Restore " + dbName + " from " + hdfsPath);
+        Utils.closeDB(dbName, adminPort);
+        Utils.restoreLocalDB(adminPort, dbName, hdfsPath, snapshotHost, snapshotPort);
       }
     }
 
