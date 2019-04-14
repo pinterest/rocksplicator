@@ -356,7 +356,9 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           LOG.error(
               "Failed to release the mutex for partition " + resourceName + "/" + partitionName,
               e);
-          return;
+          // we may or may not have finished the transition successfully when we get to here.
+          // still want to mark the partition as ERROR for safety
+          throw e;
         }
 
         // rebuild is needed
