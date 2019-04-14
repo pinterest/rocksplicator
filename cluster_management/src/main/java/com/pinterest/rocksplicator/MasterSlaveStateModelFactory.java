@@ -358,7 +358,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
               e);
           // we may or may not have finished the transition successfully when we get to here.
           // still want to mark the partition as ERROR for safety
-          throw e;
+          throw new RuntimeException(e);
         }
 
         // rebuild is needed
