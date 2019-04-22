@@ -977,6 +977,27 @@ void AdminHandler::async_tm_compactDB(
   callback.release()->result(CompactDBResponse());
 }
 
+void AdminHandler::async_tm_startMessageIngestion(
+    std::unique_ptr<apache::thrift::HandlerCallback<
+        std::unique_ptr<StartMessageIngestionResponse>>>
+        callback,
+    std::unique_ptr<StartMessageIngestionRequest> request) {
+    LOG(INFO) << "Start message ingestion on db : " << request->db_name
+              << " from topic " << request->topic_name
+              << " on kafka broker serverset " << request->kafka_broker_serverset_path
+              << " from timestamp " << request->replay_timestamp_ms;
+    callback.release()->result(StartMessageIngestionResponse());
+}
+
+void AdminHandler::async_tm_stopMessageIngestion(
+    std::unique_ptr<apache::thrift::HandlerCallback<
+        std::unique_ptr<StopMessageIngestionResponse>>>
+        callback,
+    std::unique_ptr<StopMessageIngestionRequest> request) {
+    LOG(INFO) << "Stop message ingestion on db " << request->db_name;
+    callback.release()->result(StopMessageIngestionResponse());
+}
+
 std::string AdminHandler::DumpDBStatsAsText() const {
   return db_manager_->DumpDBStatsAsText();
 }

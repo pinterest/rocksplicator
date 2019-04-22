@@ -108,6 +108,18 @@ class AdminHandler : virtual public AdminSvIf {
         CompactDBResponse>>> callback,
       std::unique_ptr<CompactDBRequest> request) override;
 
+  void async_tm_startMessageIngestion(
+      std::unique_ptr<apache::thrift::HandlerCallback<
+          std::unique_ptr<StartMessageIngestionResponse>>>
+          callback,
+      std::unique_ptr<StartMessageIngestionRequest> request) override;
+
+  void async_tm_stopMessageIngestion(
+      std::unique_ptr<apache::thrift::HandlerCallback<
+          std::unique_ptr<StopMessageIngestionResponse>>>
+          callback,
+      std::unique_ptr<StopMessageIngestionRequest> request) override;
+
   std::shared_ptr<ApplicationDB> getDB(const std::string& db_name,
                                        AdminException* ex);
 
