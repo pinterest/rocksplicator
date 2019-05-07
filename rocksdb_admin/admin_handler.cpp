@@ -74,6 +74,8 @@ DEFINE_bool(s3_direct_io, false, "Whether to enable direct I/O for s3 client");
 DEFINE_int32(max_s3_sst_loading_concurrency, 999,
              "Max S3 SST loading concurrency");
 
+DEFINE_int32(s3_download_limit_mb, 0, "S3 download sst bandwidth");
+
 namespace {
 
 const int kMB = 1024 * 1024;
@@ -787,6 +789,9 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   // request, which is not even on any critical code path. Otherwise, we will
   // see latency spike when uploading data to production clusters.
   std::shared_ptr<common::S3Util> local_s3_util;
+  if (FLAGS_s3_download_limit_mb > 0) {
+    request->s3_download_limit_mb = FLAGS_s3_download_limit_mb;
+  }
   {
     std::lock_guard<std::mutex> guard(s3_util_lock_);
     if (s3_util_ == nullptr || should_new_s3_client(*s3_util_, request.get())) {
