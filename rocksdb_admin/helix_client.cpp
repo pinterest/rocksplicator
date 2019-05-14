@@ -27,6 +27,9 @@
 #include "common/network_util.h"
 
 DECLARE_int32(port);
+DEFINE_string(helix_log_config_file_path, "",
+    "Participant log config file path "
+    "e.g: /etc/config/helix/log4j.properties");
 
 namespace {
 
@@ -34,19 +37,21 @@ JNIEnv* createVM(const std::string& class_path) {
   JavaVM* jvm;
   JNIEnv* env;
   JavaVMInitArgs args;
-  JavaVMOption options[3];
+  JavaVMOption options[4];
 
   args.version = JNI_VERSION_1_6;
-  args.nOptions = 3;
+  args.nOptions = 4;
   const std::string env_class_path = std::getenv("CLASSPATH");
   auto class_opt = "-Djava.class.path=" + class_path +
       "cluster_management-0.0.1-SNAPSHOT-jar-with-dependencies.jar" +
       env_class_path;
+  auto helix_log_config_file_path = "-Dlog4j.configuration=file:" + FLAGS_helix_log_config_file_path;
   LOG(INFO) << "classpath=" << class_opt;
   options[0].optionString = const_cast<char*>(class_opt.c_str());
   options[1].optionString = "-verbose:jni";
   // use -Xrs to block JVM signal handling
   options[2].optionString = "-Xrs";
+  options[3].optionString = const_cast<char*>(helix_log_config_file_path.c_str());
 
   args.options = options;
   args.ignoreUnrecognized = false;
