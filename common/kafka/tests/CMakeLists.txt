@@ -1,0 +1,20 @@
+cmake_minimum_required(VERSION 3.1)
+
+FILE(GLOB TEST_SOURCES *.cpp)
+
+SET(kafka_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../)
+SET(kafka_SRCS ${kafka_DIR}/kafka_consumer.cpp
+        ${kafka_DIR}/kafka_consumer_pool.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/mock_kafka_cluster.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/mock_kafka_consumer.h
+        ${kafka_DIR}/stats_enum.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../stats/stats.cpp)
+ADD_LIBRARY(kafka_consumer ${kafka_SRCS})
+
+foreach(testsourcefile ${TEST_SOURCES})
+  get_filename_component(testname ${testsourcefile} NAME_WE)
+  add_executable(${testname} ${testsourcefile})
+  target_link_libraries(${testname} common gtest kafka_consumer rdkafka++)
+  add_test(NAME ${testname} COMMAND ${testname})
+endforeach(testsourcefile ${TEST_SOURCES})
+

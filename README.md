@@ -36,7 +36,7 @@ cd docker && docker build -t rocksplicator-build .
 
 Or pull the one we uploaded.
 ```sh
-docker pull pinterestbo/rocksplicator-build:latest
+docker pull rajathprasad/rocksplicator-build:latest
 ```
 
 ### Initialize submodules
@@ -50,7 +50,7 @@ cd rocksplicator && git submodule update --init
 Get into the docker build environment. We are assuming the rocksplicator repo is under $HOME/code/, and $HOME/docker-root is an existing directory.
 
 ```sh
-docker run -v <SOURCE-DIR>:/rocksplicator -v $HOME/docker-root:/root -ti pinterestbo/rocksplicator-build:latest bash
+docker run -v <SOURCE-DIR>:/rocksplicator -v $HOME/docker-root:/root -ti rajathprasad/rocksplicator-build:latest bash
 ```
 
 Run the following command in the docker bash to build Rocksplicator:
