@@ -30,7 +30,7 @@ DEFINE_int32(global_worker_threads, sysconf(_SC_NPROCESSORS_ONLN),
 DEFINE_bool(block_on_global_cpu_pool_full, true,
             "Block on enqueuing when the global cpu pool is full.");
 
-DEFINE_string(global_cpu_thread_pool_name, "g_cpu_pool",
+DEFINE_string(global_cpu_thread_pool_name, "g-cpu-pool",
               "The name for threads in the global cpu pool");
 
 namespace {
