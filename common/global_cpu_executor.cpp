@@ -29,6 +29,9 @@ DEFINE_int32(global_worker_threads, sysconf(_SC_NPROCESSORS_ONLN),
 DEFINE_bool(block_on_global_cpu_pool_full, true,
             "Block on enqueuing when the global cpu pool is full.");
 
+DEFINE_string(global_cpu_thread_pool_name, "g_cpu_pool",
+              "The name for threads in the global cpu pool");
+
 namespace {
 
 uint16_t GetThreadsCount() {
@@ -52,6 +55,26 @@ int GetQueueSize() {
 }  // namespace
 
 
+namespace wangle {
+
+class IdenticalNamedThreadFactory : public ThreadFactory {
+ public:
+  explicit IdenticalNamedThreadFactory(const std::string& name)
+    : name_(name) {}
+
+  std::thread newThread(folly::Func&& func) override {
+    auto thread = std::thread(std::move(func));
+    folly::setThreadName(thread.native_handle(), name_);
+
+    return thread;
+  }
+
+ private:
+  const std::string name_;
+};
+
+}
+
 namespace common {
 
 wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor() {
@@ -60,7 +83,9 @@ wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor() {
       GetThreadsCount(),
       std::make_unique<
         wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
-        wangle::QueueBehaviorIfFull::BLOCK>>(GetQueueSize()));
+        wangle::QueueBehaviorIfFull::BLOCK>>(GetQueueSize()),
+      std::make_shared<wangle::IdenticalNamedThreadFactory>(
+        FLAGS_global_cpu_thread_pool_name));
 
     return &g_executor;
   } else {
@@ -68,7 +93,9 @@ wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor() {
       GetThreadsCount(),
       std::make_unique<
         wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
-        wangle::QueueBehaviorIfFull::THROW>>(GetQueueSize()));
+        wangle::QueueBehaviorIfFull::THROW>>(GetQueueSize()),
+      std::make_shared<wangle::IdenticalNamedThreadFactory>(
+        FLAGS_global_cpu_thread_pool_name));
 
     return &g_executor;
   }
