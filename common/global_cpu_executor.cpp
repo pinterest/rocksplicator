@@ -21,6 +21,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include "common/identical_name_thread_factory.h"
 #include "wangle/concurrent/CPUThreadPoolExecutor.h"
 
 DEFINE_int32(global_worker_threads, sysconf(_SC_NPROCESSORS_ONLN),
@@ -28,6 +29,9 @@ DEFINE_int32(global_worker_threads, sysconf(_SC_NPROCESSORS_ONLN),
 
 DEFINE_bool(block_on_global_cpu_pool_full, true,
             "Block on enqueuing when the global cpu pool is full.");
+
+DEFINE_string(global_cpu_thread_pool_name, "g-cpu-pool",
+              "The name for threads in the global cpu pool");
 
 namespace {
 
@@ -60,7 +64,9 @@ wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor() {
       GetThreadsCount(),
       std::make_unique<
         wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
-        wangle::QueueBehaviorIfFull::BLOCK>>(GetQueueSize()));
+        wangle::QueueBehaviorIfFull::BLOCK>>(GetQueueSize()),
+      std::make_shared<IdenticalNameThreadFactory>(
+        FLAGS_global_cpu_thread_pool_name));
 
     return &g_executor;
   } else {
@@ -68,7 +74,9 @@ wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor() {
       GetThreadsCount(),
       std::make_unique<
         wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
-        wangle::QueueBehaviorIfFull::THROW>>(GetQueueSize()));
+        wangle::QueueBehaviorIfFull::THROW>>(GetQueueSize()),
+      std::make_shared<IdenticalNameThreadFactory>(
+        FLAGS_global_cpu_thread_pool_name));
 
     return &g_executor;
   }
