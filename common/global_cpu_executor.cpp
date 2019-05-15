@@ -21,6 +21,7 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
+#include "common/identical_name_thread_factory.h"
 #include "wangle/concurrent/CPUThreadPoolExecutor.h"
 
 DEFINE_int32(global_worker_threads, sysconf(_SC_NPROCESSORS_ONLN),
@@ -55,26 +56,6 @@ int GetQueueSize() {
 }  // namespace
 
 
-namespace wangle {
-
-class IdenticalNamedThreadFactory : public ThreadFactory {
- public:
-  explicit IdenticalNamedThreadFactory(const std::string& name)
-    : name_(name) {}
-
-  std::thread newThread(folly::Func&& func) override {
-    auto thread = std::thread(std::move(func));
-    folly::setThreadName(thread.native_handle(), name_);
-
-    return thread;
-  }
-
- private:
-  const std::string name_;
-};
-
-}
-
 namespace common {
 
 wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor() {
@@ -84,7 +65,7 @@ wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor() {
       std::make_unique<
         wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
         wangle::QueueBehaviorIfFull::BLOCK>>(GetQueueSize()),
-      std::make_shared<wangle::IdenticalNamedThreadFactory>(
+      std::make_shared<IdenticalNameThreadFactory>(
         FLAGS_global_cpu_thread_pool_name));
 
     return &g_executor;
@@ -94,7 +75,7 @@ wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor() {
       std::make_unique<
         wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
         wangle::QueueBehaviorIfFull::THROW>>(GetQueueSize()),
-      std::make_shared<wangle::IdenticalNamedThreadFactory>(
+      std::make_shared<IdenticalNameThreadFactory>(
         FLAGS_global_cpu_thread_pool_name));
 
     return &g_executor;
