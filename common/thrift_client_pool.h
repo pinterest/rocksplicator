@@ -29,6 +29,7 @@
 #include "folly/futures/Promise.h"
 #include "folly/io/async/EventBase.h"
 #include "folly/io/async/SSLContext.h"
+#include "folly/Demangle.h"
 #include "folly/SocketAddress.h"
 #include "thrift/lib/cpp/async/TAsyncSocket.h"
 #include "thrift/lib/cpp/async/TAsyncSSLSocket.h"
@@ -147,14 +148,24 @@ class ThriftClientPool {
       std::pair<std::weak_ptr<apache::thrift::HeaderClientChannel>,
                 std::unique_ptr<ClientStatusCallback>>> channels_;
 
+    static std::string ioThreadName() {
+      const auto class_name = folly::demangle(typeid(T)).toStdString();
+      const auto pos = class_name.find_last_of(':');
+      std::string io_thread_name = "io-";
+      if (pos == std::string::npos) {
+        io_thread_name += class_name;
+      } else {
+        io_thread_name += class_name.substr(pos + 1);
+      }
+
+      return io_thread_name;
+    }
 
     // Create an IO thread and an event base for this loop.
     EventLoop() {
       auto evb = std::make_unique<folly::EventBase>();
       thread_ = std::make_unique<std::thread>([evb = evb.get()] {
-          static std::atomic<int> thread_id(0);
-          auto name =
-            folly::stringPrintf("client-io-%d", thread_id.fetch_add(1));
+          static const auto name = ioThreadName();
           if (!folly::setThreadName(name)) {
             LOG(ERROR) << "Failed to set thread name for thrift IO thread";
           }
