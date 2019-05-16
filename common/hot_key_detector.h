@@ -198,7 +198,7 @@ class HotKeyDetector {
   uint64_t total_records_;
   uint64_t total_recorded_load_;
   std::chrono::time_point<std::chrono::steady_clock> last_decay_time_;
-  std::mutex mtx_;
+  mutable std::mutex mtx_;
 };
 
 }  // namespace common
