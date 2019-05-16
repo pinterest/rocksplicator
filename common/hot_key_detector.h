@@ -125,7 +125,7 @@ class HotKeyDetector {
    * estimation accuracy can be low.
    * parameter percents can't be greater than 100, which doesn't make sense
    */
-  bool isAbove(const K& key, int percents) {
+  bool isAbove(const K& key, int percents) const {
     std::lock_guard<std::mutex> lock(mtx_);
 
     // if total_records_ is too small, statistic estimation won't make sense
@@ -134,7 +134,7 @@ class HotKeyDetector {
       return false;
     }
 
-    auto itor = std::find(keys_.begin(), keys_.end(), key);
+    const auto itor = std::find(keys_.begin(), keys_.end(), key);
     if (itor == keys_.end()) {
       return false;
     }
@@ -178,7 +178,7 @@ class HotKeyDetector {
     last_decay_time_ = now;
   }
 
-  bool isIdxKeyAbove(int idx, int percents) {
+  bool isIdxKeyAbove(int idx, int percents) const {
     // TODO(bol) we may want to reduce load_[idx] in the following formula to
     // provide a more accurate estimation when there are multiple hot keys
     //
