@@ -11,3 +11,5 @@ add_subdirectory(rocksdb_glogger)
 add_subdirectory(stats)
 add_subdirectory(tests)
 add_subdirectory(jsoncpp)
+add_subdirectory(kafka)
+
