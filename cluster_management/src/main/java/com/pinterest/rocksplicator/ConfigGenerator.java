@@ -18,6 +18,7 @@
 
 package com.pinterest.rocksplicator;
 
+import org.apache.helix.api.listeners.PreFetch;
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixConstants;
 import org.apache.helix.HelixManager;
@@ -82,6 +83,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   }
 
   @Override
+  @PreFetch(enabled = false)
   public void onConfigChange(List<InstanceConfig> configs, NotificationContext changeContext) {
     if (updateDisabledHosts()) {
       generateShardConfig();
@@ -89,6 +91,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   }
 
   @Override
+  @PreFetch(enabled = false)
   public void onExternalViewChange(List<ExternalView> externalViewList, NotificationContext changeContext) {
     generateShardConfig();
   }
