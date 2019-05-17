@@ -132,7 +132,7 @@ public class Spectator {
       spectator.startListener(postUrl);
       Thread.currentThread().join();
     } catch (RuntimeException e) {
-      throw e;
+      LOG.error("RuntimeException thrown by cluster " + clusterName, e);
     } catch (Exception e) {
       LOG.error("Failed to release the mutex for cluster " + clusterName, e);
     }
