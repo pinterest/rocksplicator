@@ -147,11 +147,11 @@ public class Participant {
     final String stateModelType = cmd.getOptionValue(stateModel);
     final String postUrl = cmd.getOptionValue(configPostUrl);
     final String instanceName = host + "_" + port;
-    final Boolean runAsSpectator = !cmd.hasOption(disableSpectator);
+    final boolean runSpectator = !cmd.hasOption(disableSpectator);
 
     LOG.error("Starting participant with ZK:" + zkConnectString);
     Participant participant = new Participant(zkConnectString, clusterName, instanceName,
-        stateModelType, Integer.parseInt(port), postUrl, runAsSpectator);
+        stateModelType, Integer.parseInt(port), postUrl, runSpectator);
 
     HelixAdmin helixAdmin = new ZKHelixAdmin(zkConnectString);
     HelixConfigScope scope =
@@ -166,7 +166,7 @@ public class Participant {
   }
 
   public Participant(String zkConnectString, String clusterName, String instanceName,
-                     String stateModelType, int port, String postUrl, Boolean runAsSpectator) throws Exception {
+                     String stateModelType, int port, String postUrl, boolean runSpectator) throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
 
@@ -188,7 +188,7 @@ public class Participant {
         Message.MessageType.STATE_TRANSITION.name(), stateMach);
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
 
-    if (runAsSpectator) {
+    if (runSpectator) {
       // Add callback to create rocksplicator shard config
       HelixCustomCodeRunner codeRunner = new HelixCustomCodeRunner(helixManager, zkConnectString)
           .invoke(new ConfigGenerator(clusterName, helixManager, postUrl))
