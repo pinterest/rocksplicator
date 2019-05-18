@@ -13,7 +13,7 @@
 /// limitations under the License.
 
 //
-// @author bol (bol@pinterest.com)
+// @author Terry Shen (fshen@pinterest.com)
 //
 
 package com.pinterest.rocksplicator;
@@ -27,7 +27,11 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.apache.helix.HelixAdmin;
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.CuratorFrameworkFactory;
+import org.apache.curator.framework.recipes.locks.InterProcessMutex;
+import org.apache.curator.framework.recipes.locks.Locker;
+import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.helix.HelixConstants;
 import org.apache.helix.HelixManager;
 import org.apache.helix.HelixManagerFactory;
@@ -37,10 +41,6 @@ import org.apache.helix.manager.zk.ZKHelixAdmin;
 import org.apache.helix.model.HelixConfigScope;
 import org.apache.helix.model.Message;
 import org.apache.helix.model.builder.HelixConfigScopeBuilder;
-import org.apache.helix.participant.HelixCustomCodeRunner;
-import org.apache.helix.participant.StateMachineEngine;
-import org.apache.helix.participant.statemachine.StateModel;
-import org.apache.helix.participant.statemachine.StateModelFactory;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.ConsoleAppender;
 import org.apache.log4j.Level;
@@ -49,19 +49,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-public class Participant {
-  private static final Logger LOG = LoggerFactory.getLogger(Participant.class);
+public class Spectator {
+  private static final Logger LOG = LoggerFactory.getLogger(Spectator.class);
   private static final String zkServer = "zkSvr";
   private static final String cluster = "cluster";
-  private static final String domain = "domain";
   private static final String hostAddress = "host";
   private static final String hostPort = "port";
-  private static final String stateModel = "stateModelType";
   private static final String configPostUrl = "configPostUrl";
-  private static final String disableSpectator = "disableSpectator";
 
   private HelixManager helixManager;
-  private StateModelFactory<StateModel> stateModelFactory;
 
   private static Options constructCommandLineOptions() {
     Option zkServerOption =
@@ -76,12 +72,6 @@ public class Participant {
     clusterOption.setRequired(true);
     clusterOption.setArgName("Cluster name (Required)");
 
-    Option domainOption =
-        OptionBuilder.withLongOpt(domain).withDescription("Provide instance domain").create();
-    domainOption.setArgs(1);
-    domainOption.setRequired(true);
-    domainOption.setArgName("Instance domain (Required)");
-
     Option hostOption =
         OptionBuilder.withLongOpt(hostAddress).withDescription("Provide host name").create();
     hostOption.setArgs(1);
@@ -94,31 +84,17 @@ public class Participant {
     portOption.setRequired(true);
     portOption.setArgName("Host port (Required)");
 
-    Option stateModelOption =
-        OptionBuilder.withLongOpt(stateModel).withDescription("StateModel Type").create();
-    stateModelOption.setArgs(1);
-    stateModelOption.setRequired(true);
-    stateModelOption.setArgName("StateModel Type (Required)");
-
     Option configPostUrlOption =
         OptionBuilder.withLongOpt(configPostUrl).withDescription("URL to post config").create();
     configPostUrlOption.setArgs(1);
     configPostUrlOption.setRequired(true);
     configPostUrlOption.setArgName("URL to post config (Required)");
 
-    Option disableSpectatorOption =
-        OptionBuilder.withLongOpt(disableSpectator).withDescription("Disable Spectator").create();
-    configPostUrlOption.setArgs(0);
-    configPostUrlOption.setRequired(false);
-    configPostUrlOption.setArgName("Disable Spectator (Optional)");
-
     Options options = new Options();
     options.addOption(zkServerOption)
         .addOption(clusterOption)
-        .addOption(domainOption)
         .addOption(hostOption)
         .addOption(portOption)
-        .addOption(stateModelOption)
         .addOption(configPostUrlOption);
     return options;
   }
@@ -130,7 +106,7 @@ public class Participant {
   }
 
   /**
-   * Start a Helix participant.
+   * Start a Helix spectator.
    * @param args command line parameters
    */
   public static void main(String[] args) throws Exception {
@@ -141,61 +117,40 @@ public class Participant {
     CommandLine cmd = processCommandLineArgs(args);
     final String zkConnectString = cmd.getOptionValue(zkServer);
     final String clusterName = cmd.getOptionValue(cluster);
-    final String domainName = cmd.getOptionValue(domain);
     final String host = cmd.getOptionValue(hostAddress);
     final String port = cmd.getOptionValue(hostPort);
-    final String stateModelType = cmd.getOptionValue(stateModel);
     final String postUrl = cmd.getOptionValue(configPostUrl);
     final String instanceName = host + "_" + port;
-    final boolean runSpectator = !cmd.hasOption(disableSpectator);
 
-    LOG.error("Starting participant with ZK:" + zkConnectString);
-    Participant participant = new Participant(zkConnectString, clusterName, instanceName,
-        stateModelType, Integer.parseInt(port), postUrl, runSpectator);
+    LOG.error("Starting spectator with ZK:" + zkConnectString);
+    Spectator spectator= new Spectator(zkConnectString, clusterName, instanceName);
 
-    HelixAdmin helixAdmin = new ZKHelixAdmin(zkConnectString);
-    HelixConfigScope scope =
-        new HelixConfigScopeBuilder(HelixConfigScope.ConfigScopeProperty.PARTICIPANT)
-            .forCluster(clusterName).forParticipant(instanceName)
-            .build();
-    Map<String, String> properties = new HashMap<String, String>();
-    properties.put("DOMAIN", domainName + ",instance=" + instanceName);
-    helixAdmin.setConfig(scope, properties);
-
-    Thread.currentThread().join();
+    CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
+    zkClient.start();
+    InterProcessMutex mutex = new InterProcessMutex(zkClient, getClusterLockPath(clusterName));
+    try (Locker locker = new Locker(mutex)) {
+      spectator.startListener(postUrl);
+      Thread.currentThread().join();
+    } catch (RuntimeException e) {
+      LOG.error("RuntimeException thrown by cluster " + clusterName, e);
+    } catch (Exception e) {
+      LOG.error("Failed to release the mutex for cluster " + clusterName, e);
+    }
   }
 
-  public Participant(String zkConnectString, String clusterName, String instanceName,
-                     String stateModelType, int port, String postUrl, boolean runSpectator) throws Exception {
-    helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
-        InstanceType.PARTICIPANT, zkConnectString);
-
-    if (stateModelType.equals("OnlineOffline")) {
-      stateModelFactory = new OnlineOfflineStateModelFactory(port, zkConnectString, clusterName);
-    } else if (stateModelType.equals("Cache")) {
-      stateModelType = "OnlineOffline";
-      stateModelFactory = new CacheStateModelFactory();
-    } else if (stateModelType.equals("MasterSlave")) {
-      stateModelFactory = new MasterSlaveStateModelFactory(instanceName.split("_")[0],
-          port, zkConnectString, clusterName);
-    } else {
-      LOG.error("Unknown state model: " + stateModelType);
-    }
-    StateMachineEngine stateMach = helixManager.getStateMachineEngine();
-    stateMach.registerStateModelFactory(stateModelType, stateModelFactory);
+  public Spectator(String zkConnectString, String clusterName, String instanceName) throws Exception {
+    helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
     helixManager.connect();
-    helixManager.getMessagingService().registerMessageHandlerFactory(
-        Message.MessageType.STATE_TRANSITION.name(), stateMach);
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
+  }
 
-    if (runSpectator) {
-      // Add callback to create rocksplicator shard config
-      HelixCustomCodeRunner codeRunner = new HelixCustomCodeRunner(helixManager, zkConnectString)
-          .invoke(new ConfigGenerator(clusterName, helixManager, postUrl))
-          .on(HelixConstants.ChangeType.EXTERNAL_VIEW, HelixConstants.ChangeType.CONFIG)
-          .usingLeaderStandbyModel("ConfigWatcher" + clusterName);
+  private void startListener(String postUrl) throws Exception {
+    ConfigGenerator configGenerator = new ConfigGenerator(helixManager.getClusterName(), helixManager, postUrl);
+    helixManager.addExternalViewChangeListener(configGenerator);
+    helixManager.addConfigChangeListener(configGenerator);
+  }
 
-      codeRunner.start();
-    }
+  private static String getClusterLockPath(String cluster) {
+    return "/rocksplicator/" + cluster + "/spectator/lock";
   }
 }

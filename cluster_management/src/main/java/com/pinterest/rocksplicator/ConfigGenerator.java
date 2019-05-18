@@ -18,6 +18,7 @@
 
 package com.pinterest.rocksplicator;
 
+import org.apache.helix.api.listeners.PreFetch;
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixConstants;
 import org.apache.helix.HelixManager;
@@ -25,6 +26,7 @@ import org.apache.helix.NotificationContext;
 import org.apache.helix.model.ExternalView;
 import org.apache.helix.model.InstanceConfig;
 import org.apache.helix.participant.CustomCodeCallbackHandler;
+import org.apache.helix.spectator.RoutingTableProvider;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
@@ -42,7 +44,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-public class ConfigGenerator implements CustomCodeCallbackHandler {
+public class ConfigGenerator extends RoutingTableProvider implements CustomCodeCallbackHandler {
   private static final Logger LOG = LoggerFactory.getLogger(ConfigGenerator.class);
 
   private final String clusterName;
@@ -78,6 +80,20 @@ public class ConfigGenerator implements CustomCodeCallbackHandler {
         generateShardConfig();
       }
     }
+  }
+
+  @Override
+  @PreFetch(enabled = false)
+  public void onConfigChange(List<InstanceConfig> configs, NotificationContext changeContext) {
+    if (updateDisabledHosts()) {
+      generateShardConfig();
+    }
+  }
+
+  @Override
+  @PreFetch(enabled = false)
+  public void onExternalViewChange(List<ExternalView> externalViewList, NotificationContext changeContext) {
+    generateShardConfig();
   }
 
   private void generateShardConfig() {
