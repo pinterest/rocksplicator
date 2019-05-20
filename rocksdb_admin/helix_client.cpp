@@ -126,7 +126,7 @@ void JoinCluster(const std::string& zk_connect_str,
                  const std::string& config_post_url,
                  bool disable_spectator) {
   std::thread t([zk_connect_str, cluster, state_model_type, domain,
-                 class_path, config_post_url] () {
+                 class_path, config_post_url, disable_spectator] () {
       // FIXME use a more reliable way to ensure the thread calling JoinCluster
       // has time to start the thrift server.
       std::this_thread::sleep_for(std::chrono::seconds(10));
