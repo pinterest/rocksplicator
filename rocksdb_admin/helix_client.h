@@ -43,6 +43,6 @@ void JoinCluster(const std::string& zk_connect_str,
                  const std::string& domain,
                  const std::string& class_path,
                  const std::string& config_post_url,
-                 bool disable_spectator = false);
+                 const bool disable_spectator = false);
 
 }  // namespace admin
