@@ -66,7 +66,8 @@ void invokeClass(JNIEnv* env,
                  const std::string& cluster,
                  const std::string& state_model_type,
                  const std::string& domain,
-                 const std::string& config_post_url) {
+                 const std::string& config_post_url,
+                 bool disable_spectator) {
   jclass ParticipantClass;
   jmethodID mainMethod;
   jobjectArray args;
@@ -81,7 +82,7 @@ void invokeClass(JNIEnv* env,
                                       "main",
                                       "([Ljava/lang/String;)V");
 
-  args = env->NewObjectArray(14, env->FindClass("java/lang/String"), nullptr);
+  args = env->NewObjectArray(14 + (disable_spectator ? 1 : 0), env->FindClass("java/lang/String"), nullptr);
 
   env->SetObjectArrayElement(args, 0, env->NewStringUTF("--zkSvr"));
   env->SetObjectArrayElement(
@@ -102,6 +103,9 @@ void invokeClass(JNIEnv* env,
   env->SetObjectArrayElement(args, 12, env->NewStringUTF("--configPostUrl"));
   env->SetObjectArrayElement(args, 13,
                              env->NewStringUTF(config_post_url.c_str()));
+  if (disable_spectator) {
+    env->SetObjectArrayElement(args, 14, env->NewStringUTF("--disableSpectator"));
+  }
 
   env->CallStaticVoidMethod(ParticipantClass, mainMethod, args);
 
@@ -119,16 +123,17 @@ void JoinCluster(const std::string& zk_connect_str,
                  const std::string& state_model_type,
                  const std::string& domain,
                  const std::string& class_path,
-                 const std::string& config_post_url) {
+                 const std::string& config_post_url,
+                 bool disable_spectator) {
   std::thread t([zk_connect_str, cluster, state_model_type, domain,
                  class_path, config_post_url] () {
-      // FIXME use a more reliable way to ensure the thread calling JoinCluster
+      // FIXME use a more reliable way to ensure the thread calling nvokeClassJoinCluster
       // has time to start the thrift server.
       std::this_thread::sleep_for(std::chrono::seconds(10));
 
       auto env = createVM(class_path);
       invokeClass(env, zk_connect_str, cluster, state_model_type, domain,
-                  config_post_url);
+                  config_post_url, disable_spectator);
     });
 
   t.detach();

@@ -32,6 +32,7 @@ namespace admin {
  *               e.g., "az=us-east-1a,pg=placement_group1"
  * @param class_path The class path for cluster_management jar.
  * @param config_post_url The url to post shard config
+ * @param disable_spectator whether we should disable spectator on this participant
  *
  * @note the function will intentionally crash the calling process if it couldn't
  *  join the cluster successfully.
@@ -41,6 +42,7 @@ void JoinCluster(const std::string& zk_connect_str,
                  const std::string& state_model_type,
                  const std::string& domain,
                  const std::string& class_path,
-                 const std::string& config_post_url);
+                 const std::string& config_post_url,
+                 bool disable_spectator = false);
 
 }  // namespace admin
