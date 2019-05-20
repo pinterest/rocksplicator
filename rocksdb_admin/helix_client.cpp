@@ -67,7 +67,7 @@ void invokeClass(JNIEnv* env,
                  const std::string& state_model_type,
                  const std::string& domain,
                  const std::string& config_post_url,
-                 bool disable_spectator) {
+                 const bool disable_spectator) {
   jclass ParticipantClass;
   jmethodID mainMethod;
   jobjectArray args;
@@ -124,7 +124,7 @@ void JoinCluster(const std::string& zk_connect_str,
                  const std::string& domain,
                  const std::string& class_path,
                  const std::string& config_post_url,
-                 bool disable_spectator) {
+                 const bool disable_spectator) {
   std::thread t([zk_connect_str, cluster, state_model_type, domain,
                  class_path, config_post_url, disable_spectator] () {
       // FIXME use a more reliable way to ensure the thread calling JoinCluster
