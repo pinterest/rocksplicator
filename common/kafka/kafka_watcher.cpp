@@ -68,7 +68,7 @@ void VerifyAndUpdateTopicPartitionOffset(
   } else {
     const auto prev_offset = it->second;
     if (prev_offset + 1 != offset) {
-      common::Stats::get()->Incr(getFullMetricName(kKafkaWatcherMessageMissing,
+      common::Stats::get()->Incr(getFullStatsName(kKafkaWatcherMessageMissing,
           {topic_name}));
     }
     it->second = offset;
@@ -191,11 +191,11 @@ uint32_t KafkaWatcher::ConsumeUpToNow(const kafka::KafkaConsumer& consumer) {
       const auto time_now_ms = common::timeutil::GetCurrentTimestamp(
           common::timeutil::TimeUnit::kMillisecond);
       common::Stats::get()->AddMetric(
-          getFullMetricName(kKafkaMsgTimeDiffFromCurrMs,
+          getFullStatsName(kKafkaMsgTimeDiffFromCurrMs,
               {kafka_watcher_metric_tag_}),
           time_now_ms - msg_timestamp_ms);
       common::Stats::get()->AddMetric(
-          getFullMetricName(kKafkaMsgNumBytes, {kafka_watcher_metric_tag_}),
+          getFullStatsName(kKafkaMsgNumBytes, {kafka_watcher_metric_tag_}),
           message->len());
       const auto topic_partition_pair = std::make_pair(message->topic_name(),
           message->partition());
@@ -234,7 +234,7 @@ uint32_t KafkaWatcher::ConsumeUpToNow(const kafka::KafkaConsumer& consumer) {
               common::timeutil::TimeUnit::kMillisecond) >
           timeout_timestamp_ms) {
         common::Stats::get()->Incr(
-            getFullMetricName(kKafkaWatcherBlockingConsumeTimeout,
+            getFullStatsName(kKafkaWatcherBlockingConsumeTimeout,
                 {kafka_watcher_metric_tag_}));
         LOG(ERROR) << name_
                    << ": Could not reach the end of partitions: "
@@ -311,7 +311,7 @@ void KafkaWatcher::Start(const std::map<std::string, std::map<int32_t,
           common::timeutil::TimeUnit::kMillisecond)
       - start_timestamp_ms;
   common::Stats::get()->AddMetric(
-      getFullMetricName(kKafkaWatcherInitMs, {kafka_watcher_metric_tag_}),
+      getFullStatsName(kKafkaWatcherInitMs, {kafka_watcher_metric_tag_}),
       duration_ms);
   LOG(INFO) << name_ << ": Finished init watcher in: "
             << duration_ms << "ms. Starting watch loop";
@@ -355,7 +355,7 @@ void KafkaWatcher::Start(int64_t initial_kafka_seek_timestamp_ms) {
           common::timeutil::TimeUnit::kMillisecond)
       - start_timestamp_ms;
   common::Stats::get()->AddMetric(
-      getFullMetricName(kKafkaWatcherInitMs, {kafka_watcher_metric_tag_}),
+      getFullStatsName(kKafkaWatcherInitMs, {kafka_watcher_metric_tag_}),
       duration_ms);
   LOG(INFO) << name_ << ": Finished init watcher in: "
             << duration_ms << "ms. Starting watch loop";
@@ -402,11 +402,11 @@ void KafkaWatcher::StartWatchLoop() {
             const auto time_now_ms = common::timeutil::GetCurrentTimestamp(
                 common::timeutil::TimeUnit::kMillisecond);
             common::Stats::get()->AddMetric(
-                getFullMetricName(kKafkaMsgTimeDiffFromCurrMs,
+                getFullStatsName(kKafkaMsgTimeDiffFromCurrMs,
                     {kafka_watcher_metric_tag_}),
                 time_now_ms - msg_timestamp_ms);
             common::Stats::get()->AddMetric(
-                getFullMetricName(kKafkaMsgNumBytes,
+                getFullStatsName(kKafkaMsgNumBytes,
                     {kafka_watcher_metric_tag_}), message->len());
             HandleKafkaNoErrorMessage(message, false /* not replay */);
             // Check if messages are missing between current and previous offset

@@ -61,7 +61,7 @@ KafkaConsumerPool::KafkaConsumerPool(
 }
 
 std::shared_ptr<KafkaConsumer> KafkaConsumerPool::Get() {
-  common::Stats::get()->AddMetric(getFullMetricName(
+  common::Stats::get()->AddMetric(getFullStatsName(
       kKafkaConsumerPoolGetQueueSize, {kafka_consumer_type_metric_tag_}),
           queue_->size());
 
@@ -79,7 +79,7 @@ std::shared_ptr<KafkaConsumer> KafkaConsumerPool::Get() {
 }
 
 void KafkaConsumerPool::Put(std::shared_ptr<KafkaConsumer> consumer) {
-  common::Stats::get()->AddMetric(getFullMetricName(
+  common::Stats::get()->AddMetric(getFullStatsName(
       kKafkaConsumerPoolPutQueueSize, {kafka_consumer_type_metric_tag_}),
           queue_->size());
 

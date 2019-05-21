@@ -32,5 +32,5 @@ const std::string kKafkaMsgTimeDiffFromCurrMs =
     "kafka_msg_time_diff_from_curr_ms";
 const std::string kKafkaMsgNumBytes = "kafka_msg_num_bytes";
 
-std::string getFullMetricName(const std::string& metric_name,
+std::string getFullStatsName(const std::string& metric_name,
     const std::initializer_list<std::string>& tags);

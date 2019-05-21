@@ -25,7 +25,7 @@ DEFINE_string(index_type, "", "The index type");
 DEFINE_string(normalized_cluster_name, "", "The normalized cluster name");
 DEFINE_string(stats_prefix, "", "Prefix for the stats");
 
-std::string getFullMetricName(const std::string& metric_name,
+std::string getFullStatsName(const std::string& metric_name,
                               const std::initializer_list<std::string>& tags) {
   std::string full_metric_name;
   full_metric_name.append(FLAGS_stats_prefix)

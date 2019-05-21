@@ -82,7 +82,7 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
   RdKafka::Conf::CONF_OK) {
     LOG(ERROR) << "Failed to create kafka config for partitions: "
                << folly::join(",", partition_ids) << ", error: " << err;
-    common::Stats::get()->Incr(getFullMetricName(
+    common::Stats::get()->Incr(getFullStatsName(
         kKafkaConsumerErrorInit, {"kafka_consumer_type=" + kafka_consumer_type}));
     return nullptr;
   }
@@ -156,7 +156,7 @@ KafkaConsumer::KafkaConsumer(std::shared_ptr<RdKafka::KafkaConsumer> consumer,
     LOG(ERROR) << "Failed to assign partitions: " << partition_ids_str_
                << ", error_code: " << RdKafka::err2str(error_code)
                << ", num retries: " << FLAGS_kafka_consumer_num_retries;
-    common::Stats::get()->Incr(getFullMetricName(
+    common::Stats::get()->Incr(getFullStatsName(
         kKafkaConsumerErrorAssign,
         {kafka_consumer_type_metric_tag_,
          "error_code=" + std::to_string(error_code)}));
@@ -175,7 +175,7 @@ bool KafkaConsumer::Seek(const int64_t timestamp_ms) {
     return true;
   } else {
     common::Stats::get()->Incr(
-        getFullMetricName(kKafkaConsumerErrorSeek,
+        getFullStatsName(kKafkaConsumerErrorSeek,
             {kafka_consumer_type_metric_tag_}));
     return false;
   }
@@ -192,7 +192,7 @@ bool KafkaConsumer::Seek(const std::string& topic_name,
   }
 
   if (!is_success) {
-    common::Stats::get()->Incr(getFullMetricName(
+    common::Stats::get()->Incr(getFullStatsName(
         kKafkaConsumerErrorSeek, {kafka_consumer_type_metric_tag_,
                                   "topic=" + topic_name}));
   }
@@ -206,7 +206,7 @@ bool KafkaConsumer::Seek(const std::map<std::string, std::map<int32_t,
   }
 
   common::Stats::get()->Incr(
-      getFullMetricName(kKafkaConsumerErrorSeek,
+      getFullStatsName(kKafkaConsumerErrorSeek,
           {kafka_consumer_type_metric_tag_}));
   return false;
 }
@@ -282,7 +282,7 @@ bool KafkaConsumer::SeekInternal(
               << ", offset: " << topic_partition->offset();
 
     common::Stats::get()->Incr(
-        getFullMetricName(kKafkaConsumerSeek,
+        getFullStatsName(kKafkaConsumerSeek,
                            {kafka_consumer_type_metric_tag_,
                             "topic=" + topic_partition->topic(),
                             "partition=" +
@@ -303,7 +303,7 @@ RdKafka::Message* KafkaConsumer::Consume(int32_t timeout_ms) const {
 
   if (message == nullptr) {
     common::Stats::get()->Incr(
-        getFullMetricName(kKafkaConsumerMessageNull,
+        getFullStatsName(kKafkaConsumerMessageNull,
             {kafka_consumer_type_metric_tag_}));
     return nullptr;
   }
@@ -314,7 +314,7 @@ RdKafka::Message* KafkaConsumer::Consume(int32_t timeout_ms) const {
     LOG(ERROR) << "Failed to consume from kafka, error_code: "
                << RdKafka::err2str(error_code)
                << ", partition ids: " << partition_ids_str_;
-    common::Stats::get()->Incr(getFullMetricName(
+    common::Stats::get()->Incr(getFullStatsName(
         kKafkaConsumerErrorConsume,
         {kafka_consumer_type_metric_tag_,
          "error_code=" + std::to_string(error_code)}));
