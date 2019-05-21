@@ -108,9 +108,9 @@ public class Participant {
 
     Option disableSpectatorOption =
         OptionBuilder.withLongOpt(disableSpectator).withDescription("Disable Spectator").create();
-    configPostUrlOption.setArgs(0);
-    configPostUrlOption.setRequired(false);
-    configPostUrlOption.setArgName("Disable Spectator (Optional)");
+    disableSpectatorOption.setArgs(0);
+    disableSpectatorOption.setRequired(false);
+    disableSpectatorOption.setArgName("Disable Spectator (Optional)");
 
     Options options = new Options();
     options.addOption(zkServerOption)
@@ -119,7 +119,8 @@ public class Participant {
         .addOption(hostOption)
         .addOption(portOption)
         .addOption(stateModelOption)
-        .addOption(configPostUrlOption);
+        .addOption(configPostUrlOption)
+        .addOption(disableSpectatorOption);
     return options;
   }
 
