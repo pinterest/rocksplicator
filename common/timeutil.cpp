@@ -24,7 +24,9 @@ using std::chrono::duration;
 
 namespace common {
 
-int64_t GetCurrentTimestamp(const TimeUnit type) {
+namespace timeutil {
+
+    int64_t GetCurrentTimestamp(const TimeUnit type) {
   time_point<hclock> t0 = hclock::now();
   switch (type) {
     case kHour:
@@ -46,3 +48,5 @@ int64_t GetCurrentTimestamp(const TimeUnit type) {
 }
 
 }  // namespace timeutil
+
+}  // namespace common

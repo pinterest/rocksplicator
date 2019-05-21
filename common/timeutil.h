@@ -36,6 +36,8 @@ typedef std::chrono::nanoseconds nanoseconds;
 
 namespace common {
 
+namespace timeutil {
+
 enum TimeUnit { kHour, kMinute, kSecond, kMillisecond,
     kMicrosecond, kNanosecond };
 
@@ -44,5 +46,7 @@ enum TimeUnit { kHour, kMinute, kSecond, kMillisecond,
 // since the standard base time known as the epoch: January 1 1970 at
 //  00:00:00 GMT.
 int64_t GetCurrentTimestamp(const TimeUnit type = kMillisecond);
+
+}  // namespace timeutil
 
 }  // namespace common
