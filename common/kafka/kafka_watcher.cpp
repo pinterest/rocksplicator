@@ -68,7 +68,7 @@ void VerifyAndUpdateTopicPartitionOffset(
   } else {
     const auto prev_offset = it->second;
     if (prev_offset + 1 != offset) {
-      common::Stats::get()->Incr(getFullCounterName(kKafkaWatcherMessageMissing,
+      common::Stats::get()->Incr(getFullMetricName(kKafkaWatcherMessageMissing,
           {topic_name}));
     }
     it->second = offset;
@@ -234,7 +234,7 @@ uint32_t KafkaWatcher::ConsumeUpToNow(const kafka::KafkaConsumer& consumer) {
               common::timeutil::TimeUnit::kMillisecond) >
           timeout_timestamp_ms) {
         common::Stats::get()->Incr(
-            getFullCounterName(kKafkaWatcherBlockingConsumeTimeout,
+            getFullMetricName(kKafkaWatcherBlockingConsumeTimeout,
                 {kafka_watcher_metric_tag_}));
         LOG(ERROR) << name_
                    << ": Could not reach the end of partitions: "

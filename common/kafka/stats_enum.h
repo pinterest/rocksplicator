@@ -18,59 +18,19 @@
 #include <vector>
 #include "common/stats/stats.h"
 
-#define STATS_ADD_METRIC common::Stats::get()->AddMetric
-#define STATS_INCR common::Stats::get()->Incr
+const std::string kKafkaConsumerSeek = "kafka_consumer_seek";
+const std::string kKafkaConsumerErrorInit = "kafka_consumer_error_init";
+const std::string kKafkaConsumerErrorAssign = "kafka_consumer_error_assign";
+const std::string kKafkaConsumerErrorSeek = "kafka_consumer_error_seek";
+const std::string kKafkaConsumerErrorConsume = "kafka_consumer_error_consume";
+const std::string kKafkaConsumerMessageNull = "kKafkaConsumerMessageNull";
+const std::string kKafkaWatcherMessageMissing = "kafka_watcher_message_missing";
+const std::string kKafkaWatcherBlockingConsumeTimeout =
+    "kafka_watcher_blocking_consume_timeout";
+const std::string kKafkaWatcherInitMs = "kafka_watcher_init_ms";
+const std::string kKafkaMsgTimeDiffFromCurrMs =
+    "kafka_msg_time_diff_from_curr_ms";
+const std::string kKafkaMsgNumBytes = "kafka_msg_num_bytes";
 
-enum CounterIdx {
-  kCounterIdxMin = -1,
-#define NEW_COUNTER_STAT(a, b) a,
-#define NEW_METRIC_STAT(a, b)
-    NEW_COUNTER_STAT(kKafkaConsumerSeek, "kafka_consumer_seek")
-    NEW_COUNTER_STAT(kKafkaConsumerErrorInit, "kafka_consumer_error_init")
-    NEW_COUNTER_STAT(kKafkaConsumerErrorAssign, "kafka_consumer_error_assign")
-    NEW_COUNTER_STAT(kKafkaConsumerErrorSeek, "kafka_consumer_error_seek")
-    NEW_COUNTER_STAT(kKafkaConsumerErrorConsume, "kafka_consumer_error_consume")
-    NEW_COUNTER_STAT(kKafkaConsumerMessageNull, "kafka_consumer_message_null")
-    NEW_COUNTER_STAT(kKafkaWatcherMessageMissing,
-        "kafka_watcher_message_missing")
-    NEW_COUNTER_STAT(kKafkaWatcherBlockingConsumeTimeout,
-        "kafka_watcher_blocking_consume_timeout")
-  // Used for kafka
-    NEW_METRIC_STAT(kKafkaWatcherInitMs, "kafka_watcher_init_ms")
-    NEW_METRIC_STAT(kKafkaMsgTimeDiffFromCurrMs, "kafka_msg_time_diff_from_curr_ms")
-    NEW_METRIC_STAT(kKafkaMsgNumBytes, "kafka_msg_num_bytes")
-#undef NEW_METRIC_STAT
-#undef NEW_COUNTER_STAT
-  kCounterIdxMax,
-};
-
-enum MetricIdx {
-  kMetricIdxMin = -1,
-#define NEW_METRIC_STAT(a, b) a,
-#define NEW_COUNTER_STAT(a, b)
-    NEW_COUNTER_STAT(kKafkaConsumerSeek, "kafka_consumer_seek")
-    NEW_COUNTER_STAT(kKafkaConsumerErrorInit, "kafka_consumer_error_init")
-    NEW_COUNTER_STAT(kKafkaConsumerErrorAssign, "kafka_consumer_error_assign")
-    NEW_COUNTER_STAT(kKafkaConsumerErrorSeek, "kafka_consumer_error_seek")
-    NEW_COUNTER_STAT(kKafkaConsumerErrorConsume,
-        "kafka_consumer_error_consume")
-    NEW_COUNTER_STAT(kKafkaConsumerMessageNull, "kafka_consumer_message_null")
-    NEW_COUNTER_STAT(kKafkaWatcherMessageMissing,
-        "kafka_watcher_message_missing")
-    NEW_COUNTER_STAT(kKafkaWatcherBlockingConsumeTimeout,
-        "kafka_watcher_blocking_consume_timeout")
-    // Used for kafka
-    NEW_METRIC_STAT(kKafkaWatcherInitMs, "kafka_watcher_init_ms")
-    NEW_METRIC_STAT(kKafkaMsgTimeDiffFromCurrMs, "kafka_msg_time_diff_from_curr_ms")
-    NEW_METRIC_STAT(kKafkaMsgNumBytes, "kafka_msg_num_bytes")
-#undef NEW_COUNTER_STAT
-#undef NEW_METRIC_STAT
-  kMetricIdxMax,
-};
-
-std::string getFullMetricName(MetricIdx idx,
-    const std::initializer_list<std::string>& tags);
-std::string getFullCounterName(CounterIdx idx,
-    const std::initializer_list<std::string>& tags);
 std::string getFullMetricName(const std::string& metric_name,
-                              const std::initializer_list<std::string>& tags);
+    const std::initializer_list<std::string>& tags);
