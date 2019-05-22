@@ -87,10 +87,8 @@ TEST(StatusServerTest, BasicTest) {
 
   // Sum
   c = curl_easy_init();
-  std::string str = "?a=10&b=2";
-  std::string url = curl_easy_escape(c, str.c_str(), str.size());
-  std::string server = "http://localhost:9999/sum";
-  curl_easy_setopt(c, CURLOPT_URL, server.append(url).c_str());
+  std::string url = "http://localhost:9999/sum?a=10&b=2";
+  curl_easy_setopt(c, CURLOPT_URL, url.c_str());
   curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, WriteResponse);
   curl_easy_setopt(c, CURLOPT_WRITEDATA, &s);
 
@@ -106,10 +104,46 @@ TEST(StatusServerTest, BasicTest) {
 
   // Divide
   c = curl_easy_init();
-  str = "?divident=10&divisor=2";
-  url = curl_easy_escape(c, str.c_str(), str.size());
+  url = "http://localhost:9999/divide?divident=10&divisor=2";
+  curl_easy_setopt(c, CURLOPT_URL, url.c_str());
+  curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, WriteResponse);
+  curl_easy_setopt(c, CURLOPT_WRITEDATA, &s);
+
+  errornum = curl_easy_perform(c);
+  EXPECT_EQ(errornum, CURLE_OK);
+
+  curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &resp);
+  EXPECT_EQ(resp, MHD_HTTP_OK);
+  EXPECT_EQ(s, "5");
+
+  curl_easy_cleanup(c);
+  s.clear();
+
+  // Sum with escaped query params
+  c = curl_easy_init();
+  std::string params = "?a=10&b=2";
+  params = curl_easy_escape(c, params.c_str(), params.size());
+  std::string server = "http://localhost:9999/sum";
+  curl_easy_setopt(c, CURLOPT_URL, server.append(params).c_str());
+  curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, WriteResponse);
+  curl_easy_setopt(c, CURLOPT_WRITEDATA, &s);
+
+  errornum = curl_easy_perform(c);
+  EXPECT_EQ(errornum, CURLE_OK);
+
+  curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &resp);
+  EXPECT_EQ(resp, MHD_HTTP_OK);
+  EXPECT_EQ(s, "12");
+
+  curl_easy_cleanup(c);
+  s.clear();
+
+  // Divide with escaped query params
+  c = curl_easy_init();
+  params = "?divident=10&divisor=2";
+  params = curl_easy_escape(c, params.c_str(), params.size());
   server = "http://localhost:9999/divide";
-  curl_easy_setopt(c, CURLOPT_URL, server.append(url).c_str());
+  curl_easy_setopt(c, CURLOPT_URL, server.append(params).c_str());
   curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, WriteResponse);
   curl_easy_setopt(c, CURLOPT_WRITEDATA, &s);
 
@@ -134,7 +168,7 @@ TEST(StatusServerTest, BasicTest) {
 
   curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &resp);
   EXPECT_EQ(resp, MHD_HTTP_OK);
-  EXPECT_EQ(s, "Unsupported http path.\n");
+  EXPECT_EQ(s, "Unsupported http path: /failure!\n");
 
   curl_easy_cleanup(c);
 }
