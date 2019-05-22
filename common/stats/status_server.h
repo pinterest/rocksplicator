@@ -48,9 +48,8 @@ class StatusServer {
    * (arrays can be passed in as delimited values) and returns a
    * std::string.
    */
-  using EndPointToOPMap =
-      std::map<std::string, std::function<std::string(
-              const std::vector<std::pair<std::string, std::string>>* )>>;
+  using Arguments = std::vector<std::pair<std::string, std::string>>;
+  using EndPointToOPMap = std::map<std::string, std::function<std::string(const Arguments*)>>;
 
   /*!
    * \brief Instantiate a StatusServer.
@@ -81,7 +80,7 @@ class StatusServer {
    * @param end_point The requested end point, including the query.
    * @return The result of the funciton call.
    */
-  std::string GetPageContent(const std::string& end_point);
+  std::string GetPageContent(const std::string& end_point, Arguments* args);
 
   // Stop the HTTP serving daemon. Not currently used.
   // Add to shutdown hook when available.

@@ -12,7 +12,6 @@
 /// See the License for the specific language governing permissions and
 /// limitations under the License.
 
-
 // Implementation of Status Server based on microhttpd.
 
 #include "common/stats/status_server.h"
@@ -28,6 +27,7 @@
 #include <glog/logging.h>
 #include <microhttpd.h>
 
+#include <functional>
 #include <memory>
 #include <set>
 #include <string>
@@ -58,10 +58,22 @@ int ServeCallback(void* param, struct MHD_Connection* connection,
     return MHD_YES;
   }
   if (0 != *upload_data_size) return MHD_NO; /* upload data in a GET!? */
-  *ptr = NULL;                               /* clear context pointer */
+  *ptr = nullptr;                            /* clear context pointer */
 
   StatusServer* server = reinterpret_cast<StatusServer*>(param);
-  auto str = server->GetPageContent(url);
+  StatusServer::Arguments args;
+  MHD_get_connection_values(
+      connection,
+      MHD_GET_ARGUMENT_KIND,
+      [] (void* cls, enum MHD_ValueKind kind, const char* key, const char* value) {
+        if (!(key && value)) {
+          return MHD_NO;
+        }
+        reinterpret_cast<StatusServer::Arguments*>(cls)->emplace_back(key, value);
+        return MHD_YES;
+      },
+      &args);
+  auto str = server->GetPageContent(url, &args);
   response = MHD_create_response_from_data(str.size(),
                                            const_cast<char*>(str.c_str()),
                                            MHD_NO, MHD_YES);
@@ -95,7 +107,7 @@ StatusServer::StatusServer(uint16_t port, EndPointToOPMap op_map,
   extra_stats_endpoints_.erase("/stats.txt");
   // Text
   op_map_.emplace("/stats.txt", [this]
-      (const std::vector<std::pair<std::string, std::string>>* ) {
+      (const Arguments*) {
     std::string ret = common::Stats::get()->DumpStatsAsText();
 
     for (const auto& endpoint_name : extra_stats_endpoints_) {
@@ -109,13 +121,13 @@ StatusServer::StatusServer(uint16_t port, EndPointToOPMap op_map,
 
   // dump_heap
   op_map_.emplace("/dump_heap",
-                  [] (const std::vector<std::pair<std::string, std::string>>*) {
+                  [] (const Arguments*) {
                     auto ret = mallctl("prof.dump", nullptr, nullptr, nullptr, 0);
                     return strerror(ret);
                   });
 
   op_map_.emplace("/gflags.txt",
-                  [] (const std::vector<std::pair<std::string, std::string>>*) {
+                  [] (const Arguments*) {
                     std::stringstream ss;
                     ss << "flag:value [default_value]" << std::endl;
                     std::vector<google::CommandLineFlagInfo> flag_infos;
@@ -133,23 +145,22 @@ StatusServer::StatusServer(uint16_t port, EndPointToOPMap op_map,
   }
 }
 
-std::string StatusServer::GetPageContent(const std::string& end_point) {
+std::string StatusServer::GetPageContent(const std::string& end_point, Arguments* args) {
   // Add dummy url to allow it to be parsed by folly:Uri.
+  // Note: folly:Uri is not thread-safe!
   folly::Uri u("http://blah.blah" + end_point);
-  auto params = u.getQueryParams();
 
   auto iter = op_map_.find(u.path().toStdString());
   if (iter == op_map_.end()) {
-    return  "Unsupported http path.\n";
+    return "Unsupported http path: " + end_point + "!\n";
   }
 
-  std::vector<std::pair<std::string, std::string>> args;
+  auto params = u.getQueryParams();
   for (const auto& p : params) {
-    args.push_back(std::make_pair(p.first.toStdString(),
-                                  p.second.toStdString()));
+    args->emplace_back(p.first.toStdString(), p.second.toStdString());
   }
 
-  return iter->second(&args);
+  return iter->second(args);
 }
 
 void StatusServer::Stop() {
@@ -160,7 +171,7 @@ void StatusServer::Stop() {
 
 bool StatusServer::Serve() {
   LOG(INFO) << "Starting status server at " << port_;
-  d_ = MHD_start_daemon(MHD_USE_POLL_INTERNALLY, port_, NULL, NULL,
+  d_ = MHD_start_daemon(MHD_USE_POLL_INTERNALLY, port_, nullptr, nullptr,
                         &ServeCallback, this, MHD_OPTION_END);
   return (d_ != nullptr);
 }
