@@ -19,7 +19,7 @@
 #include "folly/RWSpinLock.h"
 
 
-namespace {
+namespace kafka{
 
 class KafkaBrokerFileWatcher {
  public:
@@ -40,4 +40,4 @@ class KafkaBrokerFileWatcher {
   mutable folly::RWSpinLock kafka_broker_list_rw_lock_;
 };
 
-}  // namespace
+}  // kafka namespace

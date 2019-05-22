@@ -20,9 +20,9 @@
 
 #include "gflags/gflags.h"
 
-DEFINE_string(corpus_type, "", "The corpus type");
-DEFINE_string(index_type, "", "The index type");
-DEFINE_string(normalized_cluster_name, "", "The normalized cluster name");
+DEFINE_string(corpus_type_kafka, "", "The corpus type");
+DEFINE_string(index_type_kafka, "", "The index type");
+DEFINE_string(normalized_cluster_name_kafka, "", "The normalized cluster name");
 DEFINE_string(stats_prefix, "", "Prefix for the stats");
 
 std::string getFullStatsName(const std::string& metric_name,
@@ -31,11 +31,11 @@ std::string getFullStatsName(const std::string& metric_name,
   full_metric_name.append(FLAGS_stats_prefix)
       .append(metric_name)
       .append("_")
-      .append(FLAGS_index_type)
+      .append(FLAGS_index_type_kafka)
       .append("_")
-      .append(FLAGS_corpus_type)
+      .append(FLAGS_corpus_type_kafka)
       .append(" cluster=")
-      .append(FLAGS_normalized_cluster_name);
+      .append(FLAGS_normalized_cluster_name_kafka);
   for (const auto& tag : tags) {
     full_metric_name.append(" ").append(tag);
   }
