@@ -22,7 +22,7 @@
 #include "glog/logging.h"
 #include "common/file_watcher.h"
 
-namespace {
+namespace kafka {
 
 // Return CSV list of broker("host:port") from the broker serverset local file
 // content. An empty string is returned if it failed to parse the content.
@@ -80,5 +80,5 @@ const std::string& KafkaBrokerFileWatcher::GetKafkaBrokerList() const {
   return kafka_broker_list_;
 }
 
-}  // namespace
+}  // namespace kafka
 
