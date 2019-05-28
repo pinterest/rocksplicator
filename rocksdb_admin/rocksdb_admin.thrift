@@ -153,8 +153,8 @@ struct StartMessageIngestionRequest {
   1: required string db_name,
   2: required string topic_name,
   3: required string kafka_broker_serverset_path,
-  4: optional i64 partition_number,
-  5: optional i64 seek_timestamp_ms
+  # timestamp which the kafka consumer seeks to
+  4: required i64 replay_timestamp_ms
 }
 
 struct StartMessageIngestionResponse {
@@ -162,8 +162,7 @@ struct StartMessageIngestionResponse {
 }
 
 struct StopMessageIngestionRequest {
-  1: required string db_name,
-  2: optional i64 partition_number,
+  1: required string db_name
 }
 
 struct StopMessageIngestionResponse {
