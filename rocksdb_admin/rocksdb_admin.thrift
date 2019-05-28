@@ -149,6 +149,27 @@ struct AddS3SstFilesToDBResponse {
   # for future use
 }
 
+struct StartMessageIngestionRequest {
+  1: required string db_name,
+  2: required string topic_name,
+  3: required string kafka_broker_serverset_path,
+  4: optional i64 partition_number,
+  5: optional i64 seek_timestamp_ms
+}
+
+struct StartMessageIngestionResponse {
+  # for future use
+}
+
+struct StopMessageIngestionRequest {
+  1: required string db_name,
+  2: optional i64 partition_number,
+}
+
+struct StopMessageIngestionResponse {
+  # for future use
+}
+
 struct SetDBOptionsRequest {
   # For keys supported in this map, please refer to:
   # https://github.com/facebook/rocksdb/blob/master/util/cf_options.h#L161
@@ -233,6 +254,20 @@ ClearDBResponse clearDB(1:ClearDBRequest request)
  * Add SST files from s3 to a DB.
  */
 AddS3SstFilesToDBResponse addS3SstFilesToDB(1:AddS3SstFilesToDBRequest request)
+  throws (1:AdminException e)
+
+/*
+ * Start ingesting kafka messages to a DB.
+ */
+StartMessageIngestionResponse StartMessageIngestion(
+    1:StartMessageIngestionRequest request)
+  throws (1:AdminException e)
+
+/*
+ * Stop ingesting kafka messages to a DB.
+ */
+StopMessageIngestionResponse StopMessageIngestion(
+    1:StopMessageIngestionRequest request)
   throws (1:AdminException e)
 
 /*
