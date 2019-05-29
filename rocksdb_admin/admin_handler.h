@@ -98,6 +98,16 @@ class AdminHandler : virtual public AdminSvIf {
         AddS3SstFilesToDBResponse>>> callback,
       std::unique_ptr<AddS3SstFilesToDBRequest> request) override;
 
+  void async_tm_startMessageIngestion(
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+          StartMessageIngestionResponse>>> callback,
+  std::unique_ptr<StartMessageIngestionRequest> request) override;
+
+  void async_tm_stopMessageIngestion(
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+          StopMessageIngestionResponse>>> callback,
+  std::unique_ptr<StopMessageIngestionRequest> request) override;
+
   void async_tm_setDBOptions(
       std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
         SetDBOptionsResponse>>> callback,
@@ -108,18 +118,6 @@ class AdminHandler : virtual public AdminSvIf {
         CompactDBResponse>>> callback,
       std::unique_ptr<CompactDBRequest> request) override;
 
-  void async_tm_startMessageIngestion(
-      std::unique_ptr<apache::thrift::HandlerCallback<
-          std::unique_ptr<StartMessageIngestionResponse>>>
-          callback,
-      std::unique_ptr<StartMessageIngestionRequest> request) override;
-
-  void async_tm_stopMessageIngestion(
-      std::unique_ptr<apache::thrift::HandlerCallback<
-          std::unique_ptr<StopMessageIngestionResponse>>>
-          callback,
-      std::unique_ptr<StopMessageIngestionRequest> request) override;
-
   std::shared_ptr<ApplicationDB> getDB(const std::string& db_name,
                                        AdminException* ex);
 
@@ -129,6 +127,12 @@ class AdminHandler : virtual public AdminSvIf {
  private:
   std::unique_ptr<rocksdb::DB> removeDB(const std::string& db_name,
                                         AdminException* ex);
+
+  // Kafka consumer related helper functions
+  int getPartitionIDFromDBName(const std::string& db_name);
+  std::string getHostName();
+  std::string getConsumerGroupId(const std::string& topic_name,
+      const std::string& partition_id);
 
   DBMetaData getMetaData(const std::string& db_name);
   bool clearMetaData(const std::string& db_name);

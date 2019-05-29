@@ -20,18 +20,26 @@
 #include "rocksdb_admin/admin_handler.h"
 
 #include <chrono>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <unordered_set>
 #include <thread>
 #include <vector>
 
 #include "boost/filesystem.hpp"
+#include "common/kafka/kafka_broker_file_watcher.h"
+#include "common/kafka/kafka_consumer_pool.h"
+#include "common/kafka/kafka_watcher.h"
 #include "common/network_util.h"
 #include "common/rocksdb_glogger/rocksdb_glogger.h"
 #include "common/thrift_router.h"
+#include "common/timeutil.h"
 #include "folly/FileUtil.h"
 #include "folly/ScopeGuard.h"
 #include "folly/String.h"
+#include "librdkafka/rdkafkacpp.h"
 #include "rocksdb/env.h"
 #include "rocksdb/status.h"
 #include "rocksdb/options.h"
@@ -80,6 +88,43 @@ namespace {
 
 const int kMB = 1024 * 1024;
 const int kS3UtilRecheckSec = 5;
+
+const int64_t kMillisPerSec = 1000;
+const char kKafkaConsumerType[] = "rocksplicator_message_consumer";
+const char kKafkaWatcherName[] = "RocksplicatorMessageConsumer";
+const uint32_t kKafkaConsumerPoolSize = 1;
+
+// Global condition variables for kafka synchronization.
+struct SyncVariables
+{
+  SyncVariables(): flag(false) {} // init flag to false
+  std::atomic<bool> flag;
+  std::condition_variable cond_var;
+};
+std::unordered_map<std::string, std::shared_ptr<SyncVariables>> sync_var_map;
+
+// Global map to keep track of serverset file watchers
+std::unordered_map<std::string, std::shared_ptr<
+    ::kafka::KafkaBrokerFileWatcher>> serverset_path_to_file_watcher_map;
+
+int64_t GetMessageTimestampSecs(const RdKafka::Message& message) {
+  const auto ts = message.timestamp();
+  if (ts.type == RdKafka::MessageTimestamp::MSG_TIMESTAMP_CREATE_TIME) {
+    return ts.timestamp / kMillisPerSec;
+  }
+
+  // We only expect the timestamp to be create time.
+  return -1;
+}
+
+std::string ToUTC(const int64_t time_secs) {
+  time_t raw_time(time_secs);
+  char buf[24];
+  static const std::string time_format = "%Y-%d-%m %H:%M:%S UTC";
+  std::strftime(buf, sizeof(buf), time_format.c_str(), std::gmtime(&raw_time));
+  return std::string(buf);
+}
+
 
 rocksdb::DB* OpenMetaDB() {
   rocksdb::Options options;
@@ -929,6 +974,177 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   callback->result(AddS3SstFilesToDBResponse());
 }
 
+int AdminHandler::getPartitionIDFromDBName(const std::string& db_name) {
+  const size_t n = db_name.find_first_of("0123456789");
+  if (n != std::string::npos){
+    return std::stoi(db_name.substr(n, std::string::npos));
+  }
+  LOG(ERROR) << "No partition id found in db name " << db_name;
+
+  return -1;
+}
+
+std::string AdminHandler::getHostName() {
+  char buffer[512];
+  gethostname(buffer, sizeof(buffer));
+  return std::string(buffer);
+}
+
+std::string AdminHandler::getConsumerGroupId(
+    const std::string& topic_name, const std::string& partition_id) {
+  return getHostName() + '_' + topic_name + '_' + partition_id;
+}
+
+void AdminHandler::async_tm_startMessageIngestion(
+    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+      StartMessageIngestionResponse>>> callback,
+    std::unique_ptr<StartMessageIngestionRequest> request) {
+
+  admin::AdminException e;
+  e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+
+  const auto db_name = request->db_name;
+  const auto topic_name = request->topic_name;
+  const auto kafka_broker_serverset_path = request->kafka_broker_serverset_path;
+  const auto replay_timestamp_ms = request->replay_timestamp_ms;
+
+  LOG(INFO) << "Called startMessageIngestion for " << db_name;
+
+  // Check if there's already a thread consuming the same partition.
+  if (sync_var_map.find(db_name) != sync_var_map.end()) {
+    e.message = db_name + " is already being consumed";
+    callback.release()->exceptionInThread(std::move(e));
+    LOG(ERROR) << "Already consuming messages to " << db_name <<
+               "in another thread";
+    return;
+  }
+
+  // TODO: Compare the latest value in local_meta_db with replay_timestamp_ms
+  // and choose the latest.
+
+  const auto partition_id = getPartitionIDFromDBName(db_name);
+
+  if (partition_id == -1) {
+    e.message = "Invalid db_name: " + db_name;
+    callback.release()->exceptionInThread(std::move(e));
+    LOG(ERROR) << "Could not find partition in db_name" << db_name;
+    return;
+  }
+
+  const std::unordered_set<uint32_t> partition_ids_set({partition_id});
+
+  // Find the watcher for the given path. If none exists, create a new watcher
+  std::shared_ptr<::kafka::KafkaBrokerFileWatcher> kafka_broker_file_watcher;
+
+  const auto map_iter = serverset_path_to_file_watcher_map.find(
+      kafka_broker_serverset_path);
+
+  if (map_iter == serverset_path_to_file_watcher_map.end()) {
+    kafka_broker_file_watcher =
+        std::make_shared<::kafka::KafkaBrokerFileWatcher>(
+            kafka_broker_serverset_path);
+    serverset_path_to_file_watcher_map[kafka_broker_serverset_path] =
+        kafka_broker_file_watcher;
+  } else {
+    kafka_broker_file_watcher = map_iter->second;
+  }
+
+  // Create new synchronization variables for this partition
+  auto sync_variable = std::make_shared<SyncVariables>();
+  sync_var_map[db_name] = sync_variable;
+
+  SCOPE_EXIT { sync_var_map.erase(db_name); };
+
+  const auto kafka_consumer_pool = std::make_shared<::kafka::KafkaConsumerPool>(
+      kKafkaConsumerPoolSize,
+      partition_ids_set,
+      kafka_broker_file_watcher->GetKafkaBrokerList(),
+      std::unordered_set<std::string>({topic_name}),
+      getConsumerGroupId(topic_name, std::to_string(partition_id)),
+      kKafkaConsumerType);
+
+  const auto kafka_watcher = std::make_unique<KafkaWatcher>(
+      kKafkaWatcherName,
+      kafka_consumer_pool,
+      -1); // kafka_init_blocking_consumer_timeout_ms ;
+
+  // With kafka_init_blocking_consumer_timeout_ms set to -1, messages from
+  // replay_timestamp_ms to the current are synchronously consumed. The
+  // calling thread then returns after spawning a new thread to consume
+  // live messages
+  kafka_watcher->StartWith(
+      replay_timestamp_ms,
+      [](std::shared_ptr<const RdKafka::Message> message,
+          const bool is_replay) {
+    if (message == nullptr) {
+      LOG(ERROR) << "Message nullptr";
+      return;
+    }
+    const int64_t msg_timestamp_secs = GetMessageTimestampSecs(*message);
+
+    // Logs for debugging
+    LOG(ERROR) << "Key " << *message->key() << ", "
+    << "value " << static_cast<const char *>(message->payload()) << ", "
+    << "partition: " << message->partition() << ", "
+    << "offset: " << message->offset() << ", "
+    << "payload len: " << message->len() << ", "
+    << "msg_timestamp: " << ToUTC(msg_timestamp_secs) << " or "
+    << std::to_string(msg_timestamp_secs) << " secs";
+
+    // TODO: add the logic to write the key/value to rocksdb here
+
+    // TODO: periodically write the message timestamp to local_meta_db
+  });
+
+  LOG(INFO) << "Now consuming live messages for " << db_name;
+
+  // Live messages continue to consumed in a separate thread, but release
+  // callback so that helix can transition this partition to bootstrap stage.
+  callback.release()->result(StartMessageIngestionResponse());
+
+  // Consume live messages until 'Stop' API is called which will notify the
+  // global condition variable.
+  LOG(INFO) << "Consuming until notified for  " << db_name;
+  std::mutex mutex;
+  std::unique_lock<std::mutex> lock(mutex);
+  sync_variable->cond_var.wait(lock, [&sync_variable] {
+    return sync_variable->flag.load(); });
+
+  // Stop the watcher.
+  LOG(ERROR) << "Stopping kafka watcher";
+  kafka_watcher->StopAndWait();
+  LOG(ERROR) << "Kafka watcher stopped";
+}
+
+void AdminHandler::async_tm_stopMessageIngestion(
+    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+      StopMessageIngestionResponse>>> callback,
+    std::unique_ptr<StopMessageIngestionRequest> request) {
+
+  admin::AdminException e;
+  e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+
+  const auto db_name = request->db_name;
+  LOG(ERROR) << "Called stopMessageIngestion for " << db_name;
+
+  auto sync_variable = sync_var_map.find(db_name);
+
+  // Verify that messages are being consumed for this partition
+  if (sync_variable == sync_var_map.end()) {
+    e.message = db_name + " consumption already stopped";
+    callback.release()->exceptionInThread(std::move(e));
+    LOG(ERROR) << "Could not find condition variable for " << db_name <<
+                  ". Consumption might have never started or already stopped";
+    return;
+  }
+
+  // Set atomic flag and notify consuming thread.
+  sync_variable->second->flag.store(true);
+  sync_variable->second->cond_var.notify_all();
+  callback.release()->result(StopMessageIngestionResponse());
+  return;
+}
+
 void AdminHandler::async_tm_setDBOptions(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       SetDBOptionsResponse>>> callback,
@@ -975,27 +1191,6 @@ void AdminHandler::async_tm_compactDB(
     return;
   }
   callback.release()->result(CompactDBResponse());
-}
-
-void AdminHandler::async_tm_startMessageIngestion(
-    std::unique_ptr<apache::thrift::HandlerCallback<
-        std::unique_ptr<StartMessageIngestionResponse>>>
-        callback,
-    std::unique_ptr<StartMessageIngestionRequest> request) {
-    LOG(INFO) << "Start message ingestion on db : " << request->db_name
-              << " from topic " << request->topic_name
-              << " on kafka broker serverset " << request->kafka_broker_serverset_path
-              << " from timestamp " << request->replay_timestamp_ms;
-    callback.release()->result(StartMessageIngestionResponse());
-}
-
-void AdminHandler::async_tm_stopMessageIngestion(
-    std::unique_ptr<apache::thrift::HandlerCallback<
-        std::unique_ptr<StopMessageIngestionResponse>>>
-        callback,
-    std::unique_ptr<StopMessageIngestionRequest> request) {
-    LOG(INFO) << "Stop message ingestion on db " << request->db_name;
-    callback.release()->result(StopMessageIngestionResponse());
 }
 
 std::string AdminHandler::DumpDBStatsAsText() const {

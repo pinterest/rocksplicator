@@ -157,6 +157,29 @@ TEST(AdminHandlerTest, CheckDB) {
   thread->join();
 }
 
+TEST(AdminHandlerTest, PartitionID) {
+  EXPECT_EQ(std::system("rm -rf /tmp/meta_db"), 0);
+
+  auto db_manager = std::make_unique<admin::ApplicationDBManager>();
+  admin::AdminHandler handler(std::move(db_manager),
+                              admin::RocksDBOptionsGeneratorType());
+
+  std::string db_name;
+  int partition;
+
+  db_name = "test_db_00000";
+  partition = handler.getPartitionIDFromDBName(db_name);
+  EXPECT_EQ(partition, 0);
+
+  db_name = "test_db_00030";
+  partition = handler.getPartitionIDFromDBName(db_name);
+  EXPECT_EQ(partition, 30);
+
+  db_name = "test_db";
+  partition = handler.getPartitionIDFromDBName(db_name);
+  EXPECT_EQ(partition, -1);
+}
+
 int main(int argc, char** argv) {
   FLAGS_rocksdb_dir = "/tmp/";
   ::testing::InitGoogleTest(&argc, argv);
