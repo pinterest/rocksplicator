@@ -20,6 +20,8 @@ package com.pinterest.rocksplicator;
 
 import com.pinterest.rocksdb_admin.thrift.AddS3SstFilesToDBRequest;
 import com.pinterest.rocksdb_admin.thrift.Admin;
+import com.pinterest.rocksdb_admin.thrift.StartMessageIngestionRequest
+import com.pinterest.rocksdb_admin.thrift.StopMessageIngestionRequest
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -122,7 +124,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
 
     /**
      * Callback for ONLINE to OFFLINE transition.
-     * The callback simply close the DB.
+     * The callback will stop the kafka ingestion then close the db
      */
     public void onBecomeOfflineFromOnline(Message message, NotificationContext context) {
       Utils.checkSanity("ONLINE", "OFFLINE", message, resourceName, partitionName);
