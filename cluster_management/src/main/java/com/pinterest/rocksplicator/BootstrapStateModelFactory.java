@@ -20,8 +20,8 @@ package com.pinterest.rocksplicator;
 
 import com.pinterest.rocksdb_admin.thrift.AddS3SstFilesToDBRequest;
 import com.pinterest.rocksdb_admin.thrift.Admin;
-import com.pinterest.rocksdb_admin.thrift.StartMessageIngestionRequest
-import com.pinterest.rocksdb_admin.thrift.StopMessageIngestionRequest
+import com.pinterest.rocksdb_admin.thrift.StartMessageIngestionRequest;
+import com.pinterest.rocksdb_admin.thrift.StopMessageIngestionRequest;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
