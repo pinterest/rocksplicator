@@ -308,4 +308,28 @@ public class Utils {
       return false;
     }
   }
+
+  public static void checkSanity(String fromState, String toState, Message message, String resourceName,
+                                 String partitionName) {
+    if (fromState.equalsIgnoreCase(message.getFromState())
+            && toState.equalsIgnoreCase(message.getToState())
+            && resourceName.equalsIgnoreCase(message.getResourceName())
+            && partitionName.equalsIgnoreCase(message.getPartitionName())) {
+      return;
+    }
+
+    LOG.error("Invalid meesage: " + message.toString());
+    LOG.error("From " + fromState + " to " + toState + " for " + partitionName);
+  }
+
+  public static String getMetaLocation(String cluster, String resourceName) {
+    return "/metadata/" + cluster + "/" + resourceName + "/resource_meta";
+  }
+
+  // partition name is in format: test_0
+  // S3 part prefix is in format: part-00000-
+  public static String getS3PartPrefix(String partitionName) {
+    String[] parts = partitionName.split("_");
+    return String.format("part-%05d-", Integer.parseInt(parts[parts.length - 1]));
+  }
 }

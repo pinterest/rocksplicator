@@ -258,14 +258,14 @@ AddS3SstFilesToDBResponse addS3SstFilesToDB(1:AddS3SstFilesToDBRequest request)
 /*
  * Start ingesting kafka messages to a DB.
  */
-StartMessageIngestionResponse StartMessageIngestion(
+StartMessageIngestionResponse startMessageIngestion(
     1:StartMessageIngestionRequest request)
   throws (1:AdminException e)
 
 /*
  * Stop ingesting kafka messages to a DB.
  */
-StopMessageIngestionResponse StopMessageIngestion(
+StopMessageIngestionResponse stopMessageIngestion(
     1:StopMessageIngestionRequest request)
   throws (1:AdminException e)
 

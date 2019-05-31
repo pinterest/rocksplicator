@@ -13,13 +13,15 @@
 /// limitations under the License.
 
 //
-// @author bol (bol@pinterest.com)
+// @author cdonaghy (cdonaghy@pinterest.com)
 //
 
 package com.pinterest.rocksplicator;
 
 import com.pinterest.rocksdb_admin.thrift.AddS3SstFilesToDBRequest;
 import com.pinterest.rocksdb_admin.thrift.Admin;
+import com.pinterest.rocksdb_admin.thrift.StartMessageIngestionRequest;
+import com.pinterest.rocksdb_admin.thrift.StopMessageIngestionRequest;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -37,14 +39,47 @@ import org.apache.thrift.transport.TTransportException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel> {
+/**
+ * The Bootstrap state machine has 5 possible states. There are 7 possible state transitions that
+ * we need to handle.
+ *                         1              3             5
+ *                ONLINE  <-   BOOTSTRAP  <-   OFFLINE  ->  DROPPED
+ *                      \                 ->     ^      ^
+ *                       \                4     / \   / 7
+ *                        ---------------------   ERROR
+ *                                   2
+ *
+ *
+ * 1) Bootstrap to Online
+ *    a) Take the zk metadata and send a StartMessageIngestionRequest, will return when we have hit kafka EOF
+ *
+ * 2) Online to Offline
+ *    a) send a StopMessageIngestionRequest for the given partition
+ *
+ * 3) Offline to Bootstrap
+ *    a) Download the sst files specified from the zk metadata
+ *
+ * 4) Bootstrap to Offline
+ *    a) send a StopMessageIngestionRequest for the given partition
+ *
+ * 5) Offline to Dropped
+ *    a) clear the DB
+ *
+ * 6) Error to Offline
+ *    a) do nothing
+ *
+ * 7) Error to Dropped
+ *    a) clear the DB
+ */
+
+public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
   private final int adminPort;
   private final String cluster;
   private CuratorFramework zkClient;
 
-  private static final Logger LOG = LoggerFactory.getLogger(OnlineOfflineStateModelFactory.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BootstrapStateModelFactory.class);
 
-  OnlineOfflineStateModelFactory(int adminPort, String zkConnectString, String cluster) {
+  BootstrapStateModelFactory(String host, int adminPort, String zkConnectString, String cluster) {
     this.adminPort = adminPort;
     this.cluster = cluster;
     this.zkClient = CuratorFrameworkFactory.newClient(zkConnectString,
@@ -55,11 +90,11 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
   @Override
   public StateModel createNewStateModel(String resourceName, String partitionName) {
     LOG.error("Create a new state for " + partitionName);
-    return new OnlineOfflineStateModel(resourceName, partitionName, adminPort, cluster, zkClient);
+    return new BootstrapStateModel(resourceName, partitionName, adminPort, cluster, zkClient);
   }
 
-  public static class OnlineOfflineStateModel extends StateModel {
-    private static final Logger LOG = LoggerFactory.getLogger(OnlineOfflineStateModel.class);
+  public static class BootstrapStateModel extends StateModel {
+    private static final Logger LOG = LoggerFactory.getLogger(BootstrapStateModel.class);
 
     private final String resourceName;
     private final String partitionName;
@@ -70,7 +105,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
     /**
      * State model that handles the state machine of a single partition.
      */
-    public OnlineOfflineStateModel(String resourceName, String partitionName, int adminPort,
+    public BootstrapStateModel(String resourceName, String partitionName, int adminPort,
                                    String cluster, CuratorFramework zkClient) {
       this.resourceName = resourceName;
       this.partitionName = partitionName;
@@ -80,20 +115,21 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
     }
 
     /**
-     * Callback for OFFLINE to ONLINE transition.
+     * Callback for OFFLINE to BOOTSTRAP transition.
      * This can happen when 1) a new partition is first launched on a host; or 2) an existing
      * partition is reopened when restart/zk temporarily expires.
      * We first make sure the DB is open and then load SST files into the DB.
      */
-    public void onBecomeOnlineFromOffline(Message message, NotificationContext context) {
-      Utils.checkSanity("OFFLINE", "ONLINE", message, resourceName, partitionName);
+    public void onBecomeBootstrapFromOffline(Message message, NotificationContext context) {
+      Utils.checkSanity("OFFLINE", "BOOTSTRAP", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       Utils.addDB(Utils.getDbName(partitionName), adminPort);
 
       try {
         zkClient.sync().forPath(Utils.getMetaLocation(cluster, resourceName));
-        String meta = new String(zkClient.getData().forPath(Utils.getMetaLocation(cluster, resourceName)));
+        String meta =
+                new String(zkClient.getData().forPath(Utils.getMetaLocation(cluster, resourceName)));
         JsonObject jsonObject = new JsonParser().parse(meta).getAsJsonObject();
 
         String s3Path = jsonObject.get("s3_path").getAsString();
@@ -109,7 +145,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
         }
 
         AddS3SstFilesToDBRequest req = new AddS3SstFilesToDBRequest(Utils.getDbName(partitionName),
-            s3Bucket, s3Path + Utils.getS3PartPrefix(partitionName));
+                s3Bucket, s3Path + Utils.getS3PartPrefix(partitionName));
         req.setS3_download_limit_mb(s3_download_limit_mb);
         Admin.Client client = Utils.getLocalAdminClient(adminPort);
         client.addS3SstFilesToDB(req);
@@ -121,13 +157,70 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
 
     /**
      * Callback for ONLINE to OFFLINE transition.
-     * The callback simply close the DB.
+     * The callback will stop the kafka ingestion then close the db
      */
     public void onBecomeOfflineFromOnline(Message message, NotificationContext context) {
       Utils.checkSanity("ONLINE", "OFFLINE", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
+      try {
+        StopMessageIngestionRequest req = new StopMessageIngestionRequest(Utils.getDbName(partitionName));
+        Admin.Client client = Utils.getLocalAdminClient(adminPort);
+        client.stopMessageIngestion(req);
+      } catch (Exception e) {
+        LOG.error("Failed to Offline " + partitionName, e);
+        throw new RuntimeException(e);
+      }
+
       Utils.closeDB(Utils.getDbName(partitionName), adminPort);
+    }
+
+    /**
+     * Callback for BOOTSTRAP to OFFLINE transition.
+     * The callback will stop the kafka ingestion then close the db
+     * This might be called if there is an error from BOOTSTRAP->ONLINE
+     * or if we reset the resource while it is in BOOTSTRAP->ONLINE
+     */
+    public void onBecomeOfflineFromBootstrap(Message message, NotificationContext context) {
+      Utils.checkSanity("BOOTSTRAP", "OFFLINE", message, resourceName, partitionName);
+      Utils.logTransitionMessage(message);
+
+      try {
+        StopMessageIngestionRequest req = new StopMessageIngestionRequest(Utils.getDbName(partitionName));
+        Admin.Client client = Utils.getLocalAdminClient(adminPort);
+        client.stopMessageIngestion(req);
+      } catch (Exception e) {
+        LOG.error("Failed to Offline " + partitionName, e);
+        throw new RuntimeException(e);
+      }
+
+      Utils.closeDB(Utils.getDbName(partitionName), adminPort);
+    }
+
+    /**
+     * Callback for BOOTSTRAP to ONLINE transition
+     * We will tail kafka until we hit EOF and then return
+     */
+    public void onBecomeOnlineFromBootstrap(Message message, NotificationContext context) {
+      Utils.checkSanity("BOOTSTRAP", "ONLINE", message, resourceName, partitionName);
+      Utils.logTransitionMessage(message);
+
+      try {
+        String meta = new String(zkClient.getData().forPath(Utils.getMetaLocation(cluster, resourceName)));
+        JsonObject jsonObject = new JsonParser().parse(meta).getAsJsonObject();
+        int replay_timestamp_ms = jsonObject.get("replay_timestamp_ms").getAsInt();
+        String kafkaBrokerServersetPath = jsonObject.get("kafka_broker_serverset_path").getAsString();
+        String topicName = jsonObject.get("topic_name").getAsString();
+
+        StartMessageIngestionRequest req =
+                new StartMessageIngestionRequest(Utils.getDbName(partitionName), topicName,
+                        kafkaBrokerServersetPath, replay_timestamp_ms);
+        Admin.Client client = Utils.getLocalAdminClient(adminPort);
+        client.startMessageIngestion(req);
+      } catch (Exception e) {
+        LOG.error("Failed to replay kafka for : " + partitionName, e);
+        throw new RuntimeException(e);
+      }
     }
 
     /**
