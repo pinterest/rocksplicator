@@ -39,6 +39,39 @@ import org.apache.thrift.transport.TTransportException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * The Bootstrap state machine has 5 possible states. There are 7 possible state transitions that
+ * we need to handle.
+ *                         1              3             5
+ *                ONLINE  <-   BOOTSTRAP  <-   OFFLINE  ->  DROPPED
+ *                      \                 ->     ^      ^
+ *                       \                4     / \   / 7
+ *                        ---------------------   ERROR
+ *                                   2
+ *
+ *
+ * 1) Bootstrap to Online
+ *    a) Take the zk metadata and send a StartMessageIngestionRequest, will return when we have hit kafka EOF
+ *
+ * 2) Online to Offline
+ *    a) send a StopMessageIngestionRequest for the given partition
+ *
+ * 3) Offline to Bootstrap
+ *    a) Download the sst files specified from the zk metadata
+ *
+ * 4) Bootstrap to Offline
+ *    a) send a StopMessageIngestionRequest for the given partition
+ *
+ * 5) Offline to Dropped
+ *    a) clear the DB
+ *
+ * 6) Error to Offline
+ *    a) do nothing
+ *
+ * 7) Error to Dropped
+ *    a) clear the DB
+ */
+
 public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
   private final int adminPort;
   private final String cluster;
