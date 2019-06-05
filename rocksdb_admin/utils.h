@@ -29,4 +29,9 @@ std::string SegmentToDbName(const std::string& segment,
  */
 std::string DbNameToSegment(const std::string& db_name);
 
+/*
+ * Extract the shard id from a db name
+ */
+int ExtractShardId(const std::string& db_name);
+
 }  // namespace admin

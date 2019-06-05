@@ -19,6 +19,8 @@
 
 #include "folly/String.h"
 
+const uint32_t kShardLength = 5;
+
 namespace admin {
 
 std::string SegmentToDbName(const std::string& segment,
@@ -31,6 +33,18 @@ std::string DbNameToSegment(const std::string& db_name) {
     return db_name;
   }
   return db_name.substr(0, db_name.size() - 5);
+}
+
+int ExtractShardId(const std::string& db_name) {
+  if (UNLIKELY(db_name.size() < kShardLength)) {
+    return -1;
+  }
+
+  try {
+    return folly::to<uint32_t>(db_name.substr(db_name.size() - 5));
+  } catch (...) {
+    return -1;
+  }
 }
 
 }  // namespace admin

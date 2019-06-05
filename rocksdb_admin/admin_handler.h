@@ -128,12 +128,6 @@ class AdminHandler : virtual public AdminSvIf {
   std::unique_ptr<rocksdb::DB> removeDB(const std::string& db_name,
                                         AdminException* ex);
 
-  // Kafka consumer related helper functions
-  int getPartitionIDFromDBName(const std::string& db_name);
-  std::string getHostName();
-  std::string getConsumerGroupId(const std::string& topic_name,
-      const std::string& partition_id);
-
   DBMetaData getMetaData(const std::string& db_name);
   bool clearMetaData(const std::string& db_name);
   bool writeMetaData(const std::string& db_name,

@@ -28,6 +28,19 @@ TEST(DbNameToSegmentTest, Basics) {
   EXPECT_EQ(admin::DbNameToSegment("seg12"), "seg12");
 }
 
+TEST(ExtractShardIDTest, Basics) {
+  std::string db_name;
+
+  db_name = "test_db00000";
+  EXPECT_EQ(admin::ExtractShardId(db_name), 0);
+
+  db_name = "test_db00030";
+  EXPECT_EQ(admin::ExtractShardId(db_name), 30);
+
+  db_name = "test_db";
+  EXPECT_EQ(admin::ExtractShardId(db_name), -1);
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

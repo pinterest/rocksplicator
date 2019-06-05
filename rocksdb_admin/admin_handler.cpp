@@ -24,8 +24,8 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <unordered_set>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 #include "boost/filesystem.hpp"
@@ -94,18 +94,21 @@ const char kKafkaConsumerType[] = "rocksplicator_message_consumer";
 const char kKafkaWatcherName[] = "RocksplicatorMessageConsumer";
 const uint32_t kKafkaConsumerPoolSize = 1;
 
+// Global map to keep track of serverset file watchers
+  std::unordered_map<std::string, std::shared_ptr<
+      ::kafka::KafkaBrokerFileWatcher>> serverset_path_to_file_watcher_map;
+
 // Global condition variables for kafka synchronization.
 struct SyncVariables
 {
   SyncVariables(): flag(false) {} // init flag to false
   std::atomic<bool> flag;
   std::condition_variable cond_var;
+  std::mutex mutex;
 };
 std::unordered_map<std::string, std::shared_ptr<SyncVariables>> sync_var_map;
-
-// Global map to keep track of serverset file watchers
-std::unordered_map<std::string, std::shared_ptr<
-    ::kafka::KafkaBrokerFileWatcher>> serverset_path_to_file_watcher_map;
+std::mutex sync_var_map_mutex;
+std::mutex serverset_path_to_file_watcher_map_mutex;
 
 int64_t GetMessageTimestampSecs(const RdKafka::Message& message) {
   const auto ts = message.timestamp();
@@ -125,6 +128,10 @@ std::string ToUTC(const int64_t time_secs) {
   return std::string(buf);
 }
 
+std::string getConsumerGroupId(
+    const std::string& topic_name, const std::string& partition_id) {
+  return common::getLocalIPAddress() + '_' + topic_name + '_' + partition_id;
+}
 
 rocksdb::DB* OpenMetaDB() {
   rocksdb::Options options;
@@ -974,27 +981,6 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   callback->result(AddS3SstFilesToDBResponse());
 }
 
-int AdminHandler::getPartitionIDFromDBName(const std::string& db_name) {
-  const size_t n = db_name.find_first_of("0123456789");
-  if (n != std::string::npos){
-    return std::stoi(db_name.substr(n, std::string::npos));
-  }
-  LOG(ERROR) << "No partition id found in db name " << db_name;
-
-  return -1;
-}
-
-std::string AdminHandler::getHostName() {
-  char buffer[512];
-  gethostname(buffer, sizeof(buffer));
-  return std::string(buffer);
-}
-
-std::string AdminHandler::getConsumerGroupId(
-    const std::string& topic_name, const std::string& partition_id) {
-  return getHostName() + '_' + topic_name + '_' + partition_id;
-}
-
 void AdminHandler::async_tm_startMessageIngestion(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       StartMessageIngestionResponse>>> callback,
@@ -1008,21 +994,28 @@ void AdminHandler::async_tm_startMessageIngestion(
   const auto kafka_broker_serverset_path = request->kafka_broker_serverset_path;
   const auto replay_timestamp_ms = request->replay_timestamp_ms;
 
-  LOG(INFO) << "Called startMessageIngestion for " << db_name;
+  LOG(INFO) << "Called startMessageIngestion for db: " << db_name << ", "
+            << "topic_name: " << topic_name << ", "
+            << "serverset path: " << kafka_broker_serverset_path << ", "
+            << "replay_timestamp_ms: " << replay_timestamp_ms;
 
-  // Check if there's already a thread consuming the same partition.
-  if (sync_var_map.find(db_name) != sync_var_map.end()) {
-    e.message = db_name + " is already being consumed";
-    callback.release()->exceptionInThread(std::move(e));
-    LOG(ERROR) << "Already consuming messages to " << db_name <<
-               "in another thread";
-    return;
+  {
+    std::lock_guard<std::mutex> sync_var_map_lock(sync_var_map_mutex);
+    // Check if there's already a thread consuming the same partition.
+    if (sync_var_map.find(db_name) != sync_var_map.end()) {
+      e.message = db_name + " is already being consumed";
+      callback.release()->exceptionInThread(std::move(e));
+      LOG(ERROR) << "Already consuming messages to " << db_name <<
+                 "in another thread";
+      return;
+    }
   }
 
   // TODO: Compare the latest value in local_meta_db with replay_timestamp_ms
   // and choose the latest.
 
-  const auto partition_id = getPartitionIDFromDBName(db_name);
+  // Kafka partition to consume is the shard id in rocksdb.
+  const auto partition_id = ExtractShardId(db_name);
 
   if (partition_id == -1) {
     e.message = "Invalid db_name: " + db_name;
@@ -1036,22 +1029,31 @@ void AdminHandler::async_tm_startMessageIngestion(
   // Find the watcher for the given path. If none exists, create a new watcher
   std::shared_ptr<::kafka::KafkaBrokerFileWatcher> kafka_broker_file_watcher;
 
-  const auto map_iter = serverset_path_to_file_watcher_map.find(
-      kafka_broker_serverset_path);
+  {
+    std::lock_guard<std::mutex> lock(serverset_path_to_file_watcher_map_mutex);
+    const auto map_iter = serverset_path_to_file_watcher_map.find(
+        kafka_broker_serverset_path);
 
-  if (map_iter == serverset_path_to_file_watcher_map.end()) {
-    kafka_broker_file_watcher =
-        std::make_shared<::kafka::KafkaBrokerFileWatcher>(
-            kafka_broker_serverset_path);
-    serverset_path_to_file_watcher_map[kafka_broker_serverset_path] =
-        kafka_broker_file_watcher;
-  } else {
-    kafka_broker_file_watcher = map_iter->second;
+    if (map_iter == serverset_path_to_file_watcher_map.end()) {
+      kafka_broker_file_watcher =
+          std::make_shared<::kafka::KafkaBrokerFileWatcher>(
+              kafka_broker_serverset_path);
+      serverset_path_to_file_watcher_map[kafka_broker_serverset_path] =
+          kafka_broker_file_watcher;
+    } else {
+      kafka_broker_file_watcher = map_iter->second;
+    }
   }
 
   // Create new synchronization variables for this partition
   auto sync_variable = std::make_shared<SyncVariables>();
-  sync_var_map[db_name] = sync_variable;
+  {
+    std::lock_guard<std::mutex> sync_var_map_lock(sync_var_map_mutex);
+    sync_var_map[db_name] = sync_variable;
+  }
+  // Lock the mutex so that the synchronization variables are not modified
+  // until we wait on the condition variable.
+  std::unique_lock<std::mutex> lock(sync_variable->mutex);
 
   SCOPE_EXIT { sync_var_map.erase(db_name); };
 
@@ -1104,9 +1106,7 @@ void AdminHandler::async_tm_startMessageIngestion(
 
   // Consume live messages until 'Stop' API is called which will notify the
   // global condition variable.
-  LOG(INFO) << "Consuming until notified for  " << db_name;
-  std::mutex mutex;
-  std::unique_lock<std::mutex> lock(mutex);
+  LOG(INFO) << "Consuming until notified, for  " << db_name;
   sync_variable->cond_var.wait(lock, [&sync_variable] {
     return sync_variable->flag.load(); });
 
@@ -1127,20 +1127,27 @@ void AdminHandler::async_tm_stopMessageIngestion(
   const auto db_name = request->db_name;
   LOG(ERROR) << "Called stopMessageIngestion for " << db_name;
 
-  auto sync_variable = sync_var_map.find(db_name);
+  {
+    std::lock_guard<std::mutex> lock(sync_var_map_mutex);
+    auto sync_variable = sync_var_map.find(db_name);
 
-  // Verify that messages are being consumed for this partition
-  if (sync_variable == sync_var_map.end()) {
-    e.message = db_name + " consumption already stopped";
-    callback.release()->exceptionInThread(std::move(e));
-    LOG(ERROR) << "Could not find condition variable for " << db_name <<
-                  ". Consumption might have never started or already stopped";
-    return;
+    // Verify that messages are being consumed for this partition
+    if (sync_variable == sync_var_map.end()) {
+      e.message = db_name + " consumption already stopped";
+      callback.release()->exceptionInThread(std::move(e));
+      LOG(ERROR) << "Could not find condition variable for " << db_name <<
+                    ". Consumption might have never started or already stopped";
+      return;
+    }
+
+    // Set atomic flag and notify consuming thread.
+    {
+      std::lock_guard <std::mutex> lk(sync_variable->second->mutex);
+      sync_variable->second->flag.store(true);
+    }
+    sync_variable->second->cond_var.notify_all();
   }
 
-  // Set atomic flag and notify consuming thread.
-  sync_variable->second->flag.store(true);
-  sync_variable->second->cond_var.notify_all();
   callback.release()->result(StopMessageIngestionResponse());
   return;
 }
