@@ -95,14 +95,15 @@ const char kKafkaWatcherName[] = "RocksplicatorMessageConsumer";
 const uint32_t kKafkaConsumerPoolSize = 1;
 
 // Global map to keep track of serverset file watchers
-  std::unordered_map<std::string, std::shared_ptr<
-      ::kafka::KafkaBrokerFileWatcher>> serverset_path_to_file_watcher_map;
+std::unordered_map<std::string, std::shared_ptr<
+    ::kafka::KafkaBrokerFileWatcher>> serverset_path_to_file_watcher_map;
 
 // Global condition variables for kafka synchronization.
+// TODO (rajath): add these to a class so it's reusable
 struct SyncVariables
 {
   SyncVariables(): flag(false) {} // init flag to false
-  std::atomic<bool> flag;
+  bool flag;
   std::condition_variable cond_var;
   std::mutex mutex;
 };
@@ -1051,11 +1052,15 @@ void AdminHandler::async_tm_startMessageIngestion(
     std::lock_guard<std::mutex> sync_var_map_lock(sync_var_map_mutex);
     sync_var_map[db_name] = sync_variable;
   }
+
+  SCOPE_EXIT {
+    std::lock_guard<std::mutex> sync_var_map_lock(sync_var_map_mutex);
+    sync_var_map.erase(db_name);
+  };
+
   // Lock the mutex so that the synchronization variables are not modified
   // until we wait on the condition variable.
   std::unique_lock<std::mutex> lock(sync_variable->mutex);
-
-  SCOPE_EXIT { sync_var_map.erase(db_name); };
 
   const auto kafka_consumer_pool = std::make_shared<::kafka::KafkaConsumerPool>(
       kKafkaConsumerPoolSize,
@@ -1108,7 +1113,7 @@ void AdminHandler::async_tm_startMessageIngestion(
   // global condition variable.
   LOG(INFO) << "Consuming until notified, for  " << db_name;
   sync_variable->cond_var.wait(lock, [&sync_variable] {
-    return sync_variable->flag.load(); });
+    return sync_variable->flag; });
 
   // Stop the watcher.
   LOG(ERROR) << "Stopping kafka watcher";
@@ -1127,26 +1132,29 @@ void AdminHandler::async_tm_stopMessageIngestion(
   const auto db_name = request->db_name;
   LOG(ERROR) << "Called stopMessageIngestion for " << db_name;
 
+  std::shared_ptr<SyncVariables> sync_variable;
   {
     std::lock_guard<std::mutex> lock(sync_var_map_mutex);
-    auto sync_variable = sync_var_map.find(db_name);
+    auto sync_variable_iter = sync_var_map.find(db_name);
 
     // Verify that messages are being consumed for this partition
-    if (sync_variable == sync_var_map.end()) {
+    if (sync_variable_iter == sync_var_map.end()) {
       e.message = db_name + " consumption already stopped";
       callback.release()->exceptionInThread(std::move(e));
       LOG(ERROR) << "Could not find condition variable for " << db_name <<
                     ". Consumption might have never started or already stopped";
       return;
     }
+    // Store the synchronization variables before releasing the lock.
+    sync_variable = sync_variable_iter->second;
+  } // unlock sync_var_map_mutex
 
-    // Set atomic flag and notify consuming thread.
-    {
-      std::lock_guard <std::mutex> lk(sync_variable->second->mutex);
-      sync_variable->second->flag.store(true);
-    }
-    sync_variable->second->cond_var.notify_all();
+  // Set flag to true and notify consuming thread.
+  {
+    std::lock_guard <std::mutex> lk(sync_variable->mutex);
+    sync_variable->flag = true;
   }
+  sync_variable->cond_var.notify_all();
 
   callback.release()->result(StopMessageIngestionResponse());
   return;
