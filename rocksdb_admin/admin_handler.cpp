@@ -44,6 +44,7 @@
 #include "rocksdb/status.h"
 #include "rocksdb/options.h"
 #include "rocksdb/utilities/backupable_db.h"
+#include "rocksdb_admin/detail/file_watcher_manager.h"
 #include "rocksdb_admin/utils.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
@@ -94,23 +95,6 @@ const char kKafkaConsumerType[] = "rocksplicator_message_consumer";
 const char kKafkaWatcherName[] = "RocksplicatorMessageConsumer";
 const uint32_t kKafkaConsumerPoolSize = 1;
 
-// Global map to keep track of serverset file watchers
-std::unordered_map<std::string, std::shared_ptr<
-    ::kafka::KafkaBrokerFileWatcher>> serverset_path_to_file_watcher_map;
-
-// Global condition variables for kafka synchronization.
-// TODO (rajath): add these to a class so it's reusable
-struct SyncVariables
-{
-  SyncVariables(): flag(false) {} // init flag to false
-  bool flag;
-  std::condition_variable cond_var;
-  std::mutex mutex;
-};
-std::unordered_map<std::string, std::shared_ptr<SyncVariables>> sync_var_map;
-std::mutex sync_var_map_mutex;
-std::mutex serverset_path_to_file_watcher_map_mutex;
-
 int64_t GetMessageTimestampSecs(const RdKafka::Message& message) {
   const auto ts = message.timestamp();
   if (ts.type == RdKafka::MessageTimestamp::MSG_TIMESTAMP_CREATE_TIME) {
@@ -123,7 +107,7 @@ int64_t GetMessageTimestampSecs(const RdKafka::Message& message) {
 
 std::string ToUTC(const int64_t time_secs) {
   time_t raw_time(time_secs);
-  char buf[24];
+  char buf[48];
   static const std::string time_format = "%Y-%d-%m %H:%M:%S UTC";
   std::strftime(buf, sizeof(buf), time_format.c_str(), std::gmtime(&raw_time));
   return std::string(buf);
@@ -1000,10 +984,18 @@ void AdminHandler::async_tm_startMessageIngestion(
             << "serverset path: " << kafka_broker_serverset_path << ", "
             << "replay_timestamp_ms: " << replay_timestamp_ms;
 
+  db_admin_lock_.Lock(db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
+  auto db = getDB(db_name, &e);
+  if (db == nullptr) {
+    callback.release()->exceptionInThread(std::move(e));
+    return;
+  }
+
   {
-    std::lock_guard<std::mutex> sync_var_map_lock(sync_var_map_mutex);
+    std::lock_guard<std::mutex> lock(kafka_watcher_lock_);
     // Check if there's already a thread consuming the same partition.
-    if (sync_var_map.find(db_name) != sync_var_map.end()) {
+    if (kafka_watcher_map_.find(db_name) != kafka_watcher_map_.end()) {
       e.message = db_name + " is already being consumed";
       callback.release()->exceptionInThread(std::move(e));
       LOG(ERROR) << "Already consuming messages to " << db_name <<
@@ -1027,58 +1019,32 @@ void AdminHandler::async_tm_startMessageIngestion(
 
   const std::unordered_set<uint32_t> partition_ids_set({partition_id});
 
-  // Find the watcher for the given path. If none exists, create a new watcher
-  std::shared_ptr<::kafka::KafkaBrokerFileWatcher> kafka_broker_file_watcher;
-
-  {
-    std::lock_guard<std::mutex> lock(serverset_path_to_file_watcher_map_mutex);
-    const auto map_iter = serverset_path_to_file_watcher_map.find(
-        kafka_broker_serverset_path);
-
-    if (map_iter == serverset_path_to_file_watcher_map.end()) {
-      kafka_broker_file_watcher =
-          std::make_shared<::kafka::KafkaBrokerFileWatcher>(
-              kafka_broker_serverset_path);
-      serverset_path_to_file_watcher_map[kafka_broker_serverset_path] =
-          kafka_broker_file_watcher;
-    } else {
-      kafka_broker_file_watcher = map_iter->second;
-    }
-  }
-
-  // Create new synchronization variables for this partition
-  auto sync_variable = std::make_shared<SyncVariables>();
-  {
-    std::lock_guard<std::mutex> sync_var_map_lock(sync_var_map_mutex);
-    sync_var_map[db_name] = sync_variable;
-  }
-
-  SCOPE_EXIT {
-    std::lock_guard<std::mutex> sync_var_map_lock(sync_var_map_mutex);
-    sync_var_map.erase(db_name);
-  };
-
-  // Lock the mutex so that the synchronization variables are not modified
-  // until we wait on the condition variable.
-  std::unique_lock<std::mutex> lock(sync_variable->mutex);
+  auto kafka_broker_file_watcher = detail::FileWatcherManager::getInstance().
+      getFileWatcher(kafka_broker_serverset_path);
 
   const auto kafka_consumer_pool = std::make_shared<::kafka::KafkaConsumerPool>(
       kKafkaConsumerPoolSize,
       partition_ids_set,
+      // TODO: fix this to return a string object rather than a reference
       kafka_broker_file_watcher->GetKafkaBrokerList(),
       std::unordered_set<std::string>({topic_name}),
       getConsumerGroupId(topic_name, std::to_string(partition_id)),
       kKafkaConsumerType);
 
-  const auto kafka_watcher = std::make_unique<KafkaWatcher>(
+  auto kafka_watcher = std::make_shared<KafkaWatcher>(
       kKafkaWatcherName,
       kafka_consumer_pool,
       -1); // kafka_init_blocking_consumer_timeout_ms ;
 
+  {
+    std::lock_guard<std::mutex> lock(kafka_watcher_lock_);
+    kafka_watcher_map_[db_name] = kafka_watcher;
+  }
+
   // With kafka_init_blocking_consumer_timeout_ms set to -1, messages from
   // replay_timestamp_ms to the current are synchronously consumed. The
   // calling thread then returns after spawning a new thread to consume
-  // live messages
+  // live messages.
   kafka_watcher->StartWith(
       replay_timestamp_ms,
       [](std::shared_ptr<const RdKafka::Message> message,
@@ -1106,19 +1072,9 @@ void AdminHandler::async_tm_startMessageIngestion(
   LOG(INFO) << "Now consuming live messages for " << db_name;
 
   // Live messages continue to consumed in a separate thread, but release
-  // callback so that helix can transition this partition to bootstrap stage.
+  // callback and return so that helix can transition this partition to
+  // bootstrap stage and the admin thread can be freed.
   callback.release()->result(StartMessageIngestionResponse());
-
-  // Consume live messages until 'Stop' API is called which will notify the
-  // global condition variable.
-  LOG(INFO) << "Consuming until notified, for  " << db_name;
-  sync_variable->cond_var.wait(lock, [&sync_variable] {
-    return sync_variable->flag; });
-
-  // Stop the watcher.
-  LOG(ERROR) << "Stopping kafka watcher";
-  kafka_watcher->StopAndWait();
-  LOG(ERROR) << "Kafka watcher stopped";
 }
 
 void AdminHandler::async_tm_stopMessageIngestion(
@@ -1131,30 +1087,37 @@ void AdminHandler::async_tm_stopMessageIngestion(
 
   const auto db_name = request->db_name;
   LOG(ERROR) << "Called stopMessageIngestion for " << db_name;
+  db_admin_lock_.Lock(db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
+  auto db = getDB(db_name, &e);
+  if (db == nullptr) {
+    callback.release()->exceptionInThread(std::move(e));
+    return;
+  }
 
-  std::shared_ptr<SyncVariables> sync_variable;
+  std::shared_ptr<KafkaWatcher> kafka_watcher;
   {
-    std::lock_guard<std::mutex> lock(sync_var_map_mutex);
-    auto sync_variable_iter = sync_var_map.find(db_name);
-
-    // Verify that messages are being consumed for this partition
-    if (sync_variable_iter == sync_var_map.end()) {
-      e.message = db_name + " consumption already stopped";
+    std::lock_guard<std::mutex> lock(kafka_watcher_lock_);
+    auto iter = kafka_watcher_map_.find(db_name);
+    // Verify that there is thread consuming messages for this db.
+    if (iter == kafka_watcher_map_.end()) {
+      e.message = db_name + " is not being consumed";
       callback.release()->exceptionInThread(std::move(e));
-      LOG(ERROR) << "Could not find condition variable for " << db_name <<
-                    ". Consumption might have never started or already stopped";
+      LOG(ERROR) << db_name << " is not being currently consumed";
       return;
     }
-    // Store the synchronization variables before releasing the lock.
-    sync_variable = sync_variable_iter->second;
-  } // unlock sync_var_map_mutex
-
-  // Set flag to true and notify consuming thread.
-  {
-    std::lock_guard <std::mutex> lk(sync_variable->mutex);
-    sync_variable->flag = true;
+    kafka_watcher = iter->second;
   }
-  sync_variable->cond_var.notify_all();
+
+  // Stop the watcher.
+  LOG(ERROR) << "Stopping kafka watcher";
+  kafka_watcher->StopAndWait();
+  LOG(ERROR) << "Kafka watcher stopped";
+
+  {
+    std::lock_guard<std::mutex> lock(kafka_watcher_lock_);
+    kafka_watcher_map_.erase(db_name);
+  }
 
   callback.release()->result(StopMessageIngestionResponse());
   return;

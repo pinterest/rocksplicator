@@ -29,10 +29,10 @@ std::string SegmentToDbName(const std::string& segment,
 }
 
 std::string DbNameToSegment(const std::string& db_name) {
-  if (db_name.size() <= 5) {
+  if (db_name.size() <= kShardLength) {
     return db_name;
   }
-  return db_name.substr(0, db_name.size() - 5);
+  return db_name.substr(0, db_name.size() - kShardLength);
 }
 
 int ExtractShardId(const std::string& db_name) {
@@ -41,7 +41,7 @@ int ExtractShardId(const std::string& db_name) {
   }
 
   try {
-    return folly::to<uint32_t>(db_name.substr(db_name.size() - 5));
+    return folly::to<int>(db_name.substr(db_name.size() - kShardLength));
   } catch (...) {
     return -1;
   }
