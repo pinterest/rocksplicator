@@ -22,13 +22,17 @@
 
 DEFINE_string(kafka_stats_prefix, "", "Prefix for the kafka stats");
 DEFINE_string(kafka_stats_suffix, "", "Suffix for the kafka stats");
+DEFINE_string(kafka_cluster_name, "", "Cluster consuming the kafka messages");
 
 std::string getFullStatsName(const std::string& metric_name,
                              const std::initializer_list<std::string>& tags) {
   std::string full_metric_name;
   full_metric_name.append(FLAGS_kafka_stats_prefix)
       .append(metric_name)
-      .append(FLAGS_kafka_stats_suffix);
+      .append("_")
+      .append(FLAGS_kafka_stats_suffix)
+      .append(" cluster=")
+      .append(FLAGS_kafka_cluster_name);
   for (const auto& tag : tags) {
     full_metric_name.append(" ").append(tag);
   }
