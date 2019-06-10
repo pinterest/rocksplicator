@@ -20,7 +20,6 @@
 #include "rocksdb_admin/admin_handler.h"
 
 #include <chrono>
-#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -44,7 +43,7 @@
 #include "rocksdb/status.h"
 #include "rocksdb/options.h"
 #include "rocksdb/utilities/backupable_db.h"
-#include "rocksdb_admin/detail/file_watcher_manager.h"
+#include "rocksdb_admin/detail/kafka_broker_file_watcher_manager.h"
 #include "rocksdb_admin/utils.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
@@ -988,7 +987,9 @@ void AdminHandler::async_tm_startMessageIngestion(
   SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
   auto db = getDB(db_name, &e);
   if (db == nullptr) {
+    e.message = db_name + " doesn't exist.";
     callback.release()->exceptionInThread(std::move(e));
+    LOG(ERROR) << "Database doesn't exist: " << db_name;
     return;
   }
 
@@ -1019,8 +1020,8 @@ void AdminHandler::async_tm_startMessageIngestion(
 
   const std::unordered_set<uint32_t> partition_ids_set({partition_id});
 
-  auto kafka_broker_file_watcher = detail::FileWatcherManager::getInstance().
-      getFileWatcher(kafka_broker_serverset_path);
+  auto kafka_broker_file_watcher = detail::KafkaBrokerFileWatcherManager
+      ::getInstance().getFileWatcher(kafka_broker_serverset_path);
 
   const auto kafka_consumer_pool = std::make_shared<::kafka::KafkaConsumerPool>(
       kKafkaConsumerPoolSize,
@@ -1091,7 +1092,9 @@ void AdminHandler::async_tm_stopMessageIngestion(
   SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
   auto db = getDB(db_name, &e);
   if (db == nullptr) {
+    e.message = db_name + " doesn't exist.";
     callback.release()->exceptionInThread(std::move(e));
+    LOG(ERROR) << "Database doesn't exist: " << db_name;
     return;
   }
 

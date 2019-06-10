@@ -16,7 +16,7 @@
 // @author rajathprasad (rajathprasad@pinterest.com)
 //
 
-#include "rocksdb_admin/detail/file_watcher_manager.h"
+#include "rocksdb_admin/detail/kafka_broker_file_watcher_manager.h"
 
 #include "common/kafka/kafka_broker_file_watcher.h"
 
@@ -24,7 +24,7 @@ namespace admin {
 namespace detail {
 
 std::shared_ptr<::kafka::KafkaBrokerFileWatcher>
-    FileWatcherManager::getFileWatcher(const std::string& file_path) {
+KafkaBrokerFileWatcherManager::getFileWatcher(const std::string& file_path) {
   std::shared_ptr<::kafka::KafkaBrokerFileWatcher> kafka_broker_file_watcher;
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -43,8 +43,8 @@ std::shared_ptr<::kafka::KafkaBrokerFileWatcher>
   return kafka_broker_file_watcher;
 }
 
-FileWatcherManager& FileWatcherManager::getInstance() {
-  static FileWatcherManager manager;
+KafkaBrokerFileWatcherManager& KafkaBrokerFileWatcherManager::getInstance() {
+  static KafkaBrokerFileWatcherManager manager;
   return manager;
 }
 

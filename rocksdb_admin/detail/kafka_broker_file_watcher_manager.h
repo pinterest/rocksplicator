@@ -18,6 +18,7 @@
 
 #include <memory>
 #include <mutex>
+#include <string>
 #include <unordered_map>
 
 namespace kafka {
@@ -27,21 +28,25 @@ namespace kafka {
 namespace admin {
 namespace detail {
 
-  // FileWatcherManager is a singleton class which manages the kafka broker
-  // file watchers for this process.
-  class FileWatcherManager {
+  // KafkaBrokerFileWatcherManager is a singleton class which manages the kafka
+  // broker file watchers for this process.
+  class KafkaBrokerFileWatcherManager {
   public:
     std::shared_ptr<::kafka::KafkaBrokerFileWatcher> getFileWatcher(
         const std::string &file_path);
 
-    static FileWatcherManager& getInstance();
+    static KafkaBrokerFileWatcherManager& getInstance();
+
+    KafkaBrokerFileWatcherManager(
+        const KafkaBrokerFileWatcherManager&) = delete;
+    KafkaBrokerFileWatcherManager& operator=(const
+        KafkaBrokerFileWatcherManager&) = delete;
+    KafkaBrokerFileWatcherManager(KafkaBrokerFileWatcherManager&&) = delete;
+    KafkaBrokerFileWatcherManager& operator=(
+        KafkaBrokerFileWatcherManager&&) = delete;
 
   private:
-    FileWatcherManager() {};
-
-    FileWatcherManager(FileWatcherManager const &) {};
-
-    FileWatcherManager &operator=(FileWatcherManager const &) {};
+    KafkaBrokerFileWatcherManager() {};
 
     std::unordered_map<std::string, std::shared_ptr<
         ::kafka::KafkaBrokerFileWatcher>> path_to_watcher_map_;
