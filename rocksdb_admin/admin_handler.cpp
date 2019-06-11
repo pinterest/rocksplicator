@@ -346,13 +346,16 @@ bool AdminHandler::clearMetaData(const std::string& db_name) {
   return s.ok();
 }
 
-bool AdminHandler::writeMetaData(const std::string& db_name,
-                                 const std::string& s3_bucket,
-                                 const std::string& s3_path) {
+bool AdminHandler::writeMetaData(
+    const std::string& db_name,
+    const std::string& s3_bucket,
+    const std::string& s3_path,
+    const int64_t last_kafka_msg_timestamp_ms) {
   DBMetaData meta;
   meta.db_name = db_name;
   meta.set_s3_bucket(s3_bucket);
   meta.set_s3_path(s3_path);
+  meta.set_last_kafka_msg_timestamp_ms(last_kafka_msg_timestamp_ms);
 
   std::string buffer;
   apache::thrift::CompactSerializer::serialize(meta, &buffer);

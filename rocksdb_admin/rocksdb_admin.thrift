@@ -23,6 +23,7 @@ struct DBMetaData {
   # hosted by this DB.
   2: optional string s3_bucket,
   3: optional string s3_path,
+  4: optional i64 last_kafka_msg_timestamp_ms,
 }
 
 enum AdminErrorCode {
