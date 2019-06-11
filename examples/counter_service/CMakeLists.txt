@@ -14,7 +14,7 @@ target_link_libraries(counter_lib counter_thrift rocksdb_admin)
 
 # Build counter service
 add_executable(counter ./counter.cpp)
-target_link_libraries(counter common counter_lib jemalloc)
+target_link_libraries(counter common counter_lib jemalloc kafka_consumer)
 
 # Build stress test tool
 add_executable(stress ./stress_test.cpp)

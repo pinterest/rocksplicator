@@ -35,6 +35,8 @@
 #include "rocksdb_admin/gen-cpp2/Admin.h"
 #endif
 
+class KafkaWatcher;
+
 namespace admin {
 
 using RocksDBOptionsGeneratorType =
@@ -98,6 +100,16 @@ class AdminHandler : virtual public AdminSvIf {
         AddS3SstFilesToDBResponse>>> callback,
       std::unique_ptr<AddS3SstFilesToDBRequest> request) override;
 
+  void async_tm_startMessageIngestion(
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+          StartMessageIngestionResponse>>> callback,
+      std::unique_ptr<StartMessageIngestionRequest> request) override;
+
+  void async_tm_stopMessageIngestion(
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+          StopMessageIngestionResponse>>> callback,
+      std::unique_ptr<StopMessageIngestionRequest> request) override;
+
   void async_tm_setDBOptions(
       std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
         SetDBOptionsResponse>>> callback,
@@ -107,18 +119,6 @@ class AdminHandler : virtual public AdminSvIf {
       std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
         CompactDBResponse>>> callback,
       std::unique_ptr<CompactDBRequest> request) override;
-
-  void async_tm_startMessageIngestion(
-      std::unique_ptr<apache::thrift::HandlerCallback<
-          std::unique_ptr<StartMessageIngestionResponse>>>
-          callback,
-      std::unique_ptr<StartMessageIngestionRequest> request) override;
-
-  void async_tm_stopMessageIngestion(
-      std::unique_ptr<apache::thrift::HandlerCallback<
-          std::unique_ptr<StopMessageIngestionResponse>>>
-          callback,
-      std::unique_ptr<StopMessageIngestionRequest> request) override;
 
   std::shared_ptr<ApplicationDB> getDB(const std::string& db_name,
                                        AdminException* ex);
@@ -150,6 +150,11 @@ class AdminHandler : virtual public AdminSvIf {
   std::unordered_set<std::string> allow_overlapping_keys_segments_;
   // number of the current concurrenty s3 downloadings
   std::atomic<int> num_current_s3_sst_downloadings_;
+  // Map of db_name to kafka watcher
+  std::unordered_map<std::string, std::shared_ptr<KafkaWatcher>>
+    kafka_watcher_map_;
+  // Lock for synchronizing access to kafka_watcher_map_
+  std::mutex kafka_watcher_lock_;
 };
 
 }  // namespace admin
