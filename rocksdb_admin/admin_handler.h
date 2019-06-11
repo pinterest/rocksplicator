@@ -134,7 +134,8 @@ class AdminHandler : virtual public AdminSvIf {
   bool clearMetaData(const std::string& db_name);
   bool writeMetaData(const std::string& db_name,
                      const std::string& s3_bucket,
-                     const std::string& s3_path);
+                     const std::string& s3_path,
+                     const int64_t last_kafka_msg_timestamp_ms = -1);
 
   std::unique_ptr<ApplicationDBManager> db_manager_;
   RocksDBOptionsGeneratorType rocksdb_options_;

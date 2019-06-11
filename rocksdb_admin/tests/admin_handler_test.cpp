@@ -99,12 +99,14 @@ TEST(AdminHandlerTest, MetaData) {
   const std::string db_name = "test_db";
   const std::string s3_bucket = "test_bucket";
   const std::string s3_path = "test_path";
+  const int64_t timestamp_ms = 1560211388899;
   auto meta = handler.getMetaData(db_name);
   EXPECT_EQ(meta.db_name, db_name);
   EXPECT_FALSE(meta.__isset.s3_bucket);
   EXPECT_FALSE(meta.__isset.s3_path);
+  EXPECT_FALSE(meta.__isset.last_kafka_msg_timestamp_ms);
 
-  EXPECT_TRUE(handler.writeMetaData(db_name, s3_bucket, s3_path));
+  EXPECT_TRUE(handler.writeMetaData(db_name, s3_bucket, s3_path, timestamp_ms));
 
   meta = handler.getMetaData(db_name);
   EXPECT_EQ(meta.db_name, db_name);
@@ -112,6 +114,21 @@ TEST(AdminHandlerTest, MetaData) {
   EXPECT_EQ(meta.s3_bucket, s3_bucket);
   EXPECT_TRUE(meta.__isset.s3_path);
   EXPECT_EQ(meta.s3_path, s3_path);
+  EXPECT_TRUE(meta.__isset.last_kafka_msg_timestamp_ms);
+  EXPECT_EQ(meta.last_kafka_msg_timestamp_ms, timestamp_ms);
+
+  EXPECT_TRUE(handler.clearMetaData(db_name));
+
+  // Test last_kafka_msg_timestamp_ms's default value
+  EXPECT_TRUE(handler.writeMetaData(db_name, s3_bucket, s3_path));
+  meta = handler.getMetaData(db_name);
+  EXPECT_EQ(meta.db_name, db_name);
+  EXPECT_TRUE(meta.__isset.s3_bucket);
+  EXPECT_EQ(meta.s3_bucket, s3_bucket);
+  EXPECT_TRUE(meta.__isset.s3_path);
+  EXPECT_EQ(meta.s3_path, s3_path);
+  EXPECT_TRUE(meta.__isset.last_kafka_msg_timestamp_ms);
+  EXPECT_EQ(meta.last_kafka_msg_timestamp_ms, -1);
 
   EXPECT_TRUE(handler.clearMetaData(db_name));
 
@@ -119,6 +136,7 @@ TEST(AdminHandlerTest, MetaData) {
   EXPECT_EQ(meta.db_name, db_name);
   EXPECT_FALSE(meta.__isset.s3_bucket);
   EXPECT_FALSE(meta.__isset.s3_path);
+  EXPECT_FALSE(meta.__isset.last_kafka_msg_timestamp_ms);
 }
 
 TEST(AdminHandlerTest, CheckDB) {
