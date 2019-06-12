@@ -44,6 +44,7 @@
 #include "rocksdb/options.h"
 #include "rocksdb/utilities/backupable_db.h"
 #include "rocksdb_admin/detail/kafka_broker_file_watcher_manager.h"
+#include "rocksdb_admin/detail/kafka_spec_manager.h"
 #include "rocksdb_admin/utils.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
@@ -268,6 +269,10 @@ bool SetAddressOrException(const std::string& ip,
     callback->release()->exceptionInThread(std::move(e));
     return false;
   }
+}
+
+std::string GetSchedulerNameID(const std::string& db_name) {
+  return "timestamp_update_" + db_name;
 }
 
 }  // anonymous namespace
@@ -979,7 +984,7 @@ void AdminHandler::async_tm_startMessageIngestion(
   const auto db_name = request->db_name;
   const auto topic_name = request->topic_name;
   const auto kafka_broker_serverset_path = request->kafka_broker_serverset_path;
-  const auto replay_timestamp_ms = request->replay_timestamp_ms;
+  auto replay_timestamp_ms = request->replay_timestamp_ms;
 
   LOG(INFO) << "Called startMessageIngestion for db: " << db_name << ", "
             << "topic_name: " << topic_name << ", "
@@ -996,20 +1001,22 @@ void AdminHandler::async_tm_startMessageIngestion(
     return;
   }
 
-  {
-    std::lock_guard<std::mutex> lock(kafka_watcher_lock_);
-    // Check if there's already a thread consuming the same partition.
-    if (kafka_watcher_map_.find(db_name) != kafka_watcher_map_.end()) {
-      e.message = db_name + " is already being consumed";
-      callback.release()->exceptionInThread(std::move(e));
-      LOG(ERROR) << "Already consuming messages to " << db_name <<
-                 "in another thread";
-      return;
-    }
-  }
+  // Compare the value in local meta_db with replay_timestamp_ms and choose
+  // the latest.
+  const auto meta = getMetaData(db_name);
+  replay_timestamp_ms = std::max(meta.last_kafka_msg_timestamp_ms,
+      replay_timestamp_ms);
+  LOG(ERROR) << "Using " << replay_timestamp_ms << " as the replay timestamp "
+             << "for " << db_name;
 
-  // TODO: Compare the latest value in local_meta_db with replay_timestamp_ms
-  // and choose the latest.
+  // Check if there's already a thread consuming the same partition.
+  if (kafka_spec_manager_.isSpecPresent(db_name)) {
+    e.message = db_name + " is already being consumed";
+    callback.release()->exceptionInThread(std::move(e));
+    LOG(ERROR) << "Already consuming messages to " << db_name <<
+               "in another thread";
+    return;
+  }
 
   // Kafka partition to consume is the shard id in rocksdb.
   const auto partition_id = ExtractShardId(db_name);
@@ -1040,10 +1047,23 @@ void AdminHandler::async_tm_startMessageIngestion(
       kafka_consumer_pool,
       -1); // kafka_init_blocking_consumer_timeout_ms ;
 
-  {
-    std::lock_guard<std::mutex> lock(kafka_watcher_lock_);
-    kafka_watcher_map_[db_name] = kafka_watcher;
-  }
+  auto kafka_spec = kafka_spec_manager_.addSpec(db_name, kafka_watcher,
+      meta.last_kafka_msg_timestamp_ms);
+
+  kafka_ts_updater_.addFunction(
+    [db_name, kafka_spec, this] {
+      db_admin_lock_.Lock(db_name);
+      SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
+      // Read the latest kafka message ts for this db and write it to meta_db.
+      const auto timestamp_ms = kafka_spec->getTimestamp();
+      const auto meta = getMetaData(db_name);
+      writeMetaData(db_name, meta.s3_bucket, meta.s3_path, timestamp_ms);
+      LOG(INFO) << "[FunctionScheduler]: Writing timestamp " << timestamp_ms
+                 << " for db:  " << db_name;
+    }, std::chrono::minutes(1), /* run at interval of 1 minute */
+    GetSchedulerNameID(db_name),
+    std::chrono::minutes(5) /* start delay of 5 minutes*/ );
+
 
   // With kafka_init_blocking_consumer_timeout_ms set to -1, messages from
   // replay_timestamp_ms to the current are synchronously consumed. The
@@ -1051,13 +1071,18 @@ void AdminHandler::async_tm_startMessageIngestion(
   // live messages.
   kafka_watcher->StartWith(
       replay_timestamp_ms,
-      [](std::shared_ptr<const RdKafka::Message> message,
-          const bool is_replay) {
+      [kafka_spec](std::shared_ptr<const RdKafka::Message> message,
+                   const bool is_replay) {
     if (message == nullptr) {
       LOG(ERROR) << "Message nullptr";
       return;
     }
     const int64_t msg_timestamp_secs = GetMessageTimestampSecs(*message);
+
+    if (!is_replay) {
+      // Store the timestamp (in ms) so that it can be read by the scheduler
+      kafka_spec->storeTimestamp(message->timestamp().timestamp);
+    }
 
     // Logs for debugging
     LOG(ERROR) << "Key " << *message->key() << ", "
@@ -1070,9 +1095,9 @@ void AdminHandler::async_tm_startMessageIngestion(
 
     // TODO: add the logic to write the key/value to rocksdb here
 
-    // TODO: periodically write the message timestamp to local_meta_db
   });
 
+  kafka_ts_updater_.start();
   LOG(INFO) << "Now consuming live messages for " << db_name;
 
   // Live messages continue to consumed in a separate thread, but release
@@ -1101,29 +1126,21 @@ void AdminHandler::async_tm_stopMessageIngestion(
     return;
   }
 
-  std::shared_ptr<KafkaWatcher> kafka_watcher;
-  {
-    std::lock_guard<std::mutex> lock(kafka_watcher_lock_);
-    auto iter = kafka_watcher_map_.find(db_name);
-    // Verify that there is thread consuming messages for this db.
-    if (iter == kafka_watcher_map_.end()) {
+  if (!kafka_spec_manager_.isSpecPresent(db_name)) {
       e.message = db_name + " is not being consumed";
       callback.release()->exceptionInThread(std::move(e));
       LOG(ERROR) << db_name << " is not being currently consumed";
       return;
-    }
-    kafka_watcher = iter->second;
   }
 
+  auto kafka_watcher = kafka_spec_manager_.getKafkaWatcher(db_name);
   // Stop the watcher.
   LOG(ERROR) << "Stopping kafka watcher";
   kafka_watcher->StopAndWait();
   LOG(ERROR) << "Kafka watcher stopped";
+  kafka_ts_updater_.cancelFunction(GetSchedulerNameID(db_name));
 
-  {
-    std::lock_guard<std::mutex> lock(kafka_watcher_lock_);
-    kafka_watcher_map_.erase(db_name);
-  }
+  kafka_spec_manager_.removeSpec(db_name);
 
   callback.release()->result(StopMessageIngestionResponse());
   return;

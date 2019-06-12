@@ -28,6 +28,7 @@
 #include "common/object_lock.h"
 #include "common/s3util.h"
 #include "rocksdb_admin/application_db_manager.h"
+#include "rocksdb_admin/detail/kafka_spec_manager.h"
 #ifdef PINTEREST_INTERNAL
 // NEVER SET THIS UNLESS PINTEREST INTERNAL USAGE.
 #include "schemas/gen-cpp2/Admin.h"
@@ -151,11 +152,8 @@ class AdminHandler : virtual public AdminSvIf {
   std::unordered_set<std::string> allow_overlapping_keys_segments_;
   // number of the current concurrenty s3 downloadings
   std::atomic<int> num_current_s3_sst_downloadings_;
-  // Map of db_name to kafka watcher
-  std::unordered_map<std::string, std::shared_ptr<KafkaWatcher>>
-    kafka_watcher_map_;
-  // Lock for synchronizing access to kafka_watcher_map_
-  std::mutex kafka_watcher_lock_;
+  folly::FunctionScheduler kafka_ts_updater_;
+  detail::KafkaSpecManager kafka_spec_manager_;
 };
 
 }  // namespace admin
