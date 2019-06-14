@@ -1062,7 +1062,7 @@ void AdminHandler::async_tm_startMessageIngestion(
                  << " for db:  " << db_name;
     }, std::chrono::minutes(1), /* run at interval of 1 minute */
     GetSchedulerNameID(db_name),
-    std::chrono::minutes(5) /* start delay of 5 minutes*/ );
+    std::chrono::minutes(5) /* start delay of 5 minutes */ );
 
 
   // With kafka_init_blocking_consumer_timeout_ms set to -1, messages from
@@ -1133,12 +1133,16 @@ void AdminHandler::async_tm_stopMessageIngestion(
       return;
   }
 
-  auto kafka_watcher = kafka_spec_manager_.getKafkaWatcher(db_name);
+  auto kafka_spec = kafka_spec_manager_.getSpec(db_name);
   // Stop the watcher.
   LOG(ERROR) << "Stopping kafka watcher";
-  kafka_watcher->StopAndWait();
+  kafka_spec->getKafkaWatcher()->StopAndWait();
   LOG(ERROR) << "Kafka watcher stopped";
   kafka_ts_updater_.cancelFunction(GetSchedulerNameID(db_name));
+  // Write the last consumed message timestamp to meta_db.
+  const auto meta = getMetaData(db_name);
+  writeMetaData(db_name, meta.s3_bucket, meta.s3_path,
+      kafka_spec->getTimestamp());
 
   kafka_spec_manager_.removeSpec(db_name);
 

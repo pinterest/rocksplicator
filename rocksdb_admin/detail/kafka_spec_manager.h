@@ -67,14 +67,14 @@ public:
     return kafka_spec;
   }
 
-  std::shared_ptr<KafkaWatcher> getKafkaWatcher(const std::string& db_name) {
-    std::lock_guard<std::mutex> lock(lock_);
-    return kafka_spec_map_[db_name]->getKafkaWatcher();
-  }
-
   void removeSpec(const std::string& db_name) {
     std::lock_guard<std::mutex> lock(lock_);
     kafka_spec_map_.erase(db_name);
+  }
+
+  std::shared_ptr<KafkaSpec> getSpec(const std::string& db_name) {
+    std::lock_guard<std::mutex> lock(lock_);
+    return kafka_spec_map_[db_name];
   }
 
   bool isSpecPresent(const std::string& db_name) {
