@@ -84,6 +84,9 @@ DEFINE_int32(max_s3_sst_loading_concurrency, 999,
 
 DEFINE_int32(s3_download_limit_mb, 0, "S3 download sst bandwidth");
 
+DEFINE_int32(kafka_ts_update_interval, 1000, "Number of kafka messages consumed"
+                                             " before updating meta_db");
+
 namespace {
 
 const int kMB = 1024 * 1024;
@@ -1054,14 +1057,13 @@ void AdminHandler::async_tm_startMessageIngestion(
   }
 
   int64_t message_count = 0;
-  const int message_interval = 1000; // use glfag or zk to configure this
   // With kafka_init_blocking_consumer_timeout_ms set to -1, messages from
   // replay_timestamp_ms to the current are synchronously consumed. The
   // calling thread then returns after spawning a new thread to consume
   // live messages.
   kafka_watcher->StartWith(
       replay_timestamp_ms,
-      [message_count, db_name, message_interval, this](
+      [message_count, db_name, this](
           std::shared_ptr<const RdKafka::Message> message,
           const bool is_replay) mutable {
     if (message == nullptr) {
@@ -1081,7 +1083,8 @@ void AdminHandler::async_tm_startMessageIngestion(
 
     // TODO: add the logic to write the key/value to rocksdb here
 
-    if (!is_replay && (message_count % message_interval == 0)) {
+    // Update meta_db with kafka message timestamp periodically.
+    if (!is_replay && (message_count % FLAGS_kafka_ts_update_interval == 0)) {
       db_admin_lock_.Lock(db_name);
       SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
       const auto timestamp_ms = message->timestamp().timestamp;
