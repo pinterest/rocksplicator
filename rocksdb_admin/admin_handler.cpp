@@ -84,6 +84,9 @@ DEFINE_int32(max_s3_sst_loading_concurrency, 999,
 
 DEFINE_int32(s3_download_limit_mb, 0, "S3 download sst bandwidth");
 
+DEFINE_int32(kafka_ts_update_interval, 1000, "Number of kafka messages consumed"
+                                             " before updating meta_db");
+
 namespace {
 
 const int kMB = 1024 * 1024;
@@ -979,7 +982,7 @@ void AdminHandler::async_tm_startMessageIngestion(
   const auto db_name = request->db_name;
   const auto topic_name = request->topic_name;
   const auto kafka_broker_serverset_path = request->kafka_broker_serverset_path;
-  const auto replay_timestamp_ms = request->replay_timestamp_ms;
+  auto replay_timestamp_ms = request->replay_timestamp_ms;
 
   LOG(INFO) << "Called startMessageIngestion for db: " << db_name << ", "
             << "topic_name: " << topic_name << ", "
@@ -995,6 +998,14 @@ void AdminHandler::async_tm_startMessageIngestion(
     LOG(ERROR) << "Database doesn't exist: " << db_name;
     return;
   }
+
+  // Compare the value in local_meta_db with replay_timestamp_ms and choose
+  // the latest.
+  const auto meta = getMetaData(db_name);
+  replay_timestamp_ms = std::max(meta.last_kafka_msg_timestamp_ms,
+                                 replay_timestamp_ms);
+  LOG(ERROR) << "Using " << replay_timestamp_ms << " as the replay timestamp "
+             << "for " << db_name;
 
   {
     std::lock_guard<std::mutex> lock(kafka_watcher_lock_);
@@ -1045,14 +1056,16 @@ void AdminHandler::async_tm_startMessageIngestion(
     kafka_watcher_map_[db_name] = kafka_watcher;
   }
 
+  int64_t message_count = 0;
   // With kafka_init_blocking_consumer_timeout_ms set to -1, messages from
   // replay_timestamp_ms to the current are synchronously consumed. The
   // calling thread then returns after spawning a new thread to consume
   // live messages.
   kafka_watcher->StartWith(
       replay_timestamp_ms,
-      [](std::shared_ptr<const RdKafka::Message> message,
-          const bool is_replay) {
+      [message_count, db_name, this](
+          std::shared_ptr<const RdKafka::Message> message,
+          const bool is_replay) mutable {
     if (message == nullptr) {
       LOG(ERROR) << "Message nullptr";
       return;
@@ -1070,7 +1083,15 @@ void AdminHandler::async_tm_startMessageIngestion(
 
     // TODO: add the logic to write the key/value to rocksdb here
 
-    // TODO: periodically write the message timestamp to local_meta_db
+    // Update meta_db with kafka message timestamp periodically.
+    if (message_count % FLAGS_kafka_ts_update_interval == 0) {
+      const auto timestamp_ms = message->timestamp().timestamp;
+      const auto meta = getMetaData(db_name);
+      writeMetaData(db_name, meta.s3_bucket, meta.s3_path, timestamp_ms);
+      LOG(INFO) << "[meta_db] Writing timestamp " << timestamp_ms
+                << " for db: " << db_name;
+    }
+    message_count++;
   });
 
   LOG(INFO) << "Now consuming live messages for " << db_name;
