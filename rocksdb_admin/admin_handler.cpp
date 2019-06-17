@@ -1084,9 +1084,7 @@ void AdminHandler::async_tm_startMessageIngestion(
     // TODO: add the logic to write the key/value to rocksdb here
 
     // Update meta_db with kafka message timestamp periodically.
-    if (!is_replay && (message_count % FLAGS_kafka_ts_update_interval == 0)) {
-      db_admin_lock_.Lock(db_name);
-      SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
+    if (message_count % FLAGS_kafka_ts_update_interval == 0) {
       const auto timestamp_ms = message->timestamp().timestamp;
       const auto meta = getMetaData(db_name);
       writeMetaData(db_name, meta.s3_bucket, meta.s3_path, timestamp_ms);
