@@ -1082,8 +1082,11 @@ void AdminHandler::async_tm_startMessageIngestion(
 
     // Write the message to rocksdb
     static const rocksdb::WriteOptions write_options;
-    auto status = db->rocksdb()->Put(write_options, *message->key(),
-        static_cast<const char *>(message->payload()));
+    auto key = rocksdb::Slice(static_cast<const char *>(message->key_pointer()),
+                              message->key_len());
+    auto val = rocksdb::Slice(static_cast<const char *>(message->payload()),
+                              message->len());
+    auto status = db->rocksdb()->Put(write_options, key, val);
     if (!status.ok()) {
       // TODO: if there are transient errors, add a retry
       LOG(ERROR) << "Failure while writing to " << db_name << ": "
