@@ -33,6 +33,7 @@
 #include "common/kafka/kafka_watcher.h"
 #include "common/network_util.h"
 #include "common/rocksdb_glogger/rocksdb_glogger.h"
+#include "common/stats/stats.h"
 #include "common/thrift_router.h"
 #include "common/timeutil.h"
 #include "folly/FileUtil.h"
@@ -96,6 +97,7 @@ const int64_t kMillisPerSec = 1000;
 const char kKafkaConsumerType[] = "rocksplicator_message_consumer";
 const char kKafkaWatcherName[] = "RocksplicatorMessageConsumer";
 const uint32_t kKafkaConsumerPoolSize = 1;
+const std::string kKafkaDbWriteErrors = "kafka_db_write_errors";
 
 int64_t GetMessageTimestampSecs(const RdKafka::Message& message) {
   const auto ts = message.timestamp();
@@ -1019,9 +1021,6 @@ void AdminHandler::async_tm_startMessageIngestion(
     }
   }
 
-  // TODO: Compare the latest value in local_meta_db with replay_timestamp_ms
-  // and choose the latest.
-
   // Kafka partition to consume is the shard id in rocksdb.
   const auto partition_id = ExtractShardId(db_name);
 
@@ -1063,7 +1062,7 @@ void AdminHandler::async_tm_startMessageIngestion(
   // live messages.
   kafka_watcher->StartWith(
       replay_timestamp_ms,
-      [message_count, db_name, this](
+      [message_count, db_name, db, this](
           std::shared_ptr<const RdKafka::Message> message,
           const bool is_replay) mutable {
     if (message == nullptr) {
@@ -1081,7 +1080,19 @@ void AdminHandler::async_tm_startMessageIngestion(
     << "msg_timestamp: " << ToUTC(msg_timestamp_secs) << " or "
     << std::to_string(msg_timestamp_secs) << " secs";
 
-    // TODO: add the logic to write the key/value to rocksdb here
+    // Write the message to rocksdb
+    static const rocksdb::WriteOptions write_options;
+    auto key = rocksdb::Slice(static_cast<const char *>(message->key_pointer()),
+                              message->key_len());
+    auto val = rocksdb::Slice(static_cast<const char *>(message->payload()),
+                              message->len());
+    auto status = db->rocksdb()->Put(write_options, key, val);
+    if (!status.ok()) {
+      // TODO: if there are transient errors, add a retry
+      LOG(ERROR) << "Failure while writing to " << db_name << ": "
+                 << status.ToString();
+      common::Stats::get()->Incr(kKafkaDbWriteErrors);
+    }
 
     // Update meta_db with kafka message timestamp periodically.
     if (message_count % FLAGS_kafka_ts_update_interval == 0) {
