@@ -34,6 +34,8 @@ DEFINE_int32(kafka_consumer_num_retries, 0,
     "Number of retries to try the kafka consumer");
 DEFINE_int32(kafka_consumer_time_between_retries_ms, 100,
     "Time in ms to sleep between each retry");
+DEFINE_string(enable_kafka_auto_offset_store, "false",
+    "Whether to automatically commit the kafka offsets");
 
 namespace {
 
@@ -88,7 +90,8 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
   }
   // set api.version.request to true so that Kafka timestamp can be used.
   conf->set("api.version.request", "true", err);
-  conf->set("enable.auto.offset.store", "false", err);
+  conf->set("enable.auto.offset.store", FLAGS_enable_kafka_auto_offset_store,
+            err);
   conf->set("group.id", group_id, err);
   return std::shared_ptr<RdKafka::KafkaConsumer>(
       RdKafka::KafkaConsumer::create(conf.get(), err));
