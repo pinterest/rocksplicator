@@ -208,7 +208,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
       try {
         String meta = new String(zkClient.getData().forPath(Utils.getMetaLocation(cluster, resourceName)));
         JsonObject jsonObject = new JsonParser().parse(meta).getAsJsonObject();
-        int replay_timestamp_ms = jsonObject.get("replay_timestamp_ms").getAsInt();
+        long replay_timestamp_ms = jsonObject.get("replay_timestamp_ms").getAsLong();
         String kafkaBrokerServersetPath = jsonObject.get("kafka_broker_serverset_path").getAsString();
         String topicName = jsonObject.get("topic_name").getAsString();
 
