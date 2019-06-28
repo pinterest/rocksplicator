@@ -88,6 +88,9 @@ DEFINE_int32(s3_download_limit_mb, 0, "S3 download sst bandwidth");
 DEFINE_int32(kafka_ts_update_interval, 1000, "Number of kafka messages consumed"
                                              " before updating meta_db");
 
+DEFINE_int32(consumer_log_frequency, 100, "only output one log in every "
+                                          "log_frequency of logs");
+
 namespace {
 
 const int kMB = 1024 * 1024;
@@ -118,8 +121,8 @@ std::string ToUTC(const int64_t time_secs) {
 }
 
 std::string getConsumerGroupId(
-    const std::string& topic_name, const std::string& partition_id) {
-  return common::getLocalIPAddress() + '_' + topic_name + '_' + partition_id;
+    const std::string& db_name) {
+  return common::getLocalIPAddress() + '_' + db_name;
 }
 
 rocksdb::DB* OpenMetaDB() {
@@ -1042,7 +1045,7 @@ void AdminHandler::async_tm_startMessageIngestion(
       // TODO: fix this to return a string object rather than a reference
       kafka_broker_file_watcher->GetKafkaBrokerList(),
       std::unordered_set<std::string>({topic_name}),
-      getConsumerGroupId(topic_name, std::to_string(partition_id)),
+      getConsumerGroupId(db_name),
       kKafkaConsumerType);
 
   auto kafka_watcher = std::make_shared<KafkaWatcher>(
@@ -1072,7 +1075,8 @@ void AdminHandler::async_tm_startMessageIngestion(
     const int64_t msg_timestamp_secs = GetMessageTimestampSecs(*message);
 
     // Logs for debugging
-    LOG(ERROR) << "Key " << *message->key() << ", "
+    LOG_EVERY_N(INFO, FLAGS_consumer_log_frequency) << "DB name: " << db_name
+    << ", Key " << *message->key() << ", "
     << "value " << static_cast<const char *>(message->payload()) << ", "
     << "partition: " << message->partition() << ", "
     << "offset: " << message->offset() << ", "
