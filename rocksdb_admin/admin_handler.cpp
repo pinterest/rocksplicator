@@ -91,6 +91,8 @@ DEFINE_int32(kafka_ts_update_interval, 1000, "Number of kafka messages consumed"
 DEFINE_int32(consumer_log_frequency, 100, "only output one log in every "
                                           "log_frequency of logs");
 
+DECLARE_int32(kafka_consumer_timeout_ms);
+
 namespace {
 
 const int kMB = 1024 * 1024;
@@ -1051,7 +1053,8 @@ void AdminHandler::async_tm_startMessageIngestion(
   auto kafka_watcher = std::make_shared<KafkaWatcher>(
       kKafkaWatcherName,
       kafka_consumer_pool,
-      -1); // kafka_init_blocking_consumer_timeout_ms ;
+      -1, // kafka_init_blocking_consume_timeout_ms
+      FLAGS_kafka_consumer_timeout_ms);
 
   {
     std::lock_guard<std::mutex> lock(kafka_watcher_lock_);
@@ -1059,7 +1062,7 @@ void AdminHandler::async_tm_startMessageIngestion(
   }
 
   int64_t message_count = 0;
-  // With kafka_init_blocking_consumer_timeout_ms set to -1, messages from
+  // With kafka_init_blocking_consume_timeout_ms set to -1, messages from
   // replay_timestamp_ms to the current are synchronously consumed. The
   // calling thread then returns after spawning a new thread to consume
   // live messages.
