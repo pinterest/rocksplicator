@@ -80,7 +80,7 @@ class ApplicationDBManager {
   // Get the names of all DBs currently held by the ApplicationDBManager
   // This can be used if some service wants to perform some action such
   // as compaction across all dbs currently maintained.
-  const std::vector<std::string> getAllDBNames();
+  std::vector<std::string> getAllDBNames();
 
   ~ApplicationDBManager();
 
