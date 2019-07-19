@@ -124,6 +124,16 @@ std::string ApplicationDBManager::DumpDBStatsAsText() const {
   return stats;
 }
 
+std::vector<std::string> ApplicationDBManager::getAllDBNames()  {
+    std::vector<std::string> db_names;
+    std::shared_lock<std::shared_mutex> lock(dbs_lock_);
+    db_names.reserve(dbs_.size());
+    for (const auto& db : dbs_) {
+        db_names.push_back(db.first);
+    }
+    return db_names;
+}
+
 ApplicationDBManager::~ApplicationDBManager() {
   auto itor = dbs_.begin();
   while (itor != dbs_.end()) {

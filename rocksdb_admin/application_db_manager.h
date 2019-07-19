@@ -77,6 +77,11 @@ class ApplicationDBManager {
   // Dump stats for all DBs as a text string
   std::string DumpDBStatsAsText() const;
 
+  // Get the names of all DBs currently held by the ApplicationDBManager
+  // This can be used if some service wants to perform some action such
+  // as compaction across all dbs currently maintained.
+  std::vector<std::string> getAllDBNames();
+
   ~ApplicationDBManager();
 
  private:

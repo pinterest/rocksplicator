@@ -126,6 +126,9 @@ class AdminHandler : virtual public AdminSvIf {
   // Dump stats for all DBs as a text string
   std::string DumpDBStatsAsText() const;
 
+  // Get all the db names held by the AdminHandler
+  std::vector<std::string> getAllDBNames();
+
  private:
   std::unique_ptr<rocksdb::DB> removeDB(const std::string& db_name,
                                         AdminException* ex);
