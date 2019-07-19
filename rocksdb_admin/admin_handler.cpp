@@ -1220,4 +1220,8 @@ std::string AdminHandler::DumpDBStatsAsText() const {
   return db_manager_->DumpDBStatsAsText();
 }
 
+const std::vector<std::string> AdminHandler::getAllDBNames() {
+    return db_manager_->getAllDBNames();
+}
+
 }  // namespace admin
