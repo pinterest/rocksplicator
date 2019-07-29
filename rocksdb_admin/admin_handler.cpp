@@ -103,9 +103,7 @@ const char kKafkaConsumerType[] = "rocksplicator_message_consumer";
 const char kKafkaWatcherName[] = "RocksplicatorMessageConsumer";
 const uint32_t kKafkaConsumerPoolSize = 1;
 const std::string kKafkaDbWriteErrors = "kafka_db_write_errors";
-const uint32_t kKafkaConsumerLatencyThresholdMs = 1000;
-const std::string kKafkaConsumerLatencyAboveThreshold =
-    "kafka_consumer_latency_above_threshold";
+const std::string kKafkaConsumerLatency = "kafka_consumer_latency";
 
 int64_t GetMessageTimestampSecs(const RdKafka::Message& message) {
   const auto ts = message.timestamp();
@@ -1090,12 +1088,11 @@ void AdminHandler::async_tm_startMessageIngestion(
     << "msg_timestamp: " << ToUTC(msg_timestamp_secs) << " or "
     << std::to_string(msg_timestamp_secs) << " secs";
 
-    auto latency_ms = common::timeutil::GetCurrentTimestamp(
-        common::timeutil::TimeUnit::kMillisecond)
-               - message->timestamp().timestamp;
-    if (!is_replay and latency_ms > kKafkaConsumerLatencyThresholdMs) {
-      LOG(ERROR) << "[" << db_name << "] Kafka consumer lag (in ms): " << latency_ms;
-      common::Stats::get()->Incr(kKafkaConsumerLatencyAboveThreshold);
+    if (!is_replay) {
+      auto latency_ms = common::timeutil::GetCurrentTimestamp(
+          common::timeutil::TimeUnit::kMillisecond)
+                        - message->timestamp().timestamp;
+      common::Stats::get()->AddMetric(kKafkaConsumerLatency, latency_ms);
     }
 
     // Write the message to rocksdb
