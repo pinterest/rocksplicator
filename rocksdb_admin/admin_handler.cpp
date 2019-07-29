@@ -103,6 +103,7 @@ const char kKafkaConsumerType[] = "rocksplicator_message_consumer";
 const char kKafkaWatcherName[] = "RocksplicatorMessageConsumer";
 const uint32_t kKafkaConsumerPoolSize = 1;
 const std::string kKafkaDbWriteErrors = "kafka_db_write_errors";
+const std::string kKafkaConsumerLatency = "kafka_consumer_latency";
 
 int64_t GetMessageTimestampSecs(const RdKafka::Message& message) {
   const auto ts = message.timestamp();
@@ -1086,6 +1087,13 @@ void AdminHandler::async_tm_startMessageIngestion(
     << "payload len: " << message->len() << ", "
     << "msg_timestamp: " << ToUTC(msg_timestamp_secs) << " or "
     << std::to_string(msg_timestamp_secs) << " secs";
+
+    if (!is_replay) {
+      auto latency_ms = common::timeutil::GetCurrentTimestamp(
+          common::timeutil::TimeUnit::kMillisecond)
+                        - message->timestamp().timestamp;
+      common::Stats::get()->AddMetric(kKafkaConsumerLatency, latency_ms);
+    }
 
     // Write the message to rocksdb
     static const rocksdb::WriteOptions write_options;
