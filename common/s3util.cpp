@@ -314,7 +314,10 @@ GetObjectMetadataResponse S3Util::getObjectMetadata(const string &key) {
 
 PutObjectResponse S3Util::putObject(const string& key, const string& local_path, const string& tags) {
   PutObjectRequest object_request;
-  object_request.WithBucket(bucket_).WithKey(key).WithTagging(tags);
+  object_request.WithBucket(bucket_).WithKey(key);
+  if (!tags.empty()) {
+    object_request.WithTagging(tags);
+  }
   auto input_data = Aws::MakeShared<Aws::FStream>("PutObjectInputStream",
                                                   local_path.c_str(),
                                                   std::ios_base::in | std::ios_base::binary);
