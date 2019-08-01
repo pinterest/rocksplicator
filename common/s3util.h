@@ -213,7 +213,9 @@ class S3Util {
   GetObjectMetadataResponse getObjectMetadata(const string& key);
 
   // Upload a local file to S3.
-  PutObjectResponse putObject(const string& key, const string& local_path);
+  // Tags: The tag-set for the object. The tag-set must be encoded as URL Query
+  // parameters. (For example, "Key1=Value1")
+  PutObjectResponse putObject(const string& key, const string& local_path, const string& tags="");
 
   // Upload a local file to S3 in async mode and return a future to the operation.
   Aws::S3::Model::PutObjectOutcomeCallable
