@@ -129,6 +129,12 @@ class AdminHandler : virtual public AdminSvIf {
   // Get all the db names held by the AdminHandler
   std::vector<std::string> getAllDBNames();
 
+ protected:
+  // Lock to synchronize DB admin operations at per DB granularity.
+  // Put db_admin_lock in protected to provide flexibility
+  // of overriding some admin functions
+  common::ObjectLock<std::string> db_admin_lock_;
+
  private:
   std::unique_ptr<rocksdb::DB> removeDB(const std::string& db_name,
                                         AdminException* ex);
@@ -142,8 +148,6 @@ class AdminHandler : virtual public AdminSvIf {
 
   std::unique_ptr<ApplicationDBManager> db_manager_;
   RocksDBOptionsGeneratorType rocksdb_options_;
-  // Lock to synchronize DB admin operations at per DB granularity
-  common::ObjectLock<std::string> db_admin_lock_;
   // S3 util used for download
   std::shared_ptr<common::S3Util> s3_util_;
   // Lock for protecting the s3 util

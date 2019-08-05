@@ -288,9 +288,9 @@ namespace admin {
 AdminHandler::AdminHandler(
     std::unique_ptr<ApplicationDBManager> db_manager,
     RocksDBOptionsGeneratorType rocksdb_options)
-  : db_manager_(std::move(db_manager))
+  : db_admin_lock_()
+  , db_manager_(std::move(db_manager))
   , rocksdb_options_(std::move(rocksdb_options))
-  , db_admin_lock_()
   , s3_util_()
   , s3_util_lock_()
   , meta_db_(OpenMetaDB())
