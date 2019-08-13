@@ -153,7 +153,7 @@ public class Spectator extends Thread {
   public Spectator(String zkConnectString, String clusterName, String instanceName, String postUrl, CuratorFramework zkClient) throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
     helixManager.connect();
-    Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager  ));
+    Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
     this.zkClient = zkClient;
     this.clusterName = clusterName;
     this.postUrl = postUrl;
