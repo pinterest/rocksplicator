@@ -49,15 +49,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-public class Spectator {
+public class Spectator extends Thread {
   private static final Logger LOG = LoggerFactory.getLogger(Spectator.class);
   private static final String zkServer = "zkSvr";
-  private static final String cluster = "cluster";
+  private static final String clusterNames = "clusterNames";
   private static final String hostAddress = "host";
   private static final String hostPort = "port";
   private static final String configPostUrl = "configPostUrl";
 
+  private CuratorFramework zkClient;
   private HelixManager helixManager;
+  private String clusterName;
+  private String postUrl;
 
   private static Options constructCommandLineOptions() {
     Option zkServerOption =
@@ -67,10 +70,10 @@ public class Spectator {
     zkServerOption.setArgName("ZookeeperServerAddresses(Required)");
 
     Option clusterOption =
-        OptionBuilder.withLongOpt(cluster).withDescription("Provide cluster name").create();
-    clusterOption.setArgs(1);
+        OptionBuilder.withLongOpt(clusterNames).withDescription("Provide cluster name(s)").create();
+    clusterOption.setArgs(Option.UNLIMITED_VALUES);
     clusterOption.setRequired(true);
-    clusterOption.setArgName("Cluster name (Required)");
+    clusterOption.setArgName("Cluster names (Required)");
 
     Option hostOption =
         OptionBuilder.withLongOpt(hostAddress).withDescription("Provide host name").create();
@@ -116,20 +119,29 @@ public class Spectator {
     ));
     CommandLine cmd = processCommandLineArgs(args);
     final String zkConnectString = cmd.getOptionValue(zkServer);
-    final String clusterName = cmd.getOptionValue(cluster);
+    final String[] clusterNamesList = cmd.getOptionValues(clusterNames);
     final String host = cmd.getOptionValue(hostAddress);
     final String port = cmd.getOptionValue(hostPort);
     final String postUrl = cmd.getOptionValue(configPostUrl);
     final String instanceName = host + "_" + port;
 
     LOG.error("Starting spectator with ZK:" + zkConnectString);
-    Spectator spectator= new Spectator(zkConnectString, clusterName, instanceName);
-
     CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
     zkClient.start();
+    for (String clusterName : clusterNamesList) {
+      Spectator spectator = new Spectator(zkConnectString, clusterName, instanceName, postUrl, zkClient);
+      spectator.start();
+    }
+  }
+
+  public void run() {
     InterProcessMutex mutex = new InterProcessMutex(zkClient, getClusterLockPath(clusterName));
     try (Locker locker = new Locker(mutex)) {
-      spectator.startListener(postUrl);
+      ConfigGenerator
+          configGenerator =
+          new ConfigGenerator(helixManager.getClusterName(), helixManager, postUrl);
+      helixManager.addExternalViewChangeListener(configGenerator);
+      helixManager.addConfigChangeListener(configGenerator);
       Thread.currentThread().join();
     } catch (RuntimeException e) {
       LOG.error("RuntimeException thrown by cluster " + clusterName, e);
@@ -138,16 +150,13 @@ public class Spectator {
     }
   }
 
-  public Spectator(String zkConnectString, String clusterName, String instanceName) throws Exception {
+  public Spectator(String zkConnectString, String clusterName, String instanceName, String postUrl, CuratorFramework zkClient) throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
     helixManager.connect();
-    Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
-  }
-
-  private void startListener(String postUrl) throws Exception {
-    ConfigGenerator configGenerator = new ConfigGenerator(helixManager.getClusterName(), helixManager, postUrl);
-    helixManager.addExternalViewChangeListener(configGenerator);
-    helixManager.addConfigChangeListener(configGenerator);
+    Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager  ));
+    this.zkClient = zkClient;
+    this.clusterName = clusterName;
+    this.postUrl = postUrl;
   }
 
   private static String getClusterLockPath(String cluster) {
