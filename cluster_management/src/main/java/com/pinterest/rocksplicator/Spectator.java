@@ -18,8 +18,10 @@
 
 package com.pinterest.rocksplicator;
 
+import java.util.concurrent.TimeUnit;
 import java.util.HashMap;
 import java.util.Map;
+
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
@@ -45,11 +47,12 @@ import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.ConsoleAppender;
 import org.apache.log4j.Level;
 import org.apache.log4j.PatternLayout;
+import org.jboss.netty.handler.timeout.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-public class Spectator extends Thread {
+public class Spectator {
   private static final Logger LOG = LoggerFactory.getLogger(Spectator.class);
   private static final String zkServer = "zkSvr";
   private static final String clusterNames = "clusterNames";
@@ -57,10 +60,7 @@ public class Spectator extends Thread {
   private static final String hostPort = "port";
   private static final String configPostUrl = "configPostUrl";
 
-  private CuratorFramework zkClient;
   private HelixManager helixManager;
-  private String clusterName;
-  private String postUrl;
 
   private static Options constructCommandLineOptions() {
     Option zkServerOption =
@@ -128,35 +128,38 @@ public class Spectator extends Thread {
     LOG.error("Starting spectator with ZK:" + zkConnectString);
     CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
     zkClient.start();
-    for (String clusterName : clusterNamesList) {
-      Spectator spectator = new Spectator(zkConnectString, clusterName, instanceName, postUrl, zkClient);
-      spectator.start();
+
+    int i = 0;
+    while (true) {
+      String currentClusterName = clusterNamesList[i];
+      LOG.error("Trying to get lock for cluster " + currentClusterName);
+      InterProcessMutex mutex = new InterProcessMutex(zkClient, getClusterLockPath(currentClusterName));
+      try (Locker locker = new Locker(mutex, 5, TimeUnit.SECONDS)) {
+        Spectator spectator= new Spectator(zkConnectString, currentClusterName, instanceName);
+        spectator.startListener(postUrl);
+        Thread.currentThread().join();
+      } catch (TimeoutException e) {
+        LOG.error("Could not acquire lock within 5 seconds for cluster " + currentClusterName, e);
+      } catch (RuntimeException e) {
+        LOG.error("RuntimeException thrown by cluster " + currentClusterName, e);
+      } catch (Exception e) {
+        LOG.error("Failed to release the mutex for cluster " + currentClusterName, e);
+      }
+      i++;
+      i %= clusterNamesList.length;
     }
   }
 
-  public void run() {
-    InterProcessMutex mutex = new InterProcessMutex(zkClient, getClusterLockPath(clusterName));
-    try (Locker locker = new Locker(mutex)) {
-      ConfigGenerator
-          configGenerator =
-          new ConfigGenerator(helixManager.getClusterName(), helixManager, postUrl);
-      helixManager.addExternalViewChangeListener(configGenerator);
-      helixManager.addConfigChangeListener(configGenerator);
-      Thread.currentThread().join();
-    } catch (RuntimeException e) {
-      LOG.error("RuntimeException thrown by cluster " + clusterName, e);
-    } catch (Exception e) {
-      LOG.error("Failed to release the mutex for cluster " + clusterName, e);
-    }
-  }
-
-  public Spectator(String zkConnectString, String clusterName, String instanceName, String postUrl, CuratorFramework zkClient) throws Exception {
+  public Spectator(String zkConnectString, String clusterName, String instanceName) throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
     helixManager.connect();
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
-    this.zkClient = zkClient;
-    this.clusterName = clusterName;
-    this.postUrl = postUrl;
+  }
+
+  private void startListener(String postUrl) throws Exception {
+    ConfigGenerator configGenerator = new ConfigGenerator(helixManager.getClusterName(), helixManager, postUrl);
+    helixManager.addExternalViewChangeListener(configGenerator);
+    helixManager.addConfigChangeListener(configGenerator);
   }
 
   private static String getClusterLockPath(String cluster) {
