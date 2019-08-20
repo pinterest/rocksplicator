@@ -92,19 +92,22 @@ class ThriftRouter {
   using ClusterLayout = detail::ClusterLayout;
 
   /*
+   * @param local_group  The group of the local host
    * @param config_path  The config file path
    * @param parser       User provided parser to parse config file content into
    *                     an in memory READONLY ClusterLayout structure.
+   * @param client_pool  the client pool to use. ThriftRouter will create one if nullptr
    */
   ThriftRouter(
       const std::string& local_group,
       const std::string& config_path,
       std::function<std::unique_ptr<const ClusterLayout>(
-        const std::string&, const std::string&)> parser)
+        const std::string&, const std::string&)> parser,
+      std::shared_ptr<ThriftClientPool<ClientType, USE_BINARY_PROTOCOL>> client_pool = nullptr)
       : config_path_(config_path)
       , parser_(std::move(parser))
       , cluster_layout_()
-      , local_client_map_() {
+      , local_client_map_(std::move(client_pool)) {
     CHECK(common::FileWatcher::Instance()->AddFile(
       config_path_,
       [this, local_group] (std::string content) {
@@ -247,7 +250,14 @@ class ThriftRouter {
 
   class ThreadLocalClientMap {
    public:
-    explicit ThreadLocalClientMap() {
+    explicit ThreadLocalClientMap(
+        std::shared_ptr<ThriftClientPool<ClientType, USE_BINARY_PROTOCOL>> client_pool) {
+      if (client_pool) {
+        client_pool_ = std::move(client_pool);
+      } else {
+        client_pool_ =
+          std::make_shared<ThriftClientPool<ClientType, USE_BINARY_PROTOCOL>>();
+      }
       *local_cluster_layout_ = std::make_shared<const ClusterLayout>();
     }
 
@@ -462,10 +472,10 @@ class ThriftRouter {
 
         // either don't have the client or we need to fix the bad client
         auto& cs = (*clients_)[host->addr];
-        cs.client = client_pool_.getClient(host->addr,
-                                           FLAGS_client_connect_timeout_millis,
-                                           &cs.is_good,
-                                           false /* aggressively */);
+        cs.client = client_pool_->getClient(host->addr,
+                                            FLAGS_client_connect_timeout_millis,
+                                            &cs.is_good,
+                                            false /* aggressively */);
         cs.create_time = now();
       }
     }
@@ -490,7 +500,7 @@ class ThriftRouter {
       uint64_t create_time;
     };
 
-    ThriftClientPool<ClientType, USE_BINARY_PROTOCOL> client_pool_;
+    std::shared_ptr<ThriftClientPool<ClientType, USE_BINARY_PROTOCOL>> client_pool_;
     folly::ThreadLocal<std::shared_ptr<const ClusterLayout>>
       local_cluster_layout_;
     folly::ThreadLocal<std::unordered_map<folly::SocketAddress,
