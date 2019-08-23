@@ -39,6 +39,7 @@ DECLARE_bool(always_prefer_local_host);
 DECLARE_int32(min_client_reconnect_interval_seconds);
 DECLARE_int64(client_connect_timeout_millis);
 DECLARE_int32(thrift_router_max_num_hosts_to_consider);
+DECLARE_int32(thrift_router_log_frequency);
 
 namespace common {
 
@@ -199,13 +200,13 @@ class ThriftRouter {
     const auto layout = getClusterLayout();
 
     if (UNLIKELY(layout == nullptr)) {
-      LOG_EVERY_N(ERROR, 100) << "Empty layout found";
+      LOG_EVERY_N(ERROR, FLAGS_thrift_router_log_frequency) << "Empty layout found";
       return 0;
     }
 
     auto itor = layout->segments.find(segment);
     if (itor == layout->segments.end()) {
-      LOG_EVERY_N(ERROR, 100) << "Invalid segment found: " << segment;
+      LOG_EVERY_N(ERROR, FLAGS_thrift_router_log_frequency) << "Invalid segment found: " << segment;
       return 0;
     }
 
@@ -299,7 +300,7 @@ class ThriftRouter {
         auto hosts_for_shard = filterByRoleAndSortByPreferenceAndShrinkTo(
           shard_to_hosts[shard], role, rotation_counter, segment, shrink_target);
         if (hosts_for_shard.empty()) {
-          LOG_EVERY_N(ERROR, 1000)
+          LOG_EVERY_N(ERROR, FLAGS_thrift_router_log_frequency)
             << "Could not find hosts for shard " << shard;
           ret = ReturnCode::NOT_FOUND;
           continue;
@@ -309,14 +310,14 @@ class ThriftRouter {
         filterBadHosts(&hosts_for_shard);
         if (sz != hosts_for_shard.size() && quantity == Quantity::ALL) {
           // exist some bad hosts, and we want all of them
-          LOG_EVERY_N(ERROR, 1000)
+          LOG_EVERY_N(ERROR, FLAGS_thrift_router_log_frequency)
             << "There is at least one bad host for shard " << shard;
           ret = ReturnCode::BAD_HOST;
           continue;
         }
 
         if (hosts_for_shard.empty()) {
-          LOG_EVERY_N(ERROR, 1000)
+          LOG_EVERY_N(ERROR, FLAGS_thrift_router_log_frequency)
             << "We could not find any good host for shard " << shard;
           ret = ReturnCode::BAD_HOST;
           continue;

@@ -49,6 +49,8 @@ DECLARE_int32(min_channel_create_interval_seconds);
 
 DECLARE_int32(tcp_user_timeout_ms);
 
+DECLARE_int32(thrift_client_pool_log_frequency);
+
 DECLARE_bool(channel_enable_snappy);
 
 namespace common {
@@ -104,15 +106,15 @@ class ThriftClientPool {
       , peer_addr(addr) {}
 
     void channelClosed() override {
-      LOG_EVERY_N(INFO, 1000) << peer_addr << " connection closed after "
-                              << elapsedTime() << " seconds";
+      LOG_EVERY_N(INFO, FLAGS_thrift_client_pool_log_frequency) << peer_addr
+        << " connection closed after " << elapsedTime() << " seconds";
 
       is_good.store(false);
     }
 
     void connectSuccess() noexcept override {
-      LOG_EVERY_N(INFO, 1000) << peer_addr << " connection established after "
-                              << elapsedTime() << " seconds";
+      LOG_EVERY_N(INFO, FLAGS_thrift_client_pool_log_frequency) << peer_addr
+        << " connection established after " << elapsedTime() << " seconds";
     }
 
     void connectError(const apache::thrift::transport::TTransportException& ex)
@@ -247,8 +249,9 @@ class ThriftClientPool {
             socket->setSockOpt(IPPROTO_TCP, TCP_USER_TIMEOUT, &timeout_ms);
 
           if (ret == 0) {
-            LOG_EVERY_N(INFO, 1000) << "Set TCP_USER_TIMEOUT to " << timeout_ms
-                                    << " ms for " << addr;
+            LOG_EVERY_N(INFO, FLAGS_thrift_client_pool_log_frequency) << "Set TCP_USER_TIMEOUT to "
+                                                                      << timeout_ms
+                                                                      << " ms for " << addr;
           } else {
             LOG(ERROR) << "Failed to set TCP_USER_TIMEOUT to " << timeout_ms
                        << " ms with errno " << errno << " : "
