@@ -33,6 +33,8 @@ DEFINE_int64(client_connect_timeout_millis, 100,
 DEFINE_int32(thrift_router_max_num_hosts_to_consider, -1, "Maximum number of "
              "hosts to consider for each routing request. -1 means unlimited.");
 
+DEFINE_int32(thrift_router_log_frequency, 100, "Log frequency");
+
 namespace {
 
 bool parseHost(const std::string& str, common::detail::Host* host,

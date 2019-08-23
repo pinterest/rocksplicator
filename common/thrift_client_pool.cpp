@@ -37,4 +37,6 @@ DEFINE_int32(tcp_user_timeout_ms, 10000,
              "The max time allowed for unacked tcp data before closing the "
              "corresponding TCP connection");
 
+DEFINE_int32(thrift_client_pool_log_frequency, 1000, "Log frequency");
+
 DEFINE_bool(channel_enable_snappy, false, "Enable snappy compression or not");
