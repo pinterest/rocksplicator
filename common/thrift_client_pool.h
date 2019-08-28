@@ -53,6 +53,8 @@ DECLARE_int32(thrift_client_pool_log_frequency);
 
 DECLARE_bool(channel_enable_snappy);
 
+DECLARE_bool(use_framed_transport_for_binary_protocol);
+
 namespace common {
 
 /*
@@ -269,7 +271,9 @@ class ThriftClientPool {
         }
         if (USE_BINARY_PROTOCOL) {
           channel->setProtocolId(apache::thrift::protocol::T_BINARY_PROTOCOL);
-          channel->setClientType(THRIFT_FRAMED_DEPRECATED);
+          if (FLAGS_use_framed_transport_for_binary_protocol) {
+            channel->setClientType(THRIFT_FRAMED_DEPRECATED);
+          }
         }
 
         if (is_good) {
