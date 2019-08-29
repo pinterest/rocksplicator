@@ -37,10 +37,10 @@ JNIEnv* createVM(const std::string& class_path) {
   JavaVM* jvm;
   JNIEnv* env;
   JavaVMInitArgs args;
-  JavaVMOption options[4];
+  JavaVMOption options[10];
 
   args.version = JNI_VERSION_1_6;
-  args.nOptions = 4;
+  args.nOptions = 10;
   const std::string env_class_path = std::getenv("CLASSPATH");
   auto class_opt = "-Djava.class.path=" + class_path +
       "cluster_management-0.0.1-SNAPSHOT-jar-with-dependencies.jar" +
@@ -52,6 +52,12 @@ JNIEnv* createVM(const std::string& class_path) {
   // use -Xrs to block JVM signal handling
   options[2].optionString = "-Xrs";
   options[3].optionString = const_cast<char*>(helix_log_config_file_path.c_str());
+  options[4].optionString = "-Dcom.sun.management.jmxremote";
+  options[5].optionString = "-Dcom.sun.management.jmxremote.port=10102";
+  options[6].optionString = "-Dcom.sun.management.jmxremote.local.only=false";
+  options[7].optionString = "-Dcom.sun.management.jmxremote.authenticate=false";
+  options[8].optionString = "-Dcom.sun.management.jmxremote.ssl=false";
+  options[9].optionString = "-Dcom.sun.management.jmxremote.rmi.port=10103";
 
   args.options = options;
   args.ignoreUnrecognized = false;
