@@ -17,6 +17,7 @@
 //
 
 #include "common/file_watcher.h"
+#include "common/stats/stats.h"
 
 #include <folly/FileUtil.h>
 #include <folly/SpookyHashV2.h>
@@ -25,6 +26,7 @@
 
 #include <string>
 
+#include "boost/filesystem.hpp"
 #include "gflags/gflags.h"
 
 /*
@@ -237,6 +239,9 @@ void FileWatcher::CheckFileAndCallback(const std::string& file_name,
   uint64_t new_hash;
   auto content = ReadFileAndHash(file_name, &new_hash);
   if (new_hash != state->current_hash) {
+    LOG(INFO) << "File change detected for " << file_name;
+    common::Stats::get()->Incr("file_change_detected file_name=" +
+      boost::filesystem::path(file_name).filename().string());
     state->current_hash = new_hash;
     state->cb(std::move(content));
   }
