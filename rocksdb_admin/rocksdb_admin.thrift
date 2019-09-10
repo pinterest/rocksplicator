@@ -24,6 +24,7 @@ struct DBMetaData {
   2: optional string s3_bucket,
   3: optional string s3_path,
   4: optional i64 last_kafka_msg_timestamp_ms,
+  5: optional bool should_deserialize_kafka_payload = false
 }
 
 enum AdminErrorCode {
@@ -168,6 +169,16 @@ struct StopMessageIngestionRequest {
 
 struct StopMessageIngestionResponse {
   # for future use
+}
+
+enum KafkaOperationCode {
+  PUT = 1,
+  DELETE = 2
+}
+
+struct KafkaMessagePayload {
+  1: required KafkaOperationCode op_code,
+  2: optional binary value
 }
 
 struct SetDBOptionsRequest {

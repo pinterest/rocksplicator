@@ -102,8 +102,12 @@ const int64_t kMillisPerSec = 1000;
 const char kKafkaConsumerType[] = "rocksplicator_message_consumer";
 const char kKafkaWatcherName[] = "RocksplicatorMessageConsumer";
 const uint32_t kKafkaConsumerPoolSize = 1;
-const std::string kKafkaDbWriteErrors = "kafka_db_write_errors";
 const std::string kKafkaConsumerLatency = "kafka_consumer_latency";
+const std::string kKafkaDbPutMessage = "kafka_put_msg_consumed";
+const std::string kKafkaDbDelMessage = "kafka_del_msg_consumed";
+const std::string kKafkaDbPutErrors = "kafka_db_put_errors";
+const std::string kKafkaDbDeleteErrors = "kafka_db_delete_errors";
+const std::string kKafkaDeserFailure = "kafka_deser_failure";
 
 int64_t GetMessageTimestampSecs(const RdKafka::Message& message) {
   const auto ts = message.timestamp();
@@ -281,6 +285,18 @@ bool SetAddressOrException(const std::string& ip,
   }
 }
 
+template <typename T>
+bool DecodeThriftStruct(const string& data, T* obj) {
+  auto ex = folly::try_and_catch<std::exception>([data, obj]() {
+    apache::thrift::CompactSerializer::deserialize(
+        folly::StringPiece(data.data(), data.size()), *obj);
+  });
+  if (ex) {
+    LOG(ERROR) << "Error when decoding message : " << ex.what();
+  }
+  return !ex;
+}
+
 }  // anonymous namespace
 
 namespace admin {
@@ -375,6 +391,24 @@ bool AdminHandler::writeMetaData(
   options.sync = true;
   auto s = meta_db_->Put(options, db_name, buffer);
   return s.ok();
+}
+
+bool DeserializeKafkaPayload(
+    const string& payload,
+    KafkaOperationCode& op_code,
+    rocksdb::Slice& value) {
+  KafkaMessagePayload msg_payload;
+
+  if (DecodeThriftStruct<KafkaMessagePayload>(payload, &msg_payload)) {
+    op_code = msg_payload.op_code;
+    if (msg_payload.__isset.value) {
+      value = rocksdb::Slice(msg_payload.value);
+    }
+    return true;
+  } else {
+    common::Stats::get()->Incr(kKafkaDeserFailure);
+    return false;
+  }
 }
 
 void AdminHandler::async_tm_addDB(
@@ -1063,13 +1097,14 @@ void AdminHandler::async_tm_startMessageIngestion(
   }
 
   int64_t message_count = 0;
+  const auto should_deserialize = meta.should_deserialize_kafka_payload;
   // With kafka_init_blocking_consume_timeout_ms set to -1, messages from
   // replay_timestamp_ms to the current are synchronously consumed. The
   // calling thread then returns after spawning a new thread to consume
   // live messages.
   kafka_watcher->StartWith(
       replay_timestamp_ms,
-      [message_count, db_name, db, this](
+      [message_count, db_name, db, should_deserialize, this](
           std::shared_ptr<const RdKafka::Message> message,
           const bool is_replay) mutable {
     if (message == nullptr) {
@@ -1077,6 +1112,7 @@ void AdminHandler::async_tm_startMessageIngestion(
       return;
     }
     const int64_t msg_timestamp_secs = GetMessageTimestampSecs(*message);
+    message_count++;
 
     // Logs for debugging
     LOG_EVERY_N(INFO, FLAGS_consumer_log_frequency) << "DB name: " << db_name
@@ -1095,18 +1131,50 @@ void AdminHandler::async_tm_startMessageIngestion(
       common::Stats::get()->AddMetric(kKafkaConsumerLatency, latency_ms);
     }
 
-    // Write the message to rocksdb
-    static const rocksdb::WriteOptions write_options;
     auto key = rocksdb::Slice(static_cast<const char *>(message->key_pointer()),
                               message->key_len());
-    auto val = rocksdb::Slice(static_cast<const char *>(message->payload()),
+    const std::string payload(static_cast<const char *>(message->payload()),
                               message->len());
-    auto status = db->rocksdb()->Put(write_options, key, val);
-    if (!status.ok()) {
-      // TODO: if there are transient errors, add a retry
-      LOG(ERROR) << "Failure while writing to " << db_name << ": "
-                 << status.ToString();
-      common::Stats::get()->Incr(kKafkaDbWriteErrors);
+
+    // Deserialize the kafka payload
+    KafkaOperationCode op_code;
+    rocksdb::Slice value;
+    if (should_deserialize) {
+      if (!DeserializeKafkaPayload(payload, op_code, value)) {
+        LOG(ERROR) << "Failed to deserialize. Ignoring kafka message";
+        return;
+      }
+    } else {
+      // If serialization is not required, just put the value to rocksdb
+      op_code = KafkaOperationCode::PUT;
+      value = rocksdb::Slice(payload);
+    }
+
+    // Write the message to rocksdb
+    rocksdb::Status status;
+    static const rocksdb::WriteOptions write_options;
+
+    switch (op_code) {
+      case KafkaOperationCode::PUT:
+        common::Stats::get()->Incr(kKafkaDbPutMessage);
+        status = db->rocksdb()->Put(write_options, key, value);
+        if (!status.ok()) {
+          LOG(ERROR) << "Failure while writing to " << db_name << ": "
+                     << status.ToString();
+          common::Stats::get()->Incr(kKafkaDbPutErrors);
+        }
+        break;
+      case KafkaOperationCode::DELETE:
+        common::Stats::get()->Incr(kKafkaDbDelMessage);
+        status = db->rocksdb()->Delete(write_options, key);
+        if (!status.ok()) {
+          LOG(ERROR) << "Failure while deleting from " << db_name << ": "
+                     << status.ToString();
+          common::Stats::get()->Incr(kKafkaDbDeleteErrors);
+        }
+        break;
+      default:
+        LOG(ERROR) << "Invalid op_code in kafka payload";
     }
 
     // Update meta_db with kafka message timestamp periodically.
@@ -1117,7 +1185,6 @@ void AdminHandler::async_tm_startMessageIngestion(
       LOG(INFO) << "[meta_db] Writing timestamp " << timestamp_ms
                 << " for db: " << db_name;
     }
-    message_count++;
   });
 
   LOG(INFO) << "Now consuming live messages for " << db_name;
