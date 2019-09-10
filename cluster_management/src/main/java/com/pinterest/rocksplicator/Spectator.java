@@ -52,7 +52,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-public class Spectator {
+public class Spectator extends Thread {
   private static final Logger LOG = LoggerFactory.getLogger(Spectator.class);
   private static final String zkServer = "zkSvr";
   private static final String clusterNames = "clusterNames";
@@ -61,6 +61,9 @@ public class Spectator {
   private static final String configPostUrl = "configPostUrl";
 
   private HelixManager helixManager;
+  private String clusterName;
+  private String postUrl;
+  private String zkConnectString;
 
   private static Options constructCommandLineOptions() {
     Option zkServerOption =
@@ -125,38 +128,39 @@ public class Spectator {
     final String postUrl = cmd.getOptionValue(configPostUrl);
     final String instanceName = host + "_" + port;
 
-    LOG.error("Starting spectator with ZK:" + zkConnectString);
-    CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
-    zkClient.start();
 
-    int i = 0;
-    while (true) {
-      String currentClusterName = clusterNamesList[i];
-      LOG.error("Trying to get lock for cluster " + currentClusterName);
-      InterProcessMutex mutex = new InterProcessMutex(zkClient, getClusterLockPath(currentClusterName));
-      try (Locker locker = new Locker(mutex, 5, TimeUnit.SECONDS)) {
-        Spectator spectator= new Spectator(zkConnectString, currentClusterName, instanceName);
-        spectator.startListener(postUrl);
-        Thread.currentThread().join();
-      } catch (TimeoutException e) {
-        LOG.error("Could not acquire lock within 5 seconds for cluster " + currentClusterName, e);
-      } catch (RuntimeException e) {
-        LOG.error("RuntimeException thrown by cluster " + currentClusterName, e);
-      } catch (Exception e) {
-        LOG.error("Failed to release the mutex for cluster " + currentClusterName, e);
-      }
-      i++;
-      i %= clusterNamesList.length;
+    for (String currentClusterName : clusterNamesList) {
+      LOG.error("Starting spectator with ZK:" + zkConnectString + " And cluster: " + currentClusterName);
+      Spectator spectator= new Spectator(zkConnectString, currentClusterName, instanceName, postUrl);
+      spectator.start();
     }
   }
 
-  public Spectator(String zkConnectString, String clusterName, String instanceName) throws Exception {
+  @Override
+  public void run() {
+    CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
+    zkClient.start();
+    InterProcessMutex mutex = new InterProcessMutex(zkClient, getClusterLockPath(clusterName));
+    try (Locker locker = new Locker(mutex)) {
+      this.startListener();
+      Thread.currentThread().join();
+    } catch (RuntimeException e) {
+      LOG.error("RuntimeException thrown by cluster " + clusterName, e);
+    } catch (Exception e) {
+      LOG.error("Failed to release the mutex for cluster " + clusterName, e);
+    }
+  }
+
+  public Spectator(String zkConnectString, String clusterName, String instanceName, String postUrl) throws Exception {
+    this.zkConnectString = zkConnectString;
+    this.clusterName = clusterName;
+    this.postUrl = postUrl;
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
     helixManager.connect();
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
   }
 
-  private void startListener(String postUrl) throws Exception {
+  private void startListener() throws Exception {
     ConfigGenerator configGenerator = new ConfigGenerator(helixManager.getClusterName(), helixManager, postUrl);
     helixManager.addExternalViewChangeListener(configGenerator);
     helixManager.addConfigChangeListener(configGenerator);
