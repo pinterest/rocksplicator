@@ -58,7 +58,7 @@ public class Spectator extends Thread {
   private static final String clusterNames = "clusterNames";
   private static final String hostAddress = "host";
   private static final String hostPort = "port";
-  private static final String configPostUrl = "configPostUrl";
+  private static final String configPostUrlBase = "configPostUrlBase";
 
   private HelixManager helixManager;
   private String clusterName;
@@ -90,18 +90,18 @@ public class Spectator extends Thread {
     portOption.setRequired(true);
     portOption.setArgName("Host port (Required)");
 
-    Option configPostUrlOption =
-        OptionBuilder.withLongOpt(configPostUrl).withDescription("URL to post config").create();
-    configPostUrlOption.setArgs(1);
-    configPostUrlOption.setRequired(true);
-    configPostUrlOption.setArgName("URL to post config (Required)");
+    Option configPostUrlBaseOption =
+        OptionBuilder.withLongOpt(configPostUrlBase).withDescription("Base url to post config for each cluster").create();
+    configPostUrlBaseOption.setArgs(1);
+    configPostUrlBaseOption.setRequired(true);
+    configPostUrlBaseOption.setArgName("URL to post config (Required)");
 
     Options options = new Options();
     options.addOption(zkServerOption)
         .addOption(clusterOption)
         .addOption(hostOption)
         .addOption(portOption)
-        .addOption(configPostUrlOption);
+        .addOption(configPostUrlBaseOption);
     return options;
   }
 
@@ -125,15 +125,15 @@ public class Spectator extends Thread {
     final String[] clusterNamesList = cmd.getOptionValues(clusterNames);
     final String host = cmd.getOptionValue(hostAddress);
     final String port = cmd.getOptionValue(hostPort);
-    final String postUrl = cmd.getOptionValue(configPostUrl);
+    final String postUrlBase = cmd.getOptionValue(configPostUrlBase);
     final String instanceName = host + "_" + port;
 
 
     for (String currentClusterName : clusterNamesList) {
-      LOG.error("Starting spectator with ZK:" + zkConnectString + " And cluster: " + currentClusterName);
-      Spectator spectator= new Spectator(zkConnectString, currentClusterName, instanceName, postUrl);
+      Spectator spectator= new Spectator(zkConnectString, currentClusterName, instanceName, postUrlBase);
       spectator.start();
     }
+    Thread.currentThread.join();
   }
 
   @Override
@@ -141,9 +141,11 @@ public class Spectator extends Thread {
     CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
     zkClient.start();
     InterProcessMutex mutex = new InterProcessMutex(zkClient, getClusterLockPath(clusterName));
+    LOG.error("Try to grab the lock for cluster" + clusterName);
     try (Locker locker = new Locker(mutex)) {
+      LOG.error("Starting spectator with ZK:" + zkConnectString + " And cluster: " + clusterName);
       this.startListener();
-      Thread.currentThread().join();
+      Thread.currentThread.join();
     } catch (RuntimeException e) {
       LOG.error("RuntimeException thrown by cluster " + clusterName, e);
     } catch (Exception e) {
@@ -151,10 +153,10 @@ public class Spectator extends Thread {
     }
   }
 
-  public Spectator(String zkConnectString, String clusterName, String instanceName, String postUrl) throws Exception {
+  public Spectator(String zkConnectString, String clusterName, String instanceName, String postUrlBase) throws Exception {
     this.zkConnectString = zkConnectString;
     this.clusterName = clusterName;
-    this.postUrl = postUrl;
+    this.postUrl = postUrlBase + clusterName + "?mode=overwrite";
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
     helixManager.connect();
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
