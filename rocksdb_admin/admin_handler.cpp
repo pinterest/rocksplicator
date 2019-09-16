@@ -106,6 +106,7 @@ const std::string kKafkaConsumerLatency = "kafka_consumer_latency";
 const std::string kKafkaDbPutMessage = "kafka_put_msg_consumed";
 const std::string kKafkaDbDelMessage = "kafka_del_msg_consumed";
 const std::string kKafkaDbPutErrors = "kafka_db_put_errors";
+const std::string kKafkaDbPutEmptyErrors = "kafka_db_put_empty_errors";
 const std::string kKafkaDbDeleteErrors = "kafka_db_delete_errors";
 const std::string kKafkaDeserFailure = "kafka_deser_failure";
 
@@ -286,15 +287,36 @@ bool SetAddressOrException(const std::string& ip,
 }
 
 template <typename T>
-bool DecodeThriftStruct(const string& data, T* obj) {
-  auto ex = folly::try_and_catch<std::exception>([data, obj]() {
-    apache::thrift::CompactSerializer::deserialize(
-        folly::StringPiece(data.data(), data.size()), *obj);
-  });
-  if (ex) {
+bool DecodeThriftStruct(void* data, const size_t len, T* obj) {
+  try {
+    apache::thrift::BinarySerializer::deserialize(
+        folly::IOBuf::takeOwnership(data, len).release(), *obj);
+  } catch (const std::exception& ex) {
     LOG(ERROR) << "Error when decoding message : " << ex.what();
+    return false;
   }
-  return !ex;
+  return true;
+}
+
+bool DeserializeKafkaPayload(
+    void* kafka_payload,
+    const size_t payload_len,
+    std::unique_ptr<admin::KafkaOperationCode>& op_code,
+    std::unique_ptr<rocksdb::Slice>& value) {
+  admin::KafkaMessagePayload msg_payload;
+
+  if (DecodeThriftStruct<admin::KafkaMessagePayload>(kafka_payload,
+      payload_len, &msg_payload)) {
+    op_code = std::make_unique<admin::KafkaOperationCode>(msg_payload.op_code);
+    if (msg_payload.__isset.value) {
+      value = std::make_unique<rocksdb::Slice>(
+          rocksdb::Slice(msg_payload.value->moveToFbString().toStdString()));
+    }
+    return true;
+  } else {
+    common::Stats::get()->Incr(kKafkaDeserFailure);
+    return false;
+  }
 }
 
 }  // anonymous namespace
@@ -391,24 +413,6 @@ bool AdminHandler::writeMetaData(
   options.sync = true;
   auto s = meta_db_->Put(options, db_name, buffer);
   return s.ok();
-}
-
-bool DeserializeKafkaPayload(
-    const string& payload,
-    KafkaOperationCode& op_code,
-    rocksdb::Slice& value) {
-  KafkaMessagePayload msg_payload;
-
-  if (DecodeThriftStruct<KafkaMessagePayload>(payload, &msg_payload)) {
-    op_code = msg_payload.op_code;
-    if (msg_payload.__isset.value) {
-      value = rocksdb::Slice(msg_payload.value);
-    }
-    return true;
-  } else {
-    common::Stats::get()->Incr(kKafkaDeserFailure);
-    return false;
-  }
 }
 
 void AdminHandler::async_tm_addDB(
@@ -1098,6 +1102,7 @@ void AdminHandler::async_tm_startMessageIngestion(
 
   int64_t message_count = 0;
   const auto should_deserialize = meta.should_deserialize_kafka_payload;
+
   // With kafka_init_blocking_consume_timeout_ms set to -1, messages from
   // replay_timestamp_ms to the current are synchronously consumed. The
   // calling thread then returns after spawning a new thread to consume
@@ -1133,35 +1138,42 @@ void AdminHandler::async_tm_startMessageIngestion(
 
     auto key = rocksdb::Slice(static_cast<const char *>(message->key_pointer()),
                               message->key_len());
-    const std::string payload(static_cast<const char *>(message->payload()),
-                              message->len());
 
     // Deserialize the kafka payload
-    KafkaOperationCode op_code;
-    rocksdb::Slice value;
+    std::unique_ptr<KafkaOperationCode> op_code;
+    std::unique_ptr<rocksdb::Slice> value;
     if (should_deserialize) {
-      if (!DeserializeKafkaPayload(payload, op_code, value)) {
+      if (!DeserializeKafkaPayload(message->payload(),
+          message->len(), op_code, value)) {
         LOG(ERROR) << "Failed to deserialize. Ignoring kafka message";
         return;
       }
     } else {
       // If serialization is not required, just put the value to rocksdb
-      op_code = KafkaOperationCode::PUT;
-      value = rocksdb::Slice(payload);
+      op_code = std::make_unique<KafkaOperationCode>(KafkaOperationCode::PUT);
+      value = std::make_unique<rocksdb::Slice>(
+          rocksdb::Slice(static_cast<const char *>(message->payload()),
+              message->len()));
     }
 
     // Write the message to rocksdb
     rocksdb::Status status;
     static const rocksdb::WriteOptions write_options;
 
-    switch (op_code) {
+    switch (*op_code) {
       case KafkaOperationCode::PUT:
         common::Stats::get()->Incr(kKafkaDbPutMessage);
-        status = db->rocksdb()->Put(write_options, key, value);
-        if (!status.ok()) {
-          LOG(ERROR) << "Failure while writing to " << db_name << ": "
-                     << status.ToString();
-          common::Stats::get()->Incr(kKafkaDbPutErrors);
+        if (value) {
+          status = db->rocksdb()->Put(write_options, key, *value);
+          if (!status.ok()) {
+            LOG(ERROR) << "Failure while writing to " << db_name << ": "
+                       << status.ToString();
+            common::Stats::get()->Incr(kKafkaDbPutErrors);
+          }
+        } else {
+          LOG(ERROR) << "No key provided for PUT operation."
+                        " Ignoring kafka message";
+          common::Stats::get()->Incr(kKafkaDbPutEmptyErrors);
         }
         break;
       case KafkaOperationCode::DELETE:

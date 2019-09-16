@@ -16,6 +16,8 @@
 namespace cpp2 admin
 namespace java com.pinterest.rocksdb_admin.thrift
 
+typedef binary (cpp.type = "std::unique_ptr<folly::IOBuf>") IOBufPtr
+
 # meta data maintained for each individual DB
 struct DBMetaData {
   1: required string db_name,
@@ -178,7 +180,7 @@ enum KafkaOperationCode {
 
 struct KafkaMessagePayload {
   1: required KafkaOperationCode op_code,
-  2: optional binary value
+  2: optional IOBufPtr value
 }
 
 struct SetDBOptionsRequest {
