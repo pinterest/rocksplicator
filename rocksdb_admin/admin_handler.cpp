@@ -106,7 +106,6 @@ const std::string kKafkaConsumerLatency = "kafka_consumer_latency";
 const std::string kKafkaDbPutMessage = "kafka_put_msg_consumed";
 const std::string kKafkaDbDelMessage = "kafka_del_msg_consumed";
 const std::string kKafkaDbPutErrors = "kafka_db_put_errors";
-const std::string kKafkaDbPutEmptyErrors = "kafka_db_put_empty_errors";
 const std::string kKafkaDbDeleteErrors = "kafka_db_delete_errors";
 const std::string kKafkaDeserFailure = "kafka_deser_failure";
 
@@ -287,10 +286,10 @@ bool SetAddressOrException(const std::string& ip,
 }
 
 template <typename T>
-bool DecodeThriftStruct(const string& data, T* obj) {
+bool DecodeThriftStruct(const void* data, const size_t size, T* obj) {
   try {
     apache::thrift::BinarySerializer::deserialize(
-        folly::StringPiece(data.data(), data.size()), *obj);
+        folly::StringPiece(static_cast<const char *>(data), size), *obj);
   } catch (const std::exception& ex) {
     LOG(ERROR) << "Error when decoding message : " << ex.what();
     return false;
@@ -305,9 +304,8 @@ bool DeserializeKafkaPayload(
     std::string* value) {
   admin::KafkaMessagePayload msg_payload;
 
-  const std::string payload(static_cast<const char *>(kafka_payload),
-                            payload_len);
-  if (DecodeThriftStruct<admin::KafkaMessagePayload>(payload, &msg_payload)) {
+  if (DecodeThriftStruct<admin::KafkaMessagePayload>(kafka_payload, payload_len,
+      &msg_payload)) {
     *op_code = msg_payload.op_code;
     if (msg_payload.__isset.value) {
       *value = std::move(msg_payload.value);
@@ -1141,9 +1139,9 @@ void AdminHandler::async_tm_startMessageIngestion(
 
     // Deserialize the kafka payload
     KafkaOperationCode op_code;
+    std::string deser_val;
     rocksdb::Slice value;
     if (should_deserialize) {
-      std::string deser_val;
       if (DeserializeKafkaPayload(message->payload(),
           message->len(), &op_code, &deser_val)) {
         value = rocksdb::Slice(deser_val);
