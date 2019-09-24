@@ -117,10 +117,10 @@ void invokeClass(JNIEnv* env,
 
   // The participant main function should never exit
   env->ExceptionDescribe();
-  CHECK(false) << "Participant main() exited";
+  LOG(ERROR) << "Participant main() exited";
 }
 
-}
+} // namespace
 
 namespace admin {
 
@@ -145,6 +145,56 @@ void JoinCluster(const std::string& zk_connect_str,
   t.detach();
 
   LOG(INFO) << "Launching JVM and starting Helix participant";
+}
+
+// Destroy the JVM, which will call the shutdown handler registers
+void ShutdownJVM() {
+    JNIEnv* env;
+    JavaVM* jvm;
+    jclass ParticipantClass;
+    jmethodID exitmainMethod;
+    jsize nVMs;
+
+    // Get the a reference to the created javaVM
+    JNI_GetCreatedJavaVMs(NULL, 0, &nVMs);
+    JavaVM** buffer = new JavaVM*[nVMs];
+    JNI_GetCreatedJavaVMs(buffer, nVMs, &nVMs);
+
+    if (nVMs != 1) {
+        LOG(ERROR) << "There are " < nVMs << " created, expected 1";
+        return;
+    }
+    jvm = buffer[0];
+
+    jint result = jvm->GetEnv((void **) &env, JNI_VERSION_1_6);
+    if (result == JNI_EDETACHED) {
+        LOG(ERROR) << "EDATCHED, trying to attach thread";
+        result = jvm->AttachCurrentThread((void**)&env, NULL);
+    }
+
+    if (result != JNI_OK) {
+        LOG(ERROR) << "Failed to get env";
+        return;
+    }
+
+    ParticipantClass = env->FindClass("com/pinterest/rocksplicator/Participant");
+    if (!ParticipantClass) {
+        env->ExceptionDescribe();
+        LOG(ERROR) << "Failed to find Participant class";
+        return;
+    }
+
+    exitmainMethod = env->GetStaticMethodID(ParticipantClass,
+                                            "exitmain",
+                                            "()V");
+    if (!exitmainMethod) {
+        LOG(ERROR) << "Failed to GetStaticMethodID";
+        env->ExceptionDescribe();
+        return;
+    }
+
+    LOG(INFO) << "Disconnecting helix manager";
+    env->CallStaticVoidMethod(ParticipantClass, exitmainMethod);
 }
 
 }  // namespace admin

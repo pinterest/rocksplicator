@@ -45,4 +45,11 @@ void JoinCluster(const std::string& zk_connect_str,
                  const std::string& config_post_url,
                  const bool disable_spectator = false);
 
+/*
+ * If the participant class is running its main() this function is called, this
+ * function will flip a condition variable in Participant.java that will cause the
+ * main() function to exit and the Participant to disconnect from helix
+ */
+void ShutdownJVM();
+
 }  // namespace admin
