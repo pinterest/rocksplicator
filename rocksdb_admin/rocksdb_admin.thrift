@@ -173,7 +173,8 @@ struct StopMessageIngestionResponse {
 
 enum KafkaOperationCode {
   PUT = 1,
-  DELETE = 2
+  DELETE = 2,
+  MERGE = 3
 }
 
 struct KafkaMessagePayload {
