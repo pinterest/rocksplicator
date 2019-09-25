@@ -18,9 +18,6 @@
 
 package com.pinterest.rocksplicator;
 
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.commons.cli.CommandLine;
@@ -62,8 +59,6 @@ public class Participant {
   private static final String stateModel = "stateModelType";
   private static final String configPostUrl = "configPostUrl";
   private static final String disableSpectator = "disableSpectator";
-  private static final Lock lock = new ReentrantLock();
-  private static final Condition condition = lock.newCondition();
 
   private static HelixManager helixManager;
   private StateModelFactory<StateModel> stateModelFactory;
@@ -168,19 +163,13 @@ public class Participant {
     properties.put("DOMAIN", domainName + ",instance=" + instanceName);
     helixAdmin.setConfig(scope, properties);
 
-    LOG.error("Participant running, wait for signal before disconnect from helixManager");
-    lock.lock();
-    condition.await();
-    lock.unlock();
-    LOG.error("Disconnect from helixManager");
-    helixManager.disconnect();
+    LOG.error("Participant running");
+    Thread.currentThread().join();
   }
 
-  public static void exitmain() throws Exception {
-    lock.lock();
-    LOG.error("Signal to main");
-    condition.signal();
-    lock.unlock();
+  public static void disconnectHelixManager() throws Exception {
+    LOG.error("Disconnect the helixManager");
+    helixManager.disconnect();
   }
 
 

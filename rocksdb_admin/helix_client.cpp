@@ -148,11 +148,11 @@ void JoinCluster(const std::string& zk_connect_str,
 }
 
 // Destroy the JVM, which will call the shutdown handler registers
-void ShutdownJVM() {
+void DisconnectHelixManager() {
     JNIEnv* env;
     JavaVM* jvm;
     jclass ParticipantClass;
-    jmethodID exitmainMethod;
+    jmethodID disconnectHelixManagerMethod;
     jsize nVMs;
 
     // Get the a reference to the created javaVM
@@ -161,7 +161,7 @@ void ShutdownJVM() {
     JNI_GetCreatedJavaVMs(buffer, nVMs, &nVMs);
 
     if (nVMs != 1) {
-        LOG(ERROR) << "There are " < nVMs << " created, expected 1";
+        LOG(ERROR) << "There are " << nVMs << " created, expected 1";
         return;
     }
     jvm = buffer[0];
@@ -184,17 +184,17 @@ void ShutdownJVM() {
         return;
     }
 
-    exitmainMethod = env->GetStaticMethodID(ParticipantClass,
-                                            "exitmain",
+    disconnectHelixManagerMethod = env->GetStaticMethodID(ParticipantClass,
+                                            "disconnectHelixManager",
                                             "()V");
-    if (!exitmainMethod) {
+    if (!disconnectHelixManagerMethod) {
         LOG(ERROR) << "Failed to GetStaticMethodID";
         env->ExceptionDescribe();
         return;
     }
 
     LOG(INFO) << "Disconnecting helix manager";
-    env->CallStaticVoidMethod(ParticipantClass, exitmainMethod);
+    env->CallStaticVoidMethod(ParticipantClass, disconnectHelixManagerMethod);
 }
 
 }  // namespace admin
