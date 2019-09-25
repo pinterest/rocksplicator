@@ -105,8 +105,10 @@ const uint32_t kKafkaConsumerPoolSize = 1;
 const std::string kKafkaConsumerLatency = "kafka_consumer_latency";
 const std::string kKafkaDbPutMessage = "kafka_put_msg_consumed";
 const std::string kKafkaDbDelMessage = "kafka_del_msg_consumed";
+const std::string kKafkaDbMergeMessage = "kafka_merge_msg_consumed";
 const std::string kKafkaDbPutErrors = "kafka_db_put_errors";
 const std::string kKafkaDbDeleteErrors = "kafka_db_delete_errors";
+const std::string kKafkaDbMergeErrors = "kafka_db_merge_errors";
 const std::string kKafkaDeserFailure = "kafka_deser_failure";
 
 int64_t GetMessageTimestampSecs(const RdKafka::Message& message) {
@@ -1179,6 +1181,15 @@ void AdminHandler::async_tm_startMessageIngestion(
           LOG(ERROR) << "Failure while deleting from " << db_name << ": "
                      << status.ToString();
           common::Stats::get()->Incr(kKafkaDbDeleteErrors);
+        }
+        break;
+      case KafkaOperationCode::MERGE:
+        common::Stats::get()->Incr(kKafkaDbMergeMessage);
+        status = db->rocksdb()->Merge(write_options, key, value);
+        if (!status.ok()) {
+          LOG(ERROR) << "Failure while merging to " << db_name << ": "
+                     << status.ToString();
+          common::Stats::get()->Incr(kKafkaDbMergeErrors);
         }
         break;
       default:
