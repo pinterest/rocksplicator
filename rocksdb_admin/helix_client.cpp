@@ -117,7 +117,7 @@ void invokeClass(JNIEnv* env,
 
   // The participant main function should never exit
   env->ExceptionDescribe();
-  LOG(ERROR) << "Participant main() exited";
+  CHECK(false) << "Participant main() exited";
 }
 
 } // namespace

@@ -173,7 +173,7 @@ public class Participant {
   }
 
 
-  public Participant(String zkConnectString, String clusterName, String instanceName,
+  private Participant(String zkConnectString, String clusterName, String instanceName,
                      String stateModelType, int port, String postUrl, boolean runSpectator) throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
