@@ -169,7 +169,9 @@ public class Participant {
 
   public static void disconnectHelixManager() throws Exception {
     LOG.error("Disconnect the helixManager");
-    helixManager.disconnect();
+    if (helixManager != null) {
+      helixManager.disconnect();
+    }
   }
 
 
