@@ -211,10 +211,11 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
         long replay_timestamp_ms = jsonObject.get("replay_timestamp_ms").getAsLong();
         String kafkaBrokerServersetPath = jsonObject.get("kafka_broker_serverset_path").getAsString();
         String topicName = jsonObject.get("topic_name").getAsString();
+        boolean isKafkaPayloadSerialized = jsonObject.get("is_kafka_payload_serialized").getAsBoolean();
 
         StartMessageIngestionRequest req =
                 new StartMessageIngestionRequest(Utils.getDbName(partitionName), topicName,
-                        kafkaBrokerServersetPath, replay_timestamp_ms);
+                        kafkaBrokerServersetPath, replay_timestamp_ms, isKafkaPayloadSerialized);
         Admin.Client client = Utils.getLocalAdminClient(adminPort);
         client.startMessageIngestion(req);
       } catch (Exception e) {
