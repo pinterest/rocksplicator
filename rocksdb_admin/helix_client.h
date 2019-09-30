@@ -45,4 +45,10 @@ void JoinCluster(const std::string& zk_connect_str,
                  const std::string& config_post_url,
                  const bool disable_spectator = false);
 
+/*
+ * This function will call helixManager.disconnect() on the static helixManager shared by
+ * the jvm launched in JoinCluster()
+ */
+void DisconnectHelixManager();
+
 }  // namespace admin

@@ -60,7 +60,7 @@ public class Participant {
   private static final String configPostUrl = "configPostUrl";
   private static final String disableSpectator = "disableSpectator";
 
-  private HelixManager helixManager;
+  private static HelixManager helixManager;
   private StateModelFactory<StateModel> stateModelFactory;
 
   private static Options constructCommandLineOptions() {
@@ -163,10 +163,19 @@ public class Participant {
     properties.put("DOMAIN", domainName + ",instance=" + instanceName);
     helixAdmin.setConfig(scope, properties);
 
+    LOG.error("Participant running");
     Thread.currentThread().join();
   }
 
-  public Participant(String zkConnectString, String clusterName, String instanceName,
+  public static void disconnectHelixManager() throws Exception {
+    LOG.error("Disconnect the helixManager");
+    if (helixManager != null) {
+      helixManager.disconnect();
+    }
+  }
+
+
+  private Participant(String zkConnectString, String clusterName, String instanceName,
                      String stateModelType, int port, String postUrl, boolean runSpectator) throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
