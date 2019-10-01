@@ -1101,7 +1101,7 @@ void AdminHandler::async_tm_startMessageIngestion(
   }
 
   int64_t message_count = 0;
-  const auto should_deserialize = meta.should_deserialize_kafka_payload;
+  const auto should_deserialize = request->is_kafka_payload_serialized;
 
   // With kafka_init_blocking_consume_timeout_ms set to -1, messages from
   // replay_timestamp_ms to the current are synchronously consumed. The

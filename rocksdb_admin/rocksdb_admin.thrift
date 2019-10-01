@@ -23,8 +23,7 @@ struct DBMetaData {
   # hosted by this DB.
   2: optional string s3_bucket,
   3: optional string s3_path,
-  4: optional i64 last_kafka_msg_timestamp_ms,
-  5: optional bool should_deserialize_kafka_payload = false
+  4: optional i64 last_kafka_msg_timestamp_ms
 }
 
 enum AdminErrorCode {
@@ -156,7 +155,8 @@ struct StartMessageIngestionRequest {
   2: required string topic_name,
   3: required string kafka_broker_serverset_path,
   # timestamp which the kafka consumer seeks to
-  4: required i64 replay_timestamp_ms
+  4: required i64 replay_timestamp_ms,
+  5: required bool is_kafka_payload_serialized = false
 }
 
 struct StartMessageIngestionResponse {
