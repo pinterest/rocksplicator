@@ -18,10 +18,8 @@
 
 package com.pinterest.rocksplicator;
 
-import java.util.concurrent.TimeUnit;
 import java.util.HashMap;
 import java.util.Map;
-
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
@@ -47,7 +45,6 @@ import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.ConsoleAppender;
 import org.apache.log4j.Level;
 import org.apache.log4j.PatternLayout;
-import org.jboss.netty.handler.timeout.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,7 +52,7 @@ import org.slf4j.LoggerFactory;
 public class Spectator {
   private static final Logger LOG = LoggerFactory.getLogger(Spectator.class);
   private static final String zkServer = "zkSvr";
-  private static final String clusterNames = "clusterNames";
+  private static final String cluster = "cluster";
   private static final String hostAddress = "host";
   private static final String hostPort = "port";
   private static final String configPostUrl = "configPostUrl";
@@ -70,10 +67,10 @@ public class Spectator {
     zkServerOption.setArgName("ZookeeperServerAddresses(Required)");
 
     Option clusterOption =
-        OptionBuilder.withLongOpt(clusterNames).withDescription("Provide cluster name(s)").create();
-    clusterOption.setArgs(Option.UNLIMITED_VALUES);
+        OptionBuilder.withLongOpt(cluster).withDescription("Provide cluster name").create();
+    clusterOption.setArgs(1);
     clusterOption.setRequired(true);
-    clusterOption.setArgName("Cluster names (Required)");
+    clusterOption.setArgName("Cluster name (Required)");
 
     Option hostOption =
         OptionBuilder.withLongOpt(hostAddress).withDescription("Provide host name").create();
@@ -119,34 +116,25 @@ public class Spectator {
     ));
     CommandLine cmd = processCommandLineArgs(args);
     final String zkConnectString = cmd.getOptionValue(zkServer);
-    final String[] clusterNamesList = cmd.getOptionValues(clusterNames);
+    final String clusterName = cmd.getOptionValue(cluster);
     final String host = cmd.getOptionValue(hostAddress);
     final String port = cmd.getOptionValue(hostPort);
     final String postUrl = cmd.getOptionValue(configPostUrl);
     final String instanceName = host + "_" + port;
 
     LOG.error("Starting spectator with ZK:" + zkConnectString);
+    Spectator spectator= new Spectator(zkConnectString, clusterName, instanceName);
+
     CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
     zkClient.start();
-
-    int i = 0;
-    while (true) {
-      String currentClusterName = clusterNamesList[i];
-      LOG.error("Trying to get lock for cluster " + currentClusterName);
-      InterProcessMutex mutex = new InterProcessMutex(zkClient, getClusterLockPath(currentClusterName));
-      try (Locker locker = new Locker(mutex, 5, TimeUnit.SECONDS)) {
-        Spectator spectator= new Spectator(zkConnectString, currentClusterName, instanceName);
-        spectator.startListener(postUrl);
-        Thread.currentThread().join();
-      } catch (TimeoutException e) {
-        LOG.error("Could not acquire lock within 5 seconds for cluster " + currentClusterName, e);
-      } catch (RuntimeException e) {
-        LOG.error("RuntimeException thrown by cluster " + currentClusterName, e);
-      } catch (Exception e) {
-        LOG.error("Failed to release the mutex for cluster " + currentClusterName, e);
-      }
-      i++;
-      i %= clusterNamesList.length;
+    InterProcessMutex mutex = new InterProcessMutex(zkClient, getClusterLockPath(clusterName));
+    try (Locker locker = new Locker(mutex)) {
+      spectator.startListener(postUrl);
+      Thread.currentThread().join();
+    } catch (RuntimeException e) {
+      LOG.error("RuntimeException thrown by cluster " + clusterName, e);
+    } catch (Exception e) {
+      LOG.error("Failed to release the mutex for cluster " + clusterName, e);
     }
   }
 
