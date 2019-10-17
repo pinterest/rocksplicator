@@ -17,6 +17,7 @@
 //
 
 #include <gflags/gflags.h>
+#include "folly/MoveWrapper.h"
 
 #include <chrono>
 #include <string>
