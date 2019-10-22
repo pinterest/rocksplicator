@@ -1111,7 +1111,8 @@ void AdminHandler::async_tm_startMessageIngestion(
   // live messages.
   kafka_watcher->StartWith(
       replay_timestamp_ms,
-      [message_count, db_name, db, should_deserialize, segment, this](
+      [message_count, db_name, db, should_deserialize,
+       segment = std::move(segment), this](
           std::shared_ptr<const RdKafka::Message> message,
           const bool is_replay) mutable {
     if (message == nullptr) {
