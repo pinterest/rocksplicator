@@ -99,8 +99,8 @@ const int kMB = 1024 * 1024;
 const int kS3UtilRecheckSec = 5;
 
 const int64_t kMillisPerSec = 1000;
-const char kKafkaConsumerType[] = "rocksplicator_message_consumer";
-const char kKafkaWatcherName[] = "RocksplicatorMessageConsumer";
+const char kKafkaConsumerType[] = "rocksplicator_consumer";
+const char kKafkaWatcherName[] = "rocksplicator_watcher";
 const uint32_t kKafkaConsumerPoolSize = 1;
 const std::string kKafkaConsumerLatency = "kafka_consumer_latency";
 const std::string kKafkaDbPutMessage = "kafka_put_msg_consumed";
@@ -110,6 +110,7 @@ const std::string kKafkaDbPutErrors = "kafka_db_put_errors";
 const std::string kKafkaDbDeleteErrors = "kafka_db_delete_errors";
 const std::string kKafkaDbMergeErrors = "kafka_db_merge_errors";
 const std::string kKafkaDeserFailure = "kafka_deser_failure";
+const std::string kKafkaInvalidOpcode = "kafka_invalid_opcode";
 
 int64_t GetMessageTimestampSecs(const RdKafka::Message& message) {
   const auto ts = message.timestamp();
@@ -1066,6 +1067,7 @@ void AdminHandler::async_tm_startMessageIngestion(
   }
 
   // Kafka partition to consume is the shard id in rocksdb.
+  const auto segment = DbNameToSegment(db_name);
   const auto partition_id = ExtractShardId(db_name);
 
   if (partition_id == -1) {
@@ -1087,10 +1089,10 @@ void AdminHandler::async_tm_startMessageIngestion(
       kafka_broker_file_watcher->GetKafkaBrokerList(),
       std::unordered_set<std::string>({topic_name}),
       getConsumerGroupId(db_name),
-      kKafkaConsumerType);
+      folly::stringPrintf("%s_%s", kKafkaConsumerType, segment.c_str()));
 
   auto kafka_watcher = std::make_shared<KafkaWatcher>(
-      kKafkaWatcherName,
+      folly::stringPrintf("%s_%s", kKafkaWatcherName, segment.c_str()),
       kafka_consumer_pool,
       -1, // kafka_init_blocking_consume_timeout_ms
       FLAGS_kafka_consumer_timeout_ms);
@@ -1109,7 +1111,7 @@ void AdminHandler::async_tm_startMessageIngestion(
   // live messages.
   kafka_watcher->StartWith(
       replay_timestamp_ms,
-      [message_count, db_name, db, should_deserialize, this](
+      [message_count, db_name, db, should_deserialize, segment, this](
           std::shared_ptr<const RdKafka::Message> message,
           const bool is_replay) mutable {
     if (message == nullptr) {
@@ -1133,7 +1135,8 @@ void AdminHandler::async_tm_startMessageIngestion(
       auto latency_ms = common::timeutil::GetCurrentTimestamp(
           common::timeutil::TimeUnit::kMillisecond)
                         - message->timestamp().timestamp;
-      common::Stats::get()->AddMetric(kKafkaConsumerLatency, latency_ms);
+      common::Stats::get()->AddMetric(folly::stringPrintf("%s segment=%s",
+          kKafkaConsumerLatency.c_str(), segment.c_str()), latency_ms);
     }
 
     auto key = rocksdb::Slice(static_cast<const char *>(message->key_pointer()),
@@ -1164,35 +1167,43 @@ void AdminHandler::async_tm_startMessageIngestion(
 
     switch (op_code) {
       case KafkaOperationCode::PUT:
-        common::Stats::get()->Incr(kKafkaDbPutMessage);
+        common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
+            kKafkaDbPutMessage.c_str(), segment.c_str()));
 
         status = db->rocksdb()->Put(write_options, key, value);
         if (!status.ok()) {
           LOG(ERROR) << "Failure while writing to " << db_name << ": "
                      << status.ToString();
-          common::Stats::get()->Incr(kKafkaDbPutErrors);
+          common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
+              kKafkaDbPutErrors.c_str(), segment.c_str()));
         }
 
         break;
       case KafkaOperationCode::DELETE:
-        common::Stats::get()->Incr(kKafkaDbDelMessage);
+        common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
+            kKafkaDbDelMessage.c_str(), segment.c_str()));
         status = db->rocksdb()->Delete(write_options, key);
         if (!status.ok()) {
           LOG(ERROR) << "Failure while deleting from " << db_name << ": "
                      << status.ToString();
-          common::Stats::get()->Incr(kKafkaDbDeleteErrors);
+          common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
+              kKafkaDbDeleteErrors.c_str(), segment.c_str()));
         }
         break;
       case KafkaOperationCode::MERGE:
-        common::Stats::get()->Incr(kKafkaDbMergeMessage);
+        common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
+            kKafkaDbMergeMessage.c_str(), segment.c_str()));
         status = db->rocksdb()->Merge(write_options, key, value);
         if (!status.ok()) {
           LOG(ERROR) << "Failure while merging to " << db_name << ": "
                      << status.ToString();
-          common::Stats::get()->Incr(kKafkaDbMergeErrors);
+          common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
+              kKafkaDbMergeErrors.c_str(), segment.c_str()));
         }
         break;
       default:
+        common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
+            kKafkaInvalidOpcode.c_str(), segment.c_str()));
         LOG(ERROR) << "Invalid op_code in kafka payload";
     }
 
