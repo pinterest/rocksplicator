@@ -47,6 +47,8 @@ struct AddDBRequest {
   2: required string upstream_ip,
   # if overwrite is true, destroy any rocksdb instance under db_name
   3: optional bool overwrite = false,
+  # if set, add the db to the db_manager with the specified role. one of MASTER, SLAVE, NOOP
+  4: optional string db_role = "SLAVE",
 }
 
 struct AddDBResponse {

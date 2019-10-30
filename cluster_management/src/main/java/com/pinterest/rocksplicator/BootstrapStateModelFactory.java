@@ -124,7 +124,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
       Utils.checkSanity("OFFLINE", "BOOTSTRAP", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
-      Utils.addDB(Utils.getDbName(partitionName), adminPort);
+      Utils.addDB(Utils.getDbName(partitionName), adminPort, "NOOP");
 
       try {
         zkClient.sync().forPath(Utils.getMetaLocation(cluster, resourceName));
