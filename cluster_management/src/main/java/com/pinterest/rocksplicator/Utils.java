@@ -124,7 +124,10 @@ public class Utils {
    * @param adminPort
    * @param dbRole one of SLAVE or NOOP
    */
-  public static void addDB(String dbName, int adminPort, String dbRole) {
+  public static void addDB(String dbName, int adminPort, String dbRole) throws RuntimeException {
+    if ((dbRole != "SLAVE") && (dbRole != "NOOP")) {
+      throw new RuntimeException("Invalid db role requested for new db " + dbName + " : " + dbRole);
+    }
     LOG.error("Add local DB: " + dbName + " with role " + dbRole);
     Admin.Client client = null;
     AddDBRequest req = null;

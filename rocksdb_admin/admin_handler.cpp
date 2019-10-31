@@ -473,13 +473,13 @@ void AdminHandler::async_tm_addDB(
   if (request->__isset.db_role) {
     if (request->db_role == "SLAVE") {
       role = replicator::DBRole::SLAVE;
-    } else if (request->db_role == "MASTER") {
-      role = replicator::DBRole::MASTER;
     } else if (request->db_role == "NOOP") {
       role = replicator::DBRole::NOOP;
     } else {
-      // Default behavior is to use SLAVE, so keep that
-      LOG(INFO) << "Invalid role requested to addDB " << request->db_role;
+      e.errorCode = AdminErrorCode::INVALID_DB_ROLE;
+      e.message = std::move(request->db_role);
+      callback.release()->exceptionInThread(std::move(e));
+      return;
     }
   }
 
