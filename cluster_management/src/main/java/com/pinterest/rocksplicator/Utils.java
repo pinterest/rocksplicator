@@ -119,18 +119,23 @@ public class Utils {
   }
 
   /**
-   * Add a DB as a Slave, and set it upstream to be itself. Do nothing if the DB already exists
+   * Add a db with a specific role.
    * @param dbName
    * @param adminPort
+   * @param dbRole one of SLAVE or NOOP
    */
-  public static void addDB(String dbName, int adminPort) {
-    LOG.error("Add local DB: " + dbName);
+  public static void addDB(String dbName, int adminPort, String dbRole) throws RuntimeException {
+    if ((dbRole != "SLAVE") && (dbRole != "NOOP")) {
+      throw new RuntimeException("Invalid db role requested for new db " + dbName + " : " + dbRole);
+    }
+    LOG.error("Add local DB: " + dbName + " with role " + dbRole);
     Admin.Client client = null;
     AddDBRequest req = null;
     try {
       try {
         client = getLocalAdminClient(adminPort);
         req = new AddDBRequest(dbName, "127.0.0.1");
+        req.setDb_role(dbRole);
         client.addDB(req);
       } catch (AdminException e) {
         if (e.errorCode == AdminErrorCode.DB_EXIST) {
@@ -150,6 +155,14 @@ public class Utils {
     } catch (TException e) {
       LOG.error("AddDB() request failed", e);
     }
+  }
+  /**
+   * Add a DB as a Slave, and set it upstream to be itself. Do nothing if the DB already exists
+   * @param dbName
+   * @param adminPort
+   */
+  public static void addDB(String dbName, int adminPort) {
+    addDB(dbName, adminPort, "SLAVE");
   }
 
   /**

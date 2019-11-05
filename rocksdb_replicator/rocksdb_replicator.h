@@ -63,6 +63,7 @@ struct LogExtractor : public rocksdb::WriteBatch::Handler {
 enum class DBRole {
   MASTER,
   SLAVE,
+  NOOP, // Don't perform any replication with this DB
 };
 
 enum class ReturnCode {

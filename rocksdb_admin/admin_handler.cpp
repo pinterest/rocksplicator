@@ -469,9 +469,23 @@ void AdminHandler::async_tm_addDB(
 
   // add the db to db_manager
   std::string err_msg;
+  replicator::DBRole role = replicator::DBRole::SLAVE;
+  if (request->__isset.db_role) {
+    if (request->db_role == "SLAVE") {
+      role = replicator::DBRole::SLAVE;
+    } else if (request->db_role == "NOOP") {
+      role = replicator::DBRole::NOOP;
+    } else {
+      e.errorCode = AdminErrorCode::INVALID_DB_ROLE;
+      e.message = std::move(request->db_role);
+      callback.release()->exceptionInThread(std::move(e));
+      return;
+    }
+  }
+
   if (!db_manager_->addDB(request->db_name,
                           std::unique_ptr<rocksdb::DB>(rocksdb_db),
-                          replicator::DBRole::SLAVE, std::move(upstream_addr),
+                          role, std::move(upstream_addr),
                           &err_msg)) {
     e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
     e.message = std::move(err_msg);
