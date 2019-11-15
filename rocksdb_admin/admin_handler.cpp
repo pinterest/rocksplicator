@@ -1137,14 +1137,18 @@ void AdminHandler::async_tm_startMessageIngestion(
     message_count++;
 
     // Logs for debugging
-    LOG_EVERY_N(INFO, FLAGS_consumer_log_frequency) << "DB name: " << db_name
-    << ", Key " << *message->key() << ", "
-    << "value " << static_cast<const char *>(message->payload()) << ", "
-    << "partition: " << message->partition() << ", "
-    << "offset: " << message->offset() << ", "
-    << "payload len: " << message->len() << ", "
-    << "msg_timestamp: " << ToUTC(msg_timestamp_secs) << " or "
-    << std::to_string(msg_timestamp_secs) << " secs";
+    LOG_EVERY_N(INFO, FLAGS_consumer_log_frequency)
+        << "DB name: " << db_name << ", Key " << folly::hexlify(*message->key())
+        << ", "
+        << "value "
+        << folly::hexlify(folly::StringPiece(
+               static_cast<const char*>(message->payload()), message->len()))
+        << ", "
+        << "partition: " << message->partition() << ", "
+        << "offset: " << message->offset() << ", "
+        << "payload len: " << message->len() << ", "
+        << "msg_timestamp: " << ToUTC(msg_timestamp_secs) << " or "
+        << std::to_string(msg_timestamp_secs) << " secs";
 
     if (!is_replay) {
       auto latency_ms = common::timeutil::GetCurrentTimestamp(
