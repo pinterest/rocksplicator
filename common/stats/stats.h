@@ -61,7 +61,12 @@
 
 #pragma once
 
+#if __GNUC__ >= 8
+#include <folly/concurrency/CacheLocality.h>
+#else
 #include <folly/detail/CacheLocality.h>
+#endif
+
 #include <folly/ThreadLocal.h>
 #include <folly/stats/Histogram.h>
 #include <folly/stats/MultiLevelTimeSeries.h>

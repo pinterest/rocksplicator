@@ -27,6 +27,9 @@
 #include <vector>
 
 #include "folly/futures/Promise.h"
+#if __GNUC__ >= 8
+#include "folly/system/ThreadName.h"
+#endif
 #include "folly/io/async/EventBase.h"
 #include "folly/io/async/SSLContext.h"
 #include "folly/Demangle.h"

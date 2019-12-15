@@ -16,6 +16,7 @@
 
 #include <ifaddrs.h>
 #include "folly/SocketAddress.h"
+#include <glog/logging.h>
 
 namespace {
 
