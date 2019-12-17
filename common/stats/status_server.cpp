@@ -150,14 +150,22 @@ std::string StatusServer::GetPageContent(const std::string& end_point, Arguments
   // Note: folly:Uri is not thread-safe!
   folly::Uri u("http://blah.blah" + end_point);
 
+#if __GNUC__ >= 8
+  auto iter = op_map_.find(u.path());
+#else
   auto iter = op_map_.find(u.path().toStdString());
+#endif
   if (iter == op_map_.end()) {
     return "Unsupported http path: " + end_point + "!\n";
   }
 
   auto params = u.getQueryParams();
   for (const auto& p : params) {
+#if __GNUC__ >= 8
+    args->emplace_back(p.first, p.second);
+#else
     args->emplace_back(p.first.toStdString(), p.second.toStdString());
+#endif
   }
 
   return iter->second(args);
