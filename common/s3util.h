@@ -152,7 +152,9 @@ using ListObjectsResponse = S3UtilResponse<vector<string>>;
 using ListObjectsResponseV2 = S3UtilResponse<ListObjectsResponseV2Body>;
 using GetObjectsResponse = S3UtilResponse<vector<GetObjectResponse>>;
 using GetObjectMetadataResponse = S3UtilResponse<map<string, string>>;
-
+using GetObjectSizeAndModTimeResponse = S3UtilResponse<map<string, uint64_t>>;
+using CopyObjectResponse = S3UtilResponse<bool>;
+using DeleteObjectResponse = S3UtilResponse<bool>;
 
 class S3Util {
  public:
@@ -212,6 +214,9 @@ class S3Util {
   // Now contains md5 and content-length of the s3 object
   GetObjectMetadataResponse getObjectMetadata(const string& key);
 
+  // Get the size and last modified time(ms) of an object.
+  GetObjectSizeAndModTimeResponse getObjectSizeAndModTime(const string& key);
+
   // Upload a local file to S3.
   // Tags: The tag-set for the object. The tag-set must be encoded as URL Query
   // parameters. (For example, "Key1=Value1")
@@ -220,6 +225,12 @@ class S3Util {
   // Upload a local file to S3 in async mode and return a future to the operation.
   Aws::S3::Model::PutObjectOutcomeCallable
   putObjectCallable(const string& key, const string& local_path);
+
+  // Copy the object from one location to another location in the same bucket of S3.
+  CopyObjectResponse copyObject(const string& src, const string& target);
+
+  // Delete an object from S3.
+  DeleteObjectResponse deleteObject(const string& key);
 
 
   // Some utility methods
