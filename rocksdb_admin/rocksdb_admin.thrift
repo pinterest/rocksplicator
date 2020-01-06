@@ -84,6 +84,39 @@ struct RestoreDBResponse {
   # for future use
 }
 
+struct BackupDBToS3Request {
+  # the db to backup
+  1: required string db_name,
+  # the s3 bucket to backup to
+  2: required string s3_bucket,
+  # the s3 key prefix to backup to
+  3: required string s3_backup_dir,
+  # rate limit in MB/S, a non positive value means no limit
+  4: optional i32 limit_mbs = 0,
+}
+
+struct  BackupDBToS3Response {
+  # for future use
+}
+
+struct RestoreDBFromS3Request {
+  # the db to be restored
+  1: required string db_name,
+  # the s3 bucket to restore from
+  2: required string s3_bucket,
+  # the s3 key prefix to restore from
+  3: required string s3_backup_dir,
+  # where to pull update from after restoring
+  4: required string upstream_ip,
+  5: required i16 upstream_port,
+  # rate limit in MB/S, a non positive value means no limit
+  6: optional i32 limit_mbs = 0,
+}
+
+struct RestoreDBFromS3Response {
+  # for future use
+}
+
 struct CloseDBRequest {
   # the db to close
   1: required string db_name,
@@ -230,6 +263,18 @@ BackupDBResponse backupDB(1:BackupDBRequest request)
  * from upstream_ip_port thereafter
  */
 RestoreDBResponse restoreDB(1:RestoreDBRequest request)
+  throws (1:AdminException e)
+
+/*
+ * Backup a local rocksdb instance to S3 DB.
+ */
+ BackupDBToS3Response backupDBToS3(1:BackupDBToS3Request request)
+ throws(1:AdminException e)
+
+/*
+ * Restore a local DB from S3 snapshot.
+ */
+ RestoreDBFromS3Response restoreDBFromS3(1:RestoreDBFromS3Request request)
   throws (1:AdminException e)
 
 /*
