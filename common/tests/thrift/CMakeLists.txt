@@ -16,6 +16,7 @@ set(GEN_FILES
 
 add_custom_command(
   OUTPUT ${GEN_FILES}
+  #TODO(bol) switch to "COMMAND thrift1 --gen mstch_cpp2:include_prefix=./common/tests/thrift/ --templates /usr/local/include/thrift/templates" when using U18
   COMMAND python -mthrift_compiler.main --gen cpp2
           -o ./ ${CMAKE_CURRENT_SOURCE_DIR}/dummy_service.thrift
   DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/dummy_service.thrift)

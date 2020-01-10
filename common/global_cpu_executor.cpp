@@ -22,7 +22,11 @@
 #include <glog/logging.h>
 
 #include "common/identical_name_thread_factory.h"
+#if __GNUC__ >= 8
+#include "folly/executors/CPUThreadPoolExecutor.h"
+#else
 #include "wangle/concurrent/CPUThreadPoolExecutor.h"
+#endif
 
 DEFINE_int32(global_worker_threads, sysconf(_SC_NPROCESSORS_ONLN),
              "The number of threads for global CPU executor.");
@@ -32,6 +36,16 @@ DEFINE_bool(block_on_global_cpu_pool_full, true,
 
 DEFINE_string(global_cpu_thread_pool_name, "g-cpu-pool",
               "The name for threads in the global cpu pool");
+
+#if __GNUC__ >= 8
+using folly::CPUThreadPoolExecutor;
+using folly::LifoSemMPMCQueue;
+using folly::QueueBehaviorIfFull;
+#else
+using wangle::CPUThreadPoolExecutor;
+using wangle::LifoSemMPMCQueue;
+using wangle::QueueBehaviorIfFull;
+#endif
 
 namespace {
 
@@ -58,23 +72,23 @@ int GetQueueSize() {
 
 namespace common {
 
-wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor() {
+CPUThreadPoolExecutor* getGlobalCPUExecutor() {
   if (FLAGS_block_on_global_cpu_pool_full) {
-    static wangle::CPUThreadPoolExecutor g_executor(
+    static CPUThreadPoolExecutor g_executor(
       GetThreadsCount(),
       std::make_unique<
-        wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
-        wangle::QueueBehaviorIfFull::BLOCK>>(GetQueueSize()),
+        LifoSemMPMCQueue<CPUThreadPoolExecutor::CPUTask,
+        QueueBehaviorIfFull::BLOCK>>(GetQueueSize()),
       std::make_shared<IdenticalNameThreadFactory>(
         FLAGS_global_cpu_thread_pool_name));
 
     return &g_executor;
   } else {
-    static wangle::CPUThreadPoolExecutor g_executor(
+    static CPUThreadPoolExecutor g_executor(
       GetThreadsCount(),
       std::make_unique<
-        wangle::LifoSemMPMCQueue<wangle::CPUThreadPoolExecutor::CPUTask,
-        wangle::QueueBehaviorIfFull::THROW>>(GetQueueSize()),
+        LifoSemMPMCQueue<CPUThreadPoolExecutor::CPUTask,
+        QueueBehaviorIfFull::THROW>>(GetQueueSize()),
       std::make_shared<IdenticalNameThreadFactory>(
         FLAGS_global_cpu_thread_pool_name));
 

@@ -18,7 +18,11 @@
 
 #pragma once
 
+#if __GNUC__ >= 8
+namespace folly {
+#else
 namespace wangle {
+#endif
 
 class CPUThreadPoolExecutor;
 
@@ -33,6 +37,10 @@ namespace common {
  * GFlag of thread count. In case that happens, we will fallback to use the
  * number of cores as the thread pool size.
  */
+#if __GNUC__ >= 8
+folly::CPUThreadPoolExecutor* getGlobalCPUExecutor();
+#else
 wangle::CPUThreadPoolExecutor* getGlobalCPUExecutor();
+#endif
 
 }  // namespace common
