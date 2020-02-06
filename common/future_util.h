@@ -87,7 +87,7 @@ folly::Future<T> GetSpeculativeFuture(
       }
 
       auto backup_future = backup_future_func();
-      backup_future.then([ctx = std::move(ctx)] (folly::Try<T>&& t) mutable {
+      std::move(backup_future).then([ctx = std::move(ctx)] (folly::Try<T>&& t) mutable {
         if (!t.hasException() && ctx->fulfilled.exchange(true) == false) {
           ctx->promise.setTry(std::move(t));
         }
@@ -106,7 +106,7 @@ folly::Future<T> GetSpeculativeFuture(
   auto ctx = std::make_shared<Context>(std::forward<F>(backup_future_func));
   auto future = ctx->promise.getFuture();
 
-  primary_future.then([ctx] (folly::Try<T>&& t) mutable {
+  std::move(primary_future).then([ctx] (folly::Try<T>&& t) mutable {
     if (t.hasException()) {
       if (!ctx->fulfilled.load()) {
         ctx->tryToFireBackupFuture(ctx);
@@ -118,7 +118,7 @@ folly::Future<T> GetSpeculativeFuture(
   });
 
   auto timeout_future = GenerateDelayedFuture(speculative_timeout);
-  timeout_future.then([ctx] (folly::Try<folly::Unit>&& t) mutable {
+  std::move(timeout_future).then([ctx] (folly::Try<folly::Unit>&& t) mutable {
     if (!ctx->fulfilled.load()) {
       ctx->tryToFireBackupFuture(ctx);
       common::Stats::get()->Incr(kPrimaryTimeout);
