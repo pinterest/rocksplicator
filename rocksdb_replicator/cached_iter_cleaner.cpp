@@ -17,7 +17,11 @@
 //
 
 #include <folly/io/async/EventBase.h>
+#if __GNUC__ >= 8
+#include "folly/system/ThreadName.h"
+#else
 #include <folly/ThreadName.h>
+#endif
 #include <gflags/gflags.h>
 
 #include "rocksdb_replicator/rocksdb_replicator.h"

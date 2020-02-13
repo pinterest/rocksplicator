@@ -19,7 +19,11 @@
 #pragma once
 
 #include <boost/intrusive/list.hpp>
+#if __GNUC__ >= 8
+#include <folly/concurrency/CacheLocality.h>
+#else
 #include <folly/detail/CacheLocality.h>
+#endif
 #include <folly/MPMCQueue.h>
 #include <cstddef>
 #include <functional>
@@ -46,8 +50,13 @@ class ObjectLock {
   };
 
   struct Bucket {
+#if __GNUC__ >= 8
+    alignas(folly::hardware_destructive_interference_size) MutexType bucketMutex;
+    alignas(folly::hardware_destructive_interference_size) boost::intrusive::list<Node> nodes;
+#else
     MutexType bucketMutex FOLLY_ALIGN_TO_AVOID_FALSE_SHARING;
     boost::intrusive::list<Node> nodes FOLLY_ALIGN_TO_AVOID_FALSE_SHARING;
+#endif
 
     template <typename ALLOC>
     void Lock(const ObjectType& object, ALLOC&& alloc) {
