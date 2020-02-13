@@ -37,6 +37,7 @@
 #include "common/thrift_router.h"
 #include "common/timeutil.h"
 #include "folly/FileUtil.h"
+#include "folly/MoveWrapper.h"
 #include "folly/ScopeGuard.h"
 #include "folly/String.h"
 #include "librdkafka/rdkafkacpp.h"
@@ -229,7 +230,7 @@ std::unique_ptr<::admin::ApplicationDBManager> CreateDBBasedOnConfig(
          upstream_addr = folly::makeMoveWrapper(std::move(upstream_addr)),
          my_role, &db_manager] () mutable {
           std::string err_msg;
-          auto db = (*db_future).get();
+          auto db = std::move(*db_future).get();
           CHECK(db);
           if (my_role == common::detail::Role::MASTER) {
             LOG(ERROR) << "Hosting master " << db_name;

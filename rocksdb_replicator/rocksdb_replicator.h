@@ -41,7 +41,11 @@ namespace folly {
   class Executor;
 }
 
+#if __GNUC__ >= 8
+namespace folly {
+#else
 namespace wangle {
+#endif
   class CPUThreadPoolExecutor;
 }
 
@@ -213,7 +217,11 @@ class RocksDBReplicator {
   RocksDBReplicator();
   ~RocksDBReplicator();
 
+#if __GNUC__ >= 8
+  std::unique_ptr<folly::CPUThreadPoolExecutor> executor_;
+#else
   std::unique_ptr<wangle::CPUThreadPoolExecutor> executor_;
+#endif
 
   common::ThriftClientPool<ReplicatorAsyncClient> client_pool_;
 

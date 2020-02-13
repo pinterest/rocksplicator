@@ -115,7 +115,7 @@ class NonBlockingConditionVariable {
 #else
       auto future = folly::futures::sleep(std::chrono::milliseconds(timeout_ms));
 #endif
-      std::move(future).then([weak_task = std::move(weak_task), executor = executor_] {
+      std::move(future).then([weak_task = std::move(weak_task), executor = executor_] (folly::Try<folly::Unit>&& t) {
           auto task = weak_task.lock();
           if (task && task->should_i_run()) {
             executor->add(std::move(task->func));
