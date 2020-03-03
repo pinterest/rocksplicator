@@ -58,6 +58,7 @@ public class Participant {
   private static final String hostPort = "port";
   private static final String stateModel = "stateModelType";
   private static final String configPostUrl = "configPostUrl";
+  private static final String s3Bucket = "s3Bucket";
   private static final String disableSpectator = "disableSpectator";
 
   private static HelixManager helixManager;
@@ -106,6 +107,12 @@ public class Participant {
     configPostUrlOption.setRequired(true);
     configPostUrlOption.setArgName("URL to post config (Required)");
 
+    Option s3BucketOption =
+        OptionBuilder.withLongOpt(s3Bucket).withDescription("S3 Bucket").create();
+    s3BucketOption.setArgs(1);
+    s3BucketOption.setRequired(false);
+    s3BucketOption.setArgName("S3 Bucket (Optional)");
+
     Option disableSpectatorOption =
         OptionBuilder.withLongOpt(disableSpectator).withDescription("Disable Spectator").create();
     disableSpectatorOption.setArgs(0);
@@ -120,6 +127,7 @@ public class Participant {
         .addOption(portOption)
         .addOption(stateModelOption)
         .addOption(configPostUrlOption)
+        .addOption(s3BucketOption)
         .addOption(disableSpectatorOption);
     return options;
   }
@@ -148,11 +156,16 @@ public class Participant {
     final String stateModelType = cmd.getOptionValue(stateModel);
     final String postUrl = cmd.getOptionValue(configPostUrl);
     final String instanceName = host + "_" + port;
+    String s3BucketName = "";
+    final boolean useS3Backup = cmd.hasOption(s3Bucket);
+    if (useS3Backup) {
+      s3BucketName = cmd.getOptionValue(s3Bucket);
+    }
     final boolean runSpectator = !cmd.hasOption(disableSpectator);
 
     LOG.error("Starting participant with ZK:" + zkConnectString);
     Participant participant = new Participant(zkConnectString, clusterName, instanceName,
-        stateModelType, Integer.parseInt(port), postUrl, runSpectator);
+        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator);
 
     HelixAdmin helixAdmin = new ZKHelixAdmin(zkConnectString);
     HelixConfigScope scope =
@@ -176,7 +189,8 @@ public class Participant {
 
 
   private Participant(String zkConnectString, String clusterName, String instanceName,
-                     String stateModelType, int port, String postUrl, boolean runSpectator) throws Exception {
+                     String stateModelType, int port, String postUrl,
+                     boolean useS3Backup, String s3BucketName, boolean runSpectator) throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
 
@@ -187,7 +201,7 @@ public class Participant {
       stateModelFactory = new CacheStateModelFactory();
     } else if (stateModelType.equals("MasterSlave")) {
       stateModelFactory = new MasterSlaveStateModelFactory(instanceName.split("_")[0],
-          port, zkConnectString, clusterName);
+          port, zkConnectString, clusterName, useS3Backup, s3BucketName);
     } else if (stateModelType.equals("Bootstrap")) {
       stateModelFactory = new BootstrapStateModelFactory(instanceName.split("_")[0],
               port, zkConnectString, clusterName);

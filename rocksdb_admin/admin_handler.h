@@ -27,6 +27,7 @@
 
 #include "common/object_lock.h"
 #include "common/s3util.h"
+#include "folly/SocketAddress.h"
 #include "rocksdb_admin/application_db_manager.h"
 #ifdef PINTEREST_INTERNAL
 // NEVER SET THIS UNLESS PINTEREST INTERNAL USAGE.
@@ -34,6 +35,7 @@
 #else
 #include "rocksdb_admin/gen-cpp2/Admin.h"
 #endif
+#include "rocksdb/status.h"
 
 class KafkaWatcher;
 
@@ -68,6 +70,16 @@ class AdminHandler : virtual public AdminSvIf {
       std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
         RestoreDBResponse>>> callback,
       std::unique_ptr<RestoreDBRequest> request) override;
+
+  void async_tm_backupDBToS3(
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+        BackupDBToS3Response>>> callback,
+      std::unique_ptr<BackupDBToS3Request> request) override;
+
+  void async_tm_restoreDBFromS3(
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+        RestoreDBFromS3Response>>> callback,
+      std::unique_ptr<RestoreDBFromS3Request> request) override;
 
   void async_tm_checkDB(
       std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
@@ -158,11 +170,31 @@ class AdminHandler : virtual public AdminSvIf {
   std::unordered_set<std::string> allow_overlapping_keys_segments_;
   // number of the current concurrenty s3 downloadings
   std::atomic<int> num_current_s3_sst_downloadings_;
+  // number of the current concurrenty s3 uploadings
+  std::atomic<int> num_current_s3_sst_uploadings_;
   // Map of db_name to kafka watcher
   std::unordered_map<std::string, std::shared_ptr<KafkaWatcher>>
     kafka_watcher_map_;
   // Lock for synchronizing access to kafka_watcher_map_
   std::mutex kafka_watcher_lock_;
+
+  bool backupDBHelper(const std::string& db_name,
+                      const std::string& backup_dir,
+                      std::unique_ptr<rocksdb::Env> env_holder,
+                      const bool enable_backup_rate_limit,
+                      const uint32_t backup_rate_limit,
+                      AdminException* e);
+
+  bool restoreDBHelper(const std::string& db_name,
+                       const std::string& backup_dir,
+                       std::unique_ptr<rocksdb::Env> env_holder,
+                       std::unique_ptr<folly::SocketAddress> upstream_addr,
+                       const bool enable_restore_rate_limit,
+                       const uint32_t restore_rate_limit,
+                       AdminException* e);
+
+  std::shared_ptr<common::S3Util> createLocalS3Util(const uint32_t read_ratelimit_mb = 50,
+                                                    const std::string& bucket = "");
 };
 
 }  // namespace admin

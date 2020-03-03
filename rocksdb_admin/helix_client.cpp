@@ -30,6 +30,10 @@ DECLARE_int32(port);
 DEFINE_string(helix_log_config_file_path, "",
     "Participant log config file path "
     "e.g: /etc/config/helix/log4j.properties");
+DEFINE_bool(use_s3_backup, false,
+            "whether we should use S3 env for rocksdb backup&rockstore");
+DEFINE_string(s3_bucket, "pinterest-jackson",
+              "S3 bucket would be used for rocksdb backup & restore");
 
 namespace {
 
@@ -88,7 +92,8 @@ void invokeClass(JNIEnv* env,
                                       "main",
                                       "([Ljava/lang/String;)V");
 
-  args = env->NewObjectArray(14 + (disable_spectator ? 1 : 0), env->FindClass("java/lang/String"), nullptr);
+  args = env->NewObjectArray(14 + (FLAGS_use_s3_backup ? 2 : 0) + (disable_spectator ? 1 : 0),
+                             env->FindClass("java/lang/String"), nullptr);
 
   env->SetObjectArrayElement(args, 0, env->NewStringUTF("--zkSvr"));
   env->SetObjectArrayElement(
@@ -109,8 +114,12 @@ void invokeClass(JNIEnv* env,
   env->SetObjectArrayElement(args, 12, env->NewStringUTF("--configPostUrl"));
   env->SetObjectArrayElement(args, 13,
                              env->NewStringUTF(config_post_url.c_str()));
+  if (FLAGS_use_s3_backup) {
+    env->SetObjectArrayElement(args, 14, env->NewStringUTF("--s3Bucket"));
+    env->SetObjectArrayElement(args, 15, env->NewStringUTF(FLAGS_s3_bucket.c_str()));
+  }
   if (disable_spectator) {
-    env->SetObjectArrayElement(args, 14, env->NewStringUTF("--disableSpectator"));
+    env->SetObjectArrayElement(args, FLAGS_use_s3_backup ? 16 : 14, env->NewStringUTF("--disableSpectator"));
   }
 
   env->CallStaticVoidMethod(ParticipantClass, mainMethod, args);
