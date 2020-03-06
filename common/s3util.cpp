@@ -23,6 +23,8 @@
 #include <unistd.h>
 
 #include <aws/s3/S3Client.h>
+#include <aws/s3/model/CopyObjectRequest.h>
+#include <aws/s3/model/DeleteObjectRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
 #include <aws/s3/model/ListObjectsRequest.h>
@@ -45,6 +47,8 @@
 using std::string;
 using std::vector;
 using std::tuple;
+using Aws::S3::Model::CopyObjectRequest;
+using Aws::S3::Model::DeleteObjectRequest;
 using Aws::S3::Model::GetObjectRequest;
 using Aws::S3::Model::ListObjectsRequest;
 using Aws::S3::Model::HeadObjectRequest;
@@ -312,6 +316,22 @@ GetObjectMetadataResponse S3Util::getObjectMetadata(const string &key) {
   return GetObjectMetadataResponse(std::move(metadata), "");
 }
 
+GetObjectSizeAndModTimeResponse S3Util::getObjectSizeAndModTime(const string& key) {
+  HeadObjectRequest headObjectRequest;
+  headObjectRequest.SetBucket(bucket_);
+  headObjectRequest.SetKey(key);
+  map<string, uint64_t> metadata;
+  auto headObjectOutcome = s3Client->HeadObject(headObjectRequest);
+  if (!headObjectOutcome.IsSuccess()) {
+    return GetObjectSizeAndModTimeResponse(
+        std::move(metadata), headObjectOutcome.GetError().GetMessage());
+  }
+
+  metadata["size"] = headObjectOutcome.GetResult().GetContentLength();
+  metadata["last-modified"] = headObjectOutcome.GetResult().GetLastModified().Millis();
+  return GetObjectSizeAndModTimeResponse(std::move(metadata), "");
+}
+
 PutObjectResponse S3Util::putObject(const string& key, const string& local_path, const string& tags) {
   PutObjectRequest object_request;
   object_request.WithBucket(bucket_).WithKey(key);
@@ -342,6 +362,35 @@ S3Util::putObjectCallable(const string& key, const string& local_path) {
                                                   std::ios_base::in | std::ios_base::binary);
   object_request.SetBody(input_data);
   return s3Client->PutObjectCallable(object_request);
+}
+
+CopyObjectResponse S3Util::copyObject(const string& src, const string& target) {
+  CopyObjectRequest copyObjectRequest;
+  copyObjectRequest.SetCopySource(bucket_ + "/" + src);
+  copyObjectRequest.SetBucket(bucket_);
+  copyObjectRequest.SetKey(target);
+
+  auto outcome = s3Client->CopyObject(copyObjectRequest);
+  if (!outcome.IsSuccess()) {
+    return CopyObjectResponse(
+        false, outcome.GetError().GetMessage());
+  }
+
+  return CopyObjectResponse(true, "");
+}
+
+DeleteObjectResponse S3Util::deleteObject(const string& key) {
+  DeleteObjectRequest deleteObjectRequest;
+  deleteObjectRequest.SetBucket(bucket_);
+  deleteObjectRequest.SetKey(key);
+
+  auto outcome = s3Client->DeleteObject(deleteObjectRequest);
+  if (!outcome.IsSuccess()) {
+    return DeleteObjectResponse(
+        false, outcome.GetError().GetMessage());
+  }
+
+  return DeleteObjectResponse(true, "");
 }
 
 tuple<string, string> S3Util::parseFullS3Path(const string& s3_path) {
