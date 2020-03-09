@@ -33,6 +33,7 @@ import com.pinterest.rocksdb_admin.thrift.GetSequenceNumberRequest;
 import com.pinterest.rocksdb_admin.thrift.GetSequenceNumberResponse;
 import com.pinterest.rocksdb_admin.thrift.RestoreDBRequest;
 import com.pinterest.rocksdb_admin.thrift.RestoreDBFromS3Request;
+import com.pinterest.rocksdb_admin.thrift.CompactDBRequest;
 
 import org.apache.helix.model.Message;
 import org.apache.thrift.TException;
@@ -43,6 +44,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class Utils {
+
   private static final Logger LOG = LoggerFactory.getLogger(Utils.class);
 
   /**
@@ -74,7 +76,7 @@ public class Utils {
    * @return e.g. "p2p100001"
    */
   public static String getDbName(String partitionName) {
-    int lastIdx= partitionName.lastIndexOf('_');
+    int lastIdx = partitionName.lastIndexOf('_');
     return String.format("%s%05d", partitionName.substring(0, lastIdx),
         Integer.parseInt(partitionName.substring(lastIdx + 1)));
   }
@@ -158,6 +160,7 @@ public class Utils {
       LOG.error("AddDB() request failed", e);
     }
   }
+
   /**
    * Add a DB as a Slave, and set it upstream to be itself. Do nothing if the DB already exists
    * @param dbName
@@ -205,7 +208,8 @@ public class Utils {
 
       GetSequenceNumberRequest request = new GetSequenceNumberRequest(dbName);
       GetSequenceNumberResponse response = client.getSequenceNumber(request);
-      LOG.error("Seq number for " + dbName + " on " + host + ": " + String.valueOf(response.seq_num));
+      LOG.error(
+          "Seq number for " + dbName + " on " + host + ": " + String.valueOf(response.seq_num));
       return response.seq_num;
     } catch (TException e) {
       LOG.error("Failed to get sequence number", e);
@@ -232,7 +236,7 @@ public class Utils {
 
       ChangeDBRoleAndUpstreamRequest request = new ChangeDBRoleAndUpstreamRequest(dbName, role);
       request.setUpstream_ip(upstreamIP);
-      request.setUpstream_port((short)upstreamPort);
+      request.setUpstream_port((short) upstreamPort);
       client.changeDBRoleAndUpStream(request);
     } catch (TException e) {
       LOG.error("Failed to changeDBRoleAndUpStream", e);
@@ -281,6 +285,23 @@ public class Utils {
     }
   }
 
+  public static void backupDBWithLimit(String host, int adminPort, String dbName, String hdfsPath,
+                                       int limitMbs)
+      throws RuntimeException {
+    LOG.error("don't call backupDBWithLImit");
+    LOG.error("Backup " + dbName + " from " + host + " to " + hdfsPath);
+    try {
+      Admin.Client client = getAdminClient(host, adminPort);
+
+      BackupDBRequest req = new BackupDBRequest(dbName, hdfsPath);
+      req.setLimit_mbs(limitMbs);
+      client.backupDB(req);
+    } catch (TException e) {
+      LOG.error("Failed to backup DB: ", e.toString());
+      throw new RuntimeException(e);
+    }
+  }
+
   /**
    * Restore the local DB from HDFS
    * @param adminPort
@@ -296,7 +317,7 @@ public class Utils {
       Admin.Client client = getLocalAdminClient(adminPort);
 
       RestoreDBRequest req =
-          new RestoreDBRequest(dbName, hdfsPath, upsreamHost, (short)upstreamPort);
+          new RestoreDBRequest(dbName, hdfsPath, upsreamHost, (short) upstreamPort);
       client.restoreDB(req);
     } catch (TException e) {
       LOG.error("Failed to restore DB: ", e.toString());
@@ -304,52 +325,66 @@ public class Utils {
     }
   }
 
-    /**
-     * Backup the DB on the host to S3
-     * @param host
-     * @param adminPort
-     * @param dbName
-     * @param s3Bucket
-     * @param s3Path
-     * @throws RuntimeException
-     */
-    public static void backupDBToS3(String host, int adminPort, String dbName, String s3Bucket, String s3Path)
-        throws RuntimeException {
-      LOG.error("(S3)Backup " + dbName + " from " + host + " to " + s3Path);
-      try {
-        Admin.Client client = getAdminClient(host, adminPort);
+  /**
+   * Backup the DB on the host to S3
+   * @param host
+   * @param adminPort
+   * @param dbName
+   * @param s3Bucket
+   * @param s3Path
+   * @throws RuntimeException
+   */
+  public static void backupDBToS3(String host, int adminPort, String dbName, String s3Bucket,
+                                  String s3Path)
+      throws RuntimeException {
+    LOG.error("(S3)Backup " + dbName + " from " + host + " to " + s3Path);
+    try {
+      Admin.Client client = getAdminClient(host, adminPort);
 
-        BackupDBToS3Request req = new BackupDBToS3Request(dbName, s3Bucket, s3Path);
-        client.backupDBToS3(req);
-      } catch (TException e) {
-        LOG.error("Failed to backup DB: ", e.toString());
-        throw new RuntimeException(e);
-      }
+      BackupDBToS3Request req = new BackupDBToS3Request(dbName, s3Bucket, s3Path);
+      client.backupDBToS3(req);
+    } catch (TException e) {
+      LOG.error("Failed to backup DB: ", e.toString());
+      throw new RuntimeException(e);
     }
+  }
 
-    /**
-     * Restore the local DB from s3
-     * @param adminPort
-     * @param dbName
-     * @param s3Bucket
-     * @param s3Path
-     * @throws RuntimeException
-     */
-    public static void restoreLocalDBFromS3(int adminPort, String dbName, String s3Bucket, String s3Path,
-                                            String upsreamHost, int upstreamPort)
-        throws RuntimeException {
-      LOG.error("(S3)Restore " + dbName + " from " + s3Path + " with upstream " + upsreamHost);
-      try {
-        Admin.Client client = getLocalAdminClient(adminPort);
+  /**
+   * Restore the local DB from s3
+   * @param adminPort
+   * @param dbName
+   * @param s3Bucket
+   * @param s3Path
+   * @throws RuntimeException
+   */
+  public static void restoreLocalDBFromS3(int adminPort, String dbName, String s3Bucket,
+                                          String s3Path,
+                                          String upsreamHost, int upstreamPort)
+      throws RuntimeException {
+    LOG.error("(S3)Restore " + dbName + " from " + s3Path + " with upstream " + upsreamHost);
+    try {
+      Admin.Client client = getLocalAdminClient(adminPort);
 
-        RestoreDBFromS3Request req =
-            new RestoreDBFromS3Request(dbName, s3Bucket, s3Path,  upsreamHost, (short)upstreamPort);
-        client.restoreDBFromS3(req);
-      } catch (TException e) {
-        LOG.error("Failed to restore DB: ", e.toString());
-        throw new RuntimeException(e);
-      }
+      RestoreDBFromS3Request req =
+          new RestoreDBFromS3Request(dbName, s3Bucket, s3Path, upsreamHost, (short) upstreamPort);
+      client.restoreDBFromS3(req);
+    } catch (TException e) {
+      LOG.error("Failed to restore DB: ", e.toString());
+      throw new RuntimeException(e);
     }
+  }
+
+  public static void compactDB(int adminPort, String dbName) throws RuntimeException {
+    LOG.error(String.format("Compact partition: %s", dbName));
+    try {
+      Admin.Client client = getLocalAdminClient(adminPort);
+      CompactDBRequest req = new CompactDBRequest(dbName);
+      client.compactDB(req);
+    } catch (TException e) {
+      LOG.error("Failed to dedup DB: ", e.toString());
+      throw new RuntimeException(e);
+    }
+  }
 
   /**
    * Check if the DB on host:adminPort is Master. If the CheckDBRequest request fails, return false.
@@ -371,12 +406,13 @@ public class Utils {
     }
   }
 
-  public static void checkSanity(String fromState, String toState, Message message, String resourceName,
+  public static void checkSanity(String fromState, String toState, Message message,
+                                 String resourceName,
                                  String partitionName) {
     if (fromState.equalsIgnoreCase(message.getFromState())
-            && toState.equalsIgnoreCase(message.getToState())
-            && resourceName.equalsIgnoreCase(message.getResourceName())
-            && partitionName.equalsIgnoreCase(message.getPartitionName())) {
+        && toState.equalsIgnoreCase(message.getToState())
+        && resourceName.equalsIgnoreCase(message.getResourceName())
+        && partitionName.equalsIgnoreCase(message.getPartitionName())) {
       return;
     }
 

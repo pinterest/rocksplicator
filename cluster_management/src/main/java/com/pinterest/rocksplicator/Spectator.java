@@ -18,8 +18,6 @@
 
 package com.pinterest.rocksplicator;
 
-import java.util.HashMap;
-import java.util.Map;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
@@ -32,15 +30,10 @@ import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
 import org.apache.curator.framework.recipes.locks.Locker;
 import org.apache.curator.retry.ExponentialBackoffRetry;
-import org.apache.helix.HelixConstants;
 import org.apache.helix.HelixManager;
 import org.apache.helix.HelixManagerFactory;
 import org.apache.helix.InstanceType;
 import org.apache.helix.manager.zk.HelixManagerShutdownHook;
-import org.apache.helix.manager.zk.ZKHelixAdmin;
-import org.apache.helix.model.HelixConfigScope;
-import org.apache.helix.model.Message;
-import org.apache.helix.model.builder.HelixConfigScopeBuilder;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.ConsoleAppender;
 import org.apache.log4j.Level;
@@ -129,7 +122,11 @@ public class Spectator {
     zkClient.start();
     InterProcessMutex mutex = new InterProcessMutex(zkClient, getClusterLockPath(clusterName));
     try (Locker locker = new Locker(mutex)) {
-      spectator.startListener(postUrl);
+      if (clusterName.startsWith("rocksdbsnap")) {
+        spectator.startWorkflowListener(zkConnectString, postUrl);
+      } else {
+        spectator.startListener(postUrl);
+      }
       Thread.currentThread().join();
     } catch (RuntimeException e) {
       LOG.error("RuntimeException thrown by cluster " + clusterName, e);
@@ -148,6 +145,12 @@ public class Spectator {
     ConfigGenerator configGenerator = new ConfigGenerator(helixManager.getClusterName(), helixManager, postUrl);
     helixManager.addExternalViewChangeListener(configGenerator);
     helixManager.addConfigChangeListener(configGenerator);
+  }
+
+  private void startWorkflowListener(String zkAddr, String postUrl) throws Exception {
+    JobStateGenerator
+        stateGenerator = new JobStateGenerator(helixManager.getClusterName(), helixManager, postUrl);
+    helixManager.addExternalViewChangeListener(stateGenerator);
   }
 
   private static String getClusterLockPath(String cluster) {

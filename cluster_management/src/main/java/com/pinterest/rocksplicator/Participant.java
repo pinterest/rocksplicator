@@ -18,8 +18,17 @@
 
 package com.pinterest.rocksplicator;
 
+import com.pinterest.rocksplicator.task.BackupTaskFactory;
+import com.pinterest.rocksplicator.task.RestoreTaskFactory;
+import com.pinterest.rocksplicator.task.DedupTaskFactory;
+import com.pinterest.rocksplicator.TaskUtils;
+
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
@@ -41,6 +50,8 @@ import org.apache.helix.participant.HelixCustomCodeRunner;
 import org.apache.helix.participant.StateMachineEngine;
 import org.apache.helix.participant.statemachine.StateModel;
 import org.apache.helix.participant.statemachine.StateModelFactory;
+import org.apache.helix.task.TaskFactory;
+import org.apache.helix.task.TaskStateModelFactory;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.ConsoleAppender;
 import org.apache.log4j.Level;
@@ -50,6 +61,7 @@ import org.slf4j.LoggerFactory;
 
 
 public class Participant {
+
   private static final Logger LOG = LoggerFactory.getLogger(Participant.class);
   private static final String zkServer = "zkSvr";
   private static final String cluster = "cluster";
@@ -189,40 +201,101 @@ public class Participant {
 
 
   private Participant(String zkConnectString, String clusterName, String instanceName,
-                     String stateModelType, int port, String postUrl,
-                     boolean useS3Backup, String s3BucketName, boolean runSpectator) throws Exception {
+                      String stateModelType, int port, String postUrl,
+                      boolean useS3Backup, String s3BucketName, boolean runSpectator)
+      throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
 
-    if (stateModelType.equals("OnlineOffline")) {
-      stateModelFactory = new OnlineOfflineStateModelFactory(port, zkConnectString, clusterName);
-    } else if (stateModelType.equals("Cache")) {
-      stateModelType = "OnlineOffline";
-      stateModelFactory = new CacheStateModelFactory();
-    } else if (stateModelType.equals("MasterSlave")) {
-      stateModelFactory = new MasterSlaveStateModelFactory(instanceName.split("_")[0],
-          port, zkConnectString, clusterName, useS3Backup, s3BucketName);
-    } else if (stateModelType.equals("Bootstrap")) {
-      stateModelFactory = new BootstrapStateModelFactory(instanceName.split("_")[0],
-              port, zkConnectString, clusterName);
-    } else {
-      LOG.error("Unknown state model: " + stateModelType);
-    }
+    Set<String> stateModels = new HashSet<>(Arrays.asList(stateModelType.split(";")));
+    Set<String> registeredStateModels = new HashSet<>();
+
     StateMachineEngine stateMach = helixManager.getStateMachineEngine();
-    stateMach.registerStateModelFactory(stateModelType, stateModelFactory);
+
+    for (String stateModel : stateModels) {
+      boolean status = false;
+      if (stateModel.equals("OnlineOffline")) {
+        status = stateMach.registerStateModelFactory("OnlineOffline",
+            new OnlineOfflineStateModelFactory(port, zkConnectString, clusterName));
+      } else if (stateModel.equals("Cache")) {
+        status = stateMach.registerStateModelFactory("Cache", new CacheStateModelFactory());
+      } else if (stateModel.equals("MasterSlave")) {
+        status = stateMach.registerStateModelFactory("MasterSlave",
+            new MasterSlaveStateModelFactory(instanceName.split("_")[0],
+                port, zkConnectString, clusterName, useS3Backup, s3BucketName));
+      } else if (stateModel.equals("Bootstrap")) {
+        status = stateMach.registerStateModelFactory("Bootstrap",
+            new BootstrapStateModelFactory(instanceName.split("_")[0],
+                port, zkConnectString, clusterName));
+      } else if (stateModel.equals("Task")) {
+        // register task factory
+        // if job command is "Backup", it will create BackupTask;
+        // if job command is "Restore", it will create RestoreTask
+        Map<String, TaskFactory> taskFactoryRegistry = new HashMap<>();
+        taskFactoryRegistry.put("Backup",
+            new BackupTaskFactory(instanceName.split("_")[0], port, zkConnectString, clusterName));
+        taskFactoryRegistry.put("Restore", new RestoreTaskFactory());
+        taskFactoryRegistry.put("Dedup",
+            new DedupTaskFactory(instanceName.split("_")[0], port, zkConnectString, clusterName));
+
+        TaskStateModelFactory helixTaskFactory =
+            new TaskStateModelFactory(helixManager, taskFactoryRegistry);
+        status = stateMach.registerStateModelFactory("Task", helixTaskFactory);
+      } else {
+        LOG.error("Unknown state model: " + stateModelType);
+      }
+
+      if (status) {
+        LOG.error("Successfully register " + stateModel);
+        registeredStateModels.add(stateModel);
+      } else {
+        LOG.error("Failed to register " + stateModel);
+      }
+    }
+
+    if (registeredStateModels.size() == 0) {
+      String errMsg = String
+          .format("%s has not registered to any state models from provided config: %s", clusterName,
+              stateModelType);
+      LOG.error(errMsg);
+      throw new Exception(errMsg);
+    } else {
+      LOG.error(String.format("%s has successfully registered to state models: %s", clusterName,
+          registeredStateModels.toString()));
+    }
+
     helixManager.connect();
     helixManager.getMessagingService().registerMessageHandlerFactory(
         Message.MessageType.STATE_TRANSITION.name(), stateMach);
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
 
     if (runSpectator) {
-      // Add callback to create rocksplicator shard config
-      HelixCustomCodeRunner codeRunner = new HelixCustomCodeRunner(helixManager, zkConnectString)
-          .invoke(new ConfigGenerator(clusterName, helixManager, postUrl))
-          .on(HelixConstants.ChangeType.EXTERNAL_VIEW, HelixConstants.ChangeType.CONFIG)
-          .usingLeaderStandbyModel("ConfigWatcher" + clusterName);
-
-      codeRunner.start();
+      if (registeredStateModels.size() == 1 && registeredStateModels.contains("Task")) {
+        // only Task
+        HelixCustomCodeRunner codeRunner = new HelixCustomCodeRunner(helixManager, zkConnectString)
+            .invoke(new JobStateGenerator(clusterName, helixManager, postUrl))
+            .on(HelixConstants.ChangeType.EXTERNAL_VIEW)
+            .usingLeaderStandbyModel("ConfigWatcher" + clusterName);
+        codeRunner.start();
+      } else if (!registeredStateModels.contains("Task")) {
+        // only db resource
+        HelixCustomCodeRunner codeRunner = new HelixCustomCodeRunner(helixManager, zkConnectString)
+            .invoke(new ConfigGenerator(clusterName, helixManager, postUrl))
+            .on(HelixConstants.ChangeType.EXTERNAL_VIEW, HelixConstants.ChangeType.CONFIG)
+            .usingLeaderStandbyModel("ConfigWatcher" + clusterName);
+        codeRunner.start();
+      } else {
+        // both Task and db resource
+        // construct statePostUrl from shard config postUrl
+        String statePostUrl = TaskUtils.buildStatePostUrl(postUrl);
+        HelixCustomCodeRunner codeRunner = new HelixCustomCodeRunner(helixManager, zkConnectString)
+            .invoke(
+                new ConfigAndJobStateGenerator(clusterName, helixManager, postUrl, statePostUrl))
+            .on(HelixConstants.ChangeType.EXTERNAL_VIEW, HelixConstants.ChangeType.CONFIG)
+            .usingLeaderStandbyModel("ConfigWatcher" + clusterName);
+        codeRunner.start();
+      }
     }
   }
+
 }
