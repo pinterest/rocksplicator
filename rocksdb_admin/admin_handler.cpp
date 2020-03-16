@@ -38,6 +38,7 @@
 #include "common/thrift_router.h"
 #include "common/timeutil.h"
 #include "folly/FileUtil.h"
+#include "folly/MoveWrapper.h"
 #include "folly/ScopeGuard.h"
 #include "folly/String.h"
 #include "librdkafka/rdkafkacpp.h"
