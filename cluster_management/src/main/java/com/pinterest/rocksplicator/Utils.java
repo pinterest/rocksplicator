@@ -23,6 +23,7 @@ import com.pinterest.rocksdb_admin.thrift.Admin;
 import com.pinterest.rocksdb_admin.thrift.AdminErrorCode;
 import com.pinterest.rocksdb_admin.thrift.AdminException;
 import com.pinterest.rocksdb_admin.thrift.BackupDBRequest;
+import com.pinterest.rocksdb_admin.thrift.BackupDBToS3Request;
 import com.pinterest.rocksdb_admin.thrift.ChangeDBRoleAndUpstreamRequest;
 import com.pinterest.rocksdb_admin.thrift.CheckDBRequest;
 import com.pinterest.rocksdb_admin.thrift.CheckDBResponse;
@@ -31,6 +32,7 @@ import com.pinterest.rocksdb_admin.thrift.CloseDBRequest;
 import com.pinterest.rocksdb_admin.thrift.GetSequenceNumberRequest;
 import com.pinterest.rocksdb_admin.thrift.GetSequenceNumberResponse;
 import com.pinterest.rocksdb_admin.thrift.RestoreDBRequest;
+import com.pinterest.rocksdb_admin.thrift.RestoreDBFromS3Request;
 
 import org.apache.helix.model.Message;
 import org.apache.thrift.TException;
@@ -267,7 +269,7 @@ public class Utils {
    */
   public static void backupDB(String host, int adminPort, String dbName, String hdfsPath)
       throws RuntimeException {
-    LOG.error("Backup " + dbName + " from " + host + " to " + hdfsPath);
+    LOG.error("(HDFS)Backup " + dbName + " from " + host + " to " + hdfsPath);
     try {
       Admin.Client client = getAdminClient(host, adminPort);
 
@@ -289,7 +291,7 @@ public class Utils {
   public static void restoreLocalDB(int adminPort, String dbName, String hdfsPath,
                                     String upsreamHost, int upstreamPort)
       throws RuntimeException {
-    LOG.error("Restore " + dbName + " from " + hdfsPath + " with upstream " + upsreamHost);
+    LOG.error("(HDFS)Restore " + dbName + " from " + hdfsPath + " with upstream " + upsreamHost);
     try {
       Admin.Client client = getLocalAdminClient(adminPort);
 
@@ -301,6 +303,53 @@ public class Utils {
       throw new RuntimeException(e);
     }
   }
+
+    /**
+     * Backup the DB on the host to S3
+     * @param host
+     * @param adminPort
+     * @param dbName
+     * @param s3Bucket
+     * @param s3Path
+     * @throws RuntimeException
+     */
+    public static void backupDBToS3(String host, int adminPort, String dbName, String s3Bucket, String s3Path)
+        throws RuntimeException {
+      LOG.error("(S3)Backup " + dbName + " from " + host + " to " + s3Path);
+      try {
+        Admin.Client client = getAdminClient(host, adminPort);
+
+        BackupDBToS3Request req = new BackupDBToS3Request(dbName, s3Bucket, s3Path);
+        client.backupDBToS3(req);
+      } catch (TException e) {
+        LOG.error("Failed to backup DB: ", e.toString());
+        throw new RuntimeException(e);
+      }
+    }
+
+    /**
+     * Restore the local DB from s3
+     * @param adminPort
+     * @param dbName
+     * @param s3Bucket
+     * @param s3Path
+     * @throws RuntimeException
+     */
+    public static void restoreLocalDBFromS3(int adminPort, String dbName, String s3Bucket, String s3Path,
+                                            String upsreamHost, int upstreamPort)
+        throws RuntimeException {
+      LOG.error("(S3)Restore " + dbName + " from " + s3Path + " with upstream " + upsreamHost);
+      try {
+        Admin.Client client = getLocalAdminClient(adminPort);
+
+        RestoreDBFromS3Request req =
+            new RestoreDBFromS3Request(dbName, s3Bucket, s3Path,  upsreamHost, (short)upstreamPort);
+        client.restoreDBFromS3(req);
+      } catch (TException e) {
+        LOG.error("Failed to restore DB: ", e.toString());
+        throw new RuntimeException(e);
+      }
+    }
 
   /**
    * Check if the DB on host:adminPort is Master. If the CheckDBRequest request fails, return false.

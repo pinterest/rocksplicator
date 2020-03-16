@@ -32,17 +32,15 @@
 #include "common/kafka/kafka_consumer_pool.h"
 #include "common/kafka/kafka_watcher.h"
 #include "common/network_util.h"
+#include "common/rocksdb_env_s3.h"
 #include "common/rocksdb_glogger/rocksdb_glogger.h"
 #include "common/stats/stats.h"
 #include "common/thrift_router.h"
 #include "common/timeutil.h"
 #include "folly/FileUtil.h"
-#include "folly/MoveWrapper.h"
 #include "folly/ScopeGuard.h"
 #include "folly/String.h"
 #include "librdkafka/rdkafkacpp.h"
-#include "rocksdb/env.h"
-#include "rocksdb/status.h"
 #include "rocksdb/options.h"
 #include "rocksdb/utilities/backupable_db.h"
 #include "rocksdb_admin/detail/kafka_broker_file_watcher_manager.h"
@@ -112,6 +110,14 @@ const std::string kKafkaDbDeleteErrors = "kafka_db_delete_errors";
 const std::string kKafkaDbMergeErrors = "kafka_db_merge_errors";
 const std::string kKafkaDeserFailure = "kafka_deser_failure";
 const std::string kKafkaInvalidOpcode = "kafka_invalid_opcode";
+const std::string kHDFSBackupSuccess = "hdfs_backup_success";
+const std::string kS3BackupSuccess = "s3_backup_success";
+const std::string kHDFSBackupFailure = "hdfs_backup_failure";
+const std::string kS3BackupFailure = "s3_backup_failure";
+const std::string kHDFSRestoreSuccess = "hdfs_restore_success";
+const std::string kS3RestoreSuccess = "s3_restore_success";
+const std::string kHDFSRestoreFailure = "hdfs_restore_failure";
+const std::string kS3RestoreFailure = "s3_restore_failure";
 
 int64_t GetMessageTimestampSecs(const RdKafka::Message& message) {
   const auto ts = message.timestamp();
@@ -501,59 +507,141 @@ void AdminHandler::async_tm_ping(
     callback->done();
 }
 
+bool AdminHandler::backupDBHelper(const std::string& db_name,
+                                  const std::string& backup_dir,
+                                  std::unique_ptr<rocksdb::Env> env_holder,
+                                  const bool enable_backup_rate_limit,
+                                  const uint32_t backup_rate_limit,
+                                  AdminException* e) {
+  CHECK(env_holder != nullptr);
+  db_admin_lock_.Lock(db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
+
+  auto db = getDB(db_name, e);
+  if (db == nullptr) {
+    LOG(ERROR) << "Error happened when getting db for backup: " << e->message;
+    return false;
+  }
+
+  rocksdb::BackupableDBOptions options(backup_dir);
+  common::RocksdbGLogger logger;
+  options.info_log = &logger;
+  options.max_background_operations = FLAGS_num_hdfs_access_threads;
+  if (enable_backup_rate_limit && backup_rate_limit > 0) {
+    options.backup_rate_limit = backup_rate_limit * kMB;
+  }
+  options.backup_env = env_holder.get();
+
+  rocksdb::BackupEngine* backup_engine;
+  auto status = rocksdb::BackupEngine::Open(
+      rocksdb::Env::Default(), options, &backup_engine);
+  if (!status.ok()) {
+    e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+    e->message = status.ToString();
+    LOG(ERROR) << "Error happened when opending db for backup: " << e->message;
+    return false;
+  }
+  std::unique_ptr<rocksdb::BackupEngine> backup_engine_holder(backup_engine);
+
+  return backup_engine->CreateNewBackup(db->rocksdb()).ok();
+}
+
+bool AdminHandler::restoreDBHelper(const std::string& db_name,
+                                   const std::string& backup_dir,
+                                   std::unique_ptr<rocksdb::Env> env_holder,
+                                   std::unique_ptr<folly::SocketAddress> upstream_addr,
+                                   const bool enable_restore_rate_limit,
+                                   const uint32_t restore_rate_limit,
+                                   AdminException* e) {
+  assert(env_holder != nullptr);
+  db_admin_lock_.Lock(db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
+
+  auto db = db_manager_->getDB(db_name, nullptr);
+  if (db) {
+    e->errorCode = AdminErrorCode::DB_EXIST;
+    e->message = "Could not restore an opened DB, close it first";
+    return false;
+  }
+
+  rocksdb::BackupableDBOptions options(backup_dir);
+  common::RocksdbGLogger logger;
+  options.info_log = &logger;
+  options.max_background_operations = FLAGS_num_hdfs_access_threads;
+  if (enable_restore_rate_limit && restore_rate_limit > 0) {
+    options.restore_rate_limit = restore_rate_limit * kMB;
+  }
+  options.backup_env = env_holder.get();
+
+  rocksdb::BackupEngine* backup_engine;
+  auto status = rocksdb::BackupEngine::Open(
+      rocksdb::Env::Default(), options, &backup_engine);
+  if (!status.ok()) {
+    e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+    e->message = status.ToString();
+    LOG(ERROR) << "Error happened when opending db for restore: " << e->message;
+    return false;
+  }
+  std::unique_ptr<rocksdb::BackupEngine> backup_engine_holder(backup_engine);
+
+  auto db_path = FLAGS_rocksdb_dir + db_name;
+  status = backup_engine->RestoreDBFromLatestBackup(db_path, db_path);
+  if (!status.ok()) {
+    e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+    e->message = status.ToString();
+    return false;
+  }
+
+  rocksdb::DB* rocksdb_db;
+  auto segment = admin::DbNameToSegment(db_name);
+  status = rocksdb::DB::Open(rocksdb_options_(segment), db_path, &rocksdb_db);
+  if (!status.ok()) {
+    e->errorCode = AdminErrorCode::DB_ERROR;
+    e->message = status.ToString();
+    return false;
+  }
+
+  std::string err_msg;
+  if (!db_manager_->addDB(db_name,
+                          std::unique_ptr<rocksdb::DB>(rocksdb_db),
+                          replicator::DBRole::SLAVE,
+                          std::move(upstream_addr), &err_msg)) {
+    e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+    e->message = std::move(err_msg);
+    return false;
+  }
+  return true;
+}
+
 void AdminHandler::async_tm_backupDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       BackupDBResponse>>> callback,
     std::unique_ptr<BackupDBRequest> request) {
-  db_admin_lock_.Lock(request->db_name);
-  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
-
-  AdminException e;
-  auto db = getDB(request->db_name, &e);
-  if (db == nullptr) {
-    callback.release()->exceptionInThread(std::move(e));
-    return;
-  }
-
   auto full_path = FLAGS_hdfs_name_node + request->hdfs_backup_dir;
-  LOG(INFO) << "Backup " << request->db_name << " to " << full_path;
-
   rocksdb::Env* hdfs_env;
   auto status = rocksdb::NewHdfsEnv(&hdfs_env, full_path);
   if (!OKOrSetException(status,
                         AdminErrorCode::DB_ADMIN_ERROR,
                         &callback)) {
-    return;
-  }
-  std::unique_ptr<rocksdb::Env> hdfs_env_holder(hdfs_env);
-
-  rocksdb::BackupableDBOptions options(full_path);
-  common::RocksdbGLogger logger;
-  options.info_log = &logger;
-  options.max_background_operations = FLAGS_num_hdfs_access_threads;
-  if (request->__isset.limit_mbs && request->limit_mbs > 0) {
-    options.backup_rate_limit = request->limit_mbs * kMB;
-  }
-  options.backup_env = hdfs_env;
-
-  rocksdb::BackupEngine* backup_engine;
-  status = rocksdb::BackupEngine::Open(
-    rocksdb::Env::Default(), options, &backup_engine);
-  if (!OKOrSetException(status,
-                        AdminErrorCode::DB_ADMIN_ERROR,
-                        &callback)) {
-    return;
-  }
-  std::unique_ptr<rocksdb::BackupEngine> backup_engine_holder(backup_engine);
-
-  status = backup_engine->CreateNewBackup(db->rocksdb());
-  if (!OKOrSetException(status,
-                        AdminErrorCode::DB_ADMIN_ERROR,
-                        &callback)) {
+    common::Stats::get()->Incr(kHDFSBackupFailure);
     return;
   }
 
-  LOG(INFO) << "Backup is done.";
+  LOG(INFO) << "HDFS Backup " << request->db_name << " to " << full_path;
+  AdminException e;
+  if (!backupDBHelper(request->db_name,
+                      full_path,
+                      std::unique_ptr<rocksdb::Env>(hdfs_env),
+                      request->__isset.limit_mbs,
+                      request->limit_mbs,
+                      &e)) {
+    callback.release()->exceptionInThread(std::move(e));
+    common::Stats::get()->Incr(kHDFSBackupFailure);
+    return;
+  }
+
+  LOG(INFO) << "HDFS Backup is done.";
+  common::Stats::get()->Incr(kHDFSBackupSuccess);
   callback->result(BackupDBResponse());
 }
 
@@ -561,87 +649,175 @@ void AdminHandler::async_tm_restoreDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       RestoreDBResponse>>> callback,
     std::unique_ptr<RestoreDBRequest> request) {
-  db_admin_lock_.Lock(request->db_name);
-  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
-
-  AdminException e;
   auto upstream_addr = std::make_unique<folly::SocketAddress>();
   if (!SetAddressOrException(request->upstream_ip,
                              FLAGS_rocksdb_replicator_port,
                              upstream_addr.get(),
                              &callback)) {
-    return;
-  }
-
-  auto db = db_manager_->getDB(request->db_name, nullptr);
-  if (db) {
-    e.errorCode = AdminErrorCode::DB_EXIST;
-    e.message = "Could not restore an opened DB, close it first";
-    callback.release()->exceptionInThread(std::move(e));
+    common::Stats::get()->Incr(kHDFSRestoreFailure);
     return;
   }
 
   auto full_path = FLAGS_hdfs_name_node + request->hdfs_backup_dir;
-  LOG(INFO) << "Restore " << request->db_name << " from " << full_path;
-
   rocksdb::Env* hdfs_env;
   auto status = rocksdb::NewHdfsEnv(&hdfs_env, full_path);
   if (!OKOrSetException(status,
                         AdminErrorCode::DB_ADMIN_ERROR,
                         &callback)) {
-    return;
-  }
-  std::unique_ptr<rocksdb::Env> hdfs_env_holder(hdfs_env);
-
-  rocksdb::BackupableDBOptions options(full_path);
-  common::RocksdbGLogger logger;
-  options.info_log = &logger;
-  options.max_background_operations = FLAGS_num_hdfs_access_threads;
-  if (request->__isset.limit_mbs && request->limit_mbs > 0) {
-    options.restore_rate_limit = request->limit_mbs * kMB;
-  }
-  options.backup_env = hdfs_env;
-
-  rocksdb::BackupEngine* backup_engine;
-  status = rocksdb::BackupEngine::Open(
-    rocksdb::Env::Default(), options, &backup_engine);
-  if (!OKOrSetException(status,
-                        AdminErrorCode::DB_ADMIN_ERROR,
-                        &callback)) {
-    return;
-  }
-  std::unique_ptr<rocksdb::BackupEngine> backup_engine_holder(backup_engine);
-
-  auto db_path = FLAGS_rocksdb_dir + request->db_name;
-  status = backup_engine->RestoreDBFromLatestBackup(db_path, db_path);
-  if (!OKOrSetException(status,
-                        AdminErrorCode::DB_ADMIN_ERROR,
-                        &callback)) {
+    common::Stats::get()->Incr(kHDFSRestoreFailure);
     return;
   }
 
-  rocksdb::DB* rocksdb_db;
-  auto segment = admin::DbNameToSegment(request->db_name);
-  status = rocksdb::DB::Open(rocksdb_options_(segment), db_path, &rocksdb_db);
-  if (!OKOrSetException(status,
-                        AdminErrorCode::DB_ERROR,
-                        &callback)) {
-    return;
-  }
-
-  std::string err_msg;
-  if (!db_manager_->addDB(request->db_name,
-                          std::unique_ptr<rocksdb::DB>(rocksdb_db),
-                          replicator::DBRole::SLAVE,
-                          std::move(upstream_addr), &err_msg)) {
-    e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
-    e.message = std::move(err_msg);
+  LOG(INFO) << "HDFS Restore " << request->db_name << " from " << full_path;
+  AdminException e;
+  if (!restoreDBHelper(request->db_name,
+                       full_path,
+                       std::unique_ptr<rocksdb::Env>(hdfs_env),
+                       std::move(upstream_addr),
+                       request->__isset.limit_mbs,
+                       request->limit_mbs,
+                       &e)) {
     callback.release()->exceptionInThread(std::move(e));
+    common::Stats::get()->Incr(kHDFSRestoreFailure);
+    return;
+  }
+
+  LOG(INFO) << "HDFS Restore is done.";
+  common::Stats::get()->Incr(kHDFSRestoreSuccess);
+  callback->result(RestoreDBResponse());
+}
+
+inline std::string rtrim(std::string str, char c) {
+  if (str.length() > 0 && str.back() == c) {
+    str.pop_back();
+  }
+
+  return str;
+}
+
+void AdminHandler::async_tm_backupDBToS3(
+    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+      BackupDBToS3Response>>> callback,
+    std::unique_ptr<BackupDBToS3Request> request) {
+  AdminException e;
+  const auto n = num_current_s3_sst_uploadings_.fetch_add(1);
+  SCOPE_EXIT {
+    num_current_s3_sst_uploadings_.fetch_sub(1);
+  };
+
+  if (n >= FLAGS_max_s3_sst_loading_concurrency) {
+    auto err_str =
+        folly::stringPrintf("Concurrent uploading/downloading limit hits %d by %s",
+                            n, request->db_name.c_str());
+
+    e.message = err_str;
+    callback.release()->exceptionInThread(std::move(e));
+    LOG(ERROR) << err_str;
+    common::Stats::get()->Incr(kS3BackupFailure);
+    return;
+  }
+
+  auto local_path = FLAGS_rocksdb_dir + "s3_tmp/" + request->db_name + "/";
+  boost::system::error_code remove_err;
+  boost::system::error_code create_err;
+  boost::filesystem::remove_all(local_path, remove_err);
+  boost::filesystem::create_directories(local_path, create_err);
+  SCOPE_EXIT { boost::filesystem::remove_all(local_path, remove_err); };
+  if (remove_err || create_err) {
+    e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+    e.message = "Cannot remove/create dir: " + local_path;
+    callback.release()->exceptionInThread(std::move(e));
+    common::Stats::get()->Incr(kS3BackupFailure);
+    return;
+  }
+
+  auto local_s3_util = createLocalS3Util(request->limit_mbs, request->s3_bucket);
+  std::string formatted_s3_dir_path = rtrim(request->s3_backup_dir, '/');
+  rocksdb::Env* s3_env = new rocksdb::S3Env(formatted_s3_dir_path, local_path, std::move(local_s3_util));
+
+  LOG(INFO) << "S3 Backup " << request->db_name << " to " << formatted_s3_dir_path;
+  if (!backupDBHelper(request->db_name,
+                      formatted_s3_dir_path,
+                      std::unique_ptr<rocksdb::Env>(s3_env),
+                      request->__isset.limit_mbs,
+                      request->limit_mbs,
+                      &e)) {
+    callback.release()->exceptionInThread(std::move(e));
+    common::Stats::get()->Incr(kS3BackupFailure);
+    return;
+  }
+
+  LOG(INFO) << "S3 Backup is done.";
+  common::Stats::get()->Incr(kS3BackupSuccess);
+  callback->result(BackupDBToS3Response());
+}
+
+void AdminHandler::async_tm_restoreDBFromS3(
+    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+      RestoreDBFromS3Response>>> callback,
+    std::unique_ptr<RestoreDBFromS3Request> request) {
+  AdminException e;
+  auto n = num_current_s3_sst_downloadings_.fetch_add(1);
+  SCOPE_EXIT {
+    num_current_s3_sst_downloadings_.fetch_sub(1);
+  };
+
+  if (n >= FLAGS_max_s3_sst_loading_concurrency) {
+    auto err_str =
+        folly::stringPrintf("Concurrent uploading/downloading limit hits %d by %s",
+                            n, request->db_name.c_str());
+
+    e.message = err_str;
+    callback.release()->exceptionInThread(std::move(e));
+    LOG(ERROR) << err_str;
+    common::Stats::get()->Incr(kS3RestoreFailure);
+    return;
+  }
+
+  auto local_path = FLAGS_rocksdb_dir + "s3_tmp/" + request->db_name + "/";
+  boost::system::error_code remove_err;
+  boost::system::error_code create_err;
+  boost::filesystem::remove_all(local_path, remove_err);
+  boost::filesystem::create_directories(local_path, create_err);
+  SCOPE_EXIT { boost::filesystem::remove_all(local_path, remove_err); };
+  if (remove_err || create_err) {
+    e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+    e.message = "Cannot remove/create dir: " + local_path;
+    callback.release()->exceptionInThread(std::move(e));
+    common::Stats::get()->Incr(kS3RestoreFailure);
+    return;
+  }
+
+  auto upstream_addr = std::make_unique<folly::SocketAddress>();
+  if (!SetAddressOrException(request->upstream_ip,
+                             FLAGS_rocksdb_replicator_port,
+                             upstream_addr.get(),
+                             &callback)) {
+    common::Stats::get()->Incr(kS3RestoreFailure);
+    return;
+  }
+
+  auto local_s3_util = createLocalS3Util(request->limit_mbs, request->s3_bucket);
+  std::string formatted_s3_dir_path = rtrim(request->s3_backup_dir, '/');
+  rocksdb::Env* s3_env = new rocksdb::S3Env(
+  formatted_s3_dir_path, std::move(local_path), std::move(local_s3_util));
+
+  LOG(INFO) << "S3 Restore " << request->db_name << " from " << formatted_s3_dir_path;
+  if (!restoreDBHelper(request->db_name,
+                       formatted_s3_dir_path,
+                       std::unique_ptr<rocksdb::Env>(s3_env),
+                       std::move(upstream_addr),
+                       request->__isset.limit_mbs,
+                       request->limit_mbs,
+                       &e)) {
+    callback.release()->exceptionInThread(std::move(e));
+    common::Stats::get()->Incr(kS3RestoreFailure);
     return;
   }
 
   LOG(INFO) << "Restore is done.";
-  callback->result(RestoreDBResponse());
+  callback->result(RestoreDBFromS3Response());
+  common::Stats::get()->Incr(kS3RestoreSuccess);
 }
 
 void AdminHandler::async_tm_checkDB(
@@ -825,9 +1001,39 @@ void AdminHandler::async_tm_clearDB(
 }
 
 inline bool should_new_s3_client(
-    const common::S3Util& s3_util, AddS3SstFilesToDBRequest* request) {
-  return s3_util.getBucket() != request->s3_bucket ||
-         s3_util.getRateLimit() != request->s3_download_limit_mb;
+    const common::S3Util& s3_util, const uint32_t s3_download_limit_mb, const std::string& s3_bucket) {
+  return s3_util.getBucket() != s3_bucket ||
+         s3_util.getRateLimit() != s3_download_limit_mb;
+}
+
+std::shared_ptr<common::S3Util> AdminHandler::createLocalS3Util(
+    const uint32_t read_ratelimit_mb,
+    const std::string& bucket) {
+  // Though it is claimed that AWS s3 sdk is a light weight library. However,
+  // we couldn't afford to create a new client for every SST file downloading
+  // request, which is not even on any critical code path. Otherwise, we will
+  // see latency spike when uploading data to production clusters.
+  std::shared_ptr<common::S3Util> local_s3_util;
+
+  {
+    std::lock_guard<std::mutex> guard(s3_util_lock_);
+    if (s3_util_ == nullptr || should_new_s3_client(*s3_util_, read_ratelimit_mb, bucket)) {
+      // Request with different ratelimit or bucket has to wait for old
+      // requests to drain.
+      while (s3_util_ != nullptr && s3_util_.use_count() > 1) {
+        LOG(INFO) << "There are other downloads happening, wait "
+                  << kS3UtilRecheckSec << " seconds";
+        std::this_thread::sleep_for(std::chrono::seconds(kS3UtilRecheckSec));
+      }
+      // Invoke destructor explicitly to make sure Aws::InitAPI()
+      // and Aps::ShutdownApi() appear in pairs.
+      s3_util_ = nullptr;
+      s3_util_ = common::S3Util::BuildS3Util(read_ratelimit_mb, bucket);
+    }
+    local_s3_util = s3_util_;
+  }
+
+  return local_s3_util;
 }
 
 void AdminHandler::async_tm_addS3SstFilesToDB(
@@ -888,33 +1094,11 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     return;
   }
 
-  // Though it is claimed that AWS s3 sdk is a light weight library. However,
-  // we couldn't afford to create a new client for every SST file downloading
-  // request, which is not even on any critical code path. Otherwise, we will
-  // see latency spike when uploading data to production clusters.
-  std::shared_ptr<common::S3Util> local_s3_util;
+
   if (FLAGS_s3_download_limit_mb > 0) {
     request->s3_download_limit_mb = FLAGS_s3_download_limit_mb;
   }
-  {
-    std::lock_guard<std::mutex> guard(s3_util_lock_);
-    if (s3_util_ == nullptr || should_new_s3_client(*s3_util_, request.get())) {
-      // Request with different ratelimit or bucket has to wait for old
-      // requests to drain.
-      while (s3_util_ != nullptr && s3_util_.use_count() > 1) {
-        LOG(INFO) << "There are other downloads happening, wait "
-                  << kS3UtilRecheckSec << " seconds";
-        std::this_thread::sleep_for(std::chrono::seconds(kS3UtilRecheckSec));
-      }
-      // Invoke destructor explicitly to make sure Aws::InitAPI()
-      // and Aps::ShutdownApi() appear in pairs.
-      s3_util_ = nullptr;
-      s3_util_ = common::S3Util::BuildS3Util(request->s3_download_limit_mb,
-                                             request->s3_bucket);
-    }
-    local_s3_util = s3_util_;
-  }
-
+  auto local_s3_util = createLocalS3Util(request->s3_download_limit_mb, request->s3_bucket);
   auto responses = local_s3_util->getObjects(request->s3_path,
                                       local_path, "/", FLAGS_s3_direct_io);
   if (!responses.Error().empty() || responses.Body().size() == 0) {

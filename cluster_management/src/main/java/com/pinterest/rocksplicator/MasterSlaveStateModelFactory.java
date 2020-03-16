@@ -89,12 +89,16 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
   private final int adminPort;
   private final String cluster;
   private CuratorFramework zkClient;
+  private final boolean useS3Backup;
+  private final String s3Bucket;
 
   public MasterSlaveStateModelFactory(
-      String host, int adminPort, String zkConnectString, String cluster) {
+      String host, int adminPort, String zkConnectString, String cluster, boolean useS3Backup, String s3Bucket) {
     this.host = host;
     this.adminPort = adminPort;
     this.cluster = cluster;
+    this.useS3Backup = useS3Backup;
+    this.s3Bucket = s3Bucket;
     this.zkClient = CuratorFrameworkFactory.newClient(zkConnectString,
         new ExponentialBackoffRetry(1000, 3));
     zkClient.start();
@@ -104,7 +108,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
   public StateModel createNewStateModel(String resourceName, String partitionName) {
     LOG.error("Create a new state for " + partitionName);
     return new MasterSlaveStateModel(
-        resourceName, partitionName, host, adminPort, cluster, zkClient);
+        resourceName, partitionName, host, adminPort, cluster, zkClient, useS3Backup, s3Bucket);
   }
 
 
@@ -117,20 +121,25 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
     private final int adminPort;
     private final String cluster;
     private CuratorFramework zkClient;
+    private final boolean useS3Backup;
+    private final String s3Bucket;
     private InterProcessMutex partitionMutex;
 
 
     /**
      * State model that handles the state machine of a single replica
      */
-    public  MasterSlaveStateModel(String resourceName, String partitionName, String host,
-                                  int adminPort, String cluster, CuratorFramework zkClient) {
+    public MasterSlaveStateModel(String resourceName, String partitionName, String host,
+                                  int adminPort, String cluster, CuratorFramework zkClient,
+                                  boolean useS3Backup, String s3Bucket) {
       this.resourceName = resourceName;
       this.partitionName = partitionName;
       this.host = host;
       this.adminPort = adminPort;
       this.cluster = cluster;
       this.zkClient = zkClient;
+      this.useS3Backup = useS3Backup;
+      this.s3Bucket = s3Bucket;
       this.partitionMutex = new InterProcessMutex(zkClient,
           getLockPath(cluster, resourceName, partitionName));
     }
@@ -367,15 +376,27 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         // There is a small chance that snapshotHost removes the db after we release the lock and
         // before we call backupDB() below. In that case, we will throw and let Helix mark the
         // local partition as error.
-        String hdfsPath = "/rocksplicator/" + cluster + "/" + dbName + "/" + snapshotHost + "_"
+        if (!useS3Backup) {
+          String hdfsPath = "/rocksplicator/" + cluster + "/" + dbName + "/" + snapshotHost + "_"
             + String.valueOf(snapshotPort) + "/" + String.valueOf(System.currentTimeMillis());
 
-        // backup a snapshot from the upstream host, and restore it locally
-        LOG.error("Backup " + dbName + " from " + snapshotHost);
-        Utils.backupDB(snapshotHost, snapshotPort, dbName, hdfsPath);
-        LOG.error("Restore " + dbName + " from " + hdfsPath);
-        Utils.closeDB(dbName, adminPort);
-        Utils.restoreLocalDB(adminPort, dbName, hdfsPath, snapshotHost, snapshotPort);
+          // backup a snapshot from the upstream host, and restore it locally
+          LOG.error("Backup " + dbName + " from " + snapshotHost);
+          Utils.backupDB(snapshotHost, snapshotPort, dbName, hdfsPath);
+          LOG.error("Restore " + dbName + " from " + hdfsPath);
+          Utils.closeDB(dbName, adminPort);
+          Utils.restoreLocalDB(adminPort, dbName, hdfsPath, snapshotHost, snapshotPort);
+        } else {
+          String s3Path = "tmp/backup_test/" + cluster + "/" + dbName + "/" + snapshotHost + "_"
+            + String.valueOf(snapshotPort) + "/" + String.valueOf(System.currentTimeMillis());
+
+          // backup a snapshot from the upstream host, and restore it locally
+          LOG.error("S3 Backup " + dbName + " from " + snapshotHost);
+          Utils.backupDBToS3(snapshotHost, snapshotPort, dbName, s3Bucket, s3Path);
+          LOG.error("S3 Restore " + dbName + " from " + s3Path);
+          Utils.closeDB(dbName, adminPort);
+          Utils.restoreLocalDBFromS3(adminPort, dbName, s3Bucket, s3Path, snapshotHost, snapshotPort);
+        }
       }
     }
 
