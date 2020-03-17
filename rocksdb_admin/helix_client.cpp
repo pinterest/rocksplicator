@@ -32,7 +32,7 @@ DEFINE_string(helix_log_config_file_path, "",
     "e.g: /etc/config/helix/log4j.properties");
 DEFINE_bool(use_s3_backup, false,
             "whether we should use S3 env for rocksdb backup&rockstore");
-DEFINE_string(s3_bucket, "pinterest-jackson",
+DEFINE_string(s3_bucket_backup, "pinterest-jackson",
               "S3 bucket would be used for rocksdb backup & restore");
 
 namespace {
@@ -116,7 +116,7 @@ void invokeClass(JNIEnv* env,
                              env->NewStringUTF(config_post_url.c_str()));
   if (FLAGS_use_s3_backup) {
     env->SetObjectArrayElement(args, 14, env->NewStringUTF("--s3Bucket"));
-    env->SetObjectArrayElement(args, 15, env->NewStringUTF(FLAGS_s3_bucket.c_str()));
+    env->SetObjectArrayElement(args, 15, env->NewStringUTF(FLAGS_s3_bucket_backup.c_str()));
   }
   if (disable_spectator) {
     env->SetObjectArrayElement(args, FLAGS_use_s3_backup ? 16 : 14, env->NewStringUTF("--disableSpectator"));
