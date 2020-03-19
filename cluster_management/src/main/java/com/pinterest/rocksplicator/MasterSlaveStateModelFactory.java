@@ -387,7 +387,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           Utils.closeDB(dbName, adminPort);
           Utils.restoreLocalDB(adminPort, dbName, hdfsPath, snapshotHost, snapshotPort);
         } else {
-          String s3Path = "tmp/backup_test/" + cluster + "/" + dbName + "/" + snapshotHost + "_"
+          String s3Path = "backup/" + cluster + "/" + dbName + "/" + snapshotHost + "_"
             + String.valueOf(snapshotPort) + "/" + String.valueOf(System.currentTimeMillis());
 
           // backup a snapshot from the upstream host, and restore it locally

@@ -36,6 +36,7 @@
 #include "common/rocksdb_glogger/rocksdb_glogger.h"
 #include "common/stats/stats.h"
 #include "common/thrift_router.h"
+#include "common/timer.h"
 #include "common/timeutil.h"
 #include "folly/FileUtil.h"
 #include "folly/MoveWrapper.h"
@@ -119,6 +120,10 @@ const std::string kHDFSRestoreSuccess = "hdfs_restore_success";
 const std::string kS3RestoreSuccess = "s3_restore_success";
 const std::string kHDFSRestoreFailure = "hdfs_restore_failure";
 const std::string kS3RestoreFailure = "s3_restore_failure";
+const std::string kHDFSBackupMs = "hdfs_backup_ms";
+const std::string kHDFSRestoreMs = "hdfs_restore_ms";
+const std::string kS3BackupMs = "s3_backup_ms";
+const std::string kS3RestoreMs = "s3_restore_ms";
 
 int64_t GetMessageTimestampSecs(const RdKafka::Message& message) {
   const auto ts = message.timestamp();
@@ -628,6 +633,7 @@ void AdminHandler::async_tm_backupDB(
     return;
   }
 
+  common::Timer timer(kHDFSBackupMs);
   LOG(INFO) << "HDFS Backup " << request->db_name << " to " << full_path;
   AdminException e;
   if (!backupDBHelper(request->db_name,
@@ -669,6 +675,7 @@ void AdminHandler::async_tm_restoreDB(
     return;
   }
 
+  common::Timer timer(kHDFSRestoreMs);
   LOG(INFO) << "HDFS Restore " << request->db_name << " from " << full_path;
   AdminException e;
   if (!restoreDBHelper(request->db_name,
@@ -736,6 +743,7 @@ void AdminHandler::async_tm_backupDBToS3(
   std::string formatted_s3_dir_path = rtrim(request->s3_backup_dir, '/');
   rocksdb::Env* s3_env = new rocksdb::S3Env(formatted_s3_dir_path, local_path, std::move(local_s3_util));
 
+  common::Timer timer(kS3BackupMs);
   LOG(INFO) << "S3 Backup " << request->db_name << " to " << formatted_s3_dir_path;
   if (!backupDBHelper(request->db_name,
                       formatted_s3_dir_path,
@@ -803,6 +811,7 @@ void AdminHandler::async_tm_restoreDBFromS3(
   rocksdb::Env* s3_env = new rocksdb::S3Env(
   formatted_s3_dir_path, std::move(local_path), std::move(local_s3_util));
 
+  common::Timer timer(kS3RestoreMs);
   LOG(INFO) << "S3 Restore " << request->db_name << " from " << formatted_s3_dir_path;
   if (!restoreDBHelper(request->db_name,
                        formatted_s3_dir_path,
