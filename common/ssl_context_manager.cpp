@@ -37,21 +37,17 @@ namespace {
 // create a new SSLContext from files, return nullptr on error
 std::shared_ptr<folly::SSLContext> loadSSLContext() {
   auto ctx = std::make_shared<folly::SSLContext>();
-  errno = 0;
-  ctx->loadCertificate(FLAGS_tls_certfile.c_str());
-  if (errno) {
-    LOG(ERROR) << "Got errors loading certificate : " << ctx->getErrors();
-    return nullptr;
-  }
-  ctx->loadPrivateKey(FLAGS_tls_keyfile.c_str());
-  if (errno) {
-    LOG(ERROR) << "Got errors loading private key : " << ctx->getErrors();
-    return nullptr;
-  }
-  ctx->loadTrustedCertificates(FLAGS_tls_trusted_certfile.c_str());
-  if (errno) {
-    LOG(ERROR) << "Got errors loading trusted certificate : "
-               << ctx->getErrors();
+
+  try {
+    ctx->loadCertificate(FLAGS_tls_certfile.c_str());
+    ctx->loadPrivateKey(FLAGS_tls_keyfile.c_str());
+    ctx->loadTrustedCertificates(FLAGS_tls_trusted_certfile.c_str());
+  } catch (const std::exception& ex) {
+    static const std::string kSSLContextRefreshFailures =
+      "ssl_context_refresh_failures";
+    common::Stats::get()->Incr(kSSLContextRefreshFailures);
+
+    LOG(ERROR) << "Failed to refresh SSLContext: " << ex.what();
     return nullptr;
   }
 
