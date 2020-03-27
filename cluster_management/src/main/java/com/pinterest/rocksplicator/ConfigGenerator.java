@@ -19,54 +19,26 @@
 package com.pinterest.rocksplicator;
 
 import org.apache.helix.api.listeners.PreFetch;
-import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixConstants;
 import org.apache.helix.HelixManager;
 import org.apache.helix.NotificationContext;
 import org.apache.helix.model.ExternalView;
 import org.apache.helix.model.InstanceConfig;
-import org.apache.helix.participant.CustomCodeCallbackHandler;
-import org.apache.helix.spectator.RoutingTableProvider;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
-public class ConfigGenerator extends RoutingTableProvider implements CustomCodeCallbackHandler {
+public class ConfigGenerator extends Generator {
   private static final Logger LOG = LoggerFactory.getLogger(ConfigGenerator.class);
 
-  private final String clusterName;
-  private HelixManager helixManager;
-  private Map<String, String> hostToHostWithDomain;
-  private final String postUrl;
-  private JSONObject dataParameters;
-  private String lastPostedContent;
-  private Set<String> disabledHosts;
+  private final String configPostUrl;
 
   public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
-    this.clusterName = clusterName;
-    this.helixManager = helixManager;
-    this.hostToHostWithDomain = new HashMap<String, String>();
-    this.postUrl = configPostUrl;
-    this.dataParameters = new JSONObject();
-    this.dataParameters.put("config_version", "v3");
+    super(clusterName, helixManager);
+    this.configPostUrl = configPostUrl;
     this.dataParameters.put("author", "ConfigGenerator");
     this.dataParameters.put("comment", "new shard config");
-    this.dataParameters.put("content", "{}");
-    this.lastPostedContent = null;
-    this.disabledHosts = new HashSet<>();
   }
 
   @Override
@@ -97,144 +69,8 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   }
 
   private void generateShardConfig() {
-    HelixAdmin admin = helixManager.getClusterManagmentTool();
-
-    List<String> resources = admin.getResourcesInCluster(clusterName);
-
-    Set<String> existingHosts = new HashSet<String>();
-
-    // compose cluster config
-    JSONObject config = new JSONObject();
-    for (String resource : resources) {
-      // Resources starting with PARTICIPANT_LEADER is for HelixCustomCodeRunner
-      if (resource.startsWith("PARTICIPANT_LEADER")) {
-        continue;
-      }
-
-      ExternalView externalView = admin.getResourceExternalView(clusterName, resource);
-      Set<String> partitions = externalView.getPartitionSet();
-
-      // compose resource config
-      JSONObject resourceConfig = new JSONObject();
-      String partitionsStr = externalView.getRecord().getSimpleField("NUM_PARTITIONS");
-      resourceConfig.put("num_shards", Integer.parseInt(partitionsStr));
-
-      // build host to partition list map
-      Map<String, List<String>> hostToPartitionList = new HashMap<String, List<String>>();
-      for (String partition : partitions) {
-        String[] parts = partition.split("_");
-        String partitionNumber =
-            String.format("%05d", Integer.parseInt(parts[parts.length - 1]));
-        Map<String, String> hostToState = externalView.getStateMap(partition);
-        for (Map.Entry<String, String> entry : hostToState.entrySet()) {
-          existingHosts.add(entry.getKey());
-
-          if (disabledHosts.contains(entry.getKey())) {
-            // exclude disabled hosts from the shard map config
-            continue;
-          }
-
-          String state = entry.getValue();
-          if (!state.equalsIgnoreCase("ONLINE") &&
-              !state.equalsIgnoreCase("MASTER") &&
-              !state.equalsIgnoreCase("SLAVE")) {
-            // Only ONLINE, MASTER and SLAVE states are ready for serving traffic
-            continue;
-          }
-
-          String hostWithDomain = getHostWithDomain(entry.getKey());
-          List<String> partitionList = hostToPartitionList.get(hostWithDomain);
-          if (partitionList == null) {
-            partitionList = new ArrayList<String>();
-            hostToPartitionList.put(hostWithDomain, partitionList);
-          }
-
-          if (state.equalsIgnoreCase("SLAVE")) {
-            partitionList.add(partitionNumber + ":S");
-          } else if (state.equalsIgnoreCase("MASTER")) {
-            partitionList.add(partitionNumber + ":M");
-          } else {
-            partitionList.add(partitionNumber);
-          }
-        }
-      }
-
-      // Add host to partition list map to the resource config
-      for (Map.Entry<String, List<String>> entry : hostToPartitionList.entrySet()) {
-        JSONArray jsonArray = new JSONArray();
-        for (String p : entry.getValue()) {
-          jsonArray.add(p);
-        }
-
-        resourceConfig.put(entry.getKey(), jsonArray);
-      }
-
-      // add the resource config to the cluster config
-      config.put(resource, resourceConfig);
-    }
-
-    // remove host that doesn't exist in the ExternalView from hostToHostWithDomain
-    hostToHostWithDomain.keySet().retainAll(existingHosts);
-
-    String newContent = config.toString();
-    if (lastPostedContent != null && lastPostedContent.equals(newContent)) {
-      LOG.error("Identical external view observed, skip updating config.");
-      return;
-    }
-
-    // Write the config to ZK
-    LOG.error("Generating a new shard config...");
-
-    this.dataParameters.remove("content");
-    this.dataParameters.put("content", newContent);
-    HttpPost httpPost = new HttpPost(this.postUrl);
-    try {
-      httpPost.setEntity(new StringEntity(this.dataParameters.toString()));
-      HttpResponse response = new DefaultHttpClient().execute(httpPost);
-      if (response.getStatusLine().getStatusCode() == 200) {
-        lastPostedContent = newContent;
-        LOG.error("Succeed to generate a new shard config, sleep for 2 seconds");
-        TimeUnit.SECONDS.sleep(2);
-      } else {
-        LOG.error(response.getStatusLine().getReasonPhrase());
-      }
-    } catch (Exception e) {
-      LOG.error("Failed to post the new config", e);
-    }
+    String newContent = getShardConfig();
+    postToUrl(newContent, configPostUrl);
   }
 
-  private String getHostWithDomain(String host) {
-    String hostWithDomain = hostToHostWithDomain.get(host);
-    if (hostWithDomain != null) {
-      return hostWithDomain;
-    }
-
-    // local cache missed, read from ZK
-    HelixAdmin admin = helixManager.getClusterManagmentTool();
-    InstanceConfig instanceConfig = admin.getInstanceConfig(clusterName, host);
-    String domain = instanceConfig.getDomain();
-    String[] parts = domain.split(",");
-    String az = parts[0].split("=")[1];
-    String pg = parts[1].split("=")[1];
-    hostWithDomain = host.replace('_', ':') + ":" + az + "_" + pg;
-    hostToHostWithDomain.put(host, hostWithDomain);
-    return hostWithDomain;
-  }
-
-  // update disabledHosts, return true if there is any changes
-  private boolean updateDisabledHosts() {
-    HelixAdmin admin = helixManager.getClusterManagmentTool();
-
-    Set<String> latestDisabledInstances = new HashSet<>(
-        admin.getInstancesInClusterWithTag(clusterName, "disabled"));
-
-    if (disabledHosts.equals(latestDisabledInstances)) {
-      // no changes
-      LOG.error("No changes to disabled instances");
-      return false;
-    }
-
-    disabledHosts = latestDisabledInstances;
-    return true;
-  }
 }
