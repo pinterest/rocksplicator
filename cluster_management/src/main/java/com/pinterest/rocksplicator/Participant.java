@@ -41,6 +41,8 @@ import org.apache.helix.participant.HelixCustomCodeRunner;
 import org.apache.helix.participant.StateMachineEngine;
 import org.apache.helix.participant.statemachine.StateModel;
 import org.apache.helix.participant.statemachine.StateModelFactory;
+import org.apache.helix.task.TaskFactory;
+import org.apache.helix.task.TaskStateModelFactory;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.ConsoleAppender;
 import org.apache.log4j.Level;
@@ -187,12 +189,13 @@ public class Participant {
     }
   }
 
-
   private Participant(String zkConnectString, String clusterName, String instanceName,
-                     String stateModelType, int port, String postUrl,
-                     boolean useS3Backup, String s3BucketName, boolean runSpectator) throws Exception {
+                      String stateModelType, int port, String postUrl, boolean useS3Backup,
+                      String s3BucketName, boolean runSpectator) throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
+
+    Map<String, TaskFactory> taskFactoryRegistry = new HashMap<>();
 
     if (stateModelType.equals("OnlineOffline")) {
       stateModelFactory = new OnlineOfflineStateModelFactory(port, zkConnectString, clusterName);
@@ -204,12 +207,42 @@ public class Participant {
           port, zkConnectString, clusterName, useS3Backup, s3BucketName);
     } else if (stateModelType.equals("Bootstrap")) {
       stateModelFactory = new BootstrapStateModelFactory(instanceName.split("_")[0],
-              port, zkConnectString, clusterName);
+          port, zkConnectString, clusterName);
+    } else if (stateModelType.equals("MasterSlave;Task")) {
+      stateModelType = "MasterSlave";
+      stateModelFactory = new MasterSlaveStateModelFactory(instanceName.split("_")[0],
+          port, zkConnectString, clusterName, useS3Backup, s3BucketName);
+
+      // TODO: register backup/restore factories
+      // taskFactoryRegistry.put("Backup", new BackupTaskFactory());
+      // taskFactoryRegistry.put("Restore", new RestoreTaskFactory());
+
+    } else if (stateModelType.equals("Task")) {
+
+      // TODO: register dedup factories
+      // taskFactoryRegistry.put("Dedup", new DedupTaskFactory());
+
     } else {
       LOG.error("Unknown state model: " + stateModelType);
     }
+
     StateMachineEngine stateMach = helixManager.getStateMachineEngine();
-    stateMach.registerStateModelFactory(stateModelType, stateModelFactory);
+
+    if (stateModelFactory != null) {
+      // for Task only, stateModelFactory declared without instantiation, thus, null
+      stateMach.registerStateModelFactory(stateModelType, stateModelFactory);
+      LOG.error(
+          String.format("%s has registered to state model: %s", clusterName, stateModelType));
+    }
+    if (!taskFactoryRegistry.isEmpty()) {
+      TaskStateModelFactory helixTaskFactory =
+          new TaskStateModelFactory(helixManager, taskFactoryRegistry);
+
+      stateMach.registerStateModelFactory("Task", helixTaskFactory);
+
+      LOG.error(clusterName + " has registered to Tasks: " + taskFactoryRegistry.keySet());
+    }
+
     helixManager.connect();
     helixManager.getMessagingService().registerMessageHandlerFactory(
         Message.MessageType.STATE_TRANSITION.name(), stateMach);
