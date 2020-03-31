@@ -203,14 +203,6 @@ class S3WritableFile : public WritableFile {
     }
     local_file_.reset();
 
-    // upload local file to S3
-    auto resp = s3_util_->putObject(s3_fname_, fname_);
-    if (!resp.Error().empty()) {
-      LOG(ERROR) << "Error happened when uploading the writable file to S3: "
-                 << resp.Error();
-      return Status::IOError();
-    }
-
     return Status::OK();
   }
 
@@ -406,35 +398,45 @@ Status S3Env::GetFileModificationTime(const std::string& fname,
 }
 
 // The rename is not atomic. S3 does not support renaming natively, so
-// we need to copy all the objects with src path as prefix to the ones with target
-// path as prefix and then delete the original files
+// we perform the renaming in local and then upload the updated file to S3.
 Status S3Env::RenameFile(const std::string& src, const std::string& target) {
-  // first fetch all files using the given src path as the key prefix in S3
-  auto resp = s3_util_->listObjects(src);
-  if (!resp.Error().empty()) {
-    LOG(ERROR) << "Error happened when fetching files from S3: "
-               << resp.Error() << " under path: " << src;
-    return Status::IOError();
+  auto local_src_path = local_directory_ + GetRelativePath(src);
+  auto local_target_path = local_directory_ + GetRelativePath(target);
+  Status st = posix_env_->RenameFile(local_src_path, local_target_path);
+  if (!st.ok()) {
+    LOG(ERROR) << "Error happened when renaming local file: " << src;
+    return st;
   }
-
-  // copy the files to the target position
-  for (auto& v : resp.Body()) {
-    // Our path should be a prefix of the fetched value
-    if (v.find(src) == 0) {
-      s3_util_->copyObject(v, target + v.substr(src.size()));
+  boost::filesystem::path path(local_target_path);
+  bool is_dir = boost::filesystem::is_directory(boost::filesystem::path(local_target_path));
+  if (is_dir) {
+    std::vector<std::string> files;
+    st = posix_env_->GetChildren(local_target_path, &files);
+    if (!st.ok()) {
+      LOG(ERROR) << "Error happened when GetChildren for renaming file: " << src;
+      return st;
+    }
+    for (const auto& file : files) {
+      if (file == "." || file == "..") {
+        continue;
+      }
+      auto copy_resp = s3_util_->putObject(target + file, local_target_path + file);
+      if (!copy_resp.Error().empty()) {
+        LOG(ERROR) << "Error happened when uploading file to S3: "
+                   << copy_resp.Error();
+        return Status::IOError();
+      }
+    }
+  } else {
+    auto copy_resp = s3_util_->putObject(target, local_target_path);
+    if (!copy_resp.Error().empty()) {
+      LOG(ERROR) << "Error happened when uploading file to S3: "
+                 << copy_resp.Error();
+      return Status::IOError();
     }
   }
 
-  // delete the files in the old position
-  for (auto& v : resp.Body()) {
-    // Our path should be a prefix of the fetched value
-    if (v.find(src) == 0) {
-      s3_util_->deleteObject(v);
-    }
-  }
-
-  // Do the rename on local filesystem too
-  return posix_env_->RenameFile(local_directory_ + GetRelativePath(src), local_directory_ + GetRelativePath(target));
+  return Status::OK();
 }
 
 Status S3Env::LockFile(const std::string& fname, FileLock** lock) {

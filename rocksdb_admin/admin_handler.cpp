@@ -739,11 +739,11 @@ void AdminHandler::async_tm_backupDBToS3(
     return;
   }
 
+  common::Timer timer(kS3BackupMs);
   auto local_s3_util = createLocalS3Util(request->limit_mbs, request->s3_bucket);
   std::string formatted_s3_dir_path = rtrim(request->s3_backup_dir, '/');
   rocksdb::Env* s3_env = new rocksdb::S3Env(formatted_s3_dir_path, local_path, std::move(local_s3_util));
 
-  common::Timer timer(kS3BackupMs);
   LOG(INFO) << "S3 Backup " << request->db_name << " to " << formatted_s3_dir_path;
   if (!backupDBHelper(request->db_name,
                       formatted_s3_dir_path,
@@ -806,12 +806,12 @@ void AdminHandler::async_tm_restoreDBFromS3(
     return;
   }
 
+  common::Timer timer(kS3RestoreMs);
   auto local_s3_util = createLocalS3Util(request->limit_mbs, request->s3_bucket);
   std::string formatted_s3_dir_path = rtrim(request->s3_backup_dir, '/');
   rocksdb::Env* s3_env = new rocksdb::S3Env(
       formatted_s3_dir_path, std::move(local_path), std::move(local_s3_util));
 
-  common::Timer timer(kS3RestoreMs);
   LOG(INFO) << "S3 Restore " << request->db_name << " from " << formatted_s3_dir_path;
   if (!restoreDBHelper(request->db_name,
                        formatted_s3_dir_path,
