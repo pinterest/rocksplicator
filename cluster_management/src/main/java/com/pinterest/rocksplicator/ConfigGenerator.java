@@ -24,6 +24,7 @@ import org.apache.helix.HelixConstants;
 import org.apache.helix.HelixManager;
 import org.apache.helix.NotificationContext;
 import org.apache.helix.model.ExternalView;
+import org.apache.helix.model.IdealState;
 import org.apache.helix.model.InstanceConfig;
 import org.apache.helix.participant.CustomCodeCallbackHandler;
 import org.apache.helix.spectator.RoutingTableProvider;
@@ -39,6 +40,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -100,6 +102,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     HelixAdmin admin = helixManager.getClusterManagmentTool();
 
     List<String> resources = admin.getResourcesInCluster(clusterName);
+    filterOutTaskResources(resources);
 
     Set<String> existingHosts = new HashSet<String>();
 
@@ -237,4 +240,28 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     disabledHosts = latestDisabledInstances;
     return true;
   }
+
+  /**
+   * filter out resources with "Task" state model (ie. workflows and jobs);
+   * only keep db resources from ideal states
+   */
+  public void filterOutTaskResources(List<String> resources) {
+    HelixAdmin admin = helixManager.getClusterManagmentTool();
+    Iterator<String> iter = resources.iterator();
+    while (iter.hasNext()) {
+      String res = iter.next();
+      IdealState ideal = admin.getResourceIdealState(clusterName, res);
+      if (ideal != null) {
+        String stateMode = ideal.getStateModelDefRef();
+        if (stateMode != null && stateMode.equals("Task")) {
+          iter.remove();
+        }
+      } else {
+        LOG.error(
+            "Did not remove resource from shard map generation, due to can't get ideal state for "
+                + res);
+      }
+    }
+  }
+
 }
