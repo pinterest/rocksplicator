@@ -33,6 +33,7 @@ import com.pinterest.rocksdb_admin.thrift.GetSequenceNumberRequest;
 import com.pinterest.rocksdb_admin.thrift.GetSequenceNumberResponse;
 import com.pinterest.rocksdb_admin.thrift.RestoreDBRequest;
 import com.pinterest.rocksdb_admin.thrift.RestoreDBFromS3Request;
+import com.pinterest.rocksdb_admin.thrift.CompactDBRequest;
 
 import org.apache.helix.model.Message;
 import org.apache.thrift.TException;
@@ -350,6 +351,18 @@ public class Utils {
         throw new RuntimeException(e);
       }
     }
+
+  public static void compactDB(int adminPort, String dbName) throws RuntimeException {
+    LOG.error(String.format("Compact partition: %s", dbName));
+    try {
+      Admin.Client client = getLocalAdminClient(adminPort);
+      CompactDBRequest req = new CompactDBRequest(dbName);
+      client.compactDB(req);
+    } catch (TException e) {
+      LOG.error("Failed to dedup DB: ", e.toString());
+      throw new RuntimeException(e);
+    }
+  }
 
   /**
    * Check if the DB on host:adminPort is Master. If the CheckDBRequest request fails, return false.
