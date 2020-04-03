@@ -281,6 +281,22 @@ public class Utils {
     }
   }
 
+  public static void backupDBWithLimit(String host, int adminPort, String dbName, String hdfsPath,
+                                       int limitMbs)
+      throws RuntimeException {
+    LOG.error("Backup " + dbName + " from " + host + " to " + hdfsPath);
+    try {
+      Admin.Client client = getAdminClient(host, adminPort);
+
+      BackupDBRequest req = new BackupDBRequest(dbName, hdfsPath);
+      req.setLimit_mbs(limitMbs);
+      client.backupDB(req);
+    } catch (TException e) {
+      LOG.error("Failed to backup DB: ", e.toString());
+      throw new RuntimeException(e);
+    }
+  }
+
   /**
    * Restore the local DB from HDFS
    * @param adminPort
