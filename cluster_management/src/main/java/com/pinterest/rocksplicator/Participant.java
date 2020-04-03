@@ -18,6 +18,8 @@
 
 package com.pinterest.rocksplicator;
 
+import com.pinterest.rocksplicator.task.BackupTaskFactory;
+
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.commons.cli.CommandLine;
@@ -213,8 +215,8 @@ public class Participant {
       stateModelFactory = new MasterSlaveStateModelFactory(instanceName.split("_")[0],
           port, zkConnectString, clusterName, useS3Backup, s3BucketName);
 
-      // TODO: register backup/restore factories
-      // taskFactoryRegistry.put("Backup", new BackupTaskFactory());
+      // TODO: register restore factories
+       taskFactoryRegistry.put("Backup", new BackupTaskFactory(clusterName, port));
       // taskFactoryRegistry.put("Restore", new RestoreTaskFactory());
 
     } else if (stateModelType.equals("Task")) {
