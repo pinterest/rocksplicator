@@ -19,6 +19,7 @@
 package com.pinterest.rocksplicator;
 
 import com.pinterest.rocksplicator.task.BackupTaskFactory;
+import com.pinterest.rocksplicator.task.DedupTaskFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -220,10 +221,7 @@ public class Participant {
       // taskFactoryRegistry.put("Restore", new RestoreTaskFactory());
 
     } else if (stateModelType.equals("Task")) {
-
-      // TODO: register dedup factories
-      // taskFactoryRegistry.put("Dedup", new DedupTaskFactory());
-
+      taskFactoryRegistry.put("Dedup", new DedupTaskFactory(clusterName, port));
     } else {
       LOG.error("Unknown state model: " + stateModelType);
     }
