@@ -31,6 +31,9 @@
 DEFINE_int32(global_worker_threads, sysconf(_SC_NPROCESSORS_ONLN),
              "The number of threads for global CPU executor.");
 
+DEFINE_int32(global_cpu_pool_queue_size, 1 << 14,
+             "The size of global CPU pool queue");
+
 DEFINE_bool(block_on_global_cpu_pool_full, true,
             "Block on enqueuing when the global cpu pool is full.");
 
@@ -61,7 +64,7 @@ uint16_t GetThreadsCount() {
 }
 
 int GetQueueSize() {
-  static const auto queue_sz = (1 << 14);
+  static const auto queue_sz = FLAGS_global_cpu_pool_queue_size;
   LOG(INFO) << "Running global CPU thread pool with "
             << queue_sz << " length queue";
   return queue_sz;
