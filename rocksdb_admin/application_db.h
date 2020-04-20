@@ -67,10 +67,22 @@ class ApplicationDB {
   // value: (OUT) the value of the keys
   //
   // Return a list of status for each key
-
   std::vector<rocksdb::Status> MultiGet(const rocksdb::ReadOptions& options,
                                         const std::vector<rocksdb::Slice>& keys,
                                         std::vector<std::string>* values);
+
+  // Similar to the above MultiGet(). Output a C style array of PinnableSlice
+  // instead of a vector of string
+  // options: (IN) Read options
+  // num_keys: (IN) Number of keys to lookup
+  // keys: (IN) Pointer to C style array of key Slices with num_keys elements
+  // values: (OUT) Pointer to C style array of PinnableSlices with num_keys elements
+  // statuses: (OUT) Pointer to C style array of Status with num_keys elements
+  std::vector<rocksdb::Status> MultiGet(const rocksdb::ReadOptions& options,
+                                        const size_t num_keys,
+                                        const rocksdb::Slice* keys,
+                                        rocksdb::PinnableSlice* values,
+                                        rocksdb::Status* statuses);
 
   // Batch write with the given options and data.
   // options:     (IN) Write options
