@@ -28,10 +28,14 @@ public class DedupTaskFactory implements TaskFactory {
 
   private final String cluster;
   private final int adminPort;
+  private final boolean useS3Store;
+  private final String s3Bucket;
 
-  public DedupTaskFactory(String cluster, int adminPort) {
+  public DedupTaskFactory(String cluster, int adminPort, boolean useS3Store, String s3Bucket) {
     this.cluster = cluster;
     this.adminPort = adminPort;
+    this.useS3Store = useS3Store;
+    this.s3Bucket = s3Bucket;
   }
 
   /**
@@ -71,19 +75,21 @@ public class DedupTaskFactory implements TaskFactory {
     String targetPartition = taskConfig.getTargetPartition();
 
     LOG.error(String.format(
-        "Create Task for cluster: %s, targetPartition: %s from job: %s to execute at localhost, port:"
+        "Create Task for cluster: %s, targetPartition: %s from job: %s to execute at localhost, "
+            + "port:"
             + " %d. {resourceVersion: %d, helixJobCreationTime: %d, taskCreationTime: %d}", cluster,
         targetPartition, job, adminPort, resourceVersion, jobConfig.getStat().getCreationTime(),
         System.currentTimeMillis()));
 
     return getTask(srcStorePathPrefix, resourceVersion, targetPartition, cluster, job, adminPort,
-        destStorePathPrefix);
+        destStorePathPrefix, useS3Store, s3Bucket);
   }
 
   protected DedupTask getTask(String srcStorePathPrefix, long resourceVersion, String partitionName,
-                              String cluster, String job, int port, String destStorePathPrefix) {
+                              String cluster, String job, int port, String destStorePathPrefix,
+                              boolean useS3Store, String s3Bucket) {
     return new DedupTask(srcStorePathPrefix, resourceVersion, partitionName, cluster, job, port,
-        destStorePathPrefix);
+        destStorePathPrefix, useS3Store, s3Bucket);
   }
 
 }

@@ -19,10 +19,12 @@ public class DedupTask extends UserContentStore implements Task {
   private final String job;
   private final int adminPort;
   private final String destStorePathPrefix;
+  private final boolean useS3Store;
+  private final String s3Bucket;
 
   public DedupTask(String srcStorePathPrefix, long resourceVersion, String partitionName,
                    String taskCluster, String job, int adminPort,
-                   String destStorePathPrefix) {
+                   String destStorePathPrefix, boolean useS3Store, String s3Bucket) {
     this.srcStorePathPrefix = srcStorePathPrefix;
     this.resourceVersion = resourceVersion;
     this.partitionName = partitionName;
@@ -30,6 +32,8 @@ public class DedupTask extends UserContentStore implements Task {
     this.job = job;
     this.adminPort = adminPort;
     this.destStorePathPrefix = destStorePathPrefix;
+    this.useS3Store = useS3Store;
+    this.s3Bucket = s3Bucket;
   }
 
   /**
@@ -66,7 +70,7 @@ public class DedupTask extends UserContentStore implements Task {
                   + "Other info {cluster: %s, job: %s, resourceVersion: %d}", dbName,
               srcStorePath, destStorePath, taskCluster, job, resourceVersion));
 
-      executeDedup(dbName, adminPort, srcStorePath, destStorePath);
+      executeDedup(dbName, adminPort, srcStorePath, destStorePath, useS3Store, s3Bucket);
 
       LOG.error("DedupTask completed, with: success");
       return new TaskResult(TaskResult.Status.COMPLETED, "DedupTask is completed!");
@@ -78,17 +82,25 @@ public class DedupTask extends UserContentStore implements Task {
   }
 
   protected void executeDedup(String dbName, int adminPort, String srcStorePath,
-                              String destStorePath) throws RuntimeException {
+                              String destStorePath, boolean useS3Store, String s3Bucket)
+      throws RuntimeException {
     try {
       Utils.addDB(dbName, adminPort);
       Utils.closeDB(dbName, adminPort);
-      Utils.restoreLocalDB(adminPort, dbName, srcStorePath, "127.0.0.1", adminPort);
+      if (useS3Store) {
+        Utils.restoreLocalDBFromS3(adminPort, dbName, s3Bucket, srcStorePath, "127.0.0.1", adminPort);
+      } else {
+        Utils.restoreLocalDB(adminPort, dbName, srcStorePath, "127.0.0.1", adminPort);
+      }
       LOG.error("restoreDB is done, begin compactDB");
 
       Utils.compactDB(adminPort, dbName);
       LOG.error("compactDB is done");
-
-      Utils.backupDB("127.0.0.1", adminPort, dbName, destStorePath);
+      if (useS3Store) {
+        Utils.backupDBToS3("127.0.0.1", adminPort, dbName, s3Bucket, destStorePath);
+      } else {
+        Utils.backupDB("127.0.0.1", adminPort, dbName, destStorePath);
+      }
       Utils.clearDB(dbName, adminPort);
     } catch (Exception e) {
       throw new RuntimeException(e);

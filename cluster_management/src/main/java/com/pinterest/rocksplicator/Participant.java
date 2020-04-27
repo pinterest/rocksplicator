@@ -23,6 +23,7 @@ import com.pinterest.rocksplicator.task.DedupTaskFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
@@ -55,6 +56,7 @@ import org.slf4j.LoggerFactory;
 
 
 public class Participant {
+
   private static final Logger LOG = LoggerFactory.getLogger(Participant.class);
   private static final String zkServer = "zkSvr";
   private static final String cluster = "cluster";
@@ -217,11 +219,13 @@ public class Participant {
           port, zkConnectString, clusterName, useS3Backup, s3BucketName);
 
       // TODO: register restore factories
-       taskFactoryRegistry.put("Backup", new BackupTaskFactory(clusterName, port));
+      taskFactoryRegistry
+          .put("Backup", new BackupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
       // taskFactoryRegistry.put("Restore", new RestoreTaskFactory());
 
     } else if (stateModelType.equals("Task")) {
-      taskFactoryRegistry.put("Dedup", new DedupTaskFactory(clusterName, port));
+      taskFactoryRegistry
+          .put("Dedup", new DedupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
     } else {
       LOG.error("Unknown state model: " + stateModelType);
     }
