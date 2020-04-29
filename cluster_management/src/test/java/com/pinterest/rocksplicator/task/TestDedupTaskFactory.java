@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import javax.print.DocFlavor;
 
 public class TestDedupTaskFactory extends TaskTestBase {
 
@@ -74,7 +75,8 @@ public class TestDedupTaskFactory extends TaskTestBase {
       // Set task callbacks
       Map<String, TaskFactory> taskFactoryReg = new HashMap<>();
       taskFactoryReg.put("Dedup",
-          new DummyDedupTaskFactory(CLUSTER_NAME, Integer.parseInt(instanceName.split("_")[1])));
+          new DummyDedupTaskFactory(CLUSTER_NAME, Integer.parseInt(instanceName.split("_")[1]),
+              false, ""));
 
       _participants[i] = new MockParticipantManager(ZK_ADDR, CLUSTER_NAME, instanceName);
 
@@ -153,23 +155,28 @@ public class TestDedupTaskFactory extends TaskTestBase {
       JobConfig jobConfig = _driver.getJobConfig(namespacedJobName);
 
       Set<String> taskTargetParts = new HashSet<>();
+      int taskPartitionId = 0;
       for (TaskConfig taskConfig : _driver.getJobConfig(namespacedJobName).getTaskConfigMap()
           .values()) {
         Assert.assertEquals(taskConfig.getCommand(), "Dedup");
         taskTargetParts.add(taskConfig.getTargetPartition());
 
         Assert.assertEquals(jobConfig.getJobCommandConfigMap().get("SRC_STORE_PATH_PREFIX"),
-            _driver.getTaskUserContentMap(workflowName, jobName, "0").get("srcStorePathPrefix"));
+            _driver.getTaskUserContentMap(workflowName, jobName, String.valueOf(taskPartitionId))
+                .get("srcStorePathPrefix"));
 
         Assert.assertEquals(jobConfig.getJobCommandConfigMap().get("RESOURCE_VERSION"),
-            _driver.getTaskUserContentMap(workflowName, jobName, "0").get("resourceVersion"));
+            _driver.getTaskUserContentMap(workflowName, jobName, String.valueOf(taskPartitionId))
+                .get("resourceVersion"));
 
         Assert.assertEquals(jobConfig.getJobCommandConfigMap().get("DEST_STORE_PATH_PREFIX"),
-            _driver.getTaskUserContentMap(workflowName, jobName, "0").get("destStorePathPrefix"));
+            _driver.getTaskUserContentMap(workflowName, jobName, String.valueOf(taskPartitionId))
+                .get("destStorePathPrefix"));
       }
 
       Assert
           .assertEquals(taskTargetParts, new HashSet<>(Arrays.asList("test_seg_0", "test_seg_1")));
+      taskPartitionId++;
     }
 
     _jobCommandMap.clear();
@@ -178,16 +185,18 @@ public class TestDedupTaskFactory extends TaskTestBase {
 
   protected class DummyDedupTaskFactory extends DedupTaskFactory {
 
-    public DummyDedupTaskFactory(String cluster, int adminPort) {
-      super(cluster, adminPort);
+    public DummyDedupTaskFactory(String cluster, int adminPort, boolean useS3Store,
+                                 String s3Bucket) {
+      super(cluster, adminPort, useS3Store, s3Bucket);
     }
 
     @Override
     protected DedupTask getTask(String srcStorePathPrefix, long resourceVersion,
                                 String partitionName, String cluster, String job, int port,
-                                String destStorePathPrefix) {
+                                String destStorePathPrefix, boolean useS3Store, String s3Bucket) {
       return new DummyDedupTask(srcStorePathPrefix, resourceVersion, partitionName, cluster, job,
-          port, destStorePathPrefix);
+          port,
+          destStorePathPrefix, useS3Store, s3Bucket);
     }
   }
 
@@ -195,9 +204,9 @@ public class TestDedupTaskFactory extends TaskTestBase {
 
     public DummyDedupTask(String srcStorePathPrefix, long resourceVersion,
                           String partitionName, String taskCluster, String job, int adminPort,
-                          String destStorePathPrefix) {
+                          String destStorePathPrefix, boolean useS3Store, String s3Bucket) {
       super(srcStorePathPrefix, resourceVersion, partitionName, taskCluster, job, adminPort,
-          destStorePathPrefix);
+          destStorePathPrefix, useS3Store, s3Bucket);
     }
 
     @Override

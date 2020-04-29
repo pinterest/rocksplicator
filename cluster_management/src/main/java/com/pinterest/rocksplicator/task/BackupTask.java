@@ -40,9 +40,12 @@ public class BackupTask extends UserContentStore implements Task {
   private final long resourceVersion;
   private final String job;
   private final int adminPort;
+  private final boolean useS3Store;
+  private final String s3Bucket;
 
   public BackupTask(String taskCluster, String partitionName, int backupLimitMbs,
-                    String storePathPrefix, long resourceVersion, String job, int adminPort) {
+                    String storePathPrefix, long resourceVersion, String job, int adminPort,
+                    boolean useS3Store, String s3Bucket) {
     this.taskCluster = taskCluster;
     this.partitionName = partitionName;
     this.backupLimitMbs = backupLimitMbs;
@@ -50,6 +53,8 @@ public class BackupTask extends UserContentStore implements Task {
     this.resourceVersion = resourceVersion;
     this.job = job;
     this.adminPort = adminPort;
+    this.useS3Store = useS3Store;
+    this.s3Bucket = s3Bucket;
   }
 
   /**
@@ -79,7 +84,8 @@ public class BackupTask extends UserContentStore implements Task {
                   + "%s, job: %s, version: %d}", partitionName, storePath, taskCluster, job,
               resourceVersion));
 
-      executeBackup("127.0.0.1", adminPort, dbName, storePath, backupLimitMbs);
+      executeBackup("127.0.0.1", adminPort, dbName, storePath, backupLimitMbs, useS3Store,
+          s3Bucket);
 
       return new TaskResult(TaskResult.Status.COMPLETED, "BackupTask is completed!");
     } catch (Exception e) {
@@ -90,9 +96,14 @@ public class BackupTask extends UserContentStore implements Task {
   }
 
   protected void executeBackup(String host, int port, String dbName, String storePath,
-                               int backupLimitMbs) throws RuntimeException {
+                               int backupLimitMbs, boolean useS3Store, String s3Bucket)
+      throws RuntimeException {
     try {
-      Utils.backupDBWithLimit(host, port, dbName, storePath, backupLimitMbs);
+      if (useS3Store) {
+        Utils.backupDBToS3WithLimit(host, port, dbName, backupLimitMbs, s3Bucket, storePath);
+      } else {
+        Utils.backupDBWithLimit(host, port, dbName, storePath, backupLimitMbs);
+      }
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

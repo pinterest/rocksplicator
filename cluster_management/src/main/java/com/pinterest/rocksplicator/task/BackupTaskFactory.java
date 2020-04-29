@@ -47,12 +47,16 @@ public class BackupTaskFactory implements TaskFactory {
 
   private final String cluster;
   private final int adminPort;
+  private final boolean useS3Store;
+  private final String s3Bucket;
 
   private static final int DEFAULT_BACKUP_LIMIT_MBS = 64;
 
-  public BackupTaskFactory(String cluster, int adminPort) {
+  public BackupTaskFactory(String cluster, int adminPort, boolean useS3Store, String s3Bucket) {
     this.cluster = cluster;
     this.adminPort = adminPort;
+    this.useS3Store = useS3Store;
+    this.s3Bucket = s3Bucket;
   }
 
   /**
@@ -105,13 +109,14 @@ public class BackupTaskFactory implements TaskFactory {
             System.currentTimeMillis()));
 
     return getTask(cluster, targetPartition, backupLimitMbs, storePathPrefix, resourceVersion, job,
-        adminPort);
+        adminPort, useS3Store, s3Bucket);
   }
 
   protected Task getTask(String cluster, String targetPartition, int backupLimitMbs,
-                         String storePathPrefix, long resourceVersion, String job, int port) {
+                         String storePathPrefix, long resourceVersion, String job, int port,
+                         boolean useS3Store, String s3Bucket) {
     return new BackupTask(cluster, targetPartition, backupLimitMbs, storePathPrefix,
-        resourceVersion, job, port);
+        resourceVersion, job, port, useS3Store, s3Bucket);
   }
 
 }
