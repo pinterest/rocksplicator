@@ -27,17 +27,6 @@
 
 namespace {
 
-bool isAllowedAz(const std::string& az) {
-  static const std::set<std::string> allowed_azs = {
-    "us-east-1a",
-    "us-east-1c",
-    "us-east-1d",
-    "us-east-1e",
-  };
-
-  return allowed_azs.find(az) != allowed_azs.end();
-}
-
 std::string getAvailabilityZoneImpl() {
   static const std::string command =
     "curl --silent --max-time 10 --connect-timeout 5 "
@@ -62,12 +51,7 @@ std::string getAvailabilityZoneImpl() {
 
   std::string az(buf, len);
 
-  if (isAllowedAz(az)) {
-    return az;
-  }
-
-  LOG(ERROR) << "Got invalid az: " << az;
-  return "";
+  return az;
 }
 
 }  // namespace
