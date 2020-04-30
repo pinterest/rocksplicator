@@ -33,6 +33,8 @@ bool isAllowedAz(const std::string& az) {
     "us-east-1c",
     "us-east-1d",
     "us-east-1e",
+    "eu-west-1a",
+    "eu-west-1b",
   };
 
   return allowed_azs.find(az) != allowed_azs.end();
