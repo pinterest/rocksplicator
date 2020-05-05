@@ -19,7 +19,6 @@
 #pragma once
 
 #include <thrift/lib/cpp2/async/HeaderClientChannel.h>
-#include <thrift/lib/cpp2/ServiceIncludes.h>
 #include <thrift/lib/cpp/TApplicationException.h>
 
 #include <string>
