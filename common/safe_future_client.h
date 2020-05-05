@@ -186,7 +186,7 @@ class SafeFutureClient {
 
     auto ex = folly::try_and_catch<std::exception,
                                    apache::thrift::TApplicationException,
-                                   typename RequestTraits<T>::exception_type>([&p, &recvState]() {
+                                   typename RequestTraits<T>::exception_type>([p, recvState]() {
        typename RequestTraits<T>::response_type response;
        RequestTraits<T>::recv_func(response, *recvState);
        p->setValue(std::move(response));
