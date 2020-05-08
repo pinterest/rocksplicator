@@ -17,7 +17,8 @@ namespace kafka {
  */
 static bool read_conf_file(
   const std::string &conf_file,
-  const std::shared_ptr<ConfigMap>& configMap) {
+  const std::shared_ptr<ConfigMap>& configMap,
+  bool compatibility_flag) {
   std::ifstream inf(conf_file.c_str());
 
   if (!inf) {
@@ -48,7 +49,7 @@ static bool read_conf_file(
     std::string key = line.substr(0, d);
     std::string val = line.substr(d + 1);
 
-    configMap->insert(make_pair(key, make_pair(val, false)));
+    configMap->insert(make_pair(key, make_pair(val, compatibility_flag)));
   }
   inf.close();
   return true;

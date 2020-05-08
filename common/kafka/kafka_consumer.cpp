@@ -37,7 +37,7 @@ DEFINE_int32(kafka_consumer_time_between_retries_ms, 100,
 DEFINE_string(enable_kafka_auto_offset_store, "false",
     "Whether to automatically commit the kafka offsets");
 DEFINE_string(kafka_client_global_config_file, "",
-    "Provide additional global optional parameters to kafka client library e.g.. ssl configuration");
+    "Provide additional global parameters to kafka client library e.g.. ssl configuration");
 
 namespace {
 
@@ -123,8 +123,13 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
   std::shared_ptr<kafka::ConfigMap> configMap =
     std::shared_ptr<kafka::ConfigMap>(new kafka::ConfigMap);
 
+  /**
+   * Each of the config parameter provided must be valid and known
+   * to librdkafka. This makes sure, we fail loud before setting any parameter
+   * that doesn't belong in the kafka config w.r.t version of the librdkafka
+   */
   if (!FLAGS_kafka_client_global_config_file.empty()) {
-    if (!kafka::read_conf_file(FLAGS_kafka_client_global_config_file, configMap)) {
+    if (!kafka::read_conf_file(FLAGS_kafka_client_global_config_file, configMap, true)) {
       LOG(ERROR) << "Can not read / parse config file: "
                  << FLAGS_kafka_client_global_config_file
                  << std::endl;
