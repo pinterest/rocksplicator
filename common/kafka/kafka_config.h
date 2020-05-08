@@ -6,6 +6,7 @@
 
 #include <map>
 #include <string>
+#include <memory>
 
 namespace kafka {
 typedef std::map<std::string, std::pair<std::string, bool>> ConfigMap;

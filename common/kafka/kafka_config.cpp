@@ -2,14 +2,10 @@
 // Created by Gopal Rajpurohit on 5/8/20.
 //
 
-#include <iostream>
 #include <fstream>
-#include <sstream>
 
-#include "common/kafka/kafka_config.h"
 #include "glog/logging.h"
-
-using namespace std;
+#include "common/kafka/kafka_config.h"
 
 namespace kafka {
 /**

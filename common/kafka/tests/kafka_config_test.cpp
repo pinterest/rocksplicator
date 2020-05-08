@@ -9,8 +9,10 @@ namespace kafka {
 
 TEST(KafkaConfig, TestConfigFile) {
   std::shared_ptr<ConfigMap> configMap = std::shared_ptr<ConfigMap>(new ConfigMap);
-  EXPECT_TRUE(read_conf_file("common/client_config.properties", configMap));
+  EXPECT_TRUE(read_conf_file("common/client_config.properties", configMap, true));
   EXPECT_TRUE(configMap->find("enable.sparse.connections") != configMap->end());
+  EXPECT_TRUE(configMap->find("enable.sparse.connections")->second.first == "true");
+  EXPECT_TRUE(configMap->find("enable.sparse.connections")->second.second);
   EXPECT_TRUE(configMap->find("not_enabled_config_file") == configMap->end());
 }
 } // namespace kafka
