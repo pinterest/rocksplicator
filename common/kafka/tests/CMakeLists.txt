@@ -6,7 +6,7 @@ SET(kafka_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../)
 SET(mock_kafka_SRCS
         ${CMAKE_CURRENT_SOURCE_DIR}/mock_kafka_cluster.h
         ${CMAKE_CURRENT_SOURCE_DIR}/mock_kafka_consumer.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../../stats/stats.cpp)
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../stats/stats.cpp kafka_config_test.cpp)
 ADD_LIBRARY(mock_kafka_consumer ${mock_kafka_SRCS})
 
 foreach(testsourcefile ${TEST_SOURCES})
