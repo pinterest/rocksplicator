@@ -17,7 +17,7 @@ namespace kafka {
  */
 static bool read_conf_file(
   const std::string &conf_file,
-  const std::shared_ptr<ConfigMap>& configMap,
+  const std::shared_ptr<ConfigMap> configMap,
   bool compatibility_flag) {
   std::ifstream inf(conf_file.c_str());
 

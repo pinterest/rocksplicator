@@ -12,7 +12,7 @@ typedef std::map<std::string, std::pair<std::string, bool>> ConfigMap;
 
 static bool read_conf_file (
   const std::string &conf_file,
-  const std::shared_ptr<ConfigMap> &configMap,
+  const std::shared_ptr<ConfigMap> configMap,
   bool compatibility_flag);
 
 } // namespace kafka

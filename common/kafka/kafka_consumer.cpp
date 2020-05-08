@@ -120,8 +120,7 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
   auto conf = std::shared_ptr<RdKafka::Conf>(RdKafka::Conf::create(
     RdKafka::Conf::CONF_GLOBAL));
 
-  std::shared_ptr<kafka::ConfigMap> configMap =
-    std::shared_ptr<kafka::ConfigMap>(new kafka::ConfigMap);
+  std::shared_ptr<kafka::ConfigMap> configMap(new kafka::ConfigMap);
 
   /**
    * Each of the config parameter provided must be valid and known
