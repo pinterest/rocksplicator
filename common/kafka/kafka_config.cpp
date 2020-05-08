@@ -48,7 +48,7 @@ static bool read_conf_file(
     std::string key = line.substr(0, d);
     std::string val = line.substr(d + 1);
 
-    (*configMap)[key] = make_pair(val, false);
+    configMap->insert(make_pair(key, make_pair(val, false)));
   }
   inf.close();
   return true;

@@ -120,24 +120,27 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
   auto conf = std::shared_ptr<RdKafka::Conf>(RdKafka::Conf::create(
     RdKafka::Conf::CONF_GLOBAL));
 
-  std::shared_ptr<kafka::ConfigMap> configMapPtr = std::shared_ptr<kafka::ConfigMap>(new kafka::ConfigMap);
+  std::shared_ptr<kafka::ConfigMap> configMap =
+    std::shared_ptr<kafka::ConfigMap>(new kafka::ConfigMap);
 
   if (!FLAGS_kafka_client_global_config_file.empty()) {
-    configMapPtr = kafka::read_conf_file(FLAGS_kafka_client_global_config_file);
-  } else {
-    configMapPtr = std::shared_ptr<kafka::ConfigMap>(new kafka::ConfigMap());
+    if (!kafka::read_conf_file(FLAGS_kafka_client_global_config_file, configMap)) {
+      LOG(ERROR) << "Can not read / parse config file: "
+                 << FLAGS_kafka_client_global_config_file
+                 << std::endl;
+      return nullptr;
+    }
   }
-
   // Following settings cannot be overwritten from config file...
   // https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
-  (*configMapPtr)["metadata.broker.list"] = std::make_pair(broker_list, true);
-  (*configMapPtr)["enable.partition.eof"] = std::make_pair("true", true);
+  (*configMap)["metadata.broker.list"] = std::make_pair(broker_list, true);
+  (*configMap)["enable.partition.eof"] = std::make_pair("true", true);
   // set api.version.request to true so that Kafka timestamp can be used.
-  (*configMapPtr)["api.version.request"] = std::make_pair("true", true);
-  (*configMapPtr)["enable.auto.offset.store"] = std::make_pair(FLAGS_enable_kafka_auto_offset_store, true);
-  (*configMapPtr)["group.id"] = std::make_pair(group_id, true);
+  (*configMap)["api.version.request"] = std::make_pair("true", true);
+  (*configMap)["enable.auto.offset.store"] = std::make_pair(FLAGS_enable_kafka_auto_offset_store, true);
+  (*configMap)["group.id"] = std::make_pair(group_id, true);
 
-  return CreateRdKafkaConsumer(configMapPtr, partition_ids, kafka_consumer_type);
+  return CreateRdKafkaConsumer(configMap, partition_ids, kafka_consumer_type);
 }
 
 }  // namespace
