@@ -21,17 +21,7 @@ std::string GetCurrentWorkingDir() {
   return current_working_dir;
 }
 
-class KafkaConfigTest : public ::testing::Test {};
-
-TEST_F(KafkaConfigTest, BasicTest) {
-  EXPECT_TRUE(true);
-}
-
-TEST_F(KafkaConfigTest, SecondBasicTest) {
-  EXPECT_TRUE(true);
-}
-
-TEST_F(KafkaConfigTest, ConfigFileTest) {
+TEST(KafkaConfigTest, ConfigFileTest) {
 
   std::cout << GetCurrentWorkingDir() << std::endl;
   std::cout.flush();
@@ -40,7 +30,6 @@ TEST_F(KafkaConfigTest, ConfigFileTest) {
 
   std::string configFile = std::string("client_config.properties");
   EXPECT_TRUE(KafkaConfig::read_conf_file(configFile, configMap, true));
-  /*
   EXPECT_TRUE(configMap->find("enable.sparse.connections") != configMap->end());
   EXPECT_TRUE(configMap->find("enable.sparse.connections")->second.first == "true");
   EXPECT_TRUE(configMap->find("enable.sparse.connections")->second.second);
@@ -52,7 +41,6 @@ TEST_F(KafkaConfigTest, ConfigFileTest) {
   EXPECT_TRUE(configMap->find("socket_timeout_ms")->second.first == "300");
   EXPECT_TRUE(configMap->find("socket_timeout_ms")->second.second);
   EXPECT_TRUE(configMap->find("not_enabled_config_file") == configMap->end());
-   */
 }
 
 } // namespace kafka
