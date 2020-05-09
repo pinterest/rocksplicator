@@ -8,6 +8,7 @@
 #include "common/kafka/kafka_config.h"
 
 namespace kafka {
+
 /**
  * @brief Read (Java client) configuration file
  */
