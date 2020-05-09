@@ -14,5 +14,6 @@ foreach(testsourcefile ${TEST_SOURCES})
   add_executable(${testname} ${testsourcefile})
   target_link_libraries(${testname} common gtest kafka_consumer mock_kafka_consumer rdkafka++)
   add_test(NAME ${testname} COMMAND ${testname})
+  set_tests_properties(${testname} PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endforeach(testsourcefile ${TEST_SOURCES})
 
