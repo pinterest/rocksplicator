@@ -375,8 +375,8 @@ public:
     return ERR_UNKNOWN_TOPIC_OR_PART;
   }
 
-  ~MockKafkaConsumer() override {
-
+  ConsumerGroupMetadata *groupMetadata() override {
+    return nullptr;
   }
 
 private:
