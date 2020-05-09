@@ -346,7 +346,7 @@ RUN cd /opt && \
 RUN cd /opt && \
     git clone https://github.com/edenhill/librdkafka.git && \
     (cd librdkafka && \
-     git reset --hard v0.11.4 && \
+     git reset --hard v1.4.0 && \
      ./configure && \
      make && \
      make install && \

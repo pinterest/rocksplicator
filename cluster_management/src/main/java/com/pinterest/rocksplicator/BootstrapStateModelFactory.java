@@ -153,6 +153,8 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
         LOG.error("Failed to add S3 files for " + partitionName, e);
         throw new RuntimeException(e);
       }
+
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -173,6 +175,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
       }
 
       Utils.closeDB(Utils.getDbName(partitionName), adminPort);
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -195,6 +198,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
       }
 
       Utils.closeDB(Utils.getDbName(partitionName), adminPort);
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -222,6 +226,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
         LOG.error("Failed to replay kafka for : " + partitionName, e);
         throw new RuntimeException(e);
       }
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -233,6 +238,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
       Utils.logTransitionMessage(message);
 
       Utils.clearDB(Utils.getDbName(partitionName), adminPort);
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -244,6 +250,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
       Utils.logTransitionMessage(message);
 
       Utils.clearDB(Utils.getDbName(partitionName), adminPort);
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -253,6 +260,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
     public void onBecomeOfflineFromError(Message message, NotificationContext context) {
       Utils.checkSanity("ERROR", "OFFLINE", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
+      Utils.logTransitionCompletionMessage(message);
     }
   }
 }
