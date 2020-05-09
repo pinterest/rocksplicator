@@ -177,11 +177,6 @@ public class Utils {
         + " for " + message.getPartitionName());
   }
 
-  public static void logTransitionCompletionMessage(Message message) {
-    LOG.error("Switched from " + message.getFromState() + " to " + message.getToState()
-        + " for " + message.getPartitionName());
-  }
-
   /**
    * Get the latest sequence number of the local DB
    * @param dbName

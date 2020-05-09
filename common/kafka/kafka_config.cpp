@@ -1,6 +1,16 @@
-//
-// Created by Gopal Rajpurohit on 5/8/20.
-//
+/// Copyright 2019 Pinterest Inc.
+///
+/// Licensed under the Apache License, Version 2.0 (the "License");
+/// you may not use this file except in compliance with the License.
+/// You may obtain a copy of the License at
+///
+/// http://www.apache.org/licenses/LICENSE-2.0
+
+/// Unless required by applicable law or agreed to in writing, software
+/// distributed under the License is distributed on an "AS IS" BASIS,
+/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+/// See the License for the specific language governing permissions and
+/// limitations under the License.
 
 #include <fstream>
 
@@ -10,9 +20,9 @@
 namespace kafka {
 
 /**
- * @brief Read (Java client) configuration file
+ * Read Java kafka client configuration file
  */
-bool read_conf_file(
+bool KafkaConfig::read_conf_file(
   const std::string &conf_file,
   const std::shared_ptr<ConfigMap> configMap,
   bool compatibility_flag) {
@@ -46,7 +56,7 @@ bool read_conf_file(
     std::string key = line.substr(0, d);
     std::string val = line.substr(d + 1);
 
-    configMap->insert(make_pair(key, make_pair(val, compatibility_flag)));
+    (*configMap)[key] = make_pair(val, compatibility_flag);
   }
   inf.close();
   return true;
