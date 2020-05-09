@@ -122,26 +122,51 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
 
   std::shared_ptr<kafka::ConfigMap> configMap(new kafka::ConfigMap);
 
+
+  // Note: Following settings are overridden from configuration.
+  // We explicitly set the eof this flag so that control passes back to
+  // client code one's partition eof is hit. This is important for rocksplicator's
+  // BootstrapStateModel. Since this property default changed in librdkafka-1.0.0-RC4,
+  // from true to false, upgrade to newer version of librdkafka will be impossible
+  // without explicitly setting this parameter to true. However for compatibility
+  // with older versions of librdkafka that may not have
+  // this flag in first place, we don't require this setting to be compatible.
+  // We also allow this setting to be overriden from configuration file.
+  (*configMap)["enable.partition.eof"] = std::make_pair("true", false);
+
+  // This preserves previous behavior. However this setting can be overwritten
+  // from configuration file as well, in which case this need not be set from
+  // flags.
+  (*configMap)["enable.auto.offset.store"] = std::make_pair(
+    FLAGS_enable_kafka_auto_offset_store, false);
+
   /**
    * Each of the config parameter provided must be valid and known
    * to librdkafka. This makes sure, we fail loud before setting any parameter
    * that doesn't belong in the kafka config w.r.t version of the librdkafka
    */
   if (!FLAGS_kafka_client_global_config_file.empty()) {
-    if (!kafka::read_conf_file(FLAGS_kafka_client_global_config_file, configMap, true)) {
+    if (!kafka::KafkaConfig::read_conf_file(
+      FLAGS_kafka_client_global_config_file, configMap, true)) {
       LOG(ERROR) << "Can not read / parse config file: "
                  << FLAGS_kafka_client_global_config_file
                  << std::endl;
       return nullptr;
     }
   }
-  // Following settings cannot be overwritten from config file...
+
+  // Following settings can't be set from configuration file... and are
+  // overwritten, if provided in configuration file.
+
   // https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
   (*configMap)["metadata.broker.list"] = std::make_pair(broker_list, true);
-  (*configMap)["enable.partition.eof"] = std::make_pair("true", true);
+
   // set api.version.request to true so that Kafka timestamp can be used.
+  // This is necessary for seek to work based on timestamps, hence a required
+  // setting and can't be overridden from configuration file.
   (*configMap)["api.version.request"] = std::make_pair("true", true);
-  (*configMap)["enable.auto.offset.store"] = std::make_pair(FLAGS_enable_kafka_auto_offset_store, true);
+
+  // Group id is necessary and hence we fail if it can't be set.
   (*configMap)["group.id"] = std::make_pair(group_id, true);
 
   return CreateRdKafkaConsumer(configMap, partition_ids, kafka_consumer_type);
