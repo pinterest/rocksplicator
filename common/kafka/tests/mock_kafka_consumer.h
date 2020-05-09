@@ -348,6 +348,40 @@ private:
     return NotImplNullptr<struct rd_kafka_s>();
   }
 
+public:
+  ~MockKafkaConsumer() override {
+
+  }
+
+  int32_t controllerid(int timeout_ms) override {
+    return 0;
+  }
+
+  ErrorCode fatal_error(std::string &errstr) override {
+    return ERR_UNKNOWN_TOPIC_OR_PART;
+  }
+
+  ErrorCode
+  oauthbearer_set_token(
+    const std::string &token_value,
+    int64_t md_lifetime_ms,
+    const std::string &md_principal_name,
+    const std::list<std::string> &extensions,
+    std::string &errstr) override {
+    return ERR_UNKNOWN_TOPIC_OR_PART;
+  }
+
+  ErrorCode oauthbearer_set_token_failure(const std::string &errstr) override {
+    return ERR_UNKNOWN_TOPIC_OR_PART;
+  }
+
+  ~MockKafkaConsumer() override {
+
+  }
+
+private:
+
+
   ////////////////////////////////////////////////////////////////
   // Other private methods
   std::string GetTopicPartitionKey(const std::string& topic, const int partition) {
