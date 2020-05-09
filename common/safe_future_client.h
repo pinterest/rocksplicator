@@ -19,6 +19,7 @@
 #pragma once
 
 #include <thrift/lib/cpp2/async/HeaderClientChannel.h>
+#include <thrift/lib/cpp/TApplicationException.h>
 
 #include <string>
 
@@ -183,16 +184,16 @@ class SafeFutureClient {
       return;
     }
 
-    try {
-      typename RequestTraits<T>::response_type response;
-      RequestTraits<T>::recv_func(response, *recvState);
-      p->setValue(std::move(response));
-    } catch (typename RequestTraits<T>::exception_type& e) {
-      p->setException(
-        folly::make_exception_wrapper<
-          typename RequestTraits<T>::exception_type>(std::move(e)));
-    } catch (std::exception& e) {
-      p->setException(folly::exception_wrapper(std::move(e)));
+    auto ex = folly::try_and_catch<std::exception,
+                                   apache::thrift::TApplicationException,
+                                   typename RequestTraits<T>::exception_type>([p, recvState]() {
+       typename RequestTraits<T>::response_type response;
+       RequestTraits<T>::recv_func(response, *recvState);
+       p->setValue(std::move(response));
+    });
+
+    if (ex) {
+      p->setException(std::move(ex));
     }
   }
 
