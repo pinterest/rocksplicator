@@ -7,7 +7,7 @@
 
 namespace kafka {
 
-TEST(KafkaConfig, TestConfigFile) {
+TEST(KafkaConfigTest, TestConfigFile) {
   std::shared_ptr<ConfigMap> configMap = std::shared_ptr<ConfigMap>(new ConfigMap);
 
   std::string configFile = std::string("common/client_config.properties");

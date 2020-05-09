@@ -94,6 +94,18 @@ public:
     return nullptr;
   }
 
+  Status status() const override {
+    return MSG_STATUS_PERSISTED;
+  }
+
+  Headers *headers() override {
+    return nullptr;
+  }
+
+  Headers *headers(RdKafka::ErrorCode *err) override {
+    return nullptr;
+  }
+
 private:
   const std::string topic_name_;
   const int32_t partition_id_;
