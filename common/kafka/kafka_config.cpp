@@ -11,7 +11,7 @@ namespace kafka {
 /**
  * @brief Read (Java client) configuration file
  */
-static bool read_conf_file(
+bool read_conf_file(
   const std::string &conf_file,
   const std::shared_ptr<ConfigMap> configMap,
   bool compatibility_flag) {
