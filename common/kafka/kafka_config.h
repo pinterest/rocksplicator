@@ -35,6 +35,6 @@ public:
   //            from the provided config file.
   static bool read_conf_file(
     const std::string &conf_file,
-    ConfigMap &configMap);
+    ConfigMap *configMap);
 };
 } // namespace kafka

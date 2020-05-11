@@ -29,7 +29,7 @@ TEST(KafkaConfigTest, ConfigFileTest) {
   ConfigMap configMap;
 
   std::string configFile = std::string("client_config.properties");
-  EXPECT_TRUE(KafkaConfig::read_conf_file(configFile, configMap));
+  EXPECT_TRUE(KafkaConfig::read_conf_file(configFile, &configMap));
   EXPECT_TRUE(configMap.find("enable.sparse.connections") != configMap.end());
   EXPECT_TRUE(configMap.find("enable.sparse.connections")->second == "true");
   EXPECT_TRUE(configMap.find("timeout_millis") != configMap.end());
