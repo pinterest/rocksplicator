@@ -23,9 +23,7 @@ namespace kafka {
  * Read Java kafka client configuration file
  */
 bool KafkaConfig::read_conf_file(
-  const std::string &conf_file,
-  const std::shared_ptr<ConfigMap> configMap,
-  bool compatibility_flag) {
+  const std::string &conf_file, ConfigMap &configMap) {
   std::ifstream inf(conf_file.c_str());
 
   if (!inf) {
@@ -42,7 +40,7 @@ bool KafkaConfig::read_conf_file(
     linenr++;
 
     // Ignore comments and empty lines
-    if (line[0] == '#' || line.length() == 0)
+    if (line.length() == 0 || line[0] == '#')
       continue;
 
     // Match on key=value..
@@ -56,7 +54,7 @@ bool KafkaConfig::read_conf_file(
     std::string key = line.substr(0, d);
     std::string val = line.substr(d + 1);
 
-    (*configMap)[key] = make_pair(val, compatibility_flag);
+    configMap[key] = std::move(val);
   }
   inf.close();
   return true;

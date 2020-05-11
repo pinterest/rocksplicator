@@ -26,21 +26,19 @@ TEST(KafkaConfigTest, ConfigFileTest) {
   std::cout << GetCurrentWorkingDir() << std::endl;
   std::cout.flush();
 
-  std::shared_ptr<ConfigMap> configMap = std::shared_ptr<ConfigMap>(new ConfigMap);
+  ConfigMap configMap;
 
   std::string configFile = std::string("client_config.properties");
-  EXPECT_TRUE(KafkaConfig::read_conf_file(configFile, configMap, true));
-  EXPECT_TRUE(configMap->find("enable.sparse.connections") != configMap->end());
-  EXPECT_TRUE(configMap->find("enable.sparse.connections")->second.first == "true");
-  EXPECT_TRUE(configMap->find("enable.sparse.connections")->second.second);
-  EXPECT_TRUE(configMap->find("timeout_millis") != configMap->end());
-  EXPECT_TRUE(configMap->find("timeout_millis")->second.first == "1200");
-  EXPECT_TRUE(configMap->find("timeout_millis")->second.second);
-  EXPECT_TRUE(configMap->find("socket_timeout_ms") != configMap->end());
-  EXPECT_TRUE(configMap->find("socket_timeout_ms")->first == "socket_timeout_ms");
-  EXPECT_TRUE(configMap->find("socket_timeout_ms")->second.first == "300");
-  EXPECT_TRUE(configMap->find("socket_timeout_ms")->second.second);
-  EXPECT_TRUE(configMap->find("not_enabled_config_file") == configMap->end());
+  EXPECT_TRUE(KafkaConfig::read_conf_file(configFile, configMap));
+  EXPECT_TRUE(configMap.find("enable.sparse.connections") != configMap.end());
+  EXPECT_TRUE(configMap.find("enable.sparse.connections")->second == "true");
+  EXPECT_TRUE(configMap.find("timeout_millis") != configMap.end());
+  EXPECT_TRUE(configMap.find("timeout_millis")->second == "1200");
+  EXPECT_TRUE(configMap.find("socket_timeout_ms") != configMap.end());
+  EXPECT_TRUE(configMap.find("socket_timeout_ms")->first == "socket_timeout_ms");
+  EXPECT_TRUE(configMap.find("socket_timeout_ms")->second == "300");
+  EXPECT_TRUE(configMap.find("not_enabled_config_file") == configMap.end());
+  EXPECT_FALSE(configMap.find("comment.not.visible") == configMap.end());
 }
 
 } // namespace kafka
