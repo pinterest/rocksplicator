@@ -84,7 +84,7 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
     RdKafka::Conf::CONF_GLOBAL));
 
   // Next go through each of the GLOBAL config and set.
-  for (kafka::ConfigMap::const_iterator it = config->begin(); it != config->end(); ++it) {
+  for (KafkaConfigMap::const_iterator it = config.begin(); it != config.end(); ++it) {
     const std::string& key = it->first;
     const std::pair<std::string, bool>& value = it->second;
 
@@ -143,7 +143,7 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
   kafka::ConfigMap configMap;
   if (!FLAGS_kafka_client_global_config_file.empty()) {
     if (!kafka::KafkaConfig::read_conf_file(
-      FLAGS_kafka_client_global_config_file, configMap)) {
+      FLAGS_kafka_client_global_config_file, &configMap)) {
       LOG(ERROR) << "Can not read / parse config file: "
                  << FLAGS_kafka_client_global_config_file
                  << std::endl;
