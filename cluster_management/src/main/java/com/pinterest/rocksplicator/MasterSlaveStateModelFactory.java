@@ -252,6 +252,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
             e);
       }
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -269,6 +270,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
             e);
       }
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -356,7 +358,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           if (!needRebuild) {
             Utils.changeDBRoleAndUpStream("localhost", adminPort, dbName, "SLAVE",
                 upstreamHost, upstreamPort);
-
+            Utils.logTransitionCompletionMessage(message);
             return;
           }
         } catch (RuntimeException e) {
@@ -471,6 +473,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
             e);
       }
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -485,6 +488,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
             e);
       }
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -499,6 +503,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
             e);
       }
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
