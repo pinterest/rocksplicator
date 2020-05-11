@@ -4,28 +4,12 @@
 
 #include <string>
 
-#include <stdio.h>  /* defines FILENAME_MAX */
-#include <unistd.h>
-#define GetCurrentDir getcwd
-#include<iostream>
-
 #include "gtest/gtest.h"
 #include "common/kafka/kafka_config.h"
 
 namespace kafka {
 
-std::string GetCurrentWorkingDir() {
-  char buff[FILENAME_MAX];
-  GetCurrentDir( buff, FILENAME_MAX );
-  std::string current_working_dir(buff);
-  return current_working_dir;
-}
-
 TEST(KafkaConfigTest, ConfigFileTest) {
-
-  std::cout << GetCurrentWorkingDir() << std::endl;
-  std::cout.flush();
-
   ConfigMap configMap;
 
   std::string configFile = std::string("client_config.properties");
