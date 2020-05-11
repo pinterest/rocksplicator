@@ -51,6 +51,7 @@ public class CacheStateModelFactory extends StateModelFactory<StateModel> {
     public void onBecomeOnlineFromOffline(Message message, NotificationContext context) {
       checkSanity("OFFLINE", "ONLINE", message);
       Utils.logTransitionMessage(message);
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -60,6 +61,7 @@ public class CacheStateModelFactory extends StateModelFactory<StateModel> {
     public void onBecomeOfflineFromOnline(Message message, NotificationContext context) {
       checkSanity("ONLINE", "OFFLINE", message);
       Utils.logTransitionMessage(message);
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -69,6 +71,7 @@ public class CacheStateModelFactory extends StateModelFactory<StateModel> {
     public void onBecomeDroppedFromOffline(Message message, NotificationContext context) {
       checkSanity("OFFLINE", "DROPPED", message);
       Utils.logTransitionMessage(message);
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -78,6 +81,7 @@ public class CacheStateModelFactory extends StateModelFactory<StateModel> {
     public void onBecomeDroppedFromError(Message message, NotificationContext context) {
       checkSanity("ERROR", "DROPPED", message);
       Utils.logTransitionMessage(message);
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -87,6 +91,7 @@ public class CacheStateModelFactory extends StateModelFactory<StateModel> {
     public void onBecomeOfflineFromError(Message message, NotificationContext context) {
       checkSanity("ERROR", "OFFLINE", message);
       Utils.logTransitionMessage(message);
+      Utils.logTransitionCompletionMessage(message);
     }
 
     private void checkSanity(String fromState, String toState, Message message) {

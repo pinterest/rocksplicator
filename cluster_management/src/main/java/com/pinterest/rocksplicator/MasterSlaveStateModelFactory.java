@@ -252,6 +252,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
             e);
       }
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -269,6 +270,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
             e);
       }
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -398,6 +400,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           Utils.restoreLocalDBFromS3(adminPort, dbName, s3Bucket, s3Path, snapshotHost, snapshotPort);
         }
       }
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -471,6 +474,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
             e);
       }
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -485,6 +489,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
             e);
       }
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
@@ -499,6 +504,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
             e);
       }
+      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
