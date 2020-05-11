@@ -38,7 +38,7 @@ TEST(KafkaConfigTest, ConfigFileTest) {
   EXPECT_TRUE(configMap.find("socket_timeout_ms")->first == "socket_timeout_ms");
   EXPECT_TRUE(configMap.find("socket_timeout_ms")->second == "300");
   EXPECT_TRUE(configMap.find("not_enabled_config_file") == configMap.end());
-  EXPECT_FALSE(configMap.find("comment.not.visible") == configMap.end());
+  EXPECT_TRUE(configMap.find("comment.not.visible") == configMap.end());
 }
 
 } // namespace kafka
