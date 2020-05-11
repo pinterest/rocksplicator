@@ -358,7 +358,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           if (!needRebuild) {
             Utils.changeDBRoleAndUpStream("localhost", adminPort, dbName, "SLAVE",
                 upstreamHost, upstreamPort);
-
+            Utils.logTransitionCompletionMessage(message);
             return;
           }
         } catch (RuntimeException e) {
