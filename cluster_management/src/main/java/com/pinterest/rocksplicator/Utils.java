@@ -173,7 +173,12 @@ public class Utils {
    * @param message
    */
   public static void logTransitionMessage(Message message) {
-    LOG.error("Switching from " + message.getFromState() + " to " + message.getToState()
+    LOG.error("Transition Started from " + message.getFromState() + " to " + message.getToState()
+        + " for " + message.getPartitionName());
+  }
+
+  public static void logTransitionCompletionMessage(Message message) {
+    LOG.error("Transition Completed from " + message.getFromState() + " to " + message.getToState()
         + " for " + message.getPartitionName());
   }
 
