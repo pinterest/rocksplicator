@@ -400,7 +400,6 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           Utils.restoreLocalDBFromS3(adminPort, dbName, s3Bucket, s3Path, snapshotHost, snapshotPort);
         }
       }
-      Utils.logTransitionCompletionMessage(message);
     }
 
     /**
