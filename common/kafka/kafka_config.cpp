@@ -23,7 +23,8 @@ namespace kafka {
  * Read Java kafka client configuration file
  */
 bool KafkaConfig::read_conf_file(
-  const std::string &conf_file, ConfigMap &configMap) {
+  const std::string &conf_file,
+  ConfigMap *configMap) {
   std::ifstream inf(conf_file.c_str());
 
   if (!inf) {
@@ -54,7 +55,7 @@ bool KafkaConfig::read_conf_file(
     std::string key = line.substr(0, d);
     std::string val = line.substr(d + 1);
 
-    configMap[key] = std::move(val);
+    (*configMap)[key] = std::move(val);
   }
   inf.close();
   return true;
