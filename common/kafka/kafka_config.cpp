@@ -13,8 +13,9 @@
 /// limitations under the License.
 
 #include <fstream>
+#include <folly/ScopeGuard.h>
+#include <glog/logging.h>
 
-#include "glog/logging.h"
 #include "common/kafka/kafka_config.h"
 
 namespace kafka {
@@ -24,11 +25,10 @@ namespace kafka {
  */
 bool KafkaConfig::read_conf_file(
   const std::string &conf_file,
-  const std::shared_ptr<ConfigMap> configMap,
-  bool compatibility_flag) {
-  std::ifstream inf(conf_file.c_str());
+  ConfigMap *configMap) {
+  std::ifstream input_stream(conf_file.c_str());
 
-  if (!inf) {
+  if (!input_stream || !input_stream.is_open()) {
     LOG(ERROR) << ": " << conf_file << ": could not open file" << std::endl;
     return false;
   }
@@ -38,11 +38,15 @@ bool KafkaConfig::read_conf_file(
   std::string line;
   int linenr = 0;
 
-  while (std::getline(inf, line)) {
+  SCOPE_EXIT {
+    input_stream.close();
+  };
+
+  while (std::getline(input_stream, line)) {
     linenr++;
 
     // Ignore comments and empty lines
-    if (line[0] == '#' || line.length() == 0)
+    if (line.length() == 0 || line[0] == '#')
       continue;
 
     // Match on key=value..
@@ -56,9 +60,8 @@ bool KafkaConfig::read_conf_file(
     std::string key = line.substr(0, d);
     std::string val = line.substr(d + 1);
 
-    (*configMap)[key] = make_pair(val, compatibility_flag);
+    (*configMap)[key] = std::move(val);
   }
-  inf.close();
   return true;
 }
 } // namespace kafka

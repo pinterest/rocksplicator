@@ -20,13 +20,21 @@
 
 namespace kafka {
 
-typedef std::map<std::string, std::pair<std::string, bool>> ConfigMap;
+typedef std::map<std::string, std::string> ConfigMap;
 
 class KafkaConfig {
 public:
+  // This method reads in properties/configuration in key=value pair format
+  // into configMap.
+  // The format of properties file is similar to java properties file
+  // except it doesn't dereference any escape characters or special characters.
+  // Empty lines must not contain any whitespace.
+  // parameters:
+  // conf_file: path of configuration file to read.
+  // configMap: Output-only parameter, map containing all key-value pairs read
+  //            from the provided config file.
   static bool read_conf_file(
     const std::string &conf_file,
-    const std::shared_ptr<ConfigMap> configMap,
-    bool compatibility_flag);
+    ConfigMap *configMap);
 };
 } // namespace kafka
