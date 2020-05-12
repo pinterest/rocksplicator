@@ -123,13 +123,16 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
 
   KafkaConfigMap kafkaConfigMap;
 
-  // Note: Following settings are overridden from configuration.
-  // We explicitly set the eof this flag so that control passes back to
-  // client code one's partition eof is hit. This is important for rocksplicator's
-  // BootstrapStateModel. Since this property default changed in librdkafka-1.0.0-RC4,
-  // from true to false, upgrade to newer version of librdkafka will be impossible
-  // without explicitly setting this parameter to true. However for compatibility
-  // with older versions of librdkafka that may not have
+  // Note: Following settings are overridden from configuration. We explicitly
+  // set the enable.partition.eof property to true, so that control passes back
+  // to client code one's partition eof is hit. This is important for rocksplicator's
+  // BootstrapStateModel. Since this property default changed from true to false,
+  // in librdkafka-1.0.0-RC4 (https://github.com/edenhill/librdkafka/issues/2020,
+  // https://github.com/edenhill/librdkafka/commit/a869fa19359fc285b19496c4321abe199322a736)
+  // upgrade to newer version of librdkafka will be impossible
+  // without explicitly setting this parameter to true.
+  //
+  // However for compatibility with older versions of librdkafka that may not have
   // this flag in first place, we don't require this setting to be compatible.
   // We also allow this setting to be overriden from configuration file.
   kafkaConfigMap["enable.partition.eof"] = std::make_pair("true", false);
@@ -147,11 +150,13 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
       LOG(ERROR) << "Can not read / parse config file: "
                  << FLAGS_kafka_client_global_config_file
                  << std::endl;
+      common::Stats::get()->Incr(getFullStatsName(
+        kKafkaConsumerErrorInit, {"kafka_consumer_type=" + kafka_consumer_type}));
       return nullptr;
     }
 
-    // Each of the config parameter provided must be valid and known
-    // to librdkafka. This makes sure, we fail loud before setting any parameter
+    // Each of the config parameter provided must be valid and known to
+    // librdkafka. This makes sure, we fail loud before setting any parameter
     // that doesn't belong in the kafka config w.r.t version of the librdkafka
     for (auto iter = configMap.begin(); iter != configMap.end(); ++iter) {
       kafkaConfigMap[iter->first] = std::make_pair(iter->second, true);
