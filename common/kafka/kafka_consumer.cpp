@@ -73,9 +73,10 @@ bool KafkaSeekWithRetry(RdKafka::KafkaConsumer* consumer,
   return true;
 }
 
+typedef std::map<std::string, std::pair<std::string, bool>> KafkaConfigMap;
 std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
   // https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
-  const std::shared_ptr<kafka::ConfigMap>& config,
+  const KafkaConfigMap& config,
   const std::unordered_set<uint32_t>& partition_ids,
   const std::string kafka_consumer_type) {
   std::string err;
@@ -83,7 +84,7 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
     RdKafka::Conf::CONF_GLOBAL));
 
   // Next go through each of the GLOBAL config and set.
-  for (kafka::ConfigMap::const_iterator it = config->begin(); it != config->end(); ++it) {
+  for (KafkaConfigMap::const_iterator it = config.begin(); it != config.end(); ++it) {
     const std::string& key = it->first;
     const std::pair<std::string, bool>& value = it->second;
 
@@ -120,8 +121,7 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
   auto conf = std::shared_ptr<RdKafka::Conf>(RdKafka::Conf::create(
     RdKafka::Conf::CONF_GLOBAL));
 
-  std::shared_ptr<kafka::ConfigMap> configMap(new kafka::ConfigMap);
-
+  KafkaConfigMap kafkaConfigMap;
 
   // Note: Following settings are overridden from configuration.
   // We explicitly set the eof this flag so that control passes back to
@@ -132,26 +132,29 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
   // with older versions of librdkafka that may not have
   // this flag in first place, we don't require this setting to be compatible.
   // We also allow this setting to be overriden from configuration file.
-  (*configMap)["enable.partition.eof"] = std::make_pair("true", false);
+  kafkaConfigMap["enable.partition.eof"] = std::make_pair("true", false);
 
   // This preserves previous behavior. However this setting can be overwritten
   // from configuration file as well, in which case this need not be set from
   // flags.
-  (*configMap)["enable.auto.offset.store"] = std::make_pair(
+  kafkaConfigMap["enable.auto.offset.store"] = std::make_pair(
     FLAGS_enable_kafka_auto_offset_store, false);
 
-  /**
-   * Each of the config parameter provided must be valid and known
-   * to librdkafka. This makes sure, we fail loud before setting any parameter
-   * that doesn't belong in the kafka config w.r.t version of the librdkafka
-   */
+  kafka::ConfigMap configMap;
   if (!FLAGS_kafka_client_global_config_file.empty()) {
     if (!kafka::KafkaConfig::read_conf_file(
-      FLAGS_kafka_client_global_config_file, configMap, true)) {
+      FLAGS_kafka_client_global_config_file, &configMap)) {
       LOG(ERROR) << "Can not read / parse config file: "
                  << FLAGS_kafka_client_global_config_file
                  << std::endl;
       return nullptr;
+    }
+
+    // Each of the config parameter provided must be valid and known
+    // to librdkafka. This makes sure, we fail loud before setting any parameter
+    // that doesn't belong in the kafka config w.r.t version of the librdkafka
+    for (auto iter = configMap.begin(); iter != configMap.end(); ++iter) {
+      kafkaConfigMap[iter->first] = std::make_pair(iter->second, true);
     }
   }
 
@@ -159,17 +162,17 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
   // overwritten, if provided in configuration file.
 
   // https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
-  (*configMap)["metadata.broker.list"] = std::make_pair(broker_list, true);
+  kafkaConfigMap["metadata.broker.list"] = std::make_pair(broker_list, true);
 
   // set api.version.request to true so that Kafka timestamp can be used.
   // This is necessary for seek to work based on timestamps, hence a required
   // setting and can't be overridden from configuration file.
-  (*configMap)["api.version.request"] = std::make_pair("true", true);
+  kafkaConfigMap["api.version.request"] = std::make_pair("true", true);
 
   // Group id is necessary and hence we fail if it can't be set.
-  (*configMap)["group.id"] = std::make_pair(group_id, true);
+  kafkaConfigMap["group.id"] = std::make_pair(group_id, true);
 
-  return CreateRdKafkaConsumer(configMap, partition_ids, kafka_consumer_type);
+  return CreateRdKafkaConsumer(kafkaConfigMap, partition_ids, kafka_consumer_type);
 }
 
 }  // namespace
