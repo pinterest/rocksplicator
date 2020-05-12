@@ -11,7 +11,6 @@
 /// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 /// See the License for the specific language governing permissions and
 /// limitations under the License.
-
 #include "common/kafka/kafka_consumer.h"
 
 #include <atomic>
@@ -27,6 +26,7 @@
 #include "librdkafka/rdkafka.h"
 #include "librdkafka/rdkafkacpp.h"
 #include "common/kafka/stats_enum.h"
+#include "common/kafka/kafka_config.h"
 
 DEFINE_int32(kafka_consumer_timeout_ms, 1000,
     "Kafka consumer timeout in ms");
@@ -36,6 +36,8 @@ DEFINE_int32(kafka_consumer_time_between_retries_ms, 100,
     "Time in ms to sleep between each retry");
 DEFINE_string(enable_kafka_auto_offset_store, "false",
     "Whether to automatically commit the kafka offsets");
+DEFINE_string(kafka_client_global_config_file, "",
+    "Provide additional global parameters to kafka client library e.g.. ssl configuration");
 
 namespace {
 
@@ -71,6 +73,45 @@ bool KafkaSeekWithRetry(RdKafka::KafkaConsumer* consumer,
   return true;
 }
 
+typedef std::map<std::string, std::pair<std::string, bool>> KafkaConfigMap;
+std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
+  // https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+  const KafkaConfigMap& config,
+  const std::unordered_set<uint32_t>& partition_ids,
+  const std::string kafka_consumer_type) {
+  std::string err;
+  auto conf = std::shared_ptr<RdKafka::Conf>(RdKafka::Conf::create(
+    RdKafka::Conf::CONF_GLOBAL));
+
+  // Next go through each of the GLOBAL config and set.
+  for (KafkaConfigMap::const_iterator it = config.begin(); it != config.end(); ++it) {
+    const std::string& key = it->first;
+    const std::pair<std::string, bool>& value = it->second;
+
+    if (conf->set(key, value.first, err) != RdKafka::Conf::CONF_OK) {
+      if (value.second) {
+        LOG(ERROR) << "Failed to create kafka config for partitions: "
+                   << folly::join(",", partition_ids)
+                   << ", error: " << err
+                   << "required conf couldn't be set "
+                   << "key=" << key
+                   << ", value=" << value.first << std::endl;
+        common::Stats::get()->Incr(getFullStatsName(
+          kKafkaConsumerErrorInit, {"kafka_consumer_type=" + kafka_consumer_type}));
+        return nullptr;
+      } else {
+        LOG(ERROR) << "Couldn't set provided config key-value pair"
+                   << "key=" << key
+                   << ", value=" << value.first
+                   << ", error:" << err << std::endl;
+      }
+    }
+  }
+
+  return std::shared_ptr<RdKafka::KafkaConsumer>(
+    RdKafka::KafkaConsumer::create(conf.get(), err));
+}
+
 std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
     const std::unordered_set<uint32_t>& partition_ids,
     const std::string& broker_list,
@@ -78,23 +119,65 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
     const std::string kafka_consumer_type) {
   std::string err;
   auto conf = std::shared_ptr<RdKafka::Conf>(RdKafka::Conf::create(
-      RdKafka::Conf::CONF_GLOBAL));
-  // https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
-  if (conf->set("metadata.broker.list", broker_list, err) !=
-  RdKafka::Conf::CONF_OK) {
-    LOG(ERROR) << "Failed to create kafka config for partitions: "
-               << folly::join(",", partition_ids) << ", error: " << err;
-    common::Stats::get()->Incr(getFullStatsName(
+    RdKafka::Conf::CONF_GLOBAL));
+
+  KafkaConfigMap kafkaConfigMap;
+
+  // Note: Following settings are overridden from configuration. We explicitly
+  // set the enable.partition.eof property to true, so that control passes back
+  // to client code one's partition eof is hit. This is important for rocksplicator's
+  // BootstrapStateModel. Since this property default changed from true to false,
+  // in librdkafka-1.0.0-RC4 (https://github.com/edenhill/librdkafka/issues/2020,
+  // https://github.com/edenhill/librdkafka/commit/a869fa19359fc285b19496c4321abe199322a736)
+  // upgrade to newer version of librdkafka will be impossible
+  // without explicitly setting this parameter to true.
+  //
+  // However for compatibility with older versions of librdkafka that may not have
+  // this flag in first place, we don't require this setting to be compatible.
+  // We also allow this setting to be overriden from configuration file.
+  kafkaConfigMap["enable.partition.eof"] = std::make_pair("true", false);
+
+  // This preserves previous behavior. However this setting can be overwritten
+  // from configuration file as well, in which case this need not be set from
+  // flags.
+  kafkaConfigMap["enable.auto.offset.store"] = std::make_pair(
+    FLAGS_enable_kafka_auto_offset_store, false);
+
+  kafka::ConfigMap configMap;
+  if (!FLAGS_kafka_client_global_config_file.empty()) {
+    if (!kafka::KafkaConfig::read_conf_file(
+      FLAGS_kafka_client_global_config_file, &configMap)) {
+      LOG(ERROR) << "Can not read / parse config file: "
+                 << FLAGS_kafka_client_global_config_file
+                 << std::endl;
+      common::Stats::get()->Incr(getFullStatsName(
         kKafkaConsumerErrorInit, {"kafka_consumer_type=" + kafka_consumer_type}));
-    return nullptr;
+      return nullptr;
+    }
+
+    // Each of the config parameter provided must be valid and known to
+    // librdkafka. This makes sure, we fail loud before setting any parameter
+    // that doesn't belong in the kafka config w.r.t version of the librdkafka
+    for (auto iter = configMap.begin(); iter != configMap.end(); ++iter) {
+      kafkaConfigMap[iter->first] = std::make_pair(iter->second, true);
+    }
   }
+
+  // Following settings can't be set from configuration file... and are
+  // overwritten, if provided in configuration file.
+
+  // https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+  kafkaConfigMap["metadata.broker.list"] = std::make_pair(broker_list, true);
+
   // set api.version.request to true so that Kafka timestamp can be used.
-  conf->set("api.version.request", "true", err);
-  conf->set("enable.auto.offset.store", FLAGS_enable_kafka_auto_offset_store,
-            err);
-  conf->set("group.id", group_id, err);
-  return std::shared_ptr<RdKafka::KafkaConsumer>(
-      RdKafka::KafkaConsumer::create(conf.get(), err));
+  // This is necessary for seek to work based on timestamps, hence a required
+  // setting and can't be overridden from configuration file.
+  kafkaConfigMap["api.version.request"] = std::make_pair("true", true);
+
+  // Group id is necessary and hence we fail if it can't be set.
+  kafkaConfigMap["group.id"] = std::make_pair(group_id, true);
+
+  return CreateRdKafkaConsumer(kafkaConfigMap, partition_ids, kafka_consumer_type);
 }
 
 }  // namespace
