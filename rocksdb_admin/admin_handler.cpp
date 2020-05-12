@@ -1345,10 +1345,10 @@ void AdminHandler::async_tm_startMessageIngestion(
         << "DB name: " << db_name << ", Key " << folly::hexlify(*message->key())
         << ", "
         << "value "
-        << (FLAGS_enable_logging_consumer_log_with_payload)
-          ? folly::hexlify(folly::StringPiece(
-            static_cast<const char *>(message->payload()), message->len()))
-          : "***REDACTED***"
+        << ((FLAGS_enable_logging_consumer_log_with_payload)
+          ? (folly::hexlify(folly::StringPiece(
+            static_cast<const char *>(message->payload()), message->len())))
+          : ("***REDACTED***"))
         << ", "
         << "partition: " << message->partition() << ", "
         << "offset: " << message->offset() << ", "
