@@ -155,8 +155,8 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
       return nullptr;
     }
 
-    // Each of the config parameter provided must be valid and known
-    // to librdkafka. This makes sure, we fail loud before setting any parameter
+    // Each of the config parameter provided must be valid and known to
+    // librdkafka. This makes sure, we fail loud before setting any parameter
     // that doesn't belong in the kafka config w.r.t version of the librdkafka
     for (auto iter = configMap.begin(); iter != configMap.end(); ++iter) {
       kafkaConfigMap[iter->first] = std::make_pair(iter->second, true);
