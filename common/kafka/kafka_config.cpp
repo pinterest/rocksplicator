@@ -13,6 +13,7 @@
 /// limitations under the License.
 
 #include <fstream>
+#include <folly/ScopeGuard.h>
 
 #include "glog/logging.h"
 #include "common/kafka/kafka_config.h"
@@ -37,6 +38,10 @@ bool KafkaConfig::read_conf_file(
   std::string line;
   int linenr = 0;
 
+  SCOPE_EXIT {
+    inf.close();
+  };
+
   while (std::getline(inf, line)) {
     linenr++;
 
@@ -57,7 +62,6 @@ bool KafkaConfig::read_conf_file(
 
     (*configMap)[key] = std::move(val);
   }
-  inf.close();
   return true;
 }
 } // namespace kafka
