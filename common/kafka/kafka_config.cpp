@@ -14,8 +14,8 @@
 
 #include <fstream>
 #include <folly/ScopeGuard.h>
+#include <glog/logging.h>
 
-#include "glog/logging.h"
 #include "common/kafka/kafka_config.h"
 
 namespace kafka {
