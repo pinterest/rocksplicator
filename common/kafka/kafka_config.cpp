@@ -26,9 +26,9 @@ namespace kafka {
 bool KafkaConfig::read_conf_file(
   const std::string &conf_file,
   ConfigMap *configMap) {
-  std::ifstream inf(conf_file.c_str());
+  std::ifstream input_stream(conf_file.c_str());
 
-  if (!inf || !inf.is_open()) {
+  if (!input_stream || !input_stream.is_open()) {
     LOG(ERROR) << ": " << conf_file << ": could not open file" << std::endl;
     return false;
   }
@@ -39,10 +39,10 @@ bool KafkaConfig::read_conf_file(
   int linenr = 0;
 
   SCOPE_EXIT {
-    inf.close();
+    input_stream.close();
   };
 
-  while (std::getline(inf, line)) {
+  while (std::getline(input_stream, line)) {
     linenr++;
 
     // Ignore comments and empty lines
