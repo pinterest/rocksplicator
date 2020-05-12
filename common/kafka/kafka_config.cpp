@@ -28,7 +28,7 @@ bool KafkaConfig::read_conf_file(
   ConfigMap *configMap) {
   std::ifstream inf(conf_file.c_str());
 
-  if (!inf) {
+  if (!inf || !inf.is_open()) {
     LOG(ERROR) << ": " << conf_file << ": could not open file" << std::endl;
     return false;
   }
