@@ -13,8 +13,9 @@
 /// limitations under the License.
 
 #include <fstream>
+#include <folly/ScopeGuard.h>
+#include <glog/logging.h>
 
-#include "glog/logging.h"
 #include "common/kafka/kafka_config.h"
 
 namespace kafka {
@@ -25,9 +26,9 @@ namespace kafka {
 bool KafkaConfig::read_conf_file(
   const std::string &conf_file,
   ConfigMap *configMap) {
-  std::ifstream inf(conf_file.c_str());
+  std::ifstream input_stream(conf_file.c_str());
 
-  if (!inf) {
+  if (!input_stream || !input_stream.is_open()) {
     LOG(ERROR) << ": " << conf_file << ": could not open file" << std::endl;
     return false;
   }
@@ -37,7 +38,11 @@ bool KafkaConfig::read_conf_file(
   std::string line;
   int linenr = 0;
 
-  while (std::getline(inf, line)) {
+  SCOPE_EXIT {
+    input_stream.close();
+  };
+
+  while (std::getline(input_stream, line)) {
     linenr++;
 
     // Ignore comments and empty lines
@@ -57,7 +62,6 @@ bool KafkaConfig::read_conf_file(
 
     (*configMap)[key] = std::move(val);
   }
-  inf.close();
   return true;
 }
 } // namespace kafka
