@@ -89,8 +89,14 @@ DEFINE_int32(s3_download_limit_mb, 0, "S3 download sst bandwidth");
 DEFINE_int32(kafka_ts_update_interval, 1000, "Number of kafka messages consumed"
                                              " before updating meta_db");
 
-DEFINE_int32(consumer_log_frequency, 100, "only output one log in every "
-                                          "log_frequency of logs");
+DEFINE_bool(enable_logging_consumer_log, false,
+            "Enable logging consumer messages meta data at given log frequency");
+
+DEFINE_bool(enable_logging_consumer_log_with_payload, false,
+            "Enable logging consumer messages at given log frequency");
+
+DEFINE_int32(consumer_log_frequency, 100,
+  "only output one log in every log_frequency of logs");
 
 DECLARE_int32(kafka_consumer_timeout_ms);
 
@@ -1331,19 +1337,25 @@ void AdminHandler::async_tm_startMessageIngestion(
     const int64_t msg_timestamp_secs = GetMessageTimestampSecs(*message);
     message_count++;
 
-    // Logs for debugging
-    LOG_EVERY_N(INFO, FLAGS_consumer_log_frequency)
+    // Logs for debugging, only enabled if flag is specified.
+    // In case of sensitive data... we shouldn't be logging message, unless
+    // explicitly configured to do so (may be in order to debug)
+    if (FLAGS_enable_logging_consumer_log) {
+      LOG_EVERY_N(INFO, FLAGS_consumer_log_frequency)
         << "DB name: " << db_name << ", Key " << folly::hexlify(*message->key())
         << ", "
         << "value "
-        << folly::hexlify(folly::StringPiece(
-               static_cast<const char*>(message->payload()), message->len()))
+        << ((FLAGS_enable_logging_consumer_log_with_payload)
+          ? (folly::hexlify(folly::StringPiece(
+            static_cast<const char *>(message->payload()), message->len())))
+          : ("***REDACTED***"))
         << ", "
         << "partition: " << message->partition() << ", "
         << "offset: " << message->offset() << ", "
         << "payload len: " << message->len() << ", "
         << "msg_timestamp: " << ToUTC(msg_timestamp_secs) << " or "
         << std::to_string(msg_timestamp_secs) << " secs";
+    }
 
     if (!is_replay) {
       auto latency_ms = common::timeutil::GetCurrentTimestamp(
