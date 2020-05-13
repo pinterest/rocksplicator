@@ -7,7 +7,7 @@ matrix:
       cache:
         - ccache
       before_install:
-        - docker build -f $TRAVIS_BUILD_DIR/docker/Dockerfile -t local/rocksplicator-build:latest
+        - docker pull rajathprasad/rocksplicator-build:latest
       script:
         - cd $HOME/.ccache
         - |
@@ -42,7 +42,7 @@ matrix:
           else
             echo "Full build ..."
           fi
-        - docker run -v $HOME/.ccache:/rocksplicator/build -v $TRAVIS_BUILD_DIR:/rocksplicator local/rocksplicator-build:latest /bin/sh -c "cd /rocksplicator/build && cmake .. && make && env CTEST_OUTPUT_ON_FAILURE=1 make test"
+        - docker run -v $HOME/.ccache:/rocksplicator/build -v $TRAVIS_BUILD_DIR:/rocksplicator rajathprasad/rocksplicator-build:latest /bin/sh -c "cd /rocksplicator/build && cmake .. && make && env CTEST_OUTPUT_ON_FAILURE=1 make test"
       before_cache:
         - cd $HOME/.ccache && find . -type f -printf "%T+\t%p\n" | sort | cut -f 2 > touch_order.txt
         - cd "${TRAVIS_BUILD_DIR}" && git rev-parse HEAD > $HOME/.ccache/previous_git_commit.txt
