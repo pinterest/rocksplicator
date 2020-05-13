@@ -7,7 +7,7 @@ matrix:
       cache:
         - ccache
       before_install:
-        - docker build -f $TRAVIS_BUILD_DIR/docker/Dockerfile -t local/rocksplicator-build:latest $TRAVIS_BUILD_DIR/docker
+        - docker build -f $TRAVIS_BUILD_DIR/docker/Dockerfile -t local/rocksplicator-build:latest
       script:
         - cd $HOME/.ccache
         - |
