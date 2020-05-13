@@ -36,7 +36,7 @@ cd docker && docker build -t rocksplicator-build .
 
 Or pull the one we uploaded.
 ```sh
-docker pull rajathprasad/rocksplicator-build:latest
+docker pull gopalrajpurohit/rocksplicator-build:librdkafka_1_4_0
 ```
 
 ### Initialize submodules
@@ -50,7 +50,7 @@ cd rocksplicator && git submodule update --init
 Get into the docker build environment. We are assuming the rocksplicator repo is under $HOME/code/, and $HOME/docker-root is an existing directory.
 
 ```sh
-docker run -v <SOURCE-DIR>:/rocksplicator -v $HOME/docker-root:/root -ti rajathprasad/rocksplicator-build:latest bash
+docker run -v <SOURCE-DIR>:/rocksplicator -v $HOME/docker-root:/root -ti gopalrajpurohit/rocksplicator-build:librdkafka_1_4_0 bash
 ```
 
 Run the following command in the docker bash to build Rocksplicator:
@@ -66,7 +66,7 @@ Run the following command in the docker bash:
 cd /rocksplicator && mkdir -p build && cd build && cmake .. && make -j && make test
 ```
 
-## How to build your owner service based on RocksDB replicator & cluster management libraries.
+## How to build your own service based on RocksDB replicator & cluster management libraries.
 There is an example counter service under examples/counter_service/, which demonstrated a typical usage pattern for RocksDB replicator.
 
 ## Automated cluster management and recovery

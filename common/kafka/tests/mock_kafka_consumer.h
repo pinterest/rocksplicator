@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <list>
 #include <map>
 #include <memory>
 #include <string>
@@ -91,6 +92,18 @@ public:
   }
   struct rd_kafka_message_s* c_ptr() override {
     CHECK(false) << "Not implemented";
+    return nullptr;
+  }
+
+  Status status() const override {
+    return MSG_STATUS_PERSISTED;
+  }
+
+  Headers *headers() override {
+    return nullptr;
+  }
+
+  Headers *headers(RdKafka::ErrorCode *err) override {
     return nullptr;
   }
 
@@ -335,6 +348,40 @@ private:
   struct rd_kafka_s* c_ptr() override {
     return NotImplNullptr<struct rd_kafka_s>();
   }
+
+public:
+  ~MockKafkaConsumer() override {
+
+  }
+
+  int32_t controllerid(int timeout_ms) override {
+    return 0;
+  }
+
+  ErrorCode fatal_error(std::string &errstr) override {
+    return ERR_UNKNOWN_TOPIC_OR_PART;
+  }
+
+  ErrorCode
+  oauthbearer_set_token(
+    const std::string &token_value,
+    int64_t md_lifetime_ms,
+    const std::string &md_principal_name,
+    const std::list<std::string> &extensions,
+    std::string &errstr) override {
+    return ERR_UNKNOWN_TOPIC_OR_PART;
+  }
+
+  ErrorCode oauthbearer_set_token_failure(const std::string &errstr) override {
+    return ERR_UNKNOWN_TOPIC_OR_PART;
+  }
+
+  ConsumerGroupMetadata *groupMetadata() override {
+    return nullptr;
+  }
+
+private:
+
 
   ////////////////////////////////////////////////////////////////
   // Other private methods
