@@ -66,7 +66,7 @@ Run the following command in the docker bash:
 cd /rocksplicator && mkdir -p build && cd build && cmake .. && make -j && make test
 ```
 
-## How to build your owner service based on RocksDB replicator & cluster management libraries.
+## How to build your own service based on RocksDB replicator & cluster management libraries.
 There is an example counter service under examples/counter_service/, which demonstrated a typical usage pattern for RocksDB replicator.
 
 ## Automated cluster management and recovery
