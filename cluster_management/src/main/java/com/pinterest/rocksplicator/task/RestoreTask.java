@@ -1,0 +1,106 @@
+/// Copyright 2017 Pinterest Inc.
+///
+/// Licensed under the Apache License, Version 2.0 (the "License");
+/// you may not use this file except in compliance with the License.
+/// You may obtain a copy of the License at
+///
+/// http://www.apache.org/licenses/LICENSE-2.0
+
+/// Unless required by applicable law or agreed to in writing, software
+/// distributed under the License is distributed on an "AS IS" BASIS,
+/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+/// See the License for the specific language governing permissions and
+/// limitations under the License.
+
+//
+// @author kangnanli (kangnanli@pinterest.com)
+//
+
+package com.pinterest.rocksplicator.task;
+
+import com.pinterest.rocksplicator.Utils;
+
+import org.apache.helix.task.Task;
+import org.apache.helix.task.TaskResult;
+import org.apache.helix.task.UserContentStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class RestoreTask extends UserContentStore implements Task {
+
+  private static final Logger LOG = LoggerFactory.getLogger(RestoreTask.class);
+
+  private final String taskCluster;
+  private final String partitionName;
+  private final String storePathPrefix;
+  private final String srcCluster;
+  private final long resourceVersion;
+  private final String job;
+  private final int adminPort;
+  private final boolean useS3Store;
+  private final String s3Bucket;
+
+  public RestoreTask(String taskCluster, String partitionName, String storePathPrefix,
+                     String srcCluster, long resourceVersion, String job, int adminPort,
+                     boolean useS3Store, String s3Bucket) {
+    this.taskCluster = taskCluster;
+    this.partitionName = partitionName;
+    this.storePathPrefix = storePathPrefix;
+    this.srcCluster = srcCluster;
+    this.resourceVersion = resourceVersion;
+    this.job = job;
+    this.adminPort = adminPort;
+    this.useS3Store = useS3Store;
+    this.s3Bucket = s3Bucket;
+  }
+
+  @Override
+  public TaskResult run() {
+    String dbName = Utils.getDbName(partitionName);
+    if (storePathPrefix.isEmpty() || resourceVersion == 0L) {
+      String errMsg =
+          "Cancel the task, storePathPrefix/resourceVersion is not provided from job command "
+              + "config map";
+      LOG.error(errMsg);
+      return new TaskResult(TaskResult.Status.CANCELED, errMsg);
+    }
+
+    try {
+      String storePath =
+          String.format("%s/%s/%s", storePathPrefix, String.valueOf(resourceVersion), dbName);
+
+      LOG.error(
+          String.format(
+              "RestoreTask run to restore partition: %s from storePath: %s. Other info "
+                  + "{src_cluster: %s, taskCluster: %s, job: %s, version: %d}", partitionName,
+              storePath, srcCluster, taskCluster, job, resourceVersion));
+
+      executeRestore("127.0.0.1", adminPort, dbName, storePath, useS3Store, s3Bucket);
+
+      return new TaskResult(TaskResult.Status.COMPLETED, "RestoreTask is completed!");
+    } catch (Exception e) {
+      LOG.error("Task restore failed", e);
+      return new TaskResult(TaskResult.Status.FAILED, "RestoreTask failed");
+    }
+  }
+
+  protected void executeRestore(String host, int adminPort, String dbName, String storePath,
+                                boolean useS3Store, String s3Bucket)
+      throws RuntimeException {
+    try {
+      Utils.closeDB(dbName, adminPort);
+      if (useS3Store) {
+        Utils.restoreLocalDBFromS3(adminPort, dbName, s3Bucket, storePath, host, adminPort);
+      } else {
+        Utils.restoreLocalDB(adminPort, dbName, storePath, host, adminPort);
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Override
+  public void cancel() {
+    LOG.error("RestoreTask cancelled");
+  }
+}
