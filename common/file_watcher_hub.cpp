@@ -24,6 +24,7 @@ FileWatcherHub * FileWatcherHub::Instance() {
 }
 
 typedef std::pair<std::string, EventObserverPtr> ObserverEventCallbackPair;
+typedef std::pair<std::string, IdToObserverMapPtr> FileNameObserversMapPair;
 
 bool FileWatcherHub::subscribe(
   std::string fileName,
@@ -34,7 +35,7 @@ bool FileWatcherHub::subscribe(
   if (watcherIter == subscriptions_.end()) {
     // Add to the subscription
     IdToObserverMapPtr idToObserverMapPtr = std::make_shared<IdToObserverMap>();
-    subscriptions_.insert(std::pair(fileName, idToObserverMapPtr));
+    subscriptions_.insert(FileNameObserversMapPair(fileName, idToObserverMapPtr));
     watcherIter = subscriptions_.find(fileName);
 
     auto obsPtr = watcherIter->second->find(observerId);
