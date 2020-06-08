@@ -315,6 +315,7 @@ bool KafkaConsumer::SeekInternal(
       LOG(INFO) << "Seeking topic: " << topic_partition->topic()
                 << ", partition: " << topic_partition->partition()
                 << ", offset: " << topic_partition->offset();
+
       if (!KafkaSeekWithRetry(consumer_.get(), *topic_partition)) {
         return false;
       }
@@ -395,8 +396,9 @@ RdKafka::Message* KafkaConsumer::Consume(int32_t timeout_ms) const {
   }
 
   const auto error_code = message->err();
-  if (error_code != RdKafka::ERR_NO_ERROR && error_code !=
-      RdKafka::ERR__PARTITION_EOF && error_code != RdKafka::ERR__TIMED_OUT) {
+  if (error_code != RdKafka::ERR_NO_ERROR
+      && error_code != RdKafka::ERR__PARTITION_EOF
+      && error_code != RdKafka::ERR__TIMED_OUT) {
     LOG(ERROR) << "Failed to consume from kafka, error_code: "
                << RdKafka::err2str(error_code)
                << ", partition ids: " << partition_ids_str_;

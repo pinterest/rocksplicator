@@ -68,8 +68,14 @@ void VerifyAndUpdateTopicPartitionOffset(
   } else {
     const auto prev_offset = it->second;
     if (prev_offset + 1 != offset) {
-      common::Stats::get()->Incr(getFullStatsName(kKafkaWatcherMessageMissing,
-          {topic_name}));
+      if (prev_offset + 1 < offset) {
+        common::Stats::get()->Incr(getFullStatsName(
+          kKafkaWatcherMessageMissing, {topic_name}));
+      } else if (prev_offset +1 > offset) {
+        common::Stats::get()->Incr(getFullStatsName(
+          kKafkaWatcherMessageDuplicates, {topic_name}),
+            (prev_offset - offset + 1));
+      }
     }
     it->second = offset;
   }
