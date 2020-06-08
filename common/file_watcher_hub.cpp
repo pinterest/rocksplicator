@@ -23,6 +23,8 @@ FileWatcherHub * FileWatcherHub::Instance() {
   return &instance;
 }
 
+typedef std::pair<std::string, EventObserverPtr> ObserverEventCallbackPair;
+
 bool FileWatcherHub::subscribe(
   std::string fileName,
   std::string observerId,
@@ -37,7 +39,7 @@ bool FileWatcherHub::subscribe(
 
     auto obsPtr = watcherIter->second->find(observerId);
     if (obsPtr == watcherIter->second->end()) {
-      watcherIter->second->insert(std::pair(observerId, observerPtr));
+      watcherIter->second->insert(ObserverEventCallbackPair(observerId, observerPtr));
     }
 
     CHECK(common::FileWatcher::Instance()->AddFile(
@@ -54,7 +56,7 @@ bool FileWatcherHub::subscribe(
     // The file is already being watched...
     auto obsPtr = watcherIter->second->find(observerId);
     if (obsPtr == watcherIter->second->end()) {
-      watcherIter->second->insert(std::pair(observerId, observerPtr));
+      watcherIter->second->insert(ObserverEventCallbackPair(observerId, observerPtr));
     } else {
       return false;
     }
