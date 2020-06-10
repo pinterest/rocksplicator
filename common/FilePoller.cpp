@@ -86,7 +86,7 @@ void FilePoller::init(std::chrono::milliseconds pollInterval) {
 
 void FilePoller::stop() {
   if (scheduler_) {
-    scheduler_->cancelFunctionAndWait(
+    scheduler_->cancelFunction(
         folly::to<std::string>(pollerId_));
   }
 }
