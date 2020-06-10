@@ -97,7 +97,7 @@ TEST_F(FilePollerTest, TestUpdateFile) {
     promise.set_value(true);
   });
   updateModifiedTime(tmpFile);
-  ASSERT_TRUE(promise.get_future().get()));
+  ASSERT_TRUE(promise.get_future().get());
 }
 
 TEST_F(FilePollerTest, TestUpdateFileSubSecond) {
@@ -108,7 +108,7 @@ TEST_F(FilePollerTest, TestUpdateFileSubSecond) {
     promise.set_value(true);
   });
   updateModifiedTime(tmpFile, true, milliseconds(10));
-  ASSERT_TRUE(promise.get_future().get()));
+  ASSERT_TRUE(promise.get_future().get());
 }
 
 TEST_F(FilePollerTest, TestUpdateFileBackwards) {
@@ -119,7 +119,7 @@ TEST_F(FilePollerTest, TestUpdateFileBackwards) {
     promise.set_value(true);
   });
   updateModifiedTime(tmpFile, false);
-  ASSERT_TRUE(promise.get_future().get()));
+  ASSERT_TRUE(promise.get_future().get());
 }
 
 TEST_F(FilePollerTest, TestCreateFile) {
@@ -131,19 +131,18 @@ TEST_F(FilePollerTest, TestCreateFile) {
     promise.set_value(true);
   });
   File(creat(tmpFile.c_str(), O_RDONLY));
-  ASSERT_TRUE(promise.get_future().get()));
+  ASSERT_TRUE(promise.get_future().get());
 }
 
 TEST_F(FilePollerTest, TestDeleteFile) {
   std::promise<bool> promise;
-  bool updated = false;
   createFile();
   FilePoller poller(milliseconds(1));
   poller.addFileToTrack(tmpFile, [&]() {
     promise.set_value(true);
   });
   PCHECK(remove(tmpFile.c_str()) == 0);
-  ASSERT_TRUE(promise.get_future().get()));
+  ASSERT_TRUE(promise.get_future().get());
 }
 
 struct UpdateSyncState {
