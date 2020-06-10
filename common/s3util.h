@@ -188,7 +188,7 @@ class S3Util {
   // Return a list of objects under the prefix.
   // If delimiter is not empty, it will return all keys between Prefix
   // and the next occurrence of the string specified by delimiter.
-  // NOTE: this API doesn't provide continuation support.
+  // NOTE: this API doesn't provide continuation support; default 1000 as up-limit for objects count
   ListObjectsResponse listObjects(const string& prefix,
                                   const string& delimiter = "");
 
@@ -200,6 +200,9 @@ class S3Util {
   ListObjectsResponseV2 listObjectsV2(const string& prefix,
                                       const string& delimiter = "",
                                       const string& marker = "");
+
+  // Return a list of all objects under the prefix. It will have no up-limit for objects count
+  ListObjectsResponseV2 listAllObjects(const string& prefix, const string& delimiter = "");
 
   // Download all objects under a prefix. We only assume
   // For each object downloading,

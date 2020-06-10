@@ -300,7 +300,7 @@ Status S3Env::GetChildren(const std::string& path,
                           std::vector<std::string>* result) {
   auto formated_path = ensure_ends_with_pathsep(path);
   // fetch all files using the given path as the key prefix in S3
-  auto resp = s3_util_->listObjects(formated_path);
+  auto resp = s3_util_->listAllObjects(formated_path);
   if (!resp.Error().empty()) {
     LOG(ERROR) << "Error happened when fetching files from S3: "
                << resp.Error() << " under path: " << formated_path;
@@ -308,7 +308,7 @@ Status S3Env::GetChildren(const std::string& path,
   }
 
   // trim the file name
-  for (auto& v : resp.Body()) {
+  for (auto& v : resp.Body().objects) {
     // the path should be a prefix of the fetched value
     if (v.find(formated_path) == 0) {
       result->push_back(v.substr(formated_path.size()));
