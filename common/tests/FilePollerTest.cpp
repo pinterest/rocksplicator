@@ -275,4 +275,10 @@ TEST(FilePoller, TestFork) {
   testFile.update(true, FileTime(seconds(3)));
   ASSERT_NO_FATAL_FAILURE(p1.waitForUpdate());
 }
+
+int main(int argc, char** argv) {
+  // FLAGS_recheck_removed_file_interval_ms = 500;
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
 #endif
