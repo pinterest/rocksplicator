@@ -16,12 +16,13 @@
 
 #pragma once
 
+#include "common/FilePoller.h"
+
 #include <chrono>
 #include <unordered_map>
 
 #include <folly/Function.h>
 #include <folly/SharedMutex.h>
-#include <FilePoller.h>
 
 namespace common {
 

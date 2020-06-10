@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "common/FilePoller.h"
+
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
@@ -26,7 +28,6 @@
 #include <folly/portability/SysStat.h>
 #include <folly/synchronization/Baton.h>
 #include <glog/logging.h>
-#include <common/FilePoller.h>
 
 #if !defined(_WIN32)
 
