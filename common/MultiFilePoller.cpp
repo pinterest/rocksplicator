@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <wangle/util/MultiFilePoller.h>
+#include <MultiFilePoller.h>
 
 #include <algorithm>
 #include <folly/FileUtil.h>

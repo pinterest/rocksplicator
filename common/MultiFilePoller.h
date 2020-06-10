@@ -21,7 +21,7 @@
 
 #include <folly/Function.h>
 #include <folly/SharedMutex.h>
-#include <wangle/util/FilePoller.h>
+#include <FilePoller.h>
 
 namespace common {
 

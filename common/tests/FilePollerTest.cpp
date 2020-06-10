@@ -26,7 +26,7 @@
 #include <folly/portability/SysStat.h>
 #include <folly/synchronization/Baton.h>
 #include <glog/logging.h>
-#include <wangle/util/FilePoller.h>
+#include <common/FilePoller.h>
 
 #if !defined(_WIN32)
 
