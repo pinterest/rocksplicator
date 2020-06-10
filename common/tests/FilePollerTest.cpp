@@ -143,7 +143,8 @@ TEST_F(FilePollerTest, TestDeleteFile) {
   });
   PCHECK(remove(tmpFile.c_str()) == 0);
 
-  ASSERT_TRUE(promise.get_future().wait_for(seconds(1)) == std::future_status::timeout)
+  ASSERT_TRUE(
+    promise.get_future().wait_for(seconds(1)) == std::future_status::timeout);
 }
 
 struct UpdateSyncState {
