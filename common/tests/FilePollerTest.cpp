@@ -19,6 +19,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
+#include <future>
 
 #include <folly/File.h>
 #include <folly/FileUtil.h>
@@ -26,7 +27,6 @@
 #include <folly/experimental/TestUtil.h>
 #include <folly/portability/GTest.h>
 #include <folly/portability/SysStat.h>
-#include <folly/synchronization/Baton.h>
 #include <glog/logging.h>
 
 #if !defined(_WIN32)
@@ -91,73 +91,59 @@ void updateModifiedTime(
 
 TEST_F(FilePollerTest, TestUpdateFile) {
   createFile();
-  Baton<> baton;
-  bool updated = false;
+  std::promise<bool> promise;
   FilePoller poller(milliseconds(1));
   poller.addFileToTrack(tmpFile, [&]() {
-    updated = true;
-    baton.post();
+    promise.set_value(true);
   });
   updateModifiedTime(tmpFile);
-  ASSERT_TRUE(baton.try_wait_for(seconds(5)));
-  ASSERT_TRUE(updated);
+  ASSERT_TRUE(promise.get_future().get()));
 }
 
 TEST_F(FilePollerTest, TestUpdateFileSubSecond) {
   createFile();
-  Baton<> baton;
-  bool updated = false;
+  std::promise<bool> promise;
   FilePoller poller(milliseconds(1));
   poller.addFileToTrack(tmpFile, [&]() {
-    updated = true;
-    baton.post();
+    promise.set_value(true);
   });
   updateModifiedTime(tmpFile, true, milliseconds(10));
-  ASSERT_TRUE(baton.try_wait_for(seconds(5)));
-  ASSERT_TRUE(updated);
+  ASSERT_TRUE(promise.get_future().get()));
 }
 
 TEST_F(FilePollerTest, TestUpdateFileBackwards) {
   createFile();
-  Baton<> baton;
-  bool updated = false;
+  std::promise<bool> promise;
   FilePoller poller(milliseconds(1));
   poller.addFileToTrack(tmpFile, [&]() {
-    updated = true;
-    baton.post();
+    promise.set_value(true);
   });
   updateModifiedTime(tmpFile, false);
-  ASSERT_TRUE(baton.try_wait_for(seconds(5)));
-  ASSERT_TRUE(updated);
+  ASSERT_TRUE(promise.get_future().get()));
 }
 
 TEST_F(FilePollerTest, TestCreateFile) {
-  Baton<> baton;
-  bool updated = false;
+  std::promise<bool> promise;
   createFile();
   PCHECK(remove(tmpFile.c_str()) == 0);
   FilePoller poller(milliseconds(1));
   poller.addFileToTrack(tmpFile, [&]() {
-    updated = true;
-    baton.post();
+    promise.set_value(true);
   });
   File(creat(tmpFile.c_str(), O_RDONLY));
-  ASSERT_TRUE(baton.try_wait_for(seconds(5)));
-  ASSERT_TRUE(updated);
+  ASSERT_TRUE(promise.get_future().get()));
 }
 
 TEST_F(FilePollerTest, TestDeleteFile) {
-  Baton<> baton;
+  std::promise<bool> promise;
   bool updated = false;
   createFile();
   FilePoller poller(milliseconds(1));
   poller.addFileToTrack(tmpFile, [&]() {
-    updated = true;
-    baton.post();
+    promise.set_value(true);
   });
   PCHECK(remove(tmpFile.c_str()) == 0);
-  ASSERT_FALSE(baton.try_wait_for(seconds(1)));
-  ASSERT_FALSE(updated);
+  ASSERT_TRUE(promise.get_future().get()));
 }
 
 struct UpdateSyncState {
