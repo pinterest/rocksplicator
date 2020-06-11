@@ -35,7 +35,7 @@ static const std::chrono::milliseconds kPollIntervalMs{200};
 static const std::chrono::milliseconds kWriteWaitMs{1000};
 
 // Should be a few times larger than kPollInterval.
-static const std::chrono::milliseconds kMaxSemaphoreWaitMs{2500};
+static const std::chrono::milliseconds kMaxSemaphoreWaitMs{1000};
 
 class MultiFilePollerTest : public testing::Test {
  public:
@@ -48,8 +48,10 @@ class MultiFilePollerTest : public testing::Test {
     // The delay makes sure mtime (in granularity of sec) of the modified
     // file is increased by at least 1. Otherwise common::FilePoller may not
     // detect the change.
+    std::cout << "delayed Write Begin: " << path << std::endl;
     folly::makeFuture().delayed(kWriteWaitMs).wait();
     ASSERT_TRUE(folly::writeFile(data, path.c_str()));
+    std::cout << "delayed Write Finish" << path << std::endl;
   }
 
  protected:
@@ -83,9 +85,9 @@ TEST_F(MultiFilePollerTest, BasicTest) {
         auto& content = folly::get_or_throw(newData, f);
         EXPECT_EQ(d2, content);
         EXPECT_EQ(1, ++count);
-        if (!future.valid()) {
+        if (count == 1) {
           promise.set_value(true);
-        } else if (!future_cancellation.valid()) {
+        } else if (count == 2) {
           promise_cancellation.set_value(false);
         }
       });
@@ -159,6 +161,18 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
   std::promise<bool> promise42;
   std::promise<bool> promise4_cancelled;
 
+  std::future<bool> future1 = promise1.get_future();
+  std::future<bool> future1_cancelled = promise1_cancelled.get_future();
+  std::future<bool> future21 = promise21.get_future();
+  std::future<bool> future22 = promise22.get_future();
+  std::future<bool> future2_cancelled = promise2_cancelled.get_future();
+  std::future<bool> future31 = promise31.get_future();
+  std::future<bool> future32 = promise32.get_future();
+  std::future<bool> future33 = promise33.get_future();
+  std::future<bool> future41 = promise41.get_future();
+  std::future<bool> future42 = promise42.get_future();
+  std::future<bool> future4_cancelled = promise4_cancelled.get_future();
+
   // cb1 is only triggered once. It expects the content to equal d1, which is
   // written to the file to trigger the callback.
   auto cb1 = updater_->registerFile(
@@ -166,10 +180,9 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
         auto& content = folly::get_or_throw(newData, f1);
         EXPECT_EQ(d1, content);
         EXPECT_EQ(1, ++count1); // Fail if run more than once.
-      promise1.set_value(true);
-      if (!promise1.get_future().valid()) {
+      if (count1 == 1) {
         promise1.set_value(true);
-      } else if (!promise1_cancelled.get_future().valid()) {
+      } else if (count1 == 2) {
         // This should never get called
         promise1_cancelled.set_value(false);
       }
@@ -180,11 +193,11 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
       f2, [&](const MultiFilePoller::CallbackArg& newData) {
         data2 = folly::get_or_throw(newData, f2);
         count2++;
-        if (!promise21.get_future().valid()) {
+        if (count2 == 1) {
           promise21.set_value(true);
-        } else if (!promise22.get_future().valid()) {
+        } else if (count2 == 2) {
           promise22.set_value(true);
-        } else if (!promise2_cancelled.get_future().valid()) {
+        } else if (count2 == 3) {
           // This should never get called
           promise2_cancelled.set_value(false);
         }
@@ -201,9 +214,9 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
         } else {
           // Otherwise f1 must exist in the map.
           ASSERT_NE(newData.end(), newData.find(f1));
-          if (!promise32.get_future().valid()) {
+          if (count3 == 1) {
             promise32.set_value(true);
-          } else if (!promise33.get_future().valid()) {
+          } else if (count3 == 2) {
             promise33.set_value(true);
           }
         }
@@ -215,7 +228,7 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
 
   // Create f2 to trigger cb2.
   ASSERT_TRUE(folly::writeFile(d2, f2.c_str()));
-  ASSERT_TRUE(promise21.get_future().get());
+  ASSERT_TRUE(future21.get());
 
   EXPECT_EQ(1, count2); // +1.
   EXPECT_EQ(0, count1); // No change.
@@ -224,7 +237,7 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
 
   // Create f3 to trigger cb3. Note that cb1 should not run.
   ASSERT_TRUE(folly::writeFile(d3, f3.c_str()));
-  ASSERT_TRUE(promise31.get_future().get());
+  ASSERT_TRUE(future31.get());
   EXPECT_EQ(1, count3); // +1.
   EXPECT_EQ(0, count1); // No change.
   EXPECT_EQ(1, count2); // No change.
@@ -232,11 +245,11 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
 
   // Create f1 to trigger cb3 and cb1. Order doesn't matter.
   ASSERT_TRUE(folly::writeFile(d1, f1.c_str()));
-  ASSERT_TRUE(promise1.get_future().get());
+  ASSERT_TRUE(future1.get());
 
   EXPECT_EQ(1, count1); // +1.
   EXPECT_EQ(1, count2); // No change.
-  ASSERT_TRUE(promise32.get_future().get());
+  ASSERT_TRUE(future32.get());
   EXPECT_EQ(2, count3);              // +1.
   EXPECT_EQ(std::vector<std::string>({d3, d1}), data3);
 
@@ -245,11 +258,11 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
       f2, [&](const MultiFilePoller::CallbackArg& newData) {
         data4 = folly::get_or_throw(newData, f2);
         count4++;
-        if (!promise41.get_future().valid()) {
+        if (count4 == 1) {
           promise41.set_value(true);
-        } else if (!promise42.get_future().valid()) {
+        } else if (count4 == 2) {
           promise42.set_value(true);
-        } else if (!promise4_cancelled.get_future().valid()) {
+        } else if (count4 == 3) {
           promise4_cancelled.set_value(false);
         }
       });
@@ -257,8 +270,8 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
   // Write to f2 to trigger second callback.
   delayedWrite(f2, d21);
 
-  ASSERT_TRUE(promise22.get_future().get());
-  ASSERT_TRUE(promise41.get_future().get());
+  ASSERT_TRUE(future22.get());
+  ASSERT_TRUE(future41.get());
 
   EXPECT_EQ(2, count2);  // +1.
   EXPECT_EQ(1, count4);  // +1.
@@ -270,8 +283,8 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
   // f1 is in two different callbacks. Cancel cb1 should not affect cb3.
   updater_->cancelCallback(cb1);
   ASSERT_TRUE(folly::writeFile(d11, f1.c_str())); // Last write to f1 > 1s ago.
-  ASSERT_TRUE(promise33.get_future().get());
-  ASSERT_TRUE(promise1_cancelled.get_future().wait_for(
+  ASSERT_TRUE(future33.get());
+  ASSERT_TRUE(future1_cancelled.wait_for(
     kMaxSemaphoreWaitMs) == std::future_status::timeout);
 
   EXPECT_EQ(3, count3); // +1.
@@ -283,8 +296,8 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
   // cb2 and cb4 use and only use f2. Cancel cb2 should not affect cb4.
   updater_->cancelCallback(cb2);
   ASSERT_TRUE(folly::writeFile(d22, f2.c_str())); // Last write to f2 > 1s ago.
-  ASSERT_TRUE(promise42.get_future().get());
-  ASSERT_TRUE(promise2_cancelled.get_future().wait_for(
+  ASSERT_TRUE(future42.get());
+  ASSERT_TRUE(future2_cancelled.wait_for(
     kMaxSemaphoreWaitMs) == std::future_status::timeout);
 
   EXPECT_EQ(d21, data2); // cb2 should not run, so not updated.
@@ -295,7 +308,7 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
   // Now we cancel cb4. Record of f2 should be cleaned up.
   updater_->cancelCallback(cb4);
   ASSERT_TRUE(folly::writeFile(d1, f2.c_str()));
-  ASSERT_TRUE(promise4_cancelled.get_future().wait_for(
+  ASSERT_TRUE(future4_cancelled.wait_for(
     kMaxSemaphoreWaitMs) == std::future_status::timeout);
 
   EXPECT_EQ(d21, data2); // cb2 should not run, so not updated to d1.
