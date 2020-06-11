@@ -86,7 +86,7 @@ TEST_F(MultiFilePollerTest, BasicTest) {
         if (!future.valid()) {
           promise.set_value(true);
         } else if (!future_cancellation.valid()) {
-          future_cancellation.set_value(false);
+          promise_cancellation.set_value(false);
         }
       });
 
