@@ -70,7 +70,9 @@ TEST_F(MultiFilePollerTest, BasicTest) {
   size_t count = 0;
 
   std::promise<bool> promise;
-  std::promise<bool> promiseAfterCancellation;
+  std::promise<bool> future = promise.get_future();
+  std::promise<bool> promise_cancellation;
+  std::promise<bool> future_cancellation = promise_cancellation.get_future();
 
   // Write initial data.
   ASSERT_TRUE(folly::writeFile(d1, f.c_str()));
@@ -81,17 +83,18 @@ TEST_F(MultiFilePollerTest, BasicTest) {
         auto& content = folly::get_or_throw(newData, f);
         EXPECT_EQ(d2, content);
         EXPECT_EQ(1, ++count);
-        if (!promise.get_future().valid()) {
+        if (promise)
+        if (!future.valid()) {
           promise.set_value(true);
-        } else if (!promiseAfterCancellation.get_future().valid()) {
-          promiseAfterCancellation.set_value(false);
+        } else if (!future_cancellation.valid()) {
+          future_cancellation.set_value(false);
         }
       });
 
   delayedWrite(f, d2);
 
   // Check whether the callback is triggered by acquiring the semaphore.
-  ASSERT_TRUE(promise.get_future().get());
+  ASSERT_TRUE(future.get());
   ASSERT_EQ(1, count);
 
   // Cancel the callback.
@@ -100,7 +103,7 @@ TEST_F(MultiFilePollerTest, BasicTest) {
   // Write to the file again. The callback should not run.
   delayedWrite(f, d3);
 
-  ASSERT_TRUE(promiseAfterCancellation.get_future().wait_for(
+  ASSERT_TRUE(future_cancellation.wait_for(
     kMaxSemaphoreWaitMs) == std::future_status::timeout);
 
   // If the callback runs, the assertion inside callback will also fail.
