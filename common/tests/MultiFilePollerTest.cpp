@@ -12,6 +12,45 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * Changes and modifications in this file
+ * Copyright 2020 Pinterest Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * This file is a copied and subsequently modified version of file from
+ * Facebook's wangle library from gitsha: 639938b92547030232c42ceef3eba70d027de3c0
+ * hosted at: https://github.com/facebook/wangle
+ *
+ * Details of modification (very minor modification to make it work in current
+ * versions of wangle/folly/rocksplicator dependencies)
+ * 1. Reason for copying it from wangle, rather then use if from wangle directly
+ * is because in rocksplicator, currently we are pinned to wangle and folly
+ * versions which are quite old and these files are only available in newer
+ * version of wangle.
+ *
+ * 2. The file has been migrated to namespace common, instead of it's original
+ * wangle namespace, since other applications that uses rocksplicator could
+ * potentially be on newer version of wangle/folly and this might result
+ * in linking error.
+ *
+ * 3. When we are ready to upgrade rocksplicator to use newer version of wangle
+ * /folly, we can keep these file and make migration over to wangle's version
+ * of file in separate changes.
+ *
+ * 4. Some of the tests were modified to remove usage of functionality not available
+ * in current version of folly/wangle as used by rocksplicator, without removing
+ * any functional test.
  */
 
 #include "common/MultiFilePoller.h"
@@ -48,10 +87,8 @@ class MultiFilePollerTest : public testing::Test {
     // The delay makes sure mtime (in granularity of sec) of the modified
     // file is increased by at least 1. Otherwise common::FilePoller may not
     // detect the change.
-    std::cout << "delayed Write Begin: " << path << std::endl;
     folly::makeFuture().delayed(kWriteWaitMs).wait();
     ASSERT_TRUE(folly::writeFile(data, path.c_str()));
-    std::cout << "delayed Write Finish" << path << std::endl;
   }
 
  protected:
