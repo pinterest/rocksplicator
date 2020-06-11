@@ -55,7 +55,7 @@ class MultiFilePollerTest : public testing::Test {
  protected:
   std::unique_ptr<MultiFilePoller> updater_;
   std::string tmpdirPath_;
-  TemporaryDirectory tmpdir_{"MultiFilePollerTest"};
+  TemporaryDirectory tmpdir_;
 };
 
 /**
