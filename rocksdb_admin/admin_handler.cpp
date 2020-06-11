@@ -731,7 +731,8 @@ void AdminHandler::async_tm_backupDBToS3(
     return;
   }
 
-  auto local_path = FLAGS_rocksdb_dir + "s3_tmp/" + request->db_name + "/";
+  auto ts = common::timeutil::GetCurrentTimestamp();
+  auto local_path = folly::stringPrintf("%ss3_tmp/%s%d/", FLAGS_rocksdb_dir.c_str(), request->db_name.c_str(), ts);
   boost::system::error_code remove_err;
   boost::system::error_code create_err;
   boost::filesystem::remove_all(local_path, remove_err);
@@ -789,7 +790,8 @@ void AdminHandler::async_tm_restoreDBFromS3(
     return;
   }
 
-  auto local_path = FLAGS_rocksdb_dir + "s3_tmp/" + request->db_name + "/";
+  auto ts = common::timeutil::GetCurrentTimestamp();
+  auto local_path = folly::stringPrintf("%ss3_tmp/%s%d/", FLAGS_rocksdb_dir.c_str(), request->db_name.c_str(), ts);
   boost::system::error_code remove_err;
   boost::system::error_code create_err;
   boost::filesystem::remove_all(local_path, remove_err);
