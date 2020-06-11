@@ -152,7 +152,7 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
   std::promise<bool> promise1_cancelled;
   std::promise<bool> promise21;
   std::promise<bool> promise22;
-  std::promise<bool> promise22_cancelled;
+  std::promise<bool> promise2_cancelled;
   std::promise<bool> promise31;
   std::promise<bool> promise32;
   std::promise<bool> promise33;
@@ -171,6 +171,7 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
       if (!promise1.get_future().valid()) {
         promise1.set_value(true);
       } else if (!promise1_cancelled.get_future().valid()) {
+        // This should never get called
         promise1_cancelled.set_value(false);
       }
     });
@@ -184,6 +185,9 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
           promise21.set_value(true);
         } else if (!promise22.get_future().valid()) {
           promise22.set_value(true);
+        } else if (!promise2_cancelled.get_future().valid()) {
+          // This should never get called
+          promise2_cancelled.set_value(false);
         }
       });
 
@@ -212,7 +216,7 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
 
   // Create f2 to trigger cb2.
   ASSERT_TRUE(folly::writeFile(d2, f2.c_str()));
-  ASSERT_TRUE(promise2.get_future().get());
+  ASSERT_TRUE(promise21.get_future().get());
 
   EXPECT_EQ(1, count2); // +1.
   EXPECT_EQ(0, count1); // No change.
