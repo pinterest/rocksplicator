@@ -50,7 +50,7 @@ class MultiFilePollerTest : public testing::Test {
     // detect the change.
     folly::makeFuture()
         .delayed(kWriteWaitMs)
-        .thenValue(
+        .ensure(
             [&](auto&&) { ASSERT_TRUE(folly::writeFile(data, path.c_str())); })
         .wait();
   }
@@ -259,7 +259,7 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
   delayedWrite(f2, d21);
 
   ASSERT_TRUE(promise22.get_future().get());
-  ASSERT_TRUE(promise4.get_future().get());
+  ASSERT_TRUE(promise41.get_future().get());
 
   EXPECT_EQ(2, count2);  // +1.
   EXPECT_EQ(1, count4);  // +1.
