@@ -83,7 +83,6 @@ TEST_F(MultiFilePollerTest, BasicTest) {
         auto& content = folly::get_or_throw(newData, f);
         EXPECT_EQ(d2, content);
         EXPECT_EQ(1, ++count);
-        if (promise)
         if (!future.valid()) {
           promise.set_value(true);
         } else if (!future_cancellation.valid()) {
