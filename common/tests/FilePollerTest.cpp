@@ -29,8 +29,6 @@
 #include <folly/portability/SysStat.h>
 #include <glog/logging.h>
 
-#if !defined(_WIN32)
-
 using namespace common;
 using namespace folly;
 using namespace folly::test;
@@ -58,16 +56,8 @@ void updateModifiedTime(
     throw std::runtime_error("Failed to stat file: " + path);
   }
 
-#ifdef _WIN32
-  throw std::runtime_error("don't know how to set mtime on win32");
-#elif defined(__APPLE__) || defined(__FreeBSD__) \
- || (defined(__NetBSD__) && (__NetBSD_Version__ < 6099000000))
-  newTimes[0] = currentFileStat.st_atimespec;
-  newTimes[1] = currentFileStat.st_mtimespec;
-#else
   newTimes[0] = currentFileStat.st_atim;
   newTimes[1] = currentFileStat.st_mtim;
-#endif
 
   auto secVal = duration_cast<seconds>(timeDiffNano).count();
   auto nsecVal = timeDiffNano.count();
@@ -283,4 +273,3 @@ int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
-#endif
