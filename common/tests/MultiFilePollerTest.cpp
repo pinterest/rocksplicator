@@ -70,9 +70,9 @@ TEST_F(MultiFilePollerTest, BasicTest) {
   size_t count = 0;
 
   std::promise<bool> promise;
-  std::promise<bool> future = promise.get_future();
+  std::future<bool> future = promise.get_future();
   std::promise<bool> promise_cancellation;
-  std::promise<bool> future_cancellation = promise_cancellation.get_future();
+  std::future<bool> future_cancellation = promise_cancellation.get_future();
 
   // Write initial data.
   ASSERT_TRUE(folly::writeFile(d1, f.c_str()));
