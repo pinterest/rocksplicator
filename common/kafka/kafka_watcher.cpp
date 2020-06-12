@@ -164,7 +164,7 @@ bool KafkaWatcher::InitKafkaConsumerSeek(
   return true;
 }
 
-uint32_t KafkaWatcher::ConsumeUpToNow(const kafka::KafkaConsumer& consumer) {
+uint32_t KafkaWatcher::ConsumeUpToNow(kafka::KafkaConsumer& consumer) {
   // timestamps dealt with in this function are all ms.
   uint32_t num_msg_consumed = 0;
   const auto& topic_names = consumer.GetTopicNames();
@@ -186,7 +186,7 @@ uint32_t KafkaWatcher::ConsumeUpToNow(const kafka::KafkaConsumer& consumer) {
   while (!is_stopped_.load() && finished_topic_partitions.size() !=
          num_topic_partitions) {
     const auto message =
-        std::shared_ptr<const RdKafka::Message>(
+        std::shared_ptr<RdKafka::Message>(
             consumer.Consume(kafka_consumer_timeout_ms_));
     if (message == nullptr) {
       // This should only happen if kafka consumer is unhealthy.

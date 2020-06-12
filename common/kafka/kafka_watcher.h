@@ -159,7 +159,7 @@ private:
 
   // Consumes messages up to the current timestamp for a given consumer.
   // Returns how many messages are consumed.
-  uint32_t ConsumeUpToNow(const kafka::KafkaConsumer& consumer);
+  uint32_t ConsumeUpToNow(kafka::KafkaConsumer& consumer);
 
   void StartWatchLoop();
 
