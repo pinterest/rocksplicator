@@ -28,6 +28,15 @@ namespace kafka {
 
 class RdKafkaConsumerHolder {
 public:
+  RdKafkaConsumerHolder();
+
+  // no copy nor move
+  RdKafkaConsumerHolder(const RdKafkaConsumerHolder&) = delete;
+
+  RdKafkaConsumerHolder(RdKafkaConsumerHolder&&) = delete;
+
+  virtual ~RdKafkaConsumerHolder();
+
   virtual std::shared_ptr<RdKafka::KafkaConsumer> getInstance() = 0;
   virtual void resetInstance() = 0;
   virtual void close() = 0;

@@ -38,6 +38,8 @@ DEFINE_string(enable_kafka_auto_offset_store, "false",
     "Whether to automatically commit the kafka offsets");
 DEFINE_string(kafka_client_global_config_file, "",
     "Provide additional global parameters to kafka client library e.g.. ssl configuration");
+DEFINE_string(kafka_consumer_reset_on_file_change, "",
+    "Comma separated files to watch and reset kafka consumer, when the file change is noticed");
 
 namespace {
 
@@ -184,7 +186,7 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
 
 namespace kafka {
 
-class RdKafkaConsumerHolderRenewable : public RdKafkaConsumerHolder {
+class RdKafkaConsumerHolderRenewable : virtual public RdKafkaConsumerHolder {
 private:
   const std::unordered_set<uint32_t> partition_ids_;
   const std::string &broker_list_;
@@ -218,17 +220,11 @@ public:
     }
   }
 
-  void close() override {
-    if (kafkaConsumer_) {
-      kafkaConsumer_->close();
-    }
-  }
-
-  std::shared_ptr<RdKafka::KafkaConsumer> getInstance() override {
+  virtual std::shared_ptr<RdKafka::KafkaConsumer> getInstance() override {
     return kafkaConsumer_;
   }
 
-  void resetInstance() override {
+  virtual void resetInstance() override {
     /*
      * Before creating a new KafkaConsumer instance, make sure old one is closed
      * and shutdown.
@@ -243,22 +239,30 @@ public:
       group_id_,
       kafka_consumer_type_);
   }
+
+  virtual void close() override {
+    if (kafkaConsumer_) {
+      kafkaConsumer_->close();
+    }
+  }
 };
 
-class RdKafkaConsumerHolderCached : public RdKafkaConsumerHolder {
+class RdKafkaConsumerHolderCached : virtual public RdKafkaConsumerHolder {
 private:
   const std::shared_ptr<RdKafka::KafkaConsumer> kafkaConsumer_;
 public:
   RdKafkaConsumerHolderCached(std::shared_ptr<RdKafka::KafkaConsumer> kafkaConsumer)
   : kafkaConsumer_(std::move(kafkaConsumer)) {}
-  std::shared_ptr<RdKafka::KafkaConsumer> getInstance() override {
+
+  virtual std::shared_ptr<RdKafka::KafkaConsumer> getInstance() override {
     return kafkaConsumer_;
   }
-  void resetInstance() override {
+
+  virtual void resetInstance() override {
     // doNothing();
   }
 
-  void close() override {
+  virtual void close() override {
     if (kafkaConsumer_) {
       kafkaConsumer_->close();
     }
@@ -320,6 +324,10 @@ KafkaConsumer::KafkaConsumer(
   }
 
   do {
+    while (std::atomic_exchange(&reset_, false)) {
+      consumer_->resetInstance();
+    }
+
     // TODO: Change to unique_ptr
     std::vector<std::shared_ptr<RdKafka::TopicPartition>> topic_partitions;
     // A temporary RdKafka::TopicPartition* vector specifically used
@@ -350,8 +358,7 @@ KafkaConsumer::KafkaConsumer(
       });
 
     if (error_code != RdKafka::ERR_NO_ERROR) {
-      if (std::atomic_exchange(&reset_, false)) {
-        consumer_->resetInstance();
+      if (reset_) {
         continue;
       }
 
@@ -375,14 +382,17 @@ bool KafkaConsumer::IsHealthy() const { return is_healthy_.load(); }
 
 bool KafkaConsumer::Seek(const int64_t timestamp_ms) {
   do {
+    while (std::atomic_exchange(&reset_, false)) {
+      consumer_->resetInstance();
+    }
+
     if (SeekInternal(topic_names_, timestamp_ms)) {
       return true;
     } else {
       common::Stats::get()->Incr(
         getFullStatsName(kKafkaConsumerErrorSeek,
                          {kafka_consumer_type_metric_tag_}));
-      if (std::atomic_exchange(&reset_, false)) {
-        consumer_->resetInstance();
+      if (reset_) {
         continue;
       }
       return false;
@@ -392,32 +402,51 @@ bool KafkaConsumer::Seek(const int64_t timestamp_ms) {
 
 bool KafkaConsumer::Seek(const std::string& topic_name,
     const int64_t timestamp_ms) {
-  bool is_success = false;
-  if (topic_names_.find(topic_name) != topic_names_.end()) {
-    const std::unordered_set<std::string> tmp_topic_names{topic_name};
-    is_success = SeekInternal(tmp_topic_names, timestamp_ms);
-  } else {
-    LOG(ERROR) << "Kakfa consumer is unaware of topic_name: " << topic_name;
-  }
+  do {
+    while (std::atomic_exchange(&reset_, false)) {
+      consumer_->resetInstance();
+    }
 
-  if (!is_success) {
-    common::Stats::get()->Incr(getFullStatsName(
+    bool is_success = false;
+    if (topic_names_.find(topic_name) != topic_names_.end()) {
+      const std::unordered_set<std::string> tmp_topic_names{topic_name};
+      is_success = SeekInternal(tmp_topic_names, timestamp_ms);
+    } else {
+      LOG(ERROR) << "Kakfa consumer is unaware of topic_name: " << topic_name;
+      return false;
+    }
+
+    if (!is_success) {
+      common::Stats::get()->Incr(getFullStatsName(
         kKafkaConsumerErrorSeek, {kafka_consumer_type_metric_tag_,
                                   "topic=" + topic_name}));
-  }
-  return is_success;
+      if (reset_) {
+        continue;
+      }
+    }
+    return is_success;
+  }while (reset_);
 }
 
 bool KafkaConsumer::Seek(const std::map<std::string, std::map<int32_t,
     int64_t>>& last_offsets) {
-  if (SeekInternal(last_offsets)) {
-    return true;
-  }
+  do {
+    while (std::atomic_exchange(&reset_, false)) {
+      consumer_->resetInstance();
+    }
 
-  common::Stats::get()->Incr(
+    if (SeekInternal(last_offsets)) {
+      return true;
+    }
+
+    common::Stats::get()->Incr(
       getFullStatsName(kKafkaConsumerErrorSeek,
-          {kafka_consumer_type_metric_tag_}));
-  return false;
+                       {kafka_consumer_type_metric_tag_}));
+    if (reset_) {
+      continue;
+    }
+    return false;
+  } while (reset_);
 }
 
 bool KafkaConsumer::SeekInternal(
