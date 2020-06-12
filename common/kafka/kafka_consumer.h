@@ -26,6 +26,24 @@
 
 namespace kafka {
 
+class RdKafkaConsumerHolder {
+public:
+  virtual std::shared_ptr<RdKafka::KafkaConsumer> getInstance() = 0;
+  virtual void resetInstance() = 0;
+  virtual void close() = 0;
+};
+
+class RdKafkaConsumerHolderFactory {
+public:
+  static RdKafkaConsumerHolder* createInstance(const std::unordered_set <uint32_t> &partition_ids,
+                                                const std::string &broker_list,
+                                                const std::unordered_set <std::string> &topic_names,
+                                                const std::string &group_id,
+                                                const std::string &kafka_consumer_type);
+
+  static RdKafkaConsumerHolder* createInstance(std::shared_ptr <RdKafka::KafkaConsumer> consumer);
+};
+
 class KafkaConsumer {
 public:
   KafkaConsumer(const std::unordered_set<uint32_t>& partition_ids,
@@ -61,7 +79,7 @@ public:
       int64_t>>& last_offsets);
 
   // It returns nullptr if IsHealthy() returns false.
-  virtual RdKafka::Message* Consume(int32_t timeout_ms) const;
+  virtual RdKafka::Message* Consume(int32_t timeout_ms);
 
   // Gets Kafka topic names this consumer is assigned to.
   const std::unordered_set<std::string>& GetTopicNames() const;
@@ -81,12 +99,10 @@ public:
   const std::string partition_ids_str_;
 
 private:
-  // For mock ONLY
-  explicit KafkaConsumer(const std::unordered_set<std::string>& topic_names)
-      : partition_ids_str_("0"),
-        topic_names_(topic_names),
-        partition_ids_({0}),
-        kafka_consumer_type_metric_tag_("") {}
+  KafkaConsumer(RdKafkaConsumerHolder* holder,
+    const std::unordered_set<uint32_t>& partition_ids,
+    const std::unordered_set<std::string>& topic_names,
+    const std::string& kafka_consumer_type);
 
   virtual bool SeekInternal(const std::unordered_set<std::string>& topic_names,
                             const int64_t timestamp_ms);
@@ -97,11 +113,12 @@ private:
   std::unordered_set<std::string> topic_names_;
   std::string topic_names_string_;
   const std::unordered_set<uint32_t> partition_ids_;
-  std::shared_ptr<RdKafka::KafkaConsumer> consumer_;
+  const std::shared_ptr<RdKafkaConsumerHolder> consumer_;
   // Tag used when logging metrics, so we can differentiate between kafka
   // consumers for different use cases.
   const std::string kafka_consumer_type_metric_tag_;
   std::atomic<bool> is_healthy_;
+  std::atomic<bool> reset_;
 };
 
 }  // namespace kafka
