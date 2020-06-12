@@ -256,6 +256,25 @@ ListObjectsResponseV2 S3Util::listObjectsV2(const string& prefix,
           ListObjectsResponseV2Body(objects, next_marker), error_message);
 }
 
+ListObjectsResponseV2 S3Util::listAllObjects(const string& prefix, const string& delimiter) {
+  vector<string> output;
+  vector<string> objects;
+  string error_message;
+  string marker;
+  string next_marker;
+  do {
+    listObjectsHelper(prefix, delimiter, marker, &objects, &next_marker, &error_message);
+    if (!error_message.empty()) {
+      break;
+    }
+    output.insert(output.end(), objects.begin(), objects.end());
+    objects.clear();
+    marker = next_marker;
+    next_marker.clear();
+  } while (!marker.empty());
+  return ListObjectsResponseV2(ListObjectsResponseV2Body(output, next_marker), error_message);
+}
+
 GetObjectsResponse S3Util::getObjects(
     const string& prefix, const string& local_directory,
     const string& delimiter, const bool direct_io) {
