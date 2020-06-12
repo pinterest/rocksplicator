@@ -124,21 +124,24 @@ void run_partition(const uint32_t partition_id) {
 int main(int argc, char** argv) {
   google::ParseCommandLineFlags(&argc, &argv, true);
 
+  if (FLAGS_topic_name.empty()) {
+    std::cout << "Must provide topic name" << std::endl;
+    exit(-1);
+  }
+  if (FLAGS_kafka_broker_serverset_path.empty()) {
+    std::cout << "Must provide broker serverset path" << std::endl;
+    exit(-1);
+  }
+  if (FLAGS_kafka_consumer_group.empty()) {
+    std::cout << "Must provide consumer group to use. Don't use production consumer group" << std::endl;
+    exit(-1);
+  }
+
   uint32_t batchSize = FLAGS_num_partitions_per_consumer;
   uint32_t numBatches = FLAGS_num_consumers;
   uint32_t numPartitions = batchSize * numBatches;
 
   std::vector<std::thread> threads(numPartitions);
-
-  if (FLAGS_topic_name.empty()) {
-    std::cout << "Must provide topic name" << std::endl;
-  }
-  if (FLAGS_kafka_broker_serverset_path.empty()) {
-    std::cout << "Must provide broker serverset path" << std::endl;
-  }
-  if (FLAGS_kafka_consumer_group.empty()) {
-    std::cout << "Must provide consumer group to use. Don't use production consumer group" << std::endl;
-  }
 
   for (uint32_t batchId = 0; batchId < numBatches; ++batchId) {
     unordered_set<uint32_t> partitions = unordered_set<uint32_t>();

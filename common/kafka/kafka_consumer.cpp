@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "common/stats/stats.h"
+#include "common/MultiFilePoller.h"
 #include "folly/String.h"
 #include "librdkafka/rdkafka.h"
 #include "librdkafka/rdkafkacpp.h"
@@ -42,6 +43,11 @@ DEFINE_string(kafka_consumer_reset_on_file_change, "",
     "Comma separated files to watch and reset kafka consumer, when the file change is noticed");
 
 namespace {
+
+static common::MultiFilePoller * getFilePollerInstance() {
+  static common::MultiFilePoller multiFilePoller(std::chrono::seconds(5));
+  return &multiFilePoller;
+}
 
 RdKafka::ErrorCode ExecuteKafkaOperationWithRetry(
     std::function<RdKafka::ErrorCode()> func) {
@@ -229,10 +235,12 @@ public:
      * Before creating a new KafkaConsumer instance, make sure old one is closed
      * and shutdown.
      */
+    LOG(INFO) << "Closing kafka consumer for x" << std::endl;
     if (kafkaConsumer_) {
       kafkaConsumer_->close();
     }
 
+    LOG(INFO) << "Recreating kafka consumer for x" << std::endl;
     kafkaConsumer_ = CreateRdKafkaConsumer(
       partition_ids_,
       broker_list_,
@@ -317,10 +325,20 @@ KafkaConsumer::KafkaConsumer(
     topic_names_(topic_names),
     partition_ids_(partition_ids),
     kafka_consumer_type_metric_tag_("kafka_consumer_type=" + kafka_consumer_type),
+    cbIdPtr_(nullptr),
     is_healthy_(false),
     reset_(false) {
   if (consumer_ == nullptr) {
     return;
+  }
+
+  if (!FLAGS_kafka_consumer_reset_on_file_change.empty()) {
+    cbIdPtr_ = std::make_shared<common::MultiFilePoller::CallbackId>(
+      getFilePollerInstance()->registerFile(
+        FLAGS_kafka_consumer_reset_on_file_change,
+        [&](const common::MultiFilePoller::CallbackArg &newData) {
+          reset_.store(true);
+        }));
   }
 
   do {
@@ -376,6 +394,19 @@ KafkaConsumer::KafkaConsumer(
               << folly::join(",", topic_names_);
     is_healthy_.store(true);
   } while (reset_);
+}
+
+KafkaConsumer::~KafkaConsumer() {
+  if (!FLAGS_kafka_consumer_reset_on_file_change.empty()) {
+    if (cbIdPtr_ != nullptr) {
+      auto cbId = cbIdPtr_.get();
+      getFilePollerInstance()->cancelCallback(*cbId);
+    }
+  }
+
+  if (consumer_) {
+    consumer_->close();
+  }
 }
 
 bool KafkaConsumer::IsHealthy() const { return is_healthy_.load(); }

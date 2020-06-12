@@ -20,6 +20,7 @@
 #include <string>
 #include <unordered_set>
 
+#include "common/MultiFilePoller.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "librdkafka/rdkafkacpp.h"
@@ -99,11 +100,7 @@ public:
   // Return set of topics as a string for logging
   const std::string& GetTopicsString() const;
 
-  virtual ~KafkaConsumer() {
-    if (consumer_) {
-      consumer_->close();
-    }
-  }
+  virtual ~KafkaConsumer();
 
   const std::string partition_ids_str_;
 
@@ -126,6 +123,7 @@ private:
   // Tag used when logging metrics, so we can differentiate between kafka
   // consumers for different use cases.
   const std::string kafka_consumer_type_metric_tag_;
+  std::shared_ptr<common::MultiFilePoller::CallbackId> cbIdPtr_;
   std::atomic<bool> is_healthy_;
   std::atomic<bool> reset_;
 };
