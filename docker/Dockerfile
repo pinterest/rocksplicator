@@ -207,6 +207,18 @@ RUN cd /opt && \
     rm -rf folly
 
 # wangle
+#
+# TODO: When wangle if upgraded to latest version, and the latest version
+# contains following files, please remove corresponding files from
+# common directory.
+#    if wangle has                 remove these files and migrate code to use wangle library
+# wangle/util/FilePoller.h                 -> common/FilePoller.h
+# wangle/util/FilePoller.cpp               -> common/FilePoller.cpp
+# wangle/util/MultiFilePoller.h            -> common/MultiFilePoller.h
+# wangle/util/MultiFilePoller.cpp          -> common/MultiFilePoller.cpp
+# wangle/util/test/FilePollerTest.cpp      -> common/tests/FilePollerTest.cpp
+# wangle/util/test/MultiFilePollerTest.cpp -> common/tests/MultiFilePollerTest.cpp
+#
 RUN cd /opt && \
     git clone https://github.com/facebook/wangle && \
     (cd wangle && git reset --hard 52f08ff480931fcba1b7fa9b3eebd45d220a68de) && \
