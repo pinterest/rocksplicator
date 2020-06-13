@@ -240,12 +240,17 @@ public:
       kafkaConsumer_->close();
     }
 
-    LOG(INFO) << "Recreating kafka consumer for x" << std::endl;
+    LOG(INFO) << "Recreating kafka consumer for topics "
+    << folly::join(",", topic_names_)
+    << "partitions"
+    << folly::join(",", partition_ids_) << std::endl;
     kafkaConsumer_ = CreateRdKafkaConsumer(
       partition_ids_,
       broker_list_,
       group_id_,
       kafka_consumer_type_);
+    LOG(INFO) << "Recreated kafka consumer for x" << std::endl;
+
   }
 
   virtual void close() override {
