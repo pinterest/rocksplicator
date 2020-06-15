@@ -116,7 +116,7 @@ private:
   virtual bool SeekInternal(const std::map<std::string, std::map<int32_t,
       int64_t>>& last_offsets);
 
-  std::unordered_set<std::string> topic_names_;
+  const std::unordered_set<std::string> topic_names_;
   std::string topic_names_string_;
   const std::unordered_set<uint32_t> partition_ids_;
   const std::shared_ptr<RdKafkaConsumerHolder> consumer_;

@@ -14,12 +14,14 @@
 #include "common/kafka/kafka_consumer.h"
 
 #include <atomic>
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <iostream>
 
 #include "common/stats/stats.h"
 #include "folly/String.h"
@@ -199,10 +201,10 @@ namespace kafka {
 class RdKafkaConsumerHolderRenewable : virtual public RdKafkaConsumerHolder {
 private:
   const std::unordered_set<uint32_t> partition_ids_;
-  const std::string &broker_list_;
-  const std::unordered_set<std::string> &topic_names_;
-  const std::string &group_id_;
-  const std::string &kafka_consumer_type_;
+  const std::string broker_list_;
+  const std::unordered_set<std::string> topic_names_;
+  const std::string group_id_;
+  const std::string kafka_consumer_type_;
 
   std::shared_ptr<RdKafka::KafkaConsumer> kafkaConsumer_;
 
@@ -213,10 +215,12 @@ public:
     const std::unordered_set<std::string> &topic_names,
     const std::string &group_id,
     const std::string &kafka_consumer_type) :
-    partition_ids_(partition_ids), broker_list_(broker_list),
+    partition_ids_(partition_ids),
+    broker_list_(broker_list),
     topic_names_(topic_names),
     group_id_(group_id),
     kafka_consumer_type_(kafka_consumer_type) {
+
     kafkaConsumer_ = CreateRdKafkaConsumer(
       partition_ids_,
       broker_list_,
@@ -239,22 +243,44 @@ public:
      * Before creating a new KafkaConsumer instance, make sure old one is closed
      * and shutdown.
      */
-    LOG(INFO) << "Closing kafka consumer for x" << std::endl;
+
+    LOG(INFO) << "Commit syncing kafka consumer for topic: "
+              << folly::join(",", topic_names_)
+              << "partitions: "
+              << folly::join(",", partition_ids_)
+              << std::endl << std::flush;
+
+    if (kafkaConsumer_) {
+      kafkaConsumer_->commitSync();
+    }
+
+    LOG(INFO) << "Closing kafka consumer for topic: "
+              << folly::join(",", topic_names_)
+              << "partitions: "
+              << folly::join(",", partition_ids_)
+              << std::endl << std::flush;
+
     if (kafkaConsumer_) {
       kafkaConsumer_->close();
     }
 
-    LOG(INFO) << "Recreating kafka consumer for topics "
-    << folly::join(",", topic_names_)
-    << "partitions"
-    << folly::join(",", partition_ids_) << std::endl;
+    LOG(INFO) << "Recreating kafka consumer for topic: "
+              << folly::join(",", topic_names_)
+              << "partitions: "
+              << folly::join(",", partition_ids_)
+              << std::endl << std::flush;
+
     kafkaConsumer_ = CreateRdKafkaConsumer(
       partition_ids_,
       broker_list_,
       group_id_,
       kafka_consumer_type_);
-    LOG(INFO) << "Recreated kafka consumer for x" << std::endl;
 
+    LOG(INFO) << "Recreated kafka consumer for topic: "
+              << folly::join(",", topic_names_)
+              << "partitions: "
+              << folly::join(",", partition_ids_)
+              << std::endl << std::flush;
   }
 
   virtual void close() override {
@@ -346,7 +372,7 @@ KafkaConsumer::KafkaConsumer(
       SSLFilePollerHolder::getFilePollerInstance()->registerFile(
         FLAGS_kafka_consumer_reset_on_file_change,
         [&](const common::MultiFilePoller::CallbackArg &newData) {
-          reset_.store(true);
+          std::atomic_exchange(&reset_, true);
         }));
   }
 
@@ -385,10 +411,6 @@ KafkaConsumer::KafkaConsumer(
       });
 
     if (error_code != RdKafka::ERR_NO_ERROR) {
-      if (reset_) {
-        continue;
-      }
-
       LOG(ERROR) << "Failed to assign partitions: " << partition_ids_str_
                  << ", error_code: " << RdKafka::err2str(error_code)
                  << ", num retries: " << FLAGS_kafka_consumer_num_retries;
@@ -396,13 +418,18 @@ KafkaConsumer::KafkaConsumer(
         kKafkaConsumerErrorAssign,
         {kafka_consumer_type_metric_tag_,
          "error_code=" + std::to_string(error_code)}));
+
+      if (std::atomic_load(&reset_)) {
+        continue;
+      }
+
       return;
     }
     LOG(INFO) << "Successfully created kafka consumer for partitions: "
               << partition_ids_str_ << ", topics: "
               << folly::join(",", topic_names_);
     is_healthy_.store(true);
-  } while (reset_);
+  } while (std::atomic_load(&reset_));
 }
 
 KafkaConsumer::~KafkaConsumer() {
@@ -432,12 +459,13 @@ bool KafkaConsumer::Seek(const int64_t timestamp_ms) {
       common::Stats::get()->Incr(
         getFullStatsName(kKafkaConsumerErrorSeek,
                          {kafka_consumer_type_metric_tag_}));
-      if (reset_) {
+
+      if (std::atomic_load(&reset_)) {
         continue;
       }
       return false;
     }
-  } while (reset_);
+  } while (std::atomic_load(&reset_));
 }
 
 bool KafkaConsumer::Seek(const std::string& topic_name,
@@ -460,12 +488,12 @@ bool KafkaConsumer::Seek(const std::string& topic_name,
       common::Stats::get()->Incr(getFullStatsName(
         kKafkaConsumerErrorSeek, {kafka_consumer_type_metric_tag_,
                                   "topic=" + topic_name}));
-      if (reset_) {
+      if (std::atomic_load(&reset_)) {
         continue;
       }
     }
     return is_success;
-  }while (reset_);
+  } while (std::atomic_load(&reset_));
 }
 
 bool KafkaConsumer::Seek(const std::map<std::string, std::map<int32_t,
@@ -482,11 +510,11 @@ bool KafkaConsumer::Seek(const std::map<std::string, std::map<int32_t,
     common::Stats::get()->Incr(
       getFullStatsName(kKafkaConsumerErrorSeek,
                        {kafka_consumer_type_metric_tag_}));
-    if (reset_) {
+    if (std::atomic_load(&reset_)) {
       continue;
     }
     return false;
-  } while (reset_);
+  } while (std::atomic_load(&reset_));
 }
 
 bool KafkaConsumer::SeekInternal(
@@ -579,18 +607,15 @@ RdKafka::Message* KafkaConsumer::Consume(int32_t timeout_ms) {
       return nullptr;
     }
 
-    if (std::atomic_exchange(&reset_, false)) {
+    while (std::atomic_exchange(&reset_, false)) {
       consumer_->resetInstance();
-      // Seek to last known positive offsets.
-      continue;
     }
 
     auto *message = consumer_->getInstance()->consume(timeout_ms);
 
     if (message == nullptr) {
-      if (std::atomic_exchange(&reset_, false)) {
+      if (std::atomic_load(&reset_)) {
         consumer_->resetInstance();
-        // Seek to last known positive offsets.
         continue;
       }
 
@@ -612,14 +637,12 @@ RdKafka::Message* KafkaConsumer::Consume(int32_t timeout_ms) {
         {kafka_consumer_type_metric_tag_,
          "error_code=" + std::to_string(error_code)}));
 
-      if (std::atomic_exchange(&reset_, false)) {
-        consumer_->resetInstance();
-        // Seek to last known positive offsets.
+      if (std::atomic_load(&reset_)) {
         continue;
       }
     }
     return message;
-  } while (reset_);
+  } while (std::atomic_load(&reset_));
 }
 
 const std::unordered_set<std::string>& KafkaConsumer::GetTopicNames() const {

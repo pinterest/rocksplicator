@@ -64,9 +64,9 @@ void run_partition_set(const unordered_set<uint32_t>& partition_ids_set) {
 
   const auto kafka_consumer_pool = std::make_shared<::kafka::KafkaConsumerPool>(
       kKafkaConsumerPoolSize,
-      partition_ids_set,
+      std::move(partition_ids_set),
       kafka_broker_file_watcher->GetKafkaBrokerList(),
-      std::unordered_set<std::string>({topic_name}),
+      std::move(std::unordered_set<std::string>({topic_name})),
       kafka_consumer_group,
       folly::stringPrintf("%s_%s", kKafkaConsumerType, segment.c_str()));
 
@@ -122,18 +122,24 @@ void run_partition(const uint32_t partition_id) {
 }
 
 int main(int argc, char** argv) {
+  google::InitGoogleLogging(argv[0]);
+  google::SetLogDestination(google::FATAL, "kafka_consumer_app.log.FATAL.");
+  google::SetLogDestination(google::ERROR, "kafka_consumer_app.log.ERROR.");
+  google::SetLogDestination(google::WARNING, "kafka_consumer_app.log.WARNING.");
+  google::SetLogDestination(google::INFO, "kafka_consumer_app.log.INFO.");
   google::ParseCommandLineFlags(&argc, &argv, true);
+  google::LogToStderr();
 
   if (FLAGS_topic_name.empty()) {
-    std::cout << "Must provide topic name" << std::endl;
+    LOG(ERROR) << "Must provide topic name" << std::endl;
     exit(-1);
   }
   if (FLAGS_kafka_broker_serverset_path.empty()) {
-    std::cout << "Must provide broker serverset path" << std::endl;
+    LOG(ERROR) << "Must provide broker serverset path" << std::endl;
     exit(-1);
   }
   if (FLAGS_kafka_consumer_group.empty()) {
-    std::cout << "Must provide consumer group to use. Don't use production consumer group" << std::endl;
+    LOG(ERROR) << "Must provide consumer group to use. Don't use production consumer group" << std::endl;
     exit(-1);
   }
 
