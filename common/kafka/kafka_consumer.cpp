@@ -44,7 +44,7 @@ DEFINE_string(kafka_consumer_reset_on_file_change, "",
 
 namespace {
 
-static common::MultiFilePoller * getFilePollerInstance() {
+static common::MultiFilePoller* getFilePollerInstance() {
   static common::MultiFilePoller multiFilePoller(std::chrono::seconds(5));
   return &multiFilePoller;
 }
@@ -404,8 +404,8 @@ KafkaConsumer::KafkaConsumer(
 KafkaConsumer::~KafkaConsumer() {
   if (!FLAGS_kafka_consumer_reset_on_file_change.empty()) {
     if (cbIdPtr_ != nullptr) {
-      auto cbId = cbIdPtr_.get();
-      getFilePollerInstance()->cancelCallback(*cbId);
+      const auto cbId = *cbIdPtr_.get();
+      getFilePollerInstance()->cancelCallback(cbId);
     }
   }
 
