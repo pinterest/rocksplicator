@@ -14,7 +14,6 @@
 #include "common/kafka/kafka_consumer.h"
 
 #include <atomic>
-#include <algorithm>
 #include <map>
 #include <memory>
 #include <string>
@@ -44,8 +43,6 @@ DEFINE_string(kafka_consumer_reset_on_file_change, "",
     "Comma separated files to watch and reset kafka consumer, when the file change is noticed");
 
 namespace {
-
-using namespace common;
 
 class SSLFilePollerHolder {
 public:
@@ -281,6 +278,54 @@ public:
               << "partitions: "
               << folly::join(",", partition_ids_)
               << std::endl << std::flush;
+
+    seekLast();
+  }
+
+  void seekLast() {
+    // TODO: Change to unique_ptr
+    std::vector<std::shared_ptr<RdKafka::TopicPartition>> topic_partitions;
+    // A temporary RdKafka::TopicPartition* vector specifically used
+    // for KafkaConsumer->assign(). The pointers inside this vector is
+    // owned by `topic_partitions`.
+    std::vector<RdKafka::TopicPartition *> tmp_topic_partitions;
+    topic_partitions.reserve(partition_ids_.size() * topic_names_.size());
+    tmp_topic_partitions.reserve(partition_ids_.size() * topic_names_.size());
+    for (const auto partition_id : partition_ids_) {
+      for (const auto &topic_name : topic_names_) {
+        topic_partitions.push_back(
+          std::shared_ptr<RdKafka::TopicPartition>(
+            RdKafka::TopicPartition::create(
+              topic_name,
+              partition_id,
+              // Use the end of the offset to init here, but it does not matter.
+              // When kafkaconsumer is used, the caller is supposed to call
+              // seek() to the expected offset before consuming messages.
+              RdKafka::Topic::OFFSET_BEGINNING)));
+        tmp_topic_partitions.push_back(topic_partitions.back().get());
+      }
+    }
+    const auto error_code = ExecuteKafkaOperationWithRetry(
+      [this, &tmp_topic_partitions]() {
+        return kafkaConsumer_->assign(tmp_topic_partitions);
+      });
+
+    if (error_code != RdKafka::ERR_NO_ERROR) {
+      LOG(INFO) << "Failed to assign partitions: for topic: "
+                << folly::join(",", topic_names_)
+                << ", partitions: "
+                << folly::join(",", partition_ids_)
+                << ", error_code" << RdKafka::err2str(error_code)
+                << std::endl << std::flush;
+      return;
+    }
+    LOG(INFO) << "Successfully Recreated kafka consumer for  topic: "
+              << folly::join(",", topic_names_)
+              << ", partitions: "
+              << folly::join(",", partition_ids_)
+              << ", error_code" << RdKafka::err2str(error_code)
+              << std::endl << std::flush;
+
   }
 
   virtual void close() override {
