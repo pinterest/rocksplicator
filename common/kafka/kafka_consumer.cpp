@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "common/stats/stats.h"
+#include "common/FilePoller.h"
 #include "common/MultiFilePoller.h"
 #include "folly/String.h"
 #include "librdkafka/rdkafka.h"
@@ -44,10 +45,15 @@ DEFINE_string(kafka_consumer_reset_on_file_change, "",
 
 namespace {
 
-static common::MultiFilePoller* getFilePollerInstance() {
-  static common::MultiFilePoller multiFilePoller(std::chrono::seconds(5));
-  return &multiFilePoller;
-}
+using namespace common;
+
+class SSLFilePollerHolder {
+public:
+  static common::MultiFilePoller *getFilePollerInstance() {
+    static common::MultiFilePoller multiFilePoller(std::chrono::seconds(5));
+    return &multiFilePoller;
+  }
+};
 
 RdKafka::ErrorCode ExecuteKafkaOperationWithRetry(
     std::function<RdKafka::ErrorCode()> func) {
@@ -209,7 +215,7 @@ public:
     const std::unordered_set<std::string> &topic_names,
     const std::string &group_id,
     const std::string &kafka_consumer_type) :
-    partition_ids_(partition_ids_), broker_list_(broker_list),
+    partition_ids_(partition_ids), broker_list_(broker_list),
     topic_names_(topic_names),
     group_id_(group_id),
     kafka_consumer_type_(kafka_consumer_type) {
@@ -339,7 +345,7 @@ KafkaConsumer::KafkaConsumer(
 
   if (!FLAGS_kafka_consumer_reset_on_file_change.empty()) {
     cbIdPtr_ = std::make_shared<common::MultiFilePoller::CallbackId>(
-      getFilePollerInstance()->registerFile(
+      SSLFilePollerHolder::getFilePollerInstance()->registerFile(
         FLAGS_kafka_consumer_reset_on_file_change,
         [&](const common::MultiFilePoller::CallbackArg &newData) {
           reset_.store(true);
@@ -405,7 +411,7 @@ KafkaConsumer::~KafkaConsumer() {
   if (!FLAGS_kafka_consumer_reset_on_file_change.empty()) {
     if (cbIdPtr_ != nullptr) {
       const auto cbId = *cbIdPtr_.get();
-      getFilePollerInstance()->cancelCallback(cbId);
+      SSLFilePollerHolder::getFilePollerInstance()->cancelCallback(cbId);
     }
   }
 
