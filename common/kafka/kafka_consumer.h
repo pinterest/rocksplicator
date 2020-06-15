@@ -20,7 +20,6 @@
 #include <string>
 #include <unordered_set>
 
-#include "common/FilePoller.h"
 #include "common/MultiFilePoller.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"

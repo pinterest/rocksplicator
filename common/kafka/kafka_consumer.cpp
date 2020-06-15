@@ -22,8 +22,6 @@
 #include <vector>
 
 #include "common/stats/stats.h"
-#include "common/FilePoller.h"
-#include "common/MultiFilePoller.h"
 #include "folly/String.h"
 #include "librdkafka/rdkafka.h"
 #include "librdkafka/rdkafkacpp.h"
