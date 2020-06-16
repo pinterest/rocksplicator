@@ -223,7 +223,7 @@ uint32_t KafkaWatcher::ConsumeUpToNow(const kafka::KafkaConsumer& consumer) {
       // happens when consumer hasn't got any message from the broker within the
       // timeout. We should retry in this case.
     } else {
-      ++err_count_;
+      err_count_.fetch_add(1, std::memory_order_seq_cst);
       common::Stats::get()->Incr(
           getFullStatsName(kKafkaWatcherNeedReEstablish,
               {kafka_watcher_metric_tag_}));
@@ -427,7 +427,7 @@ void KafkaWatcher::StartWatchLoop() {
             // receiving ERR__PARTITION_EOF and there was still no messages to
             // be consumed after timeout.
           } else {
-            ++err_count_;
+            err_count_.fetch_add(1, std::memory_order_seq_cst);
             common::Stats::get()->Incr(
                 getFullStatsName(kKafkaWatcherNeedReEstablish,
                     {kafka_watcher_metric_tag_}));
