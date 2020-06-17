@@ -22,27 +22,16 @@
 #include <vector>
 #include <iostream>
 
+#include "common/kafka/kafka_consumer_holder.h"
+#include "common/kafka/kafka_flags.h"
+#include "common/kafka/kafka_utils.h"
+#include "common/kafka/stats_enum.h"
 #include "common/stats/stats.h"
 #include "folly/String.h"
 #include "librdkafka/rdkafka.h"
 #include "librdkafka/rdkafkacpp.h"
-#include "common/kafka/stats_enum.h"
-#include "common/kafka/kafka_config.h"
 
-DEFINE_int32(kafka_consumer_timeout_ms, 1000,
-    "Kafka consumer timeout in ms");
-DEFINE_int32(kafka_consumer_num_retries, 0,
-    "Number of retries to try the kafka consumer");
-DEFINE_int32(kafka_consumer_time_between_retries_ms, 100,
-    "Time in ms to sleep between each retry");
-DEFINE_string(enable_kafka_auto_offset_store, "false",
-    "Whether to automatically commit the kafka offsets");
-DEFINE_string(kafka_client_global_config_file, "",
-    "Provide additional global parameters to kafka client library e.g.. ssl configuration");
-DEFINE_string(kafka_consumer_reset_on_file_change, "",
-    "Comma separated files to watch and reset kafka consumer, when the file change is noticed");
-
-namespace {
+namespace kafka {
 
 class SSLFilePollerHolder {
 public:
@@ -51,325 +40,6 @@ public:
     return &multiFilePoller;
   }
 };
-
-RdKafka::ErrorCode ExecuteKafkaOperationWithRetry(
-    std::function<RdKafka::ErrorCode()> func) {
-  auto error_code = func();
-  size_t num_retries = 0;
-  while (num_retries < FLAGS_kafka_consumer_num_retries
-  && error_code != RdKafka::ERR_NO_ERROR) {
-    error_code = func();
-    num_retries++;
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(
-            FLAGS_kafka_consumer_time_between_retries_ms));
-  }
-  return error_code;
-}
-
-bool KafkaSeekWithRetry(RdKafka::KafkaConsumer* consumer,
-                        const RdKafka::TopicPartition& topic_partition) {
-  auto error_code = ExecuteKafkaOperationWithRetry([consumer,
-                                                    &topic_partition]() {
-    return consumer->seek(topic_partition, FLAGS_kafka_consumer_timeout_ms);
-  });
-  if (error_code != RdKafka::ERR_NO_ERROR) {
-    LOG(ERROR) << "Failed to seek to offset for partition: " <<
-    topic_partition.partition()
-               << ", offset: " << topic_partition.offset()
-               << ", error_code: " << RdKafka::err2str(error_code)
-               << ", num retries: " << FLAGS_kafka_consumer_num_retries;
-    return false;
-  }
-  return true;
-}
-
-typedef std::map<std::string, std::pair<std::string, bool>> KafkaConfigMap;
-std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
-  // https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
-  const KafkaConfigMap& config,
-  const std::unordered_set<uint32_t>& partition_ids,
-  const std::string kafka_consumer_type) {
-  std::string err;
-  auto conf = std::shared_ptr<RdKafka::Conf>(RdKafka::Conf::create(
-    RdKafka::Conf::CONF_GLOBAL));
-
-  // Next go through each of the GLOBAL config and set.
-  for (KafkaConfigMap::const_iterator it = config.begin(); it != config.end(); ++it) {
-    const std::string& key = it->first;
-    const std::pair<std::string, bool>& value = it->second;
-
-    if (conf->set(key, value.first, err) != RdKafka::Conf::CONF_OK) {
-      if (value.second) {
-        LOG(ERROR) << "Failed to create kafka config for partitions: "
-                   << folly::join(",", partition_ids)
-                   << ", error: " << err
-                   << "required conf couldn't be set "
-                   << "key=" << key
-                   << ", value=" << value.first << std::endl;
-        common::Stats::get()->Incr(getFullStatsName(
-          kKafkaConsumerErrorInit, {"kafka_consumer_type=" + kafka_consumer_type}));
-        return nullptr;
-      } else {
-        LOG(ERROR) << "Couldn't set provided config key-value pair"
-                   << "key=" << key
-                   << ", value=" << value.first
-                   << ", error:" << err << std::endl;
-      }
-    }
-  }
-
-  return std::shared_ptr<RdKafka::KafkaConsumer>(
-    RdKafka::KafkaConsumer::create(conf.get(), err));
-}
-
-std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
-    const std::unordered_set<uint32_t>& partition_ids,
-    const std::string& broker_list,
-    const std::string& group_id,
-    const std::string kafka_consumer_type) {
-  std::string err;
-  auto conf = std::shared_ptr<RdKafka::Conf>(RdKafka::Conf::create(
-    RdKafka::Conf::CONF_GLOBAL));
-
-  KafkaConfigMap kafkaConfigMap;
-
-  // Note: Following settings are overridden from configuration. We explicitly
-  // set the enable.partition.eof property to true, so that control passes back
-  // to client code one's partition eof is hit. This is important for rocksplicator's
-  // BootstrapStateModel. Since this property default changed from true to false,
-  // in librdkafka-1.0.0-RC4 (https://github.com/edenhill/librdkafka/issues/2020,
-  // https://github.com/edenhill/librdkafka/commit/a869fa19359fc285b19496c4321abe199322a736)
-  // upgrade to newer version of librdkafka will be impossible
-  // without explicitly setting this parameter to true.
-  //
-  // However for compatibility with older versions of librdkafka that may not have
-  // this flag in first place, we don't require this setting to be compatible.
-  // We also allow this setting to be overriden from configuration file.
-  kafkaConfigMap["enable.partition.eof"] = std::make_pair("true", false);
-
-  // This preserves previous behavior. However this setting can be overwritten
-  // from configuration file as well, in which case this need not be set from
-  // flags.
-  kafkaConfigMap["enable.auto.offset.store"] = std::make_pair(
-    FLAGS_enable_kafka_auto_offset_store, false);
-
-  kafka::ConfigMap configMap;
-  if (!FLAGS_kafka_client_global_config_file.empty()) {
-    if (!kafka::KafkaConfig::read_conf_file(
-      FLAGS_kafka_client_global_config_file, &configMap)) {
-      LOG(ERROR) << "Can not read / parse config file: "
-                 << FLAGS_kafka_client_global_config_file
-                 << std::endl;
-      common::Stats::get()->Incr(getFullStatsName(
-        kKafkaConsumerErrorInit, {"kafka_consumer_type=" + kafka_consumer_type}));
-      return nullptr;
-    }
-
-    // Each of the config parameter provided must be valid and known to
-    // librdkafka. This makes sure, we fail loud before setting any parameter
-    // that doesn't belong in the kafka config w.r.t version of the librdkafka
-    for (auto iter = configMap.begin(); iter != configMap.end(); ++iter) {
-      kafkaConfigMap[iter->first] = std::make_pair(iter->second, true);
-    }
-  }
-
-  // Following settings can't be set from configuration file... and are
-  // overwritten, if provided in configuration file.
-
-  // https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
-  kafkaConfigMap["metadata.broker.list"] = std::make_pair(broker_list, true);
-
-  // set api.version.request to true so that Kafka timestamp can be used.
-  // This is necessary for seek to work based on timestamps, hence a required
-  // setting and can't be overridden from configuration file.
-  kafkaConfigMap["api.version.request"] = std::make_pair("true", true);
-
-  // Group id is necessary and hence we fail if it can't be set.
-  kafkaConfigMap["group.id"] = std::make_pair(group_id, true);
-
-  return CreateRdKafkaConsumer(kafkaConfigMap, partition_ids, kafka_consumer_type);
-}
-
-}  // namespace
-
-namespace kafka {
-
-class RdKafkaConsumerHolderRenewable : virtual public RdKafkaConsumerHolder {
-private:
-  const std::unordered_set<uint32_t> partition_ids_;
-  const std::string broker_list_;
-  const std::unordered_set<std::string> topic_names_;
-  const std::string group_id_;
-  const std::string kafka_consumer_type_;
-
-  std::shared_ptr<RdKafka::KafkaConsumer> kafkaConsumer_;
-
-public:
-  RdKafkaConsumerHolderRenewable(
-    const std::unordered_set<uint32_t> &partition_ids,
-    const std::string &broker_list,
-    const std::unordered_set<std::string> &topic_names,
-    const std::string &group_id,
-    const std::string &kafka_consumer_type) :
-    partition_ids_(partition_ids),
-    broker_list_(broker_list),
-    topic_names_(topic_names),
-    group_id_(group_id),
-    kafka_consumer_type_(kafka_consumer_type) {
-
-    kafkaConsumer_ = CreateRdKafkaConsumer(
-      partition_ids_,
-      broker_list_,
-      group_id_,
-      kafka_consumer_type_);
-  }
-
-  virtual ~RdKafkaConsumerHolderRenewable() {
-    if (kafkaConsumer_) {
-      kafkaConsumer_->close();
-    }
-  }
-
-  virtual std::shared_ptr<RdKafka::KafkaConsumer> getInstance() override {
-    return kafkaConsumer_;
-  }
-
-  virtual void resetInstance() override {
-    /*
-     * Before creating a new KafkaConsumer instance, make sure old one is closed
-     * and shutdown.
-     */
-
-    LOG(INFO) << "Commit syncing kafka consumer for topic: "
-              << folly::join(",", topic_names_)
-              << "partitions: "
-              << folly::join(",", partition_ids_)
-              << std::endl << std::flush;
-
-    if (kafkaConsumer_) {
-      kafkaConsumer_->commitSync();
-    }
-
-    LOG(INFO) << "Closing kafka consumer for topic: "
-              << folly::join(",", topic_names_)
-              << "partitions: "
-              << folly::join(",", partition_ids_)
-              << std::endl << std::flush;
-
-    if (kafkaConsumer_) {
-      kafkaConsumer_->close();
-    }
-
-    LOG(INFO) << "Recreating kafka consumer for topic: "
-              << folly::join(",", topic_names_)
-              << "partitions: "
-              << folly::join(",", partition_ids_)
-              << std::endl << std::flush;
-
-    kafkaConsumer_ = CreateRdKafkaConsumer(
-      partition_ids_,
-      broker_list_,
-      group_id_,
-      kafka_consumer_type_);
-
-    LOG(INFO) << "Recreated kafka consumer for topic: "
-              << folly::join(",", topic_names_)
-              << "partitions: "
-              << folly::join(",", partition_ids_)
-              << std::endl << std::flush;
-
-    seekLast();
-  }
-
-  void seekLast() {
-    // TODO: Change to unique_ptr
-    std::vector<std::shared_ptr<RdKafka::TopicPartition>> topic_partitions;
-    // A temporary RdKafka::TopicPartition* vector specifically used
-    // for KafkaConsumer->assign(). The pointers inside this vector is
-    // owned by `topic_partitions`.
-    std::vector<RdKafka::TopicPartition *> tmp_topic_partitions;
-    topic_partitions.reserve(partition_ids_.size() * topic_names_.size());
-    tmp_topic_partitions.reserve(partition_ids_.size() * topic_names_.size());
-    for (const auto partition_id : partition_ids_) {
-      for (const auto &topic_name : topic_names_) {
-        topic_partitions.push_back(
-          std::shared_ptr<RdKafka::TopicPartition>(
-            RdKafka::TopicPartition::create(
-              topic_name,
-              partition_id,
-              // Use the end of the offset to init here, but it does not matter.
-              // When kafkaconsumer is used, the caller is supposed to call
-              // seek() to the expected offset before consuming messages.
-              RdKafka::Topic::OFFSET_BEGINNING)));
-        tmp_topic_partitions.push_back(topic_partitions.back().get());
-      }
-    }
-    const auto error_code = ExecuteKafkaOperationWithRetry(
-      [this, &tmp_topic_partitions]() {
-        return kafkaConsumer_->assign(tmp_topic_partitions);
-      });
-
-    if (error_code != RdKafka::ERR_NO_ERROR) {
-      LOG(INFO) << "Failed to assign partitions: for topic: "
-                << folly::join(",", topic_names_)
-                << ", partitions: "
-                << folly::join(",", partition_ids_)
-                << ", error_code" << RdKafka::err2str(error_code)
-                << std::endl << std::flush;
-      return;
-    }
-    LOG(INFO) << "Successfully Recreated kafka consumer for  topic: "
-              << folly::join(",", topic_names_)
-              << ", partitions: "
-              << folly::join(",", partition_ids_)
-              << ", error_code" << RdKafka::err2str(error_code)
-              << std::endl << std::flush;
-
-  }
-
-  virtual void close() override {
-    if (kafkaConsumer_) {
-      kafkaConsumer_->close();
-    }
-  }
-};
-
-class RdKafkaConsumerHolderCached : virtual public RdKafkaConsumerHolder {
-private:
-  const std::shared_ptr<RdKafka::KafkaConsumer> kafkaConsumer_;
-public:
-  RdKafkaConsumerHolderCached(std::shared_ptr<RdKafka::KafkaConsumer> kafkaConsumer)
-  : kafkaConsumer_(std::move(kafkaConsumer)) {}
-
-  virtual std::shared_ptr<RdKafka::KafkaConsumer> getInstance() override {
-    return kafkaConsumer_;
-  }
-
-  virtual void resetInstance() override {
-    // doNothing();
-  }
-
-  virtual void close() override {
-    if (kafkaConsumer_) {
-      kafkaConsumer_->close();
-    }
-  }
-};
-
-RdKafkaConsumerHolder* RdKafkaConsumerHolderFactory::createInstance(
-  const std::unordered_set<uint32_t> &partition_ids,
-  const std::string &broker_list,
-  const std::unordered_set<std::string> &topic_names,
-  const std::string &group_id,
-  const std::string &kafka_consumer_type) {
-  return new RdKafkaConsumerHolderRenewable(partition_ids, broker_list, topic_names, group_id, kafka_consumer_type);
-}
-
-RdKafkaConsumerHolder* RdKafkaConsumerHolderFactory::createInstance(
-  std::shared_ptr<RdKafka::KafkaConsumer> consumer) {
-  return new RdKafkaConsumerHolderCached(consumer);
-}
 
 KafkaConsumer::KafkaConsumer(const std::unordered_set<uint32_t>& partition_ids,
                              const std::string& broker_list,
@@ -408,14 +78,34 @@ KafkaConsumer::KafkaConsumer(
     cbIdPtr_(nullptr),
     is_healthy_(false),
     reset_(false) {
-  if (consumer_ == nullptr) {
+  if (consumer_ == nullptr || consumer_->getInstance() == nullptr) {
     return;
   }
 
+  /**
+   * First set the initial timestamp to -1;
+   * This will change once, Seek to given timestamp is called;
+   */
+   for (const auto &topic_name: topic_names_) {
+     for (const auto partition_id : partition_ids_) {
+       ConsumedOffset offset;
+       offset.offset = -1;
+       offset.timestamp = -1;
+       consumedOffsets_.emplace(std::make_pair(topic_name, partition_id), offset);
+     }
+   }
+
   if (!FLAGS_kafka_consumer_reset_on_file_change.empty()) {
+    std::vector<std::string> filePathsToWatch;
+    folly::split(",", FLAGS_kafka_consumer_reset_on_file_change, filePathsToWatch);
+
+    for (const auto& it : filePathsToWatch) {
+      LOG(INFO) << "Will be watching path for change: " << it << std::endl << std::flush;
+    }
+
     cbIdPtr_ = std::make_shared<common::MultiFilePoller::CallbackId>(
-      SSLFilePollerHolder::getFilePollerInstance()->registerFile(
-        FLAGS_kafka_consumer_reset_on_file_change,
+      SSLFilePollerHolder::getFilePollerInstance()->registerFiles(
+        filePathsToWatch,
         [&](const common::MultiFilePoller::CallbackArg &newData) {
           std::atomic_exchange(&reset_, true);
         }));
@@ -423,7 +113,7 @@ KafkaConsumer::KafkaConsumer(
 
   do {
     while (std::atomic_exchange(&reset_, false)) {
-      consumer_->resetInstance();
+      consumer_->resetInstance(nullptr);
     }
 
     // TODO: Change to unique_ptr
@@ -495,7 +185,7 @@ bool KafkaConsumer::IsHealthy() const { return is_healthy_.load(); }
 bool KafkaConsumer::Seek(const int64_t timestamp_ms) {
   do {
     while (std::atomic_exchange(&reset_, false)) {
-      consumer_->resetInstance();
+      consumer_->resetInstance(nullptr);
     }
 
     if (SeekInternal(topic_names_, timestamp_ms)) {
@@ -517,7 +207,7 @@ bool KafkaConsumer::Seek(const std::string& topic_name,
     const int64_t timestamp_ms) {
   do {
     while (std::atomic_exchange(&reset_, false)) {
-      consumer_->resetInstance();
+      consumer_->resetInstance(nullptr);
     }
 
     bool is_success = false;
@@ -545,7 +235,7 @@ bool KafkaConsumer::Seek(const std::map<std::string, std::map<int32_t,
     int64_t>>& last_offsets) {
   do {
     while (std::atomic_exchange(&reset_, false)) {
-      consumer_->resetInstance();
+      consumer_->resetInstance(nullptr);
     }
 
     if (SeekInternal(last_offsets)) {
@@ -575,7 +265,7 @@ bool KafkaConsumer::SeekInternal(
           topic_partitions_pair.first,
           partition_offset_pair.first,
           // TODO: it is possible that offset+1 reach a invalid offset position
-          partition_offset_pair.second + 1));
+          partition_offset_pair.second)+1);
 
       LOG(INFO) << "Seeking topic: " << topic_partition->topic()
                 << ", partition: " << topic_partition->partition()
@@ -583,6 +273,14 @@ bool KafkaConsumer::SeekInternal(
 
       if (!KafkaSeekWithRetry(consumer_->getInstance().get(), *topic_partition)) {
         return false;
+      }
+      if (partition_offset_pair.second != -1) {
+        ConsumedOffset consumedOffset;
+        consumedOffset.offset = partition_offset_pair.second;
+        consumedOffset.timestamp = -1;
+        std::pair<std::string, std::int32_t> topic_partition_pair
+        = std::make_pair(topic_partitions_pair.first, partition_offset_pair.first);
+        consumedOffsets_[topic_partition_pair] = consumedOffset;
       }
     }
   }
@@ -592,7 +290,7 @@ bool KafkaConsumer::SeekInternal(
 bool KafkaConsumer::SeekInternal(
     const std::unordered_set<std::string>& topic_names,
     const int64_t timestamp_ms) {
-  if (consumer_ == nullptr) {
+  if (consumer_ == nullptr || consumer_->getInstance() == nullptr) {
     return false;
   }
   std::vector<std::shared_ptr<RdKafka::TopicPartition>> topic_partitions;
@@ -633,6 +331,13 @@ bool KafkaConsumer::SeekInternal(
     LOG(INFO) << "Seeking partition: " << topic_partition->partition()
               << ", offset: " << topic_partition->offset();
 
+    std::pair<std::string, std::int32_t> topic_partition_pair =
+      std::make_pair(topic_partition->topic(), topic_partition->partition());
+
+    ConsumedOffset consumedOffset;
+    consumedOffset.offset = topic_partition->offset();
+    consumedOffset.timestamp = timestamp_ms;
+
     common::Stats::get()->Incr(
         getFullStatsName(kKafkaConsumerSeek,
                            {kafka_consumer_type_metric_tag_,
@@ -642,6 +347,7 @@ bool KafkaConsumer::SeekInternal(
     if (!KafkaSeekWithRetry(consumer_->getInstance().get(), *topic_partition)) {
       return false;
     }
+    consumedOffsets_[topic_partition_pair] = consumedOffset;
   }
   return true;
 }
@@ -653,14 +359,14 @@ RdKafka::Message* KafkaConsumer::Consume(int32_t timeout_ms) {
     }
 
     while (std::atomic_exchange(&reset_, false)) {
-      consumer_->resetInstance();
+      consumer_->resetInstance(&consumedOffsets_);
     }
 
     auto *message = consumer_->getInstance()->consume(timeout_ms);
 
     if (message == nullptr) {
       if (std::atomic_load(&reset_)) {
-        consumer_->resetInstance();
+        consumer_->resetInstance(&consumedOffsets_);
         continue;
       }
 
@@ -686,6 +392,19 @@ RdKafka::Message* KafkaConsumer::Consume(int32_t timeout_ms) {
         continue;
       }
     }
+
+    /**
+     * Keep track of offsets, timestamps of individual topic / partition pairs;
+     */
+    if (error_code == RdKafka::ERR_NO_ERROR) {
+      const auto topic_partition_pair = std::make_pair(message->topic_name(),
+                                                       message->partition());
+      ConsumedOffset consumedOffset;
+      consumedOffset.timestamp = message->timestamp().timestamp;
+      consumedOffset.offset = message->offset();
+      consumedOffsets_[topic_partition_pair] = consumedOffset;
+    }
+
     return message;
   } while (std::atomic_load(&reset_));
 }

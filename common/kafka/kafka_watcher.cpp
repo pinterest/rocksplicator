@@ -22,7 +22,6 @@
 #include <utility>
 #include <vector>
 
-#include "boost/functional/hash.hpp"
 #include "common/stats/stats.h"
 #include "common/timeutil.h"
 #include "folly/String.h"
@@ -30,27 +29,12 @@
 #include "librdkafka/rdkafkacpp.h"
 #include "common/kafka/stats_enum.h"
 #include "common/kafka/kafka_consumer.h"
+#include "common/kafka/kafka_utils.h"
 #include "common/kafka/kafka_consumer_pool.h"
 
+using namespace kafka;
+
 namespace {
-
-typedef std::unordered_set<std::pair<std::string, int32_t>,
-                           boost::hash<std::pair<std::string, int32_t>>>
-    TopicPartitionSet;
-template <typename V>
-using TopicPartitionToValueMap = std::
-    unordered_map<std::pair<std::string, int32_t>, V,
-    boost::hash<std::pair<std::string, int32_t>>>;
-
-std::string TopicPartitionSetToString(
-    const TopicPartitionSet& topic_partition_set) {
-  std::string s;
-  for (const auto& pair : topic_partition_set) {
-    s.append("(").append(pair.first).append(",").
-      append(std::to_string(pair.second)).append(") ");
-  }
-  return s;
-}
 
 void VerifyAndUpdateTopicPartitionOffset(
     TopicPartitionToValueMap<int64_t>* topic_partition_to_prev_offset_map,
@@ -79,16 +63,6 @@ void VerifyAndUpdateTopicPartitionOffset(
     }
     it->second = offset;
   }
-}
-
-inline int64_t GetMessageTimestamp(const RdKafka::Message& message) {
-  const auto ts = message.timestamp();
-  if (ts.type == RdKafka::MessageTimestamp::MSG_TIMESTAMP_CREATE_TIME) {
-    return ts.timestamp;
-  }
-
-  // We only expect the timestamp to be create time.
-  return -1;
 }
 
 }  // namespace
