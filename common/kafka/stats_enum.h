@@ -26,6 +26,7 @@ const std::string kKafkaConsumerErrorConsume = "kafka_consumer_error_consume";
 const std::string kKafkaConsumerMessageNull = "kKafkaConsumerMessageNull";
 const std::string kKafkaWatcherMessageMissing = "kafka_watcher_message_missing";
 const std::string kKafkaWatcherMessageDuplicates = "kafka_watcher_message_duplicates";
+const std::string kKafkaWatcherNeedReEstablish = "kafka_watcher_need_reestablish";
 const std::string kKafkaWatcherBlockingConsumeTimeout =
     "kafka_watcher_blocking_consume_timeout";
 const std::string kKafkaWatcherInitMs = "kafka_watcher_init_ms";

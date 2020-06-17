@@ -93,6 +93,8 @@ public:
   // stop in parallel
   void Stop() { is_stopped_.store(true); }
 
+  uint64_t ErrorCount() { return err_count_.load(); }
+
   // Blocking call which signals the watch loop to terminate at the next
   // iteration and blocks and waits for the watch thread to end.
   void StopAndWait() {
@@ -165,6 +167,7 @@ private:
 
   std::thread thread_;
   std::atomic<bool> is_stopped_;
+  std::atomic<uint64_t> err_count_{0};
 
   const std::vector<std::shared_ptr<kafka::KafkaConsumerPool>>
     kafka_consumer_pools_;
