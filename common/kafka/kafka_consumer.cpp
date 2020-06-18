@@ -35,17 +35,17 @@ namespace kafka {
 
 class SSLFilePollerHolder {
 public:
-  static common::MultiFilePoller *getFilePollerInstance() {
+  static common::MultiFilePoller* getFilePollerInstance() {
     static common::MultiFilePoller multiFilePoller(std::chrono::seconds(5));
     return &multiFilePoller;
   }
 };
 
-KafkaConsumer::KafkaConsumer(const std::unordered_set<uint32_t> &partition_ids,
-                             const std::string &broker_list,
-                             const std::unordered_set<std::string> &topic_names,
-                             const std::string &group_id,
-                             const std::string &kafka_consumer_type)
+KafkaConsumer::KafkaConsumer(const std::unordered_set<uint32_t>& partition_ids,
+                             const std::string& broker_list,
+                             const std::unordered_set<std::string>& topic_names,
+                             const std::string& group_id,
+                             const std::string& kafka_consumer_type)
   : KafkaConsumer(RdKafkaConsumerHolderFactory::createInstance(
   partition_ids,
   broker_list,
@@ -57,19 +57,19 @@ KafkaConsumer::KafkaConsumer(const std::unordered_set<uint32_t> &partition_ids,
                   kafka_consumer_type) {}
 
 KafkaConsumer::KafkaConsumer(std::shared_ptr<RdKafka::KafkaConsumer> consumer,
-                             const std::unordered_set<uint32_t> &partition_ids,
-                             const std::unordered_set<std::string> &topic_names,
-                             const std::string &kafka_consumer_type)
+                             const std::unordered_set<uint32_t>& partition_ids,
+                             const std::unordered_set<std::string>& topic_names,
+                             const std::string& kafka_consumer_type)
   : KafkaConsumer(RdKafkaConsumerHolderFactory::createInstance(std::move(consumer)),
                   partition_ids,
                   topic_names,
                   kafka_consumer_type) {}
 
 KafkaConsumer::KafkaConsumer(
-  kafka::RdKafkaConsumerHolder *consumer,
-  const std::unordered_set<uint32_t> &partition_ids,
-  const std::unordered_set<std::string> &topic_names,
-  const std::string &kafka_consumer_type) :
+  kafka::RdKafkaConsumerHolder* consumer,
+  const std::unordered_set<uint32_t>& partition_ids,
+  const std::unordered_set<std::string>& topic_names,
+  const std::string& kafka_consumer_type) :
   consumer_(consumer),
   partition_ids_str_(folly::join(",", partition_ids)),
   topic_names_(topic_names),
@@ -86,7 +86,7 @@ KafkaConsumer::KafkaConsumer(
    * First set the initial timestamp to -1;
    * This will change once, Seek to given timestamp is called;
    */
-  for (const auto &topic_name: topic_names_) {
+  for (const auto& topic_name: topic_names_) {
     for (const auto partition_id : partition_ids_) {
       ConsumedOffset offset;
       offset.offset = -1;
@@ -99,14 +99,14 @@ KafkaConsumer::KafkaConsumer(
     std::vector<std::string> filePathsToWatch;
     folly::split(",", FLAGS_kafka_consumer_reset_on_file_change, filePathsToWatch);
 
-    for (const auto &it : filePathsToWatch) {
+    for (const auto& it : filePathsToWatch) {
       LOG(INFO) << "Will be watching path for change: " << it << std::endl << std::flush;
     }
 
     cbIdPtr_ = std::make_shared<common::MultiFilePoller::CallbackId>(
       SSLFilePollerHolder::getFilePollerInstance()->registerFiles(
         filePathsToWatch,
-        [&](const common::MultiFilePoller::CallbackArg &newData) {
+        [&](const common::MultiFilePoller::CallbackArg& newData) {
           std::atomic_exchange(&reset_, true);
         }));
   }
@@ -121,11 +121,11 @@ KafkaConsumer::KafkaConsumer(
     // A temporary RdKafka::TopicPartition* vector specifically used
     // for KafkaConsumer->assign(). The pointers inside this vector is
     // owned by `topic_partitions`.
-    std::vector<RdKafka::TopicPartition *> tmp_topic_partitions;
+    std::vector<RdKafka::TopicPartition*> tmp_topic_partitions;
     topic_partitions.reserve(partition_ids_.size() * topic_names_.size());
     tmp_topic_partitions.reserve(partition_ids_.size() * topic_names_.size());
     for (const auto partition_id : partition_ids_) {
-      for (const auto &topic_name : topic_names_) {
+      for (const auto& topic_name : topic_names_) {
         topic_partitions.push_back(
           std::shared_ptr<RdKafka::TopicPartition>(
             RdKafka::TopicPartition::create(
@@ -203,7 +203,7 @@ bool KafkaConsumer::Seek(const int64_t timestamp_ms) {
   } while (std::atomic_load(&reset_));
 }
 
-bool KafkaConsumer::Seek(const std::string &topic_name,
+bool KafkaConsumer::Seek(const std::string& topic_name,
                          const int64_t timestamp_ms) {
   do {
     while (std::atomic_exchange(&reset_, false)) {
@@ -212,7 +212,7 @@ bool KafkaConsumer::Seek(const std::string &topic_name,
 
     bool is_success = false;
     if (topic_names_.find(topic_name) != topic_names_.end()) {
-      const std::unordered_set<std::string> tmp_topic_names{topic_name};
+      const std::unordered_set<std::string> tmp_topic_names {topic_name};
       is_success = SeekInternal(tmp_topic_names, timestamp_ms);
     } else {
       LOG(ERROR) << "Kakfa consumer is unaware of topic_name: " << topic_name;
@@ -232,7 +232,7 @@ bool KafkaConsumer::Seek(const std::string &topic_name,
 }
 
 bool KafkaConsumer::Seek(const std::map<std::string, std::map<int32_t,
-  int64_t>> &last_offsets) {
+  int64_t>>& last_offsets) {
   do {
     while (std::atomic_exchange(&reset_, false)) {
       consumer_->resetInstance(nullptr);
@@ -253,12 +253,12 @@ bool KafkaConsumer::Seek(const std::map<std::string, std::map<int32_t,
 }
 
 bool KafkaConsumer::SeekInternal(
-  const std::map<std::string, std::map<int32_t, int64_t>> &last_offsets) {
+  const std::map<std::string, std::map<int32_t, int64_t>>& last_offsets) {
   if (consumer_ == nullptr || consumer_->getInstance() == nullptr) {
     return false;
   }
-  for (const auto &topic_partitions_pair : last_offsets) {
-    for (const auto &partition_offset_pair : topic_partitions_pair.second) {
+  for (const auto& topic_partitions_pair : last_offsets) {
+    for (const auto& partition_offset_pair : topic_partitions_pair.second) {
       // Seek to offset + 1 for each topic and partition.
       std::unique_ptr<RdKafka::TopicPartition> topic_partition(
         RdKafka::TopicPartition::create(
@@ -289,7 +289,7 @@ bool KafkaConsumer::SeekInternal(
 }
 
 bool KafkaConsumer::SeekInternal(
-  const std::unordered_set<std::string> &topic_names,
+  const std::unordered_set<std::string>& topic_names,
   const int64_t timestamp_ms) {
   if (consumer_ == nullptr || consumer_->getInstance() == nullptr) {
     return false;
@@ -298,11 +298,11 @@ bool KafkaConsumer::SeekInternal(
   // A temporary RdKafka::TopicPartition* vector specifically used for
   // KafkaConsumer->offsetsForTimes().
   // The pointers inside this vector is owned by `topic_partitions`.
-  std::vector<RdKafka::TopicPartition *> tmp_topic_partitions;
+  std::vector<RdKafka::TopicPartition*> tmp_topic_partitions;
   topic_partitions.reserve(topic_names.size());
   tmp_topic_partitions.reserve(topic_names.size());
   for (const auto partition_id : partition_ids_) {
-    for (const auto &topic_name : topic_names) {
+    for (const auto& topic_name : topic_names) {
       topic_partitions.push_back(
         std::shared_ptr<RdKafka::TopicPartition>(
           RdKafka::TopicPartition::create(
@@ -328,7 +328,7 @@ bool KafkaConsumer::SeekInternal(
   }
 
   // For each topic, seek to the above offset.
-  for (const auto *topic_partition : tmp_topic_partitions) {
+  for (const auto* topic_partition : tmp_topic_partitions) {
     LOG(INFO) << "Seeking partition: " << topic_partition->partition()
               << ", offset: " << topic_partition->offset();
 
@@ -353,7 +353,7 @@ bool KafkaConsumer::SeekInternal(
   return true;
 }
 
-RdKafka::Message *KafkaConsumer::Consume(int32_t timeout_ms) {
+RdKafka::Message* KafkaConsumer::Consume(int32_t timeout_ms) {
   do {
     if (consumer_ == nullptr || consumer_->getInstance() == nullptr) {
       return nullptr;
@@ -363,7 +363,7 @@ RdKafka::Message *KafkaConsumer::Consume(int32_t timeout_ms) {
       consumer_->resetInstance(&consumedOffsets_);
     }
 
-    auto *message = consumer_->getInstance()->consume(timeout_ms);
+    auto* message = consumer_->getInstance()->consume(timeout_ms);
 
     if (message == nullptr) {
       if (std::atomic_load(&reset_)) {
@@ -410,15 +410,15 @@ RdKafka::Message *KafkaConsumer::Consume(int32_t timeout_ms) {
   } while (std::atomic_load(&reset_));
 }
 
-const std::unordered_set<std::string> &KafkaConsumer::GetTopicNames() const {
+const std::unordered_set<std::string>& KafkaConsumer::GetTopicNames() const {
   return topic_names_;
 }
 
-const std::unordered_set<uint32_t> &KafkaConsumer::GetPartitionIds() const {
+const std::unordered_set<uint32_t>& KafkaConsumer::GetPartitionIds() const {
   return partition_ids_;
 }
 
-const std::string &KafkaConsumer::GetTopicsString() const {
+const std::string& KafkaConsumer::GetTopicsString() const {
   return topic_names_string_;
 }
 

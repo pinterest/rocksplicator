@@ -24,8 +24,8 @@ namespace kafka {
  * Read Java kafka client configuration file
  */
 bool KafkaConfig::read_conf_file(
-  const std::string &conf_file,
-  ConfigMap *configMap) {
+  const std::string& conf_file,
+  ConfigMap* configMap) {
   std::ifstream input_stream(conf_file.c_str());
 
   if (!input_stream || !input_stream.is_open()) {

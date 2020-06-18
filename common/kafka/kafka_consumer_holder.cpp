@@ -35,8 +35,8 @@ namespace kafka {
 
 std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
   // https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
-  const KafkaConfigMap &config,
-  const std::unordered_set<uint32_t> &partition_ids,
+  const KafkaConfigMap& config,
+  const std::unordered_set<uint32_t>& partition_ids,
   const std::string kafka_consumer_type) {
   std::string err;
   auto conf = std::shared_ptr<RdKafka::Conf>(RdKafka::Conf::create(
@@ -44,8 +44,8 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
 
   // Next go through each of the GLOBAL config and set.
   for (KafkaConfigMap::const_iterator it = config.begin(); it != config.end(); ++it) {
-    const std::string &key = it->first;
-    const std::pair<std::string, bool> &value = it->second;
+    const std::string& key = it->first;
+    const std::pair<std::string, bool>& value = it->second;
 
     if (conf->set(key, value.first, err) != RdKafka::Conf::CONF_OK) {
       if (value.second) {
@@ -72,9 +72,9 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
 }
 
 std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
-  const std::unordered_set<uint32_t> &partition_ids,
-  const std::string &broker_list,
-  const std::string &group_id,
+  const std::unordered_set<uint32_t>& partition_ids,
+  const std::string& broker_list,
+  const std::string& group_id,
   const std::string kafka_consumer_type) {
   std::string err;
   auto conf = std::shared_ptr<RdKafka::Conf>(RdKafka::Conf::create(
@@ -151,11 +151,11 @@ private:
 
 public:
   RdKafkaConsumerHolderRenewable(
-    const std::unordered_set<uint32_t> &partition_ids,
-    const std::string &broker_list,
-    const std::unordered_set<std::string> &topic_names,
-    const std::string &group_id,
-    const std::string &kafka_consumer_type) :
+    const std::unordered_set<uint32_t>& partition_ids,
+    const std::string& broker_list,
+    const std::unordered_set<std::string>& topic_names,
+    const std::string& group_id,
+    const std::string& kafka_consumer_type) :
     partition_ids_(partition_ids),
     broker_list_(broker_list),
     topic_names_(topic_names),
@@ -238,11 +238,11 @@ public:
               << std::endl << std::flush;
 
     std::vector<std::shared_ptr<RdKafka::TopicPartition>> topic_partitions;
-    std::vector<RdKafka::TopicPartition *> tmp_topic_partitions;
+    std::vector<RdKafka::TopicPartition*> tmp_topic_partitions;
     topic_partitions.reserve(partition_ids_.size() * topic_names_.size());
     tmp_topic_partitions.reserve(partition_ids_.size() * topic_names_.size());
     for (const auto partition_id : partition_ids_) {
-      for (const auto &topic_name : topic_names_) {
+      for (const auto& topic_name : topic_names_) {
         topic_partitions.push_back(
           std::shared_ptr<RdKafka::TopicPartition>(
             RdKafka::TopicPartition::create(
@@ -279,7 +279,7 @@ public:
     return true;
   }
 
-  bool seekToRelevantOffsets(const TopicPartitionToValueMap<ConsumedOffset> *consumedOffsets) {
+  bool seekToRelevantOffsets(const TopicPartitionToValueMap<ConsumedOffset>* consumedOffsets) {
     LOG(INFO) << "Seeking kafka consumer to relevant Offsets for topic: "
               << folly::join(",", topic_names_)
               << ", partitions: "
@@ -289,8 +289,8 @@ public:
      * Now seek individual partitions to offsets of last seen messages
      * For individual partitions, seek to timestamp, if offset not available.
      */
-    for (const auto &consumedOffset : *consumedOffsets) {
-      const std::string &topic_name = consumedOffset.first.first;
+    for (const auto& consumedOffset : *consumedOffsets) {
+      const std::string& topic_name = consumedOffset.first.first;
       int32_t partition = partition = consumedOffset.first.second;
 
       std::shared_ptr<RdKafka::TopicPartition> topic_partition;
@@ -329,7 +329,7 @@ public:
             partition,
             consumedOffset.second.timestamp));
 
-        std::vector<RdKafka::TopicPartition *> tmp_topic_partitions;
+        std::vector<RdKafka::TopicPartition*> tmp_topic_partitions;
         tmp_topic_partitions.push_back(topic_partition.get());
 
         auto error_code = ExecuteKafkaOperationWithRetry(
@@ -370,7 +370,7 @@ public:
     return true;
   }
 
-  virtual void resetInstance(const TopicPartitionToValueMap<ConsumedOffset> *consumedOffsets) override {
+  virtual void resetInstance(const TopicPartitionToValueMap<ConsumedOffset>* consumedOffsets) override {
     syncPreviousInstance();
     /*
      * Before creating a new KafkaConsumer instance, make sure old one is closed
@@ -421,7 +421,7 @@ public:
     return kafkaConsumer_;
   }
 
-  virtual void resetInstance(const TopicPartitionToValueMap<ConsumedOffset> *consumedOffsets) override {
+  virtual void resetInstance(const TopicPartitionToValueMap<ConsumedOffset>* consumedOffsets) override {
     // doNothing();
   }
 
@@ -432,16 +432,16 @@ public:
   }
 };
 
-RdKafkaConsumerHolder *RdKafkaConsumerHolderFactory::createInstance(
-  const std::unordered_set<uint32_t> &partition_ids,
-  const std::string &broker_list,
-  const std::unordered_set<std::string> &topic_names,
-  const std::string &group_id,
-  const std::string &kafka_consumer_type) {
+RdKafkaConsumerHolder* RdKafkaConsumerHolderFactory::createInstance(
+  const std::unordered_set<uint32_t>& partition_ids,
+  const std::string& broker_list,
+  const std::unordered_set<std::string>& topic_names,
+  const std::string& group_id,
+  const std::string& kafka_consumer_type) {
   return new RdKafkaConsumerHolderRenewable(partition_ids, broker_list, topic_names, group_id, kafka_consumer_type);
 }
 
-RdKafkaConsumerHolder *RdKafkaConsumerHolderFactory::createInstance(
+RdKafkaConsumerHolder* RdKafkaConsumerHolderFactory::createInstance(
   std::shared_ptr<RdKafka::KafkaConsumer> consumer) {
   return new RdKafkaConsumerHolderCached(consumer);
 }

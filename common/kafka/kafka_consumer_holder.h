@@ -43,27 +43,27 @@ public:
   RdKafkaConsumerHolder() {};
 
   // no copy nor move
-  RdKafkaConsumerHolder(const RdKafkaConsumerHolder &) = delete;
+  RdKafkaConsumerHolder(const RdKafkaConsumerHolder&) = delete;
 
-  RdKafkaConsumerHolder(RdKafkaConsumerHolder &&) = delete;
+  RdKafkaConsumerHolder(RdKafkaConsumerHolder&&) = delete;
 
   virtual ~RdKafkaConsumerHolder() {}
 
   virtual std::shared_ptr<RdKafka::KafkaConsumer> getInstance() = 0;
 
-  virtual void resetInstance(const TopicPartitionToValueMap<ConsumedOffset> *consumedOffsets) = 0;
+  virtual void resetInstance(const TopicPartitionToValueMap<ConsumedOffset>* consumedOffsets) = 0;
 
   virtual void close() = 0;
 };
 
 class RdKafkaConsumerHolderFactory {
 public:
-  static RdKafkaConsumerHolder *createInstance(const std::unordered_set<uint32_t> &partition_ids,
-                                               const std::string &broker_list,
-                                               const std::unordered_set<std::string> &topic_names,
-                                               const std::string &group_id,
-                                               const std::string &kafka_consumer_type);
+  static RdKafkaConsumerHolder* createInstance(const std::unordered_set<uint32_t>& partition_ids,
+                                               const std::string& broker_list,
+                                               const std::unordered_set<std::string>& topic_names,
+                                               const std::string& group_id,
+                                               const std::string& kafka_consumer_type);
 
-  static RdKafkaConsumerHolder *createInstance(std::shared_ptr<RdKafka::KafkaConsumer> consumer);
+  static RdKafkaConsumerHolder* createInstance(std::shared_ptr<RdKafka::KafkaConsumer> consumer);
 };
 } // namespace kafka

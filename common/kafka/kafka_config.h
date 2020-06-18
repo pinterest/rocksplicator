@@ -34,7 +34,7 @@ public:
   // configMap: Output-only parameter, map containing all key-value pairs read
   //            from the provided config file.
   static bool read_conf_file(
-    const std::string &conf_file,
-    ConfigMap *configMap);
+    const std::string& conf_file,
+    ConfigMap* configMap);
 };
 } // namespace kafka

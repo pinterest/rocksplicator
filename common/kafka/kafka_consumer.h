@@ -26,21 +26,21 @@ namespace kafka {
 
 class KafkaConsumer {
 public:
-  KafkaConsumer(const std::unordered_set<uint32_t> &partition_ids,
-                const std::string &broker_list,
-                const std::unordered_set<std::string> &topic_names,
-                const std::string &group_id,
-                const std::string &kafka_consumer_type);
+  KafkaConsumer(const std::unordered_set<uint32_t>& partition_ids,
+                const std::string& broker_list,
+                const std::unordered_set<std::string>& topic_names,
+                const std::string& group_id,
+                const std::string& kafka_consumer_type);
 
   KafkaConsumer(std::shared_ptr<RdKafka::KafkaConsumer> consumer,
-                const std::unordered_set<uint32_t> &partition_ids,
-                const std::unordered_set<std::string> &topic_names,
-                const std::string &kafka_consumer_type);
+                const std::unordered_set<uint32_t>& partition_ids,
+                const std::unordered_set<std::string>& topic_names,
+                const std::string& kafka_consumer_type);
 
   // no copy nor move
-  KafkaConsumer(const KafkaConsumer &) = delete;
+  KafkaConsumer(const KafkaConsumer&) = delete;
 
-  KafkaConsumer(KafkaConsumer &&) = delete;
+  KafkaConsumer(KafkaConsumer&&) = delete;
 
   // Returns false if this kafka consumer is not initialized correctly.
   // In this case, this Kafka consumer is not useable. Seek() always returns
@@ -52,39 +52,39 @@ public:
   // Consume() will be starting from this new offset.
   bool Seek(const int64_t timestamp_ms);
 
-  bool Seek(const std::string &topic_name, const int64_t timestamp_ms);
+  bool Seek(const std::string& topic_name, const int64_t timestamp_ms);
 
   // Seek to offsets specified in the KafkaTopicPartitionOffsets map.
   bool Seek(const std::map<std::string, std::map<int32_t,
-    int64_t>> &last_offsets);
+    int64_t>>& last_offsets);
 
   // It returns nullptr if IsHealthy() returns false.
-  virtual RdKafka::Message *Consume(int32_t timeout_ms);
+  virtual RdKafka::Message* Consume(int32_t timeout_ms);
 
   // Gets Kafka topic names this consumer is assigned to.
-  const std::unordered_set<std::string> &GetTopicNames() const;
+  const std::unordered_set<std::string>& GetTopicNames() const;
 
   // Get Kafka partition ids this consumer is assigned to.
-  const std::unordered_set<uint32_t> &GetPartitionIds() const;
+  const std::unordered_set<uint32_t>& GetPartitionIds() const;
 
   // Return set of topics as a string for logging
-  const std::string &GetTopicsString() const;
+  const std::string& GetTopicsString() const;
 
   virtual ~KafkaConsumer();
 
   const std::string partition_ids_str_;
 
 private:
-  KafkaConsumer(RdKafkaConsumerHolder *holder,
-                const std::unordered_set<uint32_t> &partition_ids,
-                const std::unordered_set<std::string> &topic_names,
-                const std::string &kafka_consumer_type);
+  KafkaConsumer(RdKafkaConsumerHolder* holder,
+                const std::unordered_set<uint32_t>& partition_ids,
+                const std::unordered_set<std::string>& topic_names,
+                const std::string& kafka_consumer_type);
 
-  virtual bool SeekInternal(const std::unordered_set<std::string> &topic_names,
+  virtual bool SeekInternal(const std::unordered_set<std::string>& topic_names,
                             const int64_t timestamp_ms);
 
   virtual bool SeekInternal(const std::map<std::string, std::map<int32_t,
-    int64_t>> &last_offsets);
+    int64_t>>& last_offsets);
 
   const std::unordered_set<std::string> topic_names_;
   std::string topic_names_string_;
