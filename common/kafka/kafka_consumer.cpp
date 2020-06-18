@@ -265,7 +265,7 @@ bool KafkaConsumer::SeekInternal(
           topic_partitions_pair.first,
           partition_offset_pair.first,
           // TODO: it is possible that offset+1 reach a invalid offset position
-          partition_offset_pair.second)+1);
+          partition_offset_pair.second + 1));
 
       LOG(INFO) << "Seeking topic: " << topic_partition->topic()
                 << ", partition: " << topic_partition->partition()
@@ -274,6 +274,7 @@ bool KafkaConsumer::SeekInternal(
       if (!KafkaSeekWithRetry(consumer_->getInstance().get(), *topic_partition)) {
         return false;
       }
+
       if (partition_offset_pair.second != -1) {
         ConsumedOffset consumedOffset;
         consumedOffset.offset = partition_offset_pair.second;
