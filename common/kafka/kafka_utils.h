@@ -28,22 +28,22 @@ typedef std::unordered_set<std::pair<std::string, int32_t>,
   boost::hash<std::pair<std::string, int32_t>>>
   TopicPartitionSet;
 
-template <typename V>
+template<typename V>
 using TopicPartitionToValueMap = std::
 unordered_map<std::pair<std::string, int32_t>, V,
   boost::hash<std::pair<std::string, int32_t>>>;
 
 inline std::string TopicPartitionSetToString(
-  const TopicPartitionSet& topic_partition_set) {
+  const TopicPartitionSet &topic_partition_set) {
   std::string s;
-  for (const auto& pair : topic_partition_set) {
+  for (const auto &pair : topic_partition_set) {
     s.append("(").append(pair.first).append(",").
       append(std::to_string(pair.second)).append(") ");
   }
   return s;
 }
 
-inline int64_t GetMessageTimestamp(const RdKafka::Message& message) {
+inline int64_t GetMessageTimestamp(const RdKafka::Message &message) {
   const auto ts = message.timestamp();
   if (ts.type == RdKafka::MessageTimestamp::MSG_TIMESTAMP_CREATE_TIME) {
     return ts.timestamp;

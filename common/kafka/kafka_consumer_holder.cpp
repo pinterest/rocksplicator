@@ -35,8 +35,8 @@ namespace kafka {
 
 std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
   // https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
-  const KafkaConfigMap& config,
-  const std::unordered_set<uint32_t>& partition_ids,
+  const KafkaConfigMap &config,
+  const std::unordered_set<uint32_t> &partition_ids,
   const std::string kafka_consumer_type) {
   std::string err;
   auto conf = std::shared_ptr<RdKafka::Conf>(RdKafka::Conf::create(
@@ -44,8 +44,8 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
 
   // Next go through each of the GLOBAL config and set.
   for (KafkaConfigMap::const_iterator it = config.begin(); it != config.end(); ++it) {
-    const std::string& key = it->first;
-    const std::pair<std::string, bool>& value = it->second;
+    const std::string &key = it->first;
+    const std::pair<std::string, bool> &value = it->second;
 
     if (conf->set(key, value.first, err) != RdKafka::Conf::CONF_OK) {
       if (value.second) {
@@ -72,9 +72,9 @@ std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
 }
 
 std::shared_ptr<RdKafka::KafkaConsumer> CreateRdKafkaConsumer(
-  const std::unordered_set<uint32_t>& partition_ids,
-  const std::string& broker_list,
-  const std::string& group_id,
+  const std::unordered_set<uint32_t> &partition_ids,
+  const std::string &broker_list,
+  const std::string &group_id,
   const std::string kafka_consumer_type) {
   std::string err;
   auto conf = std::shared_ptr<RdKafka::Conf>(RdKafka::Conf::create(
