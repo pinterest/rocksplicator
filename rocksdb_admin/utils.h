@@ -34,4 +34,11 @@ std::string DbNameToSegment(const std::string& db_name);
  */
 int ExtractShardId(const std::string& db_name);
 
+inline std::string ensure_start_with_pathsep(const std::string& s, char pathsep) {
+  if (!s.empty() && s.front() != pathsep) {
+    return pathsep + s;
+  }
+  return s;
+}
+
 }  // namespace admin

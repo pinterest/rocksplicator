@@ -379,7 +379,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         // before we call backupDB() below. In that case, we will throw and let Helix mark the
         // local partition as error.
         if (!useS3Backup) {
-          String hdfsPath = "/rocksplicator/" + cluster + "/" + dbName + "/" + snapshotHost + "_"
+          String hdfsPath = "rocksplicator/" + cluster + "/" + dbName + "/" + snapshotHost + "_"
             + String.valueOf(snapshotPort) + "/" + String.valueOf(System.currentTimeMillis());
 
           // backup a snapshot from the upstream host, and restore it locally

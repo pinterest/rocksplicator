@@ -629,7 +629,7 @@ void AdminHandler::async_tm_backupDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       BackupDBResponse>>> callback,
     std::unique_ptr<BackupDBRequest> request) {
-  auto full_path = FLAGS_hdfs_name_node + request->hdfs_backup_dir;
+  auto full_path = FLAGS_hdfs_name_node + ensure_start_with_pathsep(request->hdfs_backup_dir, '/');
   rocksdb::Env* hdfs_env;
   auto status = rocksdb::NewHdfsEnv(&hdfs_env, full_path);
   if (!OKOrSetException(status,
@@ -671,7 +671,7 @@ void AdminHandler::async_tm_restoreDB(
     return;
   }
 
-  auto full_path = FLAGS_hdfs_name_node + request->hdfs_backup_dir;
+  auto full_path = FLAGS_hdfs_name_node + ensure_start_with_pathsep(request->hdfs_backup_dir, '/');
   rocksdb::Env* hdfs_env;
   auto status = rocksdb::NewHdfsEnv(&hdfs_env, full_path);
   if (!OKOrSetException(status,
