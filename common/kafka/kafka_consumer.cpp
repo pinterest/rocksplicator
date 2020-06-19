@@ -112,8 +112,8 @@ KafkaConsumer::KafkaConsumer(
   }
 
   do {
-    while (std::atomic_exchange(&should_reset_rd_kafka_consumer_, false)) {
-      rd_kafka_consumer_provider_->resetInstance(nullptr);
+    while (shouldResetAndExchange()) {
+      resetUnSeekedConsumer();
     }
 
     // TODO: Change to unique_ptr
@@ -154,7 +154,7 @@ KafkaConsumer::KafkaConsumer(
         {kafka_consumer_type_metric_tag_,
          "error_code=" + std::to_string(error_code)}));
 
-      if (std::atomic_load(&should_reset_rd_kafka_consumer_)) {
+      if (shouldResetLoad()) {
         continue;
       }
 
@@ -164,7 +164,7 @@ KafkaConsumer::KafkaConsumer(
               << partition_ids_str_ << ", topics: "
               << folly::join(",", topic_names_);
     is_healthy_.store(true);
-  } while (std::atomic_load(&should_reset_rd_kafka_consumer_));
+  } while (shouldResetLoad());
 }
 
 KafkaConsumer::~KafkaConsumer() {
