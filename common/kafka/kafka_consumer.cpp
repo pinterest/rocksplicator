@@ -78,7 +78,7 @@ KafkaConsumer::KafkaConsumer(
   reset_callback_id_ptr_(nullptr),
   is_healthy_(false),
   should_reset_rd_kafka_consumer_(false) {
-  if (rd_kafka_consumer_provider_ == nullptr || rd_kafka_consumer_provider_->getInstance() == nullptr) {
+  if (!isConsumerAvailable()) {
     return;
   }
 
@@ -254,9 +254,11 @@ bool KafkaConsumer::Seek(const std::map<std::string, std::map<int32_t,
 
 bool KafkaConsumer::SeekInternal(
   const std::map<std::string, std::map<int32_t, int64_t>>& last_offsets) {
-  if (rd_kafka_consumer_provider_ == nullptr || rd_kafka_consumer_provider_->getInstance() == nullptr) {
+
+  if (!isConsumerAvailable()) {
     return false;
   }
+
   for (const auto& topic_partitions_pair : last_offsets) {
     for (const auto& partition_offset_pair : topic_partitions_pair.second) {
       // Seek to offset + 1 for each topic and partition.
@@ -291,9 +293,11 @@ bool KafkaConsumer::SeekInternal(
 bool KafkaConsumer::SeekInternal(
   const std::unordered_set<std::string>& topic_names,
   const int64_t timestamp_ms) {
-  if (rd_kafka_consumer_provider_ == nullptr || rd_kafka_consumer_provider_->getInstance() == nullptr) {
+
+  if (!isConsumerAvailable()) {
     return false;
   }
+
   std::vector<std::shared_ptr<RdKafka::TopicPartition>> topic_partitions;
   // A temporary RdKafka::TopicPartition* vector specifically used for
   // KafkaConsumer->offsetsForTimes().
@@ -354,8 +358,7 @@ bool KafkaConsumer::SeekInternal(
 
 RdKafka::Message* KafkaConsumer::Consume(int32_t timeout_ms) {
   do {
-    if (rd_kafka_consumer_provider_ == nullptr
-    || rd_kafka_consumer_provider_->getInstance() == nullptr) {
+    if (!isConsumerAvailable()) {
       return nullptr;
     }
 

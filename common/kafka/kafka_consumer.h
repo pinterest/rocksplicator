@@ -106,6 +106,11 @@ private:
     rd_kafka_consumer_provider_->resetInstance(nullptr);
   }
 
+  inline bool isConsumerAvailable() {
+    return !(rd_kafka_consumer_provider_ == nullptr
+     || rd_kafka_consumer_provider_->getInstance() == nullptr);
+  }
+
   const std::unordered_set<std::string> topic_names_;
   std::string topic_names_string_;
   const std::unordered_set<uint32_t> partition_ids_;
