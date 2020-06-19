@@ -70,15 +70,15 @@ KafkaConsumer::KafkaConsumer(
   const std::unordered_set<uint32_t>& partition_ids,
   const std::unordered_set<std::string>& topic_names,
   const std::string& kafka_consumer_type) :
-  consumer_(consumer),
+  rd_kafka_consumer_provider_(consumer),
   partition_ids_str_(folly::join(",", partition_ids)),
   topic_names_(topic_names),
   partition_ids_(partition_ids),
   kafka_consumer_type_metric_tag_("kafka_consumer_type=" + kafka_consumer_type),
-  cbIdPtr_(nullptr),
+  reset_callback_id_ptr_(nullptr),
   is_healthy_(false),
-  reset_(false) {
-  if (consumer_ == nullptr || consumer_->getInstance() == nullptr) {
+  should_reset_rd_kafka_consumer_(false) {
+  if (rd_kafka_consumer_provider_ == nullptr || rd_kafka_consumer_provider_->getInstance() == nullptr) {
     return;
   }
 
@@ -91,7 +91,7 @@ KafkaConsumer::KafkaConsumer(
       ConsumedOffset offset;
       offset.offset = -1;
       offset.timestamp = -1;
-      consumedOffsets_.emplace(std::make_pair(topic_name, partition_id), offset);
+      last_known_consumed_offsets_.emplace(std::make_pair(topic_name, partition_id), offset);
     }
   }
 
@@ -103,17 +103,17 @@ KafkaConsumer::KafkaConsumer(
       LOG(INFO) << "Will be watching path for change: " << it << std::endl << std::flush;
     }
 
-    cbIdPtr_ = std::make_shared<common::MultiFilePoller::CallbackId>(
+    reset_callback_id_ptr_ = std::make_shared<common::MultiFilePoller::CallbackId>(
       SSLFilePollerHolder::getFilePollerInstance()->registerFiles(
         filePathsToWatch,
         [&](const common::MultiFilePoller::CallbackArg& newData) {
-          std::atomic_exchange(&reset_, true);
+          std::atomic_exchange(&should_reset_rd_kafka_consumer_, true);
         }));
   }
 
   do {
-    while (std::atomic_exchange(&reset_, false)) {
-      consumer_->resetInstance(nullptr);
+    while (std::atomic_exchange(&should_reset_rd_kafka_consumer_, false)) {
+      rd_kafka_consumer_provider_->resetInstance(nullptr);
     }
 
     // TODO: Change to unique_ptr
@@ -142,7 +142,7 @@ KafkaConsumer::KafkaConsumer(
     }
     const auto error_code = ExecuteKafkaOperationWithRetry(
       [this, &tmp_topic_partitions]() {
-        return consumer_->getInstance()->assign(tmp_topic_partitions);
+        return rd_kafka_consumer_provider_->getInstance()->assign(tmp_topic_partitions);
       });
 
     if (error_code != RdKafka::ERR_NO_ERROR) {
@@ -154,7 +154,7 @@ KafkaConsumer::KafkaConsumer(
         {kafka_consumer_type_metric_tag_,
          "error_code=" + std::to_string(error_code)}));
 
-      if (std::atomic_load(&reset_)) {
+      if (std::atomic_load(&should_reset_rd_kafka_consumer_)) {
         continue;
       }
 
@@ -164,19 +164,19 @@ KafkaConsumer::KafkaConsumer(
               << partition_ids_str_ << ", topics: "
               << folly::join(",", topic_names_);
     is_healthy_.store(true);
-  } while (std::atomic_load(&reset_));
+  } while (std::atomic_load(&should_reset_rd_kafka_consumer_));
 }
 
 KafkaConsumer::~KafkaConsumer() {
   if (!FLAGS_kafka_consumer_reset_on_file_change.empty()) {
-    if (cbIdPtr_ != nullptr) {
-      const auto cbId = *cbIdPtr_.get();
+    if (reset_callback_id_ptr_ != nullptr) {
+      const auto cbId = *reset_callback_id_ptr_.get();
       SSLFilePollerHolder::getFilePollerInstance()->cancelCallback(cbId);
     }
   }
 
-  if (consumer_) {
-    consumer_->close();
+  if (rd_kafka_consumer_provider_) {
+    rd_kafka_consumer_provider_->close();
   }
 }
 
@@ -184,8 +184,8 @@ bool KafkaConsumer::IsHealthy() const { return is_healthy_.load(); }
 
 bool KafkaConsumer::Seek(const int64_t timestamp_ms) {
   do {
-    while (std::atomic_exchange(&reset_, false)) {
-      consumer_->resetInstance(nullptr);
+    while (shouldResetAndExchange()) {
+      resetUnSeekedConsumer();
     }
 
     if (SeekInternal(topic_names_, timestamp_ms)) {
@@ -195,19 +195,19 @@ bool KafkaConsumer::Seek(const int64_t timestamp_ms) {
         getFullStatsName(kKafkaConsumerErrorSeek,
                          {kafka_consumer_type_metric_tag_}));
 
-      if (std::atomic_load(&reset_)) {
+      if (shouldResetLoad()) {
         continue;
       }
       return false;
     }
-  } while (std::atomic_load(&reset_));
+  } while (shouldResetLoad());
 }
 
 bool KafkaConsumer::Seek(const std::string& topic_name,
                          const int64_t timestamp_ms) {
   do {
-    while (std::atomic_exchange(&reset_, false)) {
-      consumer_->resetInstance(nullptr);
+    while (shouldResetAndExchange()) {
+      resetUnSeekedConsumer();
     }
 
     bool is_success = false;
@@ -223,19 +223,19 @@ bool KafkaConsumer::Seek(const std::string& topic_name,
       common::Stats::get()->Incr(getFullStatsName(
         kKafkaConsumerErrorSeek, {kafka_consumer_type_metric_tag_,
                                   "topic=" + topic_name}));
-      if (std::atomic_load(&reset_)) {
+      if (shouldResetLoad()) {
         continue;
       }
     }
     return is_success;
-  } while (std::atomic_load(&reset_));
+  } while (shouldResetLoad());
 }
 
 bool KafkaConsumer::Seek(const std::map<std::string, std::map<int32_t,
   int64_t>>& last_offsets) {
   do {
-    while (std::atomic_exchange(&reset_, false)) {
-      consumer_->resetInstance(nullptr);
+    while (shouldResetAndExchange()) {
+      resetUnSeekedConsumer();
     }
 
     if (SeekInternal(last_offsets)) {
@@ -245,16 +245,16 @@ bool KafkaConsumer::Seek(const std::map<std::string, std::map<int32_t,
     common::Stats::get()->Incr(
       getFullStatsName(kKafkaConsumerErrorSeek,
                        {kafka_consumer_type_metric_tag_}));
-    if (std::atomic_load(&reset_)) {
+    if (shouldResetLoad()) {
       continue;
     }
     return false;
-  } while (std::atomic_load(&reset_));
+  } while (shouldResetLoad());
 }
 
 bool KafkaConsumer::SeekInternal(
   const std::map<std::string, std::map<int32_t, int64_t>>& last_offsets) {
-  if (consumer_ == nullptr || consumer_->getInstance() == nullptr) {
+  if (rd_kafka_consumer_provider_ == nullptr || rd_kafka_consumer_provider_->getInstance() == nullptr) {
     return false;
   }
   for (const auto& topic_partitions_pair : last_offsets) {
@@ -271,7 +271,7 @@ bool KafkaConsumer::SeekInternal(
                 << ", partition: " << topic_partition->partition()
                 << ", offset: " << topic_partition->offset();
 
-      if (!KafkaSeekWithRetry(consumer_->getInstance().get(), *topic_partition)) {
+      if (!KafkaSeekWithRetry(rd_kafka_consumer_provider_->getInstance().get(), *topic_partition)) {
         return false;
       }
 
@@ -281,7 +281,7 @@ bool KafkaConsumer::SeekInternal(
         consumedOffset.timestamp = -1;
         std::pair<std::string, std::int32_t> topic_partition_pair
           = std::make_pair(topic_partitions_pair.first, partition_offset_pair.first);
-        consumedOffsets_[topic_partition_pair] = consumedOffset;
+        last_known_consumed_offsets_[topic_partition_pair] = consumedOffset;
       }
     }
   }
@@ -291,7 +291,7 @@ bool KafkaConsumer::SeekInternal(
 bool KafkaConsumer::SeekInternal(
   const std::unordered_set<std::string>& topic_names,
   const int64_t timestamp_ms) {
-  if (consumer_ == nullptr || consumer_->getInstance() == nullptr) {
+  if (rd_kafka_consumer_provider_ == nullptr || rd_kafka_consumer_provider_->getInstance() == nullptr) {
     return false;
   }
   std::vector<std::shared_ptr<RdKafka::TopicPartition>> topic_partitions;
@@ -316,7 +316,7 @@ bool KafkaConsumer::SeekInternal(
 
   auto error_code = ExecuteKafkaOperationWithRetry(
     [this, &tmp_topic_partitions]() {
-      return consumer_->getInstance()->offsetsForTimes(tmp_topic_partitions,
+      return rd_kafka_consumer_provider_->getInstance()->offsetsForTimes(tmp_topic_partitions,
                                                        FLAGS_kafka_consumer_timeout_ms);
     });
   if (error_code != RdKafka::ERR_NO_ERROR) {
@@ -331,7 +331,15 @@ bool KafkaConsumer::SeekInternal(
   for (const auto* topic_partition : tmp_topic_partitions) {
     LOG(INFO) << "Seeking partition: " << topic_partition->partition()
               << ", offset: " << topic_partition->offset();
-
+    common::Stats::get()->Incr(
+      getFullStatsName(kKafkaConsumerSeek,
+                       {kafka_consumer_type_metric_tag_,
+                        "topic=" + topic_partition->topic(),
+                        "partition=" +
+                        std::to_string(topic_partition->partition())}));
+    if (!KafkaSeekWithRetry(rd_kafka_consumer_provider_->getInstance().get(), *topic_partition)) {
+      return false;
+    }
     std::pair<std::string, std::int32_t> topic_partition_pair =
       std::make_pair(topic_partition->topic(), topic_partition->partition());
 
@@ -339,35 +347,26 @@ bool KafkaConsumer::SeekInternal(
     consumedOffset.offset = topic_partition->offset();
     consumedOffset.timestamp = timestamp_ms;
 
-    common::Stats::get()->Incr(
-      getFullStatsName(kKafkaConsumerSeek,
-                       {kafka_consumer_type_metric_tag_,
-                        "topic=" + topic_partition->topic(),
-                        "partition=" +
-                        std::to_string(topic_partition->partition())}));
-    if (!KafkaSeekWithRetry(consumer_->getInstance().get(), *topic_partition)) {
-      return false;
-    }
-    consumedOffsets_[topic_partition_pair] = consumedOffset;
+    last_known_consumed_offsets_[topic_partition_pair] = consumedOffset;
   }
   return true;
 }
 
 RdKafka::Message* KafkaConsumer::Consume(int32_t timeout_ms) {
   do {
-    if (consumer_ == nullptr || consumer_->getInstance() == nullptr) {
+    if (rd_kafka_consumer_provider_ == nullptr
+    || rd_kafka_consumer_provider_->getInstance() == nullptr) {
       return nullptr;
     }
 
-    while (std::atomic_exchange(&reset_, false)) {
-      consumer_->resetInstance(&consumedOffsets_);
+    while (shouldResetAndExchange()) {
+      resetSeekedConsumer();
     }
 
-    auto* message = consumer_->getInstance()->consume(timeout_ms);
+    auto* message = rd_kafka_consumer_provider_->getInstance()->consume(timeout_ms);
 
     if (message == nullptr) {
-      if (std::atomic_load(&reset_)) {
-        consumer_->resetInstance(&consumedOffsets_);
+      if (shouldResetLoad()) {
         continue;
       }
 
@@ -389,7 +388,7 @@ RdKafka::Message* KafkaConsumer::Consume(int32_t timeout_ms) {
         {kafka_consumer_type_metric_tag_,
          "error_code=" + std::to_string(error_code)}));
 
-      if (std::atomic_load(&reset_)) {
+      if (shouldResetLoad()) {
         continue;
       }
     }
@@ -403,11 +402,11 @@ RdKafka::Message* KafkaConsumer::Consume(int32_t timeout_ms) {
       ConsumedOffset consumedOffset;
       consumedOffset.timestamp = message->timestamp().timestamp;
       consumedOffset.offset = message->offset();
-      consumedOffsets_[topic_partition_pair] = consumedOffset;
+      last_known_consumed_offsets_[topic_partition_pair] = consumedOffset;
     }
 
     return message;
-  } while (std::atomic_load(&reset_));
+  } while (shouldResetLoad());
 }
 
 const std::unordered_set<std::string>& KafkaConsumer::GetTopicNames() const {

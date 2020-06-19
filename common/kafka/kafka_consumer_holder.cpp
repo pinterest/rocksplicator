@@ -279,7 +279,7 @@ public:
     return true;
   }
 
-  bool seekToRelevantOffsets(const TopicPartitionToValueMap<ConsumedOffset>* consumedOffsets) {
+  bool seekToRelevantOffsets(const TopicPartitionToValueMap<ConsumedOffset>& consumedOffsets) {
     LOG(INFO) << "Seeking kafka consumer to relevant Offsets for topic: "
               << folly::join(",", topic_names_)
               << ", partitions: "
@@ -289,7 +289,7 @@ public:
      * Now seek individual partitions to offsets of last seen messages
      * For individual partitions, seek to timestamp, if offset not available.
      */
-    for (const auto& consumedOffset : *consumedOffsets) {
+    for (const auto& consumedOffset : consumedOffsets) {
       const std::string& topic_name = consumedOffset.first.first;
       int32_t partition = partition = consumedOffset.first.second;
 
@@ -396,7 +396,7 @@ public:
         continue;
       }
 
-      if (!seekToRelevantOffsets(consumedOffsets)) {
+      if (!seekToRelevantOffsets(*consumedOffsets)) {
         continue;
       }
       done = true;

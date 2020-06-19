@@ -86,17 +86,37 @@ private:
   virtual bool SeekInternal(const std::map<std::string, std::map<int32_t,
     int64_t>>& last_offsets);
 
+  inline bool isResettable() {
+    return reset_callback_id_ptr_ != nullptr;
+  }
+
+  inline bool shouldResetAndExchange() {
+    return isResettable() && std::atomic_exchange(&should_reset_rd_kafka_consumer_, false);
+  }
+
+  inline bool shouldResetLoad() {
+    return isResettable() && std::atomic_load(&should_reset_rd_kafka_consumer_);
+  }
+
+  inline bool resetSeekedConsumer() {
+    rd_kafka_consumer_provider_->resetInstance(&last_known_consumed_offsets_);
+  }
+
+  inline bool resetUnSeekedConsumer() {
+    rd_kafka_consumer_provider_->resetInstance(nullptr);
+  }
+
   const std::unordered_set<std::string> topic_names_;
   std::string topic_names_string_;
   const std::unordered_set<uint32_t> partition_ids_;
-  const std::shared_ptr<RdKafkaConsumerHolder> consumer_;
+  const std::shared_ptr<RdKafkaConsumerHolder> rd_kafka_consumer_provider_;
   // Tag used when logging metrics, so we can differentiate between kafka
   // consumers for different use cases.
   const std::string kafka_consumer_type_metric_tag_;
-  std::shared_ptr<common::MultiFilePoller::CallbackId> cbIdPtr_;
+  std::shared_ptr<common::MultiFilePoller::CallbackId> reset_callback_id_ptr_;
   std::atomic<bool> is_healthy_;
-  std::atomic<bool> reset_;
-  TopicPartitionToValueMap<ConsumedOffset> consumedOffsets_;
+  std::atomic<bool> should_reset_rd_kafka_consumer_;
+  TopicPartitionToValueMap<ConsumedOffset> last_known_consumed_offsets_;
 };
 
 }  // namespace kafka
