@@ -17,7 +17,7 @@
 #include "common/kafka/kafka_flags.h"
 #include "common/kafka/kafka_utils.h"
 
-#include <atomic>
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <string>
@@ -371,19 +371,25 @@ public:
   }
 
   virtual void resetInstance(const TopicPartitionToValueMap<ConsumedOffset>* consumedOffsets) override {
+    common::Stats::get()->Incr(kKafkaResets);
+
     syncPreviousInstance();
     /*
      * Before creating a new KafkaConsumer instance, make sure old one is closed
      * and shutdown.
      */
+
+    int64_t minSleepMs = 1000; // 1 second
+    int64_t backoffFactor = 1;
+    int64_t maxBackOffFactor = 256;
+
+    int64_t currentTimeToSleepMsPerLoop = minSleepMs;
+
     bool done = false;
     do {
       closePreviousInstance();
 
       recreateInstance();
-
-      std::this_thread::sleep_for(
-        std::chrono::milliseconds(1000));
 
       /**
        * If there are no consumedOffsets, return;
@@ -392,11 +398,14 @@ public:
         return;
       }
 
-      if (!assignPartitions()) {
-        continue;
-      }
+      if (!(assignPartitions() && seekToRelevantOffsets(*consumedOffsets))) {
+        common::Stats::get()->Incr(kKafkaResetsInLoop);
+        common::Stats::get()->Incr(kKafkaResetSleepMillis, currentTimeToSleepMsPerLoop);
+        std::this_thread::sleep_for(
+          std::chrono::milliseconds(currentTimeToSleepMsPerLoop));
+        currentTimeToSleepMsPerLoop = backoffFactor * minSleepMs + rand() % minSleepMs;
+        backoffFactor = std::min(backoffFactor << 1, maxBackOffFactor);
 
-      if (!seekToRelevantOffsets(*consumedOffsets)) {
         continue;
       }
       done = true;

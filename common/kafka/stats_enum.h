@@ -33,6 +33,9 @@ const std::string kKafkaWatcherInitMs = "kafka_watcher_init_ms";
 const std::string kKafkaMsgTimeDiffFromCurrMs =
     "kafka_msg_time_diff_from_curr_ms";
 const std::string kKafkaMsgNumBytes = "kafka_msg_num_bytes";
+const std::string kKafkaResets = "kafka_consumer_resets";
+const std::string kKafkaResetsInLoop = "kafka_consumer_resets_in_loop";
+const std::string kKafkaResetSleepMillis = "kafka_consumer_reset_sleep_ms";
 
 std::string getFullStatsName(const std::string& metric_name,
     const std::initializer_list<std::string>& tags);
