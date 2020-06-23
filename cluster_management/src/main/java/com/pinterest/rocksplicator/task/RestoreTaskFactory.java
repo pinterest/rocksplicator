@@ -72,12 +72,11 @@ import java.util.Map;
  * and restore task will be configured (ie. set "TargetPartitionStates": "Master" in {@link JobConfig})
  * to target 1 and only 1 replica in Master state (compared to {@link BackupTask} which target
  * 1 and only 1 replica either in Master or Slave with "TargetPartitionStates": "Master, Slave").
- * If replica factor (RF) > 1, then {@link RestoreTask} is also responsible to sync data from
- * Master replica to all Slave replicas. Due to the resource must be newly created, replicas in
- * other states, such as Offline, Error should always have no data which will later go through
- * helix state transition to get the latest restored data from Master or Slave.
- * TODO: we can extend to support restore to replica in either Master or Slave, and replicate to
- * all replicas, not limited to only restore to Master.
+ * If replica factor (RF) > 1, then {@link RestoreTask} is also responsible to initiate restore
+ * to all other replicas in state model: Slave/Offline/Error.
+ *
+ * TODO: we can extend to support restoreTask to target replica in either Master or Slave in case
+ * transient missing Master replica.
  *
  * Upon Task creation, configs inherited from job configs JobCommandConfigMap: STORE_PATH_PREFIX,
  * the cloud path prefix stored the backup; RESOURCE_VERSION: the timestamp the available backup
