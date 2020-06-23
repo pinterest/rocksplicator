@@ -18,6 +18,7 @@
 
 package com.pinterest.rocksplicator.task;
 
+import org.apache.helix.HelixAdmin;
 import org.apache.helix.task.JobConfig;
 import org.apache.helix.task.Task;
 import org.apache.helix.task.TaskCallbackContext;
@@ -33,11 +34,12 @@ import java.util.Map;
  * cloud to local.
  *
  * There are 2 use cases: 1. if periodical backup is setup for the resource, then, RestoreTask
- * provide rollback to a previous backup version, especially during disaster recovery. The
- * rollback will discard the local data and restore to a previous snapshot; 2. if there is
- * available backup (either from periodical or ad-hoc backup), then, restore the resource to a
- * new cluster which provide the ability of data migration (note: client need request to the new
- * cluster after migration).
+ * provide rollback to a previous backup version, especially during disaster recovery.
+ * note: it can only be used to restore to newly created segment, which require the resource to
+ * be manually removed, then re-created by service operator; 2. if there is available backup
+ * (either from periodical or ad-hoc backup), then, restore the resource to a new cluster which
+ * provide the ability of data migration (note: client need request to the new cluster after migration).
+ *
  * TODO (Kangnan) rescue writes loss due to: 1. writes since the backup; 2. writes during restore
  * due to DB close.
  *
@@ -66,6 +68,17 @@ import java.util.Map;
  * The Task will be running as targeted job similar to backupTask, which means the db resource
  * must exist first before the restoreTask to pinpoint the targetPartition and restore it.
  *
+ * Since {@link RestoreTask} will only be used for {@link com.pinterest.rocksplicator.MasterSlaveStateModelFactory.MasterSlaveStateModel},
+ * and restore task will be configured (ie. set "TargetPartitionStates": "Master" in {@link JobConfig})
+ * to target 1 and only 1 replica in Master state (compared to {@link BackupTask} which target
+ * 1 and only 1 replica either in Master or Slave with "TargetPartitionStates": "Master, Slave").
+ * If replica factor (RF) > 1, then {@link RestoreTask} is also responsible to sync data from
+ * Master replica to all Slave replicas. Due to the resource must be newly created, replicas in
+ * other states, such as Offline, Error should always have no data which will later go through
+ * helix state transition to get the latest restored data from Master or Slave.
+ * TODO: we can extend to support restore to replica in either Master or Slave, and replicate to
+ * all replicas, not limited to only restore to Master.
+ *
  * Upon Task creation, configs inherited from job configs JobCommandConfigMap: STORE_PATH_PREFIX,
  * the cloud path prefix stored the backup; RESOURCE_VERSION: the timestamp the available backup
  * to restore from; "prefix/[version]/[dbName]" will be the full filesystem path to get db from
@@ -89,6 +102,7 @@ public class RestoreTaskFactory implements TaskFactory {
 
   @Override
   public Task createNewTask(TaskCallbackContext context) {
+    HelixAdmin admin = context.getManager().getClusterManagmentTool();
 
     TaskConfig taskConfig = context.getTaskConfig();
     JobConfig jobConfig = context.getJobConfig();
@@ -129,14 +143,14 @@ public class RestoreTaskFactory implements TaskFactory {
             cluster, targetPartition, job, adminPort, src_cluster, resourceVersion,
             System.currentTimeMillis()));
 
-    return getTask(cluster, targetPartition, storePathPrefix, src_cluster, resourceVersion, job,
+    return getTask(admin, cluster, targetPartition, storePathPrefix, src_cluster, resourceVersion, job,
         adminPort, useS3Store, s3Bucket);
   }
 
-  protected Task getTask(String cluster, String targetPartition, String storePathPrefix,
+  protected Task getTask(HelixAdmin admin, String cluster, String targetPartition, String storePathPrefix,
                          String src_cluster, long resourceVersion, String job, int port,
                          boolean useS3Store, String s3Bucket) {
-    return new RestoreTask(cluster, targetPartition, storePathPrefix, src_cluster,
+    return new RestoreTask(admin, cluster, targetPartition, storePathPrefix, src_cluster,
         resourceVersion, job, port, useS3Store, s3Bucket);
   }
 }

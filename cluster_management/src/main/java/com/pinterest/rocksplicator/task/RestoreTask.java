@@ -20,11 +20,15 @@ package com.pinterest.rocksplicator.task;
 
 import com.pinterest.rocksplicator.Utils;
 
+import org.apache.helix.HelixAdmin;
+import org.apache.helix.model.ExternalView;
 import org.apache.helix.task.Task;
 import org.apache.helix.task.TaskResult;
 import org.apache.helix.task.UserContentStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Map;
 
 public class RestoreTask extends UserContentStore implements Task {
 
@@ -39,10 +43,12 @@ public class RestoreTask extends UserContentStore implements Task {
   private final int adminPort;
   private final boolean useS3Store;
   private final String s3Bucket;
+  private HelixAdmin admin;
 
-  public RestoreTask(String taskCluster, String partitionName, String storePathPrefix,
-                     String srcCluster, long resourceVersion, String job, int adminPort,
-                     boolean useS3Store, String s3Bucket) {
+  public RestoreTask(HelixAdmin admin, String taskCluster, String partitionName,
+                     String storePathPrefix, String srcCluster, long resourceVersion, String job,
+                     int adminPort, boolean useS3Store, String s3Bucket) {
+    this.admin = admin;
     this.taskCluster = taskCluster;
     this.partitionName = partitionName;
     this.storePathPrefix = storePathPrefix;
@@ -69,13 +75,37 @@ public class RestoreTask extends UserContentStore implements Task {
       String storePath =
           String.format("%s/%s/%s", storePathPrefix, String.valueOf(resourceVersion), dbName);
 
-      LOG.error(
-          String.format(
-              "RestoreTask run to restore partition: %s from storePath: %s. Other info "
-                  + "{src_cluster: %s, taskCluster: %s, job: %s, version: %d}", partitionName,
-              storePath, srcCluster, taskCluster, job, resourceVersion));
+      // restore same data to other replicas of this parition
+      String resourceName = dbName.substring(0, dbName.length() - 5);
+      ExternalView view = admin.getResourceExternalView(taskCluster, resourceName);
+      Map<String, String> stateMap = view.getStateMap(partitionName);
+      if (stateMap.size() != 0) {
+        if (stateMap.containsValue("SLAVE") || stateMap.containsValue("MASTER")) {
+          for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
+            String hostPort = instanceNameAndRole.getKey();
+            String role = instanceNameAndRole.getValue();
+            String host = hostPort.split("_")[0];
+            int port = Integer.parseInt(hostPort.split("_")[1]);
 
-      executeRestore("127.0.0.1", adminPort, dbName, storePath, useS3Store, s3Bucket);
+            LOG.error(
+                String.format(
+                    "RestoreTask run to restore partition: %s from storePath: %s to host: %s, "
+                        + "role: %s. Other info {src_cluster: %s, taskCluster: %s, job: %s, "
+                        + "version: %d}", partitionName, storePath, host, role, srcCluster,
+                    taskCluster, job, resourceVersion));
+
+            executeRestore(host, port, dbName, storePath, useS3Store, s3Bucket);
+          }
+        } else {
+          throw new RuntimeException(
+              "Skip restore due to no Master or Slave replica found for partition: "
+                  + partitionName);
+        }
+      } else {
+        throw new RuntimeException(
+            "Skip restore due to empty stateMap got from resource externalView for partition: "
+                + partitionName);
+      }
 
       return new TaskResult(TaskResult.Status.COMPLETED, "RestoreTask is completed!");
     } catch (Exception e) {
@@ -88,11 +118,12 @@ public class RestoreTask extends UserContentStore implements Task {
                                 boolean useS3Store, String s3Bucket)
       throws RuntimeException {
     try {
-      Utils.closeDB(dbName, adminPort);
+      Utils.closeRemoteOrLocalDB(host, adminPort, dbName);
       if (useS3Store) {
-        Utils.restoreLocalDBFromS3(adminPort, dbName, s3Bucket, storePath, host, adminPort);
+        Utils.restoreRemoteOrLocalDBFromS3(host, adminPort, dbName, s3Bucket, storePath, host,
+            adminPort);
       } else {
-        Utils.restoreLocalDB(adminPort, dbName, storePath, host, adminPort);
+        Utils.restoreRemoteOrLocalDB(host, adminPort, dbName, storePath, host, adminPort);
       }
     } catch (Exception e) {
       throw new RuntimeException(e);

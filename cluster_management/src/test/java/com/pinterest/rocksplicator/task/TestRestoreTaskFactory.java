@@ -1,5 +1,6 @@
 package com.pinterest.rocksplicator.task;
 
+import org.apache.helix.HelixAdmin;
 import org.apache.helix.TestHelper;
 import org.apache.helix.integration.manager.MockParticipantManager;
 import org.apache.helix.integration.task.TaskTestBase;
@@ -88,7 +89,7 @@ public class TestRestoreTaskFactory extends TaskTestBase {
       List<TaskConfig> taskConfigs = new ArrayList<>();
       for (int j = 0; j < NUM_TASK_PER_JOB; ++j) {
         Map<String, String> taskConfigMap = new HashMap<>();
-        taskConfigMap.put("TASK_TARGET_PARTITION", "test_seg_" + j);
+        taskConfigMap.put("TASK_TARGET_PARTITION", "TestDB_" + j);
         taskConfigs.add(new TaskConfig("Restore", taskConfigMap));
       }
 
@@ -155,7 +156,7 @@ public class TestRestoreTaskFactory extends TaskTestBase {
       }
 
       Assert
-          .assertEquals(taskTargetParts, new HashSet<>(Arrays.asList("test_seg_0", "test_seg_1")));
+          .assertEquals(taskTargetParts, new HashSet<>(Arrays.asList("TestDB_0", "TestDB_1")));
     }
   }
 
@@ -174,21 +175,20 @@ public class TestRestoreTaskFactory extends TaskTestBase {
     }
 
     @Override
-    protected Task getTask(String cluster, String targetPartition, String storePathPrefix,
-                           String src_cluster, long resourceVersion, String job, int port,
-                           boolean useS3Store, String s3Bucket) {
-      return new TestRestoreTaskFactory.DummyRestoreTask(cluster, targetPartition,
+    protected Task getTask(HelixAdmin admin, String cluster, String targetPartition,
+                           String storePathPrefix, String src_cluster, long resourceVersion,
+                           String job, int port, boolean useS3Store, String s3Bucket) {
+      return new TestRestoreTaskFactory.DummyRestoreTask(admin, cluster, targetPartition,
           storePathPrefix, src_cluster, resourceVersion, job, port, useS3Store, s3Bucket);
     }
-
   }
 
   private class DummyRestoreTask extends RestoreTask {
 
-    public DummyRestoreTask(String taskCluster, String partitionName, String storePathPrefix,
-                            String src_cluster, long resourceVersion, String job, int adminPort,
-                            boolean useS3Store, String s3Bucket) {
-      super(taskCluster, partitionName, storePathPrefix, src_cluster, resourceVersion, job,
+    public DummyRestoreTask(HelixAdmin admin, String taskCluster, String partitionName,
+                            String storePathPrefix, String src_cluster, long resourceVersion,
+                            String job, int adminPort, boolean useS3Store, String s3Bucket) {
+      super(admin, taskCluster, partitionName, storePathPrefix, src_cluster, resourceVersion, job,
           adminPort, useS3Store, s3Bucket);
     }
 
