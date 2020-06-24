@@ -428,6 +428,10 @@ RdKafka::ErrorCode KafkaConsumer::Commit(std::vector<RdKafka::TopicPartition*>& 
   }
 }
 
+RdKafka::ErrorCode KafkaConsumer::Committed(std::vector<RdKafka::TopicPartition*>& partitions, int timeout_ms) {
+  return rd_kafka_consumer_provider_->getInstance()->commited(partitions, timeout_ms);
+}
+
 const std::unordered_set<std::string>& KafkaConsumer::GetTopicNames() const {
   return topic_names_;
 }
