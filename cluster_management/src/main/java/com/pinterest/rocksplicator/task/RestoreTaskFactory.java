@@ -34,11 +34,11 @@ import java.util.Map;
  * cloud to local.
  *
  * There are 2 use cases: 1. if periodical backup is setup for the resource, then, RestoreTask
- * provide rollback to a previous backup version, especially during disaster recovery.
- * note: it can only be used to restore to newly created segment, which require the resource to
- * be manually removed, then re-created by service operator; 2. if there is available backup
- * (either from periodical or ad-hoc backup), then, restore the resource to a new cluster which
- * provide the ability of data migration (note: client need request to the new cluster after migration).
+ * provide rollback to a previous backup version, especially during disaster recovery. 2. if there
+ * is available backup (either from periodical or ad-hoc backup), then, restore the resource to a
+ * new cluster which provide the ability of data migration (note: client need request to the new
+ * cluster after migration). note: during restore, the DB will be closed which will stall the
+ * realtime writes.
  *
  * TODO (Kangnan) rescue writes loss due to: 1. writes since the backup; 2. writes during restore
  * due to DB close.
