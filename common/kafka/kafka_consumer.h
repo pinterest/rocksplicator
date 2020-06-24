@@ -15,14 +15,12 @@
 #pragma once
 
 #include <atomic>
-#include <map>
-#include <memory>
 #include <string>
 #include <unordered_set>
 
-#include "gflags/gflags.h"
-#include "glog/logging.h"
-#include "librdkafka/rdkafkacpp.h"
+#include "common/MultiFilePoller.h"
+#include "common/kafka/kafka_consumer_holder.h"
+
 
 namespace kafka {
 
@@ -58,10 +56,10 @@ public:
 
   // Seek to offsets specified in the KafkaTopicPartitionOffsets map.
   bool Seek(const std::map<std::string, std::map<int32_t,
-      int64_t>>& last_offsets);
+    int64_t>>& last_offsets);
 
   // It returns nullptr if IsHealthy() returns false.
-  virtual RdKafka::Message* Consume(int32_t timeout_ms) const;
+  virtual RdKafka::Message* Consume(int32_t timeout_ms);
 
   // Commit offset for a single topic+partition based on message.
   virtual RdKafka::ErrorCode Commit(RdKafka::Message* message, bool is_async);
@@ -78,36 +76,58 @@ public:
   // Return set of topics as a string for logging
   const std::string& GetTopicsString() const;
 
-  virtual ~KafkaConsumer() {
-    if (consumer_) {
-      consumer_->close();
-    }
-  }
+  virtual ~KafkaConsumer();
 
   const std::string partition_ids_str_;
 
 private:
-  // For mock ONLY
-  explicit KafkaConsumer(const std::unordered_set<std::string>& topic_names)
-      : partition_ids_str_("0"),
-        topic_names_(topic_names),
-        partition_ids_({0}),
-        kafka_consumer_type_metric_tag_("") {}
+  KafkaConsumer(RdKafkaConsumerHolder* holder,
+                const std::unordered_set<uint32_t>& partition_ids,
+                const std::unordered_set<std::string>& topic_names,
+                const std::string& kafka_consumer_type);
 
   virtual bool SeekInternal(const std::unordered_set<std::string>& topic_names,
                             const int64_t timestamp_ms);
 
   virtual bool SeekInternal(const std::map<std::string, std::map<int32_t,
-      int64_t>>& last_offsets);
+    int64_t>>& last_offsets);
 
-  std::unordered_set<std::string> topic_names_;
+  inline bool isResettable() {
+    return reset_callback_id_ptr_ != nullptr;
+  }
+
+  inline bool shouldResetAndExchange() {
+    return isResettable() && std::atomic_exchange(&should_reset_rd_kafka_consumer_, false);
+  }
+
+  inline bool shouldResetLoad() {
+    return isResettable() && std::atomic_load(&should_reset_rd_kafka_consumer_);
+  }
+
+  inline bool resetSeekedConsumer() {
+    rd_kafka_consumer_provider_->resetInstance(&last_known_consumed_offsets_);
+  }
+
+  inline bool resetUnSeekedConsumer() {
+    rd_kafka_consumer_provider_->resetInstance(nullptr);
+  }
+
+  inline bool isConsumerAvailable() {
+    return !(rd_kafka_consumer_provider_ == nullptr
+     || rd_kafka_consumer_provider_->getInstance() == nullptr);
+  }
+
+  const std::unordered_set<std::string> topic_names_;
   std::string topic_names_string_;
   const std::unordered_set<uint32_t> partition_ids_;
-  std::shared_ptr<RdKafka::KafkaConsumer> consumer_;
+  const std::shared_ptr<RdKafkaConsumerHolder> rd_kafka_consumer_provider_;
   // Tag used when logging metrics, so we can differentiate between kafka
   // consumers for different use cases.
   const std::string kafka_consumer_type_metric_tag_;
+  std::shared_ptr<common::MultiFilePoller::CallbackId> reset_callback_id_ptr_;
   std::atomic<bool> is_healthy_;
+  std::atomic<bool> should_reset_rd_kafka_consumer_;
+  TopicPartitionToValueMap<ConsumedOffset> last_known_consumed_offsets_;
 };
 
 }  // namespace kafka
