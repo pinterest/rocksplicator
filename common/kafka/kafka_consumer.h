@@ -61,6 +61,15 @@ public:
   // It returns nullptr if IsHealthy() returns false.
   virtual RdKafka::Message* Consume(int32_t timeout_ms);
 
+  // Commit offset for a single topic+partition based on message.
+  virtual RdKafka::ErrorCode Commit(RdKafka::Message* message, bool is_async);
+
+  // Commit offsets for the provided list of partitions.
+  virtual RdKafka::ErrorCode Commit(std::vector<RdKafka::TopicPartition*>& offsets, bool is_async);
+
+  // Retrieve committed offsets for topics+partitions
+  virtual RdKafka::ErrorCode Committed(std::vector<RdKafka::TopicPartition*>& partitions, int timeout_ms);
+
   // Gets Kafka topic names this consumer is assigned to.
   const std::unordered_set<std::string>& GetTopicNames() const;
 

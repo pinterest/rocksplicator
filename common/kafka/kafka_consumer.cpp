@@ -412,6 +412,26 @@ RdKafka::Message* KafkaConsumer::Consume(int32_t timeout_ms) {
   } while (shouldResetLoad());
 }
 
+RdKafka::ErrorCode KafkaConsumer::Commit(RdKafka::Message* message, bool is_async) {
+  if (is_async) {
+    return rd_kafka_consumer_provider_->getInstance()->commitAsync(message);
+  } else {
+    return rd_kafka_consumer_provider_->getInstance()->commitSync(message);
+  }
+}
+
+RdKafka::ErrorCode KafkaConsumer::Commit(std::vector<RdKafka::TopicPartition*>& offsets, bool is_async) {
+  if (is_async) {
+    return rd_kafka_consumer_provider_->getInstance()->commitAsync(offsets);
+  } else {
+    return rd_kafka_consumer_provider_->getInstance()->commitSync(offsets);
+  }
+}
+
+RdKafka::ErrorCode KafkaConsumer::Committed(std::vector<RdKafka::TopicPartition*>& partitions, int timeout_ms) {
+  return rd_kafka_consumer_provider_->getInstance()->committed(partitions, timeout_ms);
+}
+
 const std::unordered_set<std::string>& KafkaConsumer::GetTopicNames() const {
   return topic_names_;
 }
