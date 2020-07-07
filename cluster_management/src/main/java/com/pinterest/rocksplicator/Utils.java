@@ -108,15 +108,19 @@ public class Utils {
    * @param adminPort
    */
   public static void closeDB(String dbName, int adminPort) {
+    closeRemoteOrLocalDB("localhost", adminPort, dbName);
+  }
+
+  public static void closeRemoteOrLocalDB(String host, int adminPort, String dbName) {
     try {
-      LOG.error("Close local DB: " + dbName);
-      Admin.Client client = getLocalAdminClient(adminPort);
+      LOG.error("Close DB: " + dbName + " on host: " + host);
+      Admin.Client client = getAdminClient(host, adminPort);
       CloseDBRequest req = new CloseDBRequest(dbName);
       client.closeDB(req);
     } catch (AdminException e) {
       LOG.error(dbName + " doesn't exist", e);
     } catch (TTransportException e) {
-      LOG.error("Failed to connect to local Admin port", e);
+      LOG.error("Failed to connect to Admin port", e);
     } catch (TException e) {
       LOG.error("CloseDB() request failed", e);
     }
@@ -316,9 +320,15 @@ public class Utils {
   public static void restoreLocalDB(int adminPort, String dbName, String hdfsPath,
                                     String upsreamHost, int upstreamPort)
       throws RuntimeException {
+    restoreRemoteOrLocalDB("localhost", adminPort, dbName, hdfsPath, upsreamHost, upstreamPort);
+  }
+
+  public static void restoreRemoteOrLocalDB(String host, int adminPort, String dbName,
+                                            String hdfsPath, String upsreamHost, int upstreamPort)
+      throws RuntimeException {
     LOG.error("(HDFS)Restore " + dbName + " from " + hdfsPath + " with upstream " + upsreamHost);
     try {
-      Admin.Client client = getLocalAdminClient(adminPort);
+      Admin.Client client = getAdminClient(host, adminPort);
 
       RestoreDBRequest req =
           new RestoreDBRequest(dbName, hdfsPath, upsreamHost, (short) upstreamPort);
@@ -380,9 +390,17 @@ public class Utils {
   public static void restoreLocalDBFromS3(int adminPort, String dbName, String s3Bucket,
                                           String s3Path, String upsreamHost, int upstreamPort)
       throws RuntimeException {
+    restoreRemoteOrLocalDBFromS3("localhost", adminPort, dbName, s3Bucket, s3Path, upsreamHost,
+        upstreamPort);
+  }
+
+  public static void restoreRemoteOrLocalDBFromS3(String host, int adminPort, String dbName,
+                                                  String s3Bucket, String s3Path,
+                                                  String upsreamHost, int upstreamPort)
+      throws RuntimeException {
     LOG.error("(S3)Restore " + dbName + " from " + s3Path + " with upstream " + upsreamHost);
     try {
-      Admin.Client client = getLocalAdminClient(adminPort);
+      Admin.Client client = getAdminClient(host, adminPort);
 
       RestoreDBFromS3Request req =
           new RestoreDBFromS3Request(dbName, s3Bucket, s3Path, upsreamHost, (short) upstreamPort);

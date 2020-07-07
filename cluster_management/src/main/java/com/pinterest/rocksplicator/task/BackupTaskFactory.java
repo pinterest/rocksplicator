@@ -72,7 +72,7 @@ public class BackupTaskFactory implements TaskFactory {
 
     LOG.error("Create task with TaskConfig: " + taskConfig.toString());
 
-    long jobCreationTime = jobConfig.getStat().getCreationTime();
+    long jobCreationTime = jobConfig.getStat().getCreationTime() / 1000; // milli to seconds
 
     String storePathPrefix = "";
     long resourceVersion = jobCreationTime;
