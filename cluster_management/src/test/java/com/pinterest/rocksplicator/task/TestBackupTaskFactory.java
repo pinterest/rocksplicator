@@ -207,9 +207,9 @@ public class TestBackupTaskFactory extends TaskTestBase {
     @Override
     protected Task getTask(String cluster, String targetPartition, int backupLimitMbs,
                            String storePathPrefix, long resourceVersion, String job, int port,
-                           boolean useS3Store, String s3Bucket) {
+                           boolean useS3Store, String s3Bucket, boolean shareFilesWithChecksum) {
       return new DummyBackupTask(cluster, targetPartition, backupLimitMbs, storePathPrefix,
-          resourceVersion, job, port, useS3Store, s3Bucket);
+          resourceVersion, job, port, useS3Store, s3Bucket, shareFilesWithChecksum);
     }
 
   }
@@ -218,9 +218,9 @@ public class TestBackupTaskFactory extends TaskTestBase {
 
     public DummyBackupTask(String taskCluster, String partitionName, int backupLimitMbs,
                            String storePathPrefix, long resourceVersion, String job, int adminPort,
-                           boolean useS3Store, String s3Bucket) {
+                           boolean useS3Store, String s3Bucket, boolean shareFilesWithChecksum) {
       super(taskCluster, partitionName, backupLimitMbs, storePathPrefix, resourceVersion, job,
-          adminPort, useS3Store, s3Bucket);
+          adminPort, useS3Store, s3Bucket, shareFilesWithChecksum);
     }
 
     @Override
@@ -257,7 +257,8 @@ public class TestBackupTaskFactory extends TaskTestBase {
 
     @Override
     protected void executeBackup(String host, int port, String dbName, String storePath,
-                                 int backupLimitMbs, boolean useS3Store, String s3Bucket)
+                                 int backupLimitMbs, boolean useS3Store, String s3Bucket,
+                                 boolean shareFilesWithChecksum)
         throws RuntimeException {
       try {
         boolean useS3 = readPrivateSuperClassBooleanField("useS3Store");

@@ -77,6 +77,7 @@ public class BackupTaskFactory implements TaskFactory {
     String storePathPrefix = "";
     long resourceVersion = jobCreationTime;
     int backupLimitMbs = DEFAULT_BACKUP_LIMIT_MBS;
+    boolean shareFilesWithChecksum = true;
 
     try {
       Map<String, String> jobCmdMap = jobConfig.getJobCommandConfigMap();
@@ -89,6 +90,10 @@ public class BackupTaskFactory implements TaskFactory {
         }
         if (jobCmdMap.containsKey("BACKUP_LIMIT_MBS")) {
           backupLimitMbs = Integer.parseInt(jobCmdMap.get("BACKUP_LIMIT_MBS"));
+        }
+        if (jobCmdMap.containsKey("ROCKSDB_SHARE_FILES_WITH_CHECKSUM")) {
+          shareFilesWithChecksum =
+              Boolean.parseBoolean(jobCmdMap.get("ROCKSDB_SHARE_FILES_WITH_CHECKSUM"));
         }
       }
     } catch (NumberFormatException e) {
@@ -109,14 +114,14 @@ public class BackupTaskFactory implements TaskFactory {
             System.currentTimeMillis()));
 
     return getTask(cluster, targetPartition, backupLimitMbs, storePathPrefix, resourceVersion, job,
-        adminPort, useS3Store, s3Bucket);
+        adminPort, useS3Store, s3Bucket, shareFilesWithChecksum);
   }
 
   protected Task getTask(String cluster, String targetPartition, int backupLimitMbs,
                          String storePathPrefix, long resourceVersion, String job, int port,
-                         boolean useS3Store, String s3Bucket) {
+                         boolean useS3Store, String s3Bucket, boolean shareFilesWithChecksum) {
     return new BackupTask(cluster, targetPartition, backupLimitMbs, storePathPrefix,
-        resourceVersion, job, port, useS3Store, s3Bucket);
+        resourceVersion, job, port, useS3Store, s3Bucket, shareFilesWithChecksum);
   }
 
 }

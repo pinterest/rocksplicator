@@ -574,6 +574,7 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
                                   std::unique_ptr<rocksdb::Env> env_holder,
                                   const bool enable_backup_rate_limit,
                                   const uint32_t backup_rate_limit,
+                                  const bool share_files_with_checksum,
                                   AdminException* e) {
   CHECK(env_holder != nullptr);
   db_admin_lock_.Lock(db_name);
@@ -586,6 +587,9 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
   }
 
   rocksdb::BackupableDBOptions options(backup_dir);
+  if (share_files_with_checksum) {
+    options.share_files_with_checksum = true;
+  }
   common::RocksdbGLogger logger;
   options.info_log = &logger;
   options.max_background_operations = FLAGS_num_hdfs_access_threads;
@@ -692,11 +696,13 @@ void AdminHandler::async_tm_backupDB(
   common::Timer timer(kHDFSBackupMs);
   LOG(INFO) << "HDFS Backup " << request->db_name << " to " << full_path;
   AdminException e;
+  const bool share_files_with_checksum = request->__isset.share_files_with_checksum && request->share_files_with_checksum;
   if (!backupDBHelper(request->db_name,
                       full_path,
                       std::unique_ptr<rocksdb::Env>(hdfs_env),
                       request->__isset.limit_mbs,
                       request->limit_mbs,
+                      share_files_with_checksum,
                       &e)) {
     callback.release()->exceptionInThread(std::move(e));
     common::Stats::get()->Incr(kHDFSBackupFailure);
@@ -914,12 +920,12 @@ void AdminHandler::async_tm_backupDBToS3(
     auto local_s3_util = createLocalS3Util(request->limit_mbs, request->s3_bucket);
     std::string formatted_s3_dir_path = rtrim(request->s3_backup_dir, '/');
     rocksdb::Env* s3_env = new rocksdb::S3Env(formatted_s3_dir_path, local_path, std::move(local_s3_util));
-
     if (!backupDBHelper(request->db_name,
                         formatted_s3_dir_path,
                         std::unique_ptr<rocksdb::Env>(s3_env),
                         request->__isset.limit_mbs,
                         request->limit_mbs,
+                        false,
                         &e)) {
       callback.release()->exceptionInThread(std::move(e));
       common::Stats::get()->Incr(kS3BackupFailure);

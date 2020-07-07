@@ -183,6 +183,7 @@ class AdminHandler : virtual public AdminSvIf {
                       std::unique_ptr<rocksdb::Env> env_holder,
                       const bool enable_backup_rate_limit,
                       const uint32_t backup_rate_limit,
+                      const bool share_files_with_checksum,
                       AdminException* e);
 
   bool restoreDBHelper(const std::string& db_name,
