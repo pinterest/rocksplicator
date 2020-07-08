@@ -62,6 +62,8 @@ struct BackupDBRequest {
   2: required string hdfs_backup_dir,
   # rate limit in MB/S, a non positive value means no limit
   3: optional i32 limit_mbs = 0,
+  # enable appending checksum to sst file name during backup
+  4: optional bool share_files_with_checksum = false,
 }
 
 struct BackupDBResponse {

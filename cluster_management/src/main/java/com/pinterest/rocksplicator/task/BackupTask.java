@@ -42,10 +42,11 @@ public class BackupTask extends UserContentStore implements Task {
   private final int adminPort;
   private final boolean useS3Store;
   private final String s3Bucket;
+  private final boolean shareFilesWithChecksum;
 
   public BackupTask(String taskCluster, String partitionName, int backupLimitMbs,
                     String storePathPrefix, long resourceVersion, String job, int adminPort,
-                    boolean useS3Store, String s3Bucket) {
+                    boolean useS3Store, String s3Bucket, boolean shareFilesWithChecksum) {
     this.taskCluster = taskCluster;
     this.partitionName = partitionName;
     this.backupLimitMbs = backupLimitMbs;
@@ -55,6 +56,7 @@ public class BackupTask extends UserContentStore implements Task {
     this.adminPort = adminPort;
     this.useS3Store = useS3Store;
     this.s3Bucket = s3Bucket;
+    this.shareFilesWithChecksum = shareFilesWithChecksum;
   }
 
   /**
@@ -85,7 +87,7 @@ public class BackupTask extends UserContentStore implements Task {
               resourceVersion));
 
       executeBackup("127.0.0.1", adminPort, dbName, storePath, backupLimitMbs, useS3Store,
-          s3Bucket);
+          s3Bucket, shareFilesWithChecksum);
 
       return new TaskResult(TaskResult.Status.COMPLETED, "BackupTask is completed!");
     } catch (Exception e) {
@@ -96,13 +98,15 @@ public class BackupTask extends UserContentStore implements Task {
   }
 
   protected void executeBackup(String host, int port, String dbName, String storePath,
-                               int backupLimitMbs, boolean useS3Store, String s3Bucket)
+                               int backupLimitMbs, boolean useS3Store, String s3Bucket,
+                               boolean shareFilesWithChecksum)
       throws RuntimeException {
     try {
       if (useS3Store) {
         Utils.backupDBToS3WithLimit(host, port, dbName, backupLimitMbs, s3Bucket, storePath);
       } else {
-        Utils.backupDBWithLimit(host, port, dbName, storePath, backupLimitMbs);
+        Utils.backupDBWithLimit(host, port, dbName, storePath, backupLimitMbs,
+            shareFilesWithChecksum);
       }
     } catch (Exception e) {
       throw new RuntimeException(e);

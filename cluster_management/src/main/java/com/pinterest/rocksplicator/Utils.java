@@ -295,7 +295,7 @@ public class Utils {
   }
 
   public static void backupDBWithLimit(String host, int adminPort, String dbName, String hdfsPath,
-                                       int limitMbs)
+                                       int limitMbs, boolean shareFilesWithChecksum)
       throws RuntimeException {
     LOG.error("Backup " + dbName + " from " + host + " to " + hdfsPath);
     try {
@@ -303,6 +303,7 @@ public class Utils {
 
       BackupDBRequest req = new BackupDBRequest(dbName, hdfsPath);
       req.setLimit_mbs(limitMbs);
+      req.setShare_files_with_checksum(shareFilesWithChecksum);
       client.backupDB(req);
     } catch (TException e) {
       LOG.error("Failed to backup DB: ", e.toString());
