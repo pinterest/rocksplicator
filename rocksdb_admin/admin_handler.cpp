@@ -925,7 +925,7 @@ void AdminHandler::async_tm_backupDBToS3(
                         std::unique_ptr<rocksdb::Env>(s3_env),
                         request->__isset.limit_mbs,
                         request->limit_mbs,
-                        false,
+                        false, // disable checksum support for s3 till checkpoint backup to s3 also support it
                         &e)) {
       callback.release()->exceptionInThread(std::move(e));
       common::Stats::get()->Incr(kS3BackupFailure);
