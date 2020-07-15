@@ -118,8 +118,10 @@ folly::Future<T> GetSpeculativeFuture(
   });
 
   auto timeout_future = GenerateDelayedFuture(speculative_timeout);
-  std::move(timeout_future).then([ctx] (folly::Try<folly::Unit>&& t) mutable {
-    if (!ctx->fulfilled.load()) {
+  std::weak_ptr<Context> weak_ctx = ctx;
+  std::move(timeout_future).then([weak_ctx] (folly::Try<folly::Unit>&& t) mutable {
+    auto ctx = weak_ctx.lock();
+    if (ctx && !ctx->fulfilled.load()) {
       ctx->tryToFireBackupFuture(ctx);
       common::Stats::get()->Incr(kPrimaryTimeout);
     }
