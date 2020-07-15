@@ -68,13 +68,13 @@ using namespace common;
 using namespace folly::test;
 
 // Fine to set below 1_s because we have a padding of kWriteWaitMs.
-static const std::chrono::milliseconds kPollIntervalMs{200};
+static const std::chrono::milliseconds kPollIntervalMs{50};
 
 // FilePoller's min granularity.
-static const std::chrono::milliseconds kWriteWaitMs{1000};
+static const std::chrono::milliseconds kWriteWaitMs{1100};
 
 // Should be a few times larger than kPollInterval.
-static const std::chrono::milliseconds kMaxSemaphoreWaitMs{1000};
+static const std::chrono::milliseconds kMaxSemaphoreWaitMs{1500};
 
 class MultiFilePollerTest : public testing::Test {
  public:
