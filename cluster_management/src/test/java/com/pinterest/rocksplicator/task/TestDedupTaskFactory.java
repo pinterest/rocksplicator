@@ -159,20 +159,22 @@ public class TestDedupTaskFactory extends TaskTestBase {
     @Override
     protected DedupTask getTask(String srcStorePathPrefix, long resourceVersion,
                                 String partitionName, String cluster, String job, int port,
-                                String destStorePathPrefix, boolean useS3Store, String s3Bucket) {
-      return new DummyDedupTask(srcStorePathPrefix, resourceVersion, partitionName, cluster, job,
-          port,
-          destStorePathPrefix, useS3Store, s3Bucket);
+                                String destStorePathPrefix, boolean useS3Store, String s3Bucket,
+                                int backupLimitMbs, boolean shareFilesWithChecksum) {
+      return new DummyDedupTask(srcStorePathPrefix, resourceVersion, partitionName, cluster, job, port,
+          destStorePathPrefix, useS3Store, s3Bucket, backupLimitMbs, shareFilesWithChecksum);
     }
+
   }
 
   protected class DummyDedupTask extends DedupTask {
 
     public DummyDedupTask(String srcStorePathPrefix, long resourceVersion,
                           String partitionName, String taskCluster, String job, int adminPort,
-                          String destStorePathPrefix, boolean useS3Store, String s3Bucket) {
+                          String destStorePathPrefix, boolean useS3Store, String s3Bucket,
+                          int backupLimitMbs, boolean shareFilesWithChecksum) {
       super(srcStorePathPrefix, resourceVersion, partitionName, taskCluster, job, adminPort,
-          destStorePathPrefix, useS3Store, s3Bucket);
+          destStorePathPrefix, useS3Store, s3Bucket, backupLimitMbs, shareFilesWithChecksum);
     }
 
     @Override

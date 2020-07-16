@@ -31,6 +31,8 @@ public class DedupTaskFactory implements TaskFactory {
   private final boolean useS3Store;
   private final String s3Bucket;
 
+  private static final int DEFAULT_BACKUP_LIMIT_MBS = 64;
+
   public DedupTaskFactory(String cluster, int adminPort, boolean useS3Store, String s3Bucket) {
     this.cluster = cluster;
     this.adminPort = adminPort;
@@ -54,6 +56,8 @@ public class DedupTaskFactory implements TaskFactory {
     String srcStorePathPrefix = "";
     long resourceVersion = -1;
     String destStorePathPrefix = "";
+    int backupLimitMbs = DEFAULT_BACKUP_LIMIT_MBS;
+    boolean shareFilesWithChecksum = true;
 
     try {
       Map<String, String> jobCmdMap = jobConfig.getJobCommandConfigMap();
@@ -66,6 +70,13 @@ public class DedupTaskFactory implements TaskFactory {
         }
         if (jobCmdMap.containsKey("DEST_STORE_PATH_PREFIX")) {
           destStorePathPrefix = jobCmdMap.get("DEST_STORE_PATH_PREFIX");
+        }
+        if (jobCmdMap.containsKey("BACKUP_LIMIT_MBS")) {
+          backupLimitMbs = Integer.parseInt(jobCmdMap.get("BACKUP_LIMIT_MBS"));
+        }
+        if (jobCmdMap.containsKey("ROCKSDB_SHARE_FILES_WITH_CHECKSUM")) {
+          shareFilesWithChecksum =
+              Boolean.parseBoolean(jobCmdMap.get("ROCKSDB_SHARE_FILES_WITH_CHECKSUM"));
         }
       }
     } catch (NumberFormatException e) {
@@ -82,14 +93,15 @@ public class DedupTaskFactory implements TaskFactory {
         System.currentTimeMillis()));
 
     return getTask(srcStorePathPrefix, resourceVersion, targetPartition, cluster, job, adminPort,
-        destStorePathPrefix, useS3Store, s3Bucket);
+        destStorePathPrefix, useS3Store, s3Bucket, backupLimitMbs, shareFilesWithChecksum);
   }
 
   protected DedupTask getTask(String srcStorePathPrefix, long resourceVersion, String partitionName,
                               String cluster, String job, int port, String destStorePathPrefix,
-                              boolean useS3Store, String s3Bucket) {
+                              boolean useS3Store, String s3Bucket, int backupLimitMbs,
+                              boolean shareFilesWithChecksum) {
     return new DedupTask(srcStorePathPrefix, resourceVersion, partitionName, cluster, job, port,
-        destStorePathPrefix, useS3Store, s3Bucket);
+        destStorePathPrefix, useS3Store, s3Bucket, backupLimitMbs, shareFilesWithChecksum);
   }
 
 }
