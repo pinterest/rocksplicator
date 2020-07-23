@@ -124,7 +124,11 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
       Utils.checkSanity("OFFLINE", "BOOTSTRAP", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
-      Utils.addDB(Utils.getDbName(partitionName), adminPort, "NOOP");
+      try{
+        Utils.addDB(Utils.getDbName(partitionName), adminPort, "NOOP");
+      } catch (Exception e) {
+        LOG.error("addDB with dbRole: NOOP failed with exception during offline->bootstrap");
+      }
 
       try {
         zkClient.sync().forPath(Utils.getMetaLocation(cluster, resourceName));

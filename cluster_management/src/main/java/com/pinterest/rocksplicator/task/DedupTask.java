@@ -92,8 +92,8 @@ public class DedupTask extends UserContentStore implements Task {
                               int backupLimitMbs, boolean shareFilesWithChecksum)
       throws RuntimeException {
     try {
-      Utils.addDB(dbName, adminPort);
-      Utils.closeDB(dbName, adminPort);
+      Utils.addDB(dbName, adminPort, "SLAVE");
+      Utils.closeRemoteOrLocalDB("localhost", adminPort, dbName);
       if (useS3Store) {
         Utils.restoreLocalDBFromS3(adminPort, dbName, s3Bucket, srcStorePath, "127.0.0.1",
             adminPort);
