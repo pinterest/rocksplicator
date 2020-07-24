@@ -108,10 +108,15 @@ public class Utils {
    * @param adminPort
    */
   public static void closeDB(String dbName, int adminPort) {
-    closeRemoteOrLocalDB("localhost", adminPort, dbName);
+    try {
+      closeRemoteOrLocalDB("localhost", adminPort, dbName);
+    } catch (RuntimeException e) {
+      LOG.error("closeDB failed with exception", e);
+    }
   }
 
-  public static void closeRemoteOrLocalDB(String host, int adminPort, String dbName) {
+  public static void closeRemoteOrLocalDB(String host, int adminPort, String dbName)
+      throws RuntimeException {
     try {
       LOG.error("Close DB: " + dbName + " on host: " + host);
       Admin.Client client = getAdminClient(host, adminPort);
@@ -119,10 +124,13 @@ public class Utils {
       client.closeDB(req);
     } catch (AdminException e) {
       LOG.error(dbName + " doesn't exist", e);
+      throw new RuntimeException(e);
     } catch (TTransportException e) {
       LOG.error("Failed to connect to Admin port", e);
+      throw new RuntimeException(e);
     } catch (TException e) {
       LOG.error("CloseDB() request failed", e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -160,8 +168,10 @@ public class Utils {
       }
     } catch (TTransportException e) {
       LOG.error("Failed to connect to local Admin port", e);
+      throw new RuntimeException(e);
     } catch (TException e) {
       LOG.error("AddDB() request failed", e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -171,7 +181,11 @@ public class Utils {
    * @param adminPort
    */
   public static void addDB(String dbName, int adminPort) {
-    addDB(dbName, adminPort, "SLAVE");
+    try {
+      addDB(dbName, adminPort, "SLAVE");
+    } catch (RuntimeException e) {
+      LOG.error("addDB failed with exception", e);
+    }
   }
 
   /**
