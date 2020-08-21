@@ -107,6 +107,9 @@ class LocalStats {
   void AddMetric(const uint32_t metric, int64_t value);
   void AddMetric(const string& metric, int64_t value);
 
+  // Gauge update methods.
+  void SetGauge(const string& gauge, uint64_t value);
+
   void FlushAll();
 
  private:
@@ -126,6 +129,12 @@ class LocalStats {
     explicit Counter(uint64_t n) : sum(n) {}
   };
 
+  struct Gauge {
+    std::atomic<uint64_t> value;
+
+    explicit Gauge(uint64_t n) : value(n) {}
+  };
+
   // Flush the thread local stats to global stats.
   void FlushCounter(const uint32_t counter, seconds time_epoch_seconds);
   void FlushCounter(std::pair<const string, unique_ptr<Counter>>* counter,
@@ -134,6 +143,7 @@ class LocalStats {
   void FlushMetric(
       std::pair<const string, unique_ptr<HistogramWrapper>>* metric,
       seconds time_epoch_seconds);
+  void FlushGauge(std::pair<const string, unique_ptr<Gauge>>* gauge);
 
   const int64_t min_metric_value_;
   const int64_t max_metric_value_;
@@ -145,6 +155,8 @@ class LocalStats {
   mutex lock_histogram_map_;
   std::unordered_map<string, unique_ptr<Counter>> counter_map_;
   mutex lock_counter_map_;
+  std::unordered_map<string, unique_ptr<Gauge>> gauge_map_;
+  mutex lock_gauge_map_;
 
   // Global stats object.
   Stats* stats_;
@@ -160,6 +172,8 @@ LocalStats::LocalStats(uint32_t num_counters, uint32_t num_metrics,
       lock_histogram_map_(),
       counter_map_(),
       lock_counter_map_(),
+      gauge_map_(),
+      lock_gauge_map_(),
       stats_(Stats::get()) {
   for (uint32_t i = 0; i < num_metrics; ++i) {
     histograms_.emplace_back(folly::make_unique<HistogramWrapper>(
@@ -217,6 +231,20 @@ void LocalStats::AddMetric(const string& metric, int64_t value) {
   histogram_map_.emplace(metric, std::move(hw));
 }
 
+void LocalStats::SetGauge(const string& gauge, uint64_t value) {
+  // only the thread who is recording stats can modify the structure of
+  // gauge_map_.
+  // Thus we don't need to do any synchronizations when reading it.
+  auto it = gauge_map_.find(gauge);
+  if (LIKELY(it != gauge_map_.end())) {
+    it->second->value.store(value);
+    return;
+  }
+
+  lock_guard<mutex> g(lock_gauge_map_);
+  gauge_map_.emplace(gauge, folly::make_unique<Gauge>(value));
+}
+
 void LocalStats::FlushAll() {
   auto now = GetTimeSinceEpochSeconds();
   for (uint32_t counter = 0; counter < counters_.size(); ++counter) {
@@ -238,6 +266,13 @@ void LocalStats::FlushAll() {
     lock_guard<mutex> g(lock_histogram_map_);
     for (auto& histogram : histogram_map_) {
       FlushMetric(&histogram, now);
+    }
+  }
+
+  {
+    lock_guard<mutex> g(lock_gauge_map_);
+    for (auto& gauge : gauge_map_) {
+      FlushGauge(&gauge);
     }
   }
 }
@@ -291,6 +326,10 @@ void LocalStats::FlushMetric(
   stats_->FlushMetric(metric->first, *histogram_ptr, time_epoch_seconds);
 }
 
+void LocalStats::FlushGauge(std::pair<const string, unique_ptr<Gauge>>* gauge) {
+  stats_->FlushGauge(gauge->first, gauge->second->value);
+}
+
 Stats* Stats::get() {
   static Stats instance;
   return &instance;
@@ -320,7 +359,7 @@ Stats::Stats() : flush_interval_(kFlushIntervalMS)
     }
   }
 
-    // Start flush thread.
+  // Start flush thread.
   flush_thread_ = thread([this] {
     while (!should_stop_) {
       sleep_for(this->flush_interval_);
@@ -336,6 +375,13 @@ Stats::Stats() : flush_interval_(kFlushIntervalMS)
           AddMetric(registered_metrics.first, registered_metrics.second());
         }
       }
+      {
+        lock_guard<mutex> g(lock_gauge_callbacks_);
+        for (auto& registered_gauge : gauge_callbacks_) {
+          GetLocalStats()->SetGauge(registered_gauge.first, registered_gauge.second());
+        }
+      }
+
       // Note that this object blocks creation of new thread local objects until
       // it is destroyed.
       auto accessor = this->local_stats_.accessAllThreads();
@@ -378,6 +424,12 @@ void Stats::RegisterAddMetric(const std::string &metric,
                               std::function<int64_t()> callback) {
   lock_guard<mutex> g(lock_metrics_callbacks_);
   metrics_callbacks_.emplace(metric, std::move(callback));
+}
+
+void Stats::RegisterGauge(const std::string& gauge,
+                          std::function<uint64_t()> callback) {
+  lock_guard<mutex> g(lock_gauge_callbacks_);
+  gauge_callbacks_.emplace(gauge, std::move(callback));
 }
 
 LocalStats* Stats::GetLocalStats() {
@@ -446,6 +498,18 @@ void Stats::FlushCounter(const string& counter, uint64_t sum,
   timeseries_map_.emplace(counter, std::move(mtsw));
 }
 
+void Stats::FlushGauge(const string& gauge, uint64_t value) {
+  // only the flush thread can modify the structure of gauges_map_.
+  // Thus we don't need to do any synchronizations when reading it.
+  auto it = gauges_map_.find(gauge);
+  if (LIKELY(it != gauges_map_.end())) {
+    it->second->store(value);
+    return;
+  }
+
+  gauges_map_.emplace(gauge, folly::make_unique<std::atomic<uint64_t>>(value));
+}
+
 Stats::Counter::Counter(Stats::MultiLevelTimeSeriesWrapper* ts_wrapper_arg)
     : ts_wrapper_(ts_wrapper_arg) {}
 
@@ -512,6 +576,13 @@ int64_t Stats::Metric::GetCountLastMinute() {
   return hist_wrapper_->ts_histogram.count(0);
 }
 
+Stats::Gauge::Gauge(std::atomic<uint64_t>* value)
+    : value_(value) {}
+
+uint64_t Stats::Gauge::GetValue() {
+  return *value_;
+}
+
 unique_ptr<Stats::Metric> Stats::GetMetric(const uint32_t metric) {
   if (UNLIKELY(metric >= histograms_.size())) {
     return nullptr;
@@ -548,6 +619,16 @@ unique_ptr<Stats::Counter> Stats::GetCounter(const string& counter) {
   return folly::make_unique<Stats::Counter>(it->second.get());
 }
 
+unique_ptr<Stats::Gauge> Stats::GetGauge(const string& gauge) {
+  lock_guard<mutex> g(lock_gauges_map_);
+  auto it = gauges_map_.find(gauge);
+  if (UNLIKELY(it == gauges_map_.end())) {
+    return nullptr;
+  }
+
+  return folly::make_unique<Stats::Gauge>(it->second.get());
+}
+
 namespace {
 /**
  * Total names have __TOTAL appended to the stats name.
@@ -573,6 +654,11 @@ string GetTotalName(const string& raw_name) {
 string Stats::DumpStatsAsText() {
   stringstream output;
   output << "gauges:\n";
+  for (auto& gauge : gauges_map_) {
+    output << boost::format("  %1%: %2%\n") % gauge.first %
+                  gauge.second.get();
+  };
+
   output << "labels:\n";
   output << "metrics:\n";
   auto metric_logger =
