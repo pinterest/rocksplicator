@@ -657,7 +657,7 @@ string Stats::DumpStatsAsText() {
   output << "gauges:\n";
   for (auto& gauge : gauges_map_) {
     output << boost::format("  %1%: %2%\n") % gauge.first %
-                  gauge.second.get();
+                  gauge.second->load();
   };
 
   output << "labels:\n";
