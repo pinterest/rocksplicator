@@ -241,8 +241,9 @@ void LocalStats::SetGauge(const string& gauge, uint64_t value) {
     return;
   }
 
+  auto new_gauge = folly::make_unique<Gauge>(value);
   lock_guard<mutex> g(lock_gauge_map_);
-  gauge_map_.emplace(gauge, folly::make_unique<Gauge>(value));
+  gauge_map_.emplace(gauge, std::move(new_gauge));
 }
 
 void LocalStats::FlushAll() {
@@ -580,7 +581,7 @@ Stats::Gauge::Gauge(std::atomic<uint64_t>* value)
     : value_(value) {}
 
 uint64_t Stats::Gauge::GetValue() {
-  return *value_;
+  return value_->load();
 }
 
 unique_ptr<Stats::Metric> Stats::GetMetric(const uint32_t metric) {
