@@ -59,6 +59,8 @@ const std::string kMetric3 = "metric3";
 
 std::vector<std::string> metric_names = { "metric1", };
 
+const std::string kGauge1 = "gauge1";
+
 class StatsTest : public ::testing::Test {
  public:
   static void SetUpTestCase() {
@@ -151,6 +153,26 @@ TEST_F(StatsTest, StatsCounterTest) {
   EXPECT_NEAR(600, counter2->GetTotal(), 110);
 
   EXPECT_EQ(nullptr, Stats::get()->GetCounter(kCounter3));
+}
+
+// Verifies that the gauge's value is correctly exported.
+TEST_F(StatsTest, GaugesTest) {
+  const uint64_t kGaugeVal1 = 100;
+  const uint64_t kGaugeVal2 = 200;
+
+  std::atomic<uint64_t> gauge_val(kGaugeVal1);
+  Stats::get()->RegisterGauge(kGauge1, [&gauge_val]() { return gauge_val.load(); });
+  sleep_for(seconds(1));
+
+  unique_ptr<Stats::Gauge> stats_gauge = Stats::get()->GetGauge(kGauge1);
+  EXPECT_NE(stats_gauge, nullptr);
+  EXPECT_EQ(kGaugeVal1, stats_gauge->GetValue());
+
+  gauge_val.store(kGaugeVal2);
+  sleep_for(seconds(1));
+  stats_gauge = Stats::get()->GetGauge(kGauge1);
+  EXPECT_NE(stats_gauge, nullptr);
+  EXPECT_EQ(kGaugeVal2, stats_gauge->GetValue());
 }
 
 // Runs one thread updating metric1 for 15 seconds in the range (0, 100)

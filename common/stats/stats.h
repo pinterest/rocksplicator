@@ -34,6 +34,9 @@
  * Stats::get()->RegisterIncr(counter, std::function<uint64_t()>);
  * Stats::get()->RegisterAddMetric(metric, std::function<int64_t()>);
  *
+ * Register callbacks to set the value of a stat (eg. export a map's size).
+ * Stats::get()->RegisterGauge(gauge, std::function<uint64_t()>);
+ *
  * Stats::get()->GetCounter(counter)->GetTotal();
  * Stats::get()->GetCounter(counter)->GetLastMinute();
  *
@@ -93,10 +96,11 @@ class Stats {
   void AddMetric(const uint32_t metric, int64_t value);
   void AddMetric(const std::string& metric, int64_t value);
 
-  // Register callback for Counter / Metric so they will be reported
+  // Register callback for Counter / Metric / Gauge so they will be reported
   // periodically by the Stats class.
   void RegisterIncr(const std::string& counter, std::function<uint64_t()>);
   void RegisterAddMetric(const std::string& metric, std::function<int64_t()>);
+  void RegisterGauge(const std::string& gauge, std::function<uint64_t()>);
 
   // Returns the singleton stats instance.
   static Stats* get();
@@ -151,6 +155,15 @@ class Stats {
     TimeseriesHistogramWrapper* hist_wrapper_;
   };
 
+  class Gauge {
+   public:
+    explicit Gauge(std::atomic<uint64_t>* value);
+    uint64_t GetValue();
+
+   private:
+    std::atomic<uint64_t>* value_;
+  };
+
   // Returns the corresponding Stats::Metric object, if the metric is not found,
   // nullptr is returned.
   std::unique_ptr<Metric> GetMetric(const uint32_t metric);
@@ -159,6 +172,10 @@ class Stats {
   // found, nullptr is returned.
   std::unique_ptr<Counter> GetCounter(const uint32_t counter);
   std::unique_ptr<Counter> GetCounter(const std::string& counter);
+
+  // Returns the corresponding Stats::Gauge object, if the gauge is not
+  // found, nullptr is returned.
+  std::unique_ptr<Gauge> GetGauge(const std::string& gauge);
 
   // Dumps all the stats in the form of text (formatted similar to how java's
   // ostrich library dumps stats).
@@ -182,6 +199,7 @@ class Stats {
                     std::chrono::seconds time_epoch_seconds);
   void FlushCounter(const std::string& counter, uint64_t sum,
                     std::chrono::seconds time_epoch_seconds);
+  void FlushGauge(const std::string& counter, uint64_t value);
 
   Stats();
   ~Stats();
@@ -203,6 +221,8 @@ class Stats {
   std::unordered_map<std::string, std::unique_ptr<MultiLevelTimeSeriesWrapper>>
       timeseries_map_;
   std::mutex lock_timeseries_map_;
+  std::unordered_map<std::string, std::unique_ptr<std::atomic<uint64_t>>> gauges_map_;
+  std::mutex lock_gauges_map_;
 
   static std::atomic<uint32_t> nSecondsPerMin_;
   static std::atomic<const std::vector<std::string>*> counter_names_;
@@ -214,8 +234,10 @@ class Stats {
   // Callbacks registerd for pulling periodically
   std::mutex lock_counter_callbacks_;
   std::mutex lock_metrics_callbacks_;
+  std::mutex lock_gauge_callbacks_;
   std::unordered_map<std::string, std::function<uint64_t()>> counter_callbacks_;
   std::unordered_map<std::string, std::function<int64_t()>> metrics_callbacks_;
+  std::unordered_map<std::string, std::function<uint64_t()>> gauge_callbacks_;
 };
 
 }  // namespace common
