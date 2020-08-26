@@ -18,6 +18,7 @@
 
 package com.pinterest.rocksplicator;
 
+import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
 import com.pinterest.rocksplicator.task.BackupTaskFactory;
 import com.pinterest.rocksplicator.task.DedupTaskFactory;
 import com.pinterest.rocksplicator.task.RestoreTaskFactory;
@@ -71,6 +72,7 @@ public class Participant {
 
   private static HelixManager helixManager;
   private StateModelFactory<StateModel> stateModelFactory;
+  private final RocksplicatorMonitor monitor;
 
   private static Options constructCommandLineOptions() {
     Option zkServerOption =
@@ -201,6 +203,8 @@ public class Participant {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
 
+    monitor = new RocksplicatorMonitor(instanceName);
+
     Map<String, TaskFactory> taskFactoryRegistry = new HashMap<>();
 
     if (stateModelType.equals("OnlineOffline")) {
@@ -256,7 +260,7 @@ public class Participant {
     if (runSpectator) {
       // Add callback to create rocksplicator shard config
       HelixCustomCodeRunner codeRunner = new HelixCustomCodeRunner(helixManager, zkConnectString)
-          .invoke(new ConfigGenerator(clusterName, helixManager, postUrl))
+          .invoke(new ConfigGenerator(clusterName, helixManager, postUrl, monitor))
           .on(HelixConstants.ChangeType.EXTERNAL_VIEW, HelixConstants.ChangeType.CONFIG)
           .usingLeaderStandbyModel("ConfigWatcher" + clusterName);
 

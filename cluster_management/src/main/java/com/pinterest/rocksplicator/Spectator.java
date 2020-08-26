@@ -18,6 +18,8 @@
 
 package com.pinterest.rocksplicator;
 
+import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
+
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.commons.cli.CommandLine;
@@ -58,6 +60,7 @@ public class Spectator {
   private static final String configPostUrl = "configPostUrl";
 
   private HelixManager helixManager;
+  private final RocksplicatorMonitor monitor;
 
   private static Options constructCommandLineOptions() {
     Option zkServerOption =
@@ -140,7 +143,11 @@ public class Spectator {
 
   public Spectator(String zkConnectString, String clusterName, String instanceName) throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
+
+    monitor = new RocksplicatorMonitor(instanceName);
+
     helixManager.connect();
+
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
   }
 
