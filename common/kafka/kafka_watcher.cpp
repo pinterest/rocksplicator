@@ -244,28 +244,28 @@ uint32_t KafkaWatcher::ConsumeUpToNow(kafka::KafkaConsumer& consumer) {
   return num_msg_consumed;
 }
 
-void KafkaWatcher::StartWith(int64_t initial_kafka_seek_timestamp_ms,
+bool KafkaWatcher::StartWith(int64_t initial_kafka_seek_timestamp_ms,
     KafkaMessageHandler handler) {
   CHECK(handler != nullptr);
   handler_ = handler;
-  Start(initial_kafka_seek_timestamp_ms);
+  return Start(initial_kafka_seek_timestamp_ms);
 }
 
-void KafkaWatcher::StartWith(const std::map<std::string, std::map<int32_t,
+bool KafkaWatcher::StartWith(const std::map<std::string, std::map<int32_t,
                              int64_t>>& last_offsets,
                              KafkaMessageHandler handler) {
   CHECK(handler != nullptr);
   handler_ = handler;
-  Start(last_offsets);
+  return Start(last_offsets);
 }
 
 // TODO: merge following two Start functions.
-void KafkaWatcher::Start(const std::map<std::string, std::map<int32_t,
+bool KafkaWatcher::Start(const std::map<std::string, std::map<int32_t,
     int64_t>>& last_offsets) {
   const auto start_timestamp_ms = common::timeutil::GetCurrentTimestamp(
       common::timeutil::TimeUnit::kMillisecond);
   if (!Init()) {
-    return;
+    return false;
   }
   for (const auto& kafka_consumer : kafka_consumers_) {
     const auto& topic_names = kafka_consumer->GetTopicsString();
@@ -273,7 +273,7 @@ void KafkaWatcher::Start(const std::map<std::string, std::map<int32_t,
       if (!kafka_consumer->Seek(last_offsets)) {
         LOG(ERROR) << name_ << ": Kafka seek failed with consumer for topics:"
                    << topic_names << "Will not watch and ingest new documents";
-        return;
+        return false;
       }
 
       if (kafka_init_blocking_consume_timeout_ms_ != 0) {
@@ -303,20 +303,21 @@ void KafkaWatcher::Start(const std::map<std::string, std::map<int32_t,
   // unhealthy, because derived class could potentially watch data from
   // other sources, e.g. S3
   thread_ = std::thread(&KafkaWatcher::StartWatchLoop, this);
+  return true;
 }
 
-void KafkaWatcher::Start(int64_t initial_kafka_seek_timestamp_ms) {
+bool KafkaWatcher::Start(int64_t initial_kafka_seek_timestamp_ms) {
   const auto start_timestamp_ms = common::timeutil::GetCurrentTimestamp(
       common::timeutil::TimeUnit::kMillisecond);
   if (!Init()) {
-    return;
+    return false;
   }
   for (const auto& kafka_consumer : kafka_consumers_) {
     const auto& topic_names = kafka_consumer->GetTopicsString();
     if (kafka_consumer != nullptr && kafka_consumer->IsHealthy()) {
       if (!InitKafkaConsumerSeek(kafka_consumer.get(),
           initial_kafka_seek_timestamp_ms)) {
-        return;
+        return false;
       }
 
       if (kafka_init_blocking_consume_timeout_ms_ != 0) {
@@ -347,6 +348,7 @@ void KafkaWatcher::Start(int64_t initial_kafka_seek_timestamp_ms) {
   // unhealthy, because derived class could potentially watch data from other
   // sources, e.g. S3
   thread_ = std::thread(&KafkaWatcher::StartWatchLoop, this);
+  return true;
 }
 
 void KafkaWatcher::StartWatchLoop() {
