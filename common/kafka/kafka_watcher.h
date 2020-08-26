@@ -74,17 +74,19 @@ public:
 
   // If set to a value other than -1, will seek kafka consumer to this
   // timestamp ms during initialization.
-  void Start(int64_t initial_kafka_seek_timestamp_ms = -1);
+  // return false if init or seek fails internally rather than fail silently
+  bool Start(int64_t initial_kafka_seek_timestamp_ms = -1);
 
   // If last_offsets is not empty, will seek kafka consumer to the
   // last_offsets + 1 during initialization.
-  void Start(const std::map<std::string, std::map<int32_t,
+  // return false if init or seek fails internally rather than fail silently
+  bool Start(const std::map<std::string, std::map<int32_t,
       int64_t>>& last_offsets);
 
-  void StartWith(int64_t initial_kafka_seek_timestamp_ms,
+  bool StartWith(int64_t initial_kafka_seek_timestamp_ms,
       KafkaMessageHandler handler);
 
-  void StartWith(const std::map<std::string, std::map<int32_t,
+  bool StartWith(const std::map<std::string, std::map<int32_t,
       int64_t>>& last_offsets,
       KafkaMessageHandler handler);
 
