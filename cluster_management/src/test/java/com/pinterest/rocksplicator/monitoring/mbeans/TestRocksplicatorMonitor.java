@@ -27,6 +27,8 @@ public class TestRocksplicatorMonitor {
   static Logger
       LOG = LoggerFactory.getLogger(org.apache.helix.monitoring.TestParticipantMonitor.class);
 
+  private static final String TEST_CLUSTER = "testCluster";
+
   // Listener impl copied from: org/apache/helix/monitoring/TestParticipantMonitor.java
   class ParticipantRocksplicatorMonitorListener extends ClusterMBeanObserver {
 
@@ -44,7 +46,8 @@ public class TestRocksplicatorMonitor {
         // Mbeans from different test class might exist at same time and queried by current Listener
         // thus, specific the Mbean name to query
         Set<ObjectInstance> existingInstances =
-            _server.queryMBeans(new ObjectName(_domain + ":InstanceName=localhost"), null);
+            _server
+                .queryMBeans(new ObjectName(_domain + ":cluster=*,instanceName=localhost"), null);
         for (ObjectInstance instance : existingInstances) {
           String mbeanName = instance.getObjectName().toString();
           // System.out.println("mbeanName: " + mbeanName);
@@ -90,12 +93,12 @@ public class TestRocksplicatorMonitor {
     }
   }
 
-  @Test()
+  @Test
   public void testMBeansRegisteredAfterMonitorInit()
       throws InstanceNotFoundException, MalformedObjectNameException,
              NullPointerException, IOException, InterruptedException {
     System.out.println("START " + TestHelper.getTestMethodName());
-    RocksplicatorMonitor monitor = new RocksplicatorMonitor("localhost");
+    RocksplicatorMonitor monitor = new RocksplicatorMonitor(TEST_CLUSTER, "localhost");
 
     int monitorNum = 0;
 
@@ -108,8 +111,9 @@ public class TestRocksplicatorMonitor {
     monitorListener.printBeanValueMap();
 
     // only 1 mbean found: RocksplicatorReport:ParticipantName=localhost
-    Assert.assertEquals( monitorListener._beanValueMap.size(), monitorNum + 1);
-    String expectedParticipantBeanName = "RocksplicatorReport:InstanceName=localhost";
+    Assert.assertEquals(monitorListener._beanValueMap.size(), monitorNum + 1);
+    String expectedParticipantBeanName =
+        "RocksplicatorReport:cluster=testCluster,instanceName=localhost";
     Assert.assertEquals(monitorListener._beanValueMap.keySet(),
         new HashSet<>(Arrays.asList(expectedParticipantBeanName)));
     Assert.assertEquals(

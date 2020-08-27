@@ -144,7 +144,7 @@ public class Spectator {
   public Spectator(String zkConnectString, String clusterName, String instanceName) throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
 
-    monitor = new RocksplicatorMonitor(instanceName);
+    monitor = new RocksplicatorMonitor(clusterName, instanceName);
 
     helixManager.connect();
 

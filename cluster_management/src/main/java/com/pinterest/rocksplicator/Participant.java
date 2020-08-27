@@ -203,7 +203,7 @@ public class Participant {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
 
-    monitor = new RocksplicatorMonitor(instanceName);
+    monitor = new RocksplicatorMonitor(clusterName, instanceName);
 
     Map<String, TaskFactory> taskFactoryRegistry = new HashMap<>();
 

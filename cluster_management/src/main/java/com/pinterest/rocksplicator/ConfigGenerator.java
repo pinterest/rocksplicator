@@ -63,7 +63,8 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   private RocksplicatorMonitor monitor;
 
   public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
-    this(clusterName, helixManager, configPostUrl, new RocksplicatorMonitor(helixManager.getInstanceName()));
+    this(clusterName, helixManager, configPostUrl,
+        new RocksplicatorMonitor(clusterName, helixManager.getInstanceName()));
   }
 
   public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl,

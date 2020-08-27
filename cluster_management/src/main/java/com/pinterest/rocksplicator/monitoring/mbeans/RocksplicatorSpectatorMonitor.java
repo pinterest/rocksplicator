@@ -7,8 +7,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RocksplicatorSpectatorMonitor
     implements RocksplicatorSpectatorMonitorMBean {
 
-  public static final String INSTANCENAME_KEY = "InstanceName";
-
   public enum LATENCY_TYPE {
     CONFIG_GENERATOR_EXECUTION
   }
@@ -39,10 +37,6 @@ public class RocksplicatorSpectatorMonitor
 
   public void incrementConfigGeneratorNullExternalView(int count) {
     configGeneratorNullExternalView += count;
-  }
-
-  public String getBeanName() {
-    return String.format("%s=%s", INSTANCENAME_KEY, instanceName);
   }
 
   @Override
