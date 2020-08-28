@@ -662,7 +662,9 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
 
   rocksdb::DB* rocksdb_db;
   auto segment = admin::DbNameToSegment(db_name);
-  status = rocksdb::DB::Open(rocksdb_options_(segment), db_path, &rocksdb_db);
+  auto options = rocksdb_options_(segment);
+  options.allow_ingest_behind = true;
+  status = rocksdb::DB::Open(options, db_path, &rocksdb_db);
   if (!status.ok()) {
     e->errorCode = AdminErrorCode::DB_ERROR;
     e->message = status.ToString();
@@ -1069,7 +1071,9 @@ void AdminHandler::async_tm_restoreDBFromS3(
 
     rocksdb::DB* restore_db;
     auto segment = admin::DbNameToSegment(request->db_name);
-    auto status = rocksdb::DB::Open(rocksdb_options_(segment), formatted_local_path, &restore_db);
+    auto options = rocksdb_options_(segment);
+    options.allow_ingest_behind = true;
+    auto status = rocksdb::DB::Open(options, formatted_local_path, &restore_db);
     if (!status.ok()) {
       OKOrSetException(status, AdminErrorCode::DB_ERROR, &callback);
       LOG(ERROR) << "Error happened when opening db via checkpoint: " << status.ToString();
