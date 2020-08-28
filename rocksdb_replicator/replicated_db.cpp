@@ -241,8 +241,9 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
   auto seq_no = static_cast<rocksdb::SequenceNumber>(request->seq_no);
 
   // Inverse of predicate below: if requested sequence number is HIGHER than latest sequence number on leader, emit a stat)
-  if (FLAGS_emit_stat_for_leader_behind && db->db_->GetLatestSequenceNumber() < seq_no) {
-    incCounter(kReplicatorLeaderBehindCount, 1, db->db_name_);
+  auto leaderSeqNum = db->db_->GetLatestSequenceNumber();
+  if (FLAGS_emit_stat_for_leader_behind && leaderSeqNum < seq_no) {
+    logMetric(kReplicatorLeaderSequenceNumbersBehind, seq_no - leaderSeqNum, db ->db_name_);
   }
 
   if (FLAGS_replicator_replication_mode == 1 ||
