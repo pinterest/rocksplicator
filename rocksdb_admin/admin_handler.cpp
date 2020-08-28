@@ -528,7 +528,9 @@ void AdminHandler::async_tm_addDB(
 
   // Open the actual rocksdb instance
   rocksdb::DB* rocksdb_db;
-  status = rocksdb::DB::Open(rocksdb_options_(segment), db_path, &rocksdb_db);
+  auto options = rocksdb_options_(segment);
+  options.allow_ingest_behind = true;
+  status = rocksdb::DB::Open(options, db_path, &rocksdb_db);
   if (!OKOrSetException(status,
                         AdminErrorCode::DB_ERROR,
                         &callback)) {
@@ -1484,6 +1486,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   /* if true, rocksdb will allow for overlapping keys */
   ifo.allow_global_seqno = allow_overlapping_keys;
   ifo.allow_blocking_flush = allow_overlapping_keys;
+  ifo.ingest_behind = true;
   auto status = db->rocksdb()->IngestExternalFile(sst_file_paths, ifo);
   if (!OKOrSetException(status,
                         AdminErrorCode::DB_ADMIN_ERROR,
