@@ -39,6 +39,7 @@ const std::string kReplicatorGetUpdatesSinceErrors =
 const std::string kReplicatorGetUpdatesSinceMs =
   "replicator_get_update_since_ms";
 const std::string kReplicatorWriteMs = "replicator_write_ms";
+const std::string kReplicatorLeaderSequenceNumbersBehind = "replicator_leader_sequence_numbers_behind";
 
 
 void logMetric(const std::string& metric_name, int64_t value,

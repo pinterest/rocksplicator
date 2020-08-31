@@ -50,6 +50,9 @@ DEFINE_uint64(replicator_timeout_ms, 5 * 1000,
               " waiting forever");
 
 DECLARE_int32(replicator_idle_iter_timeout_ms);
+DEFINE_bool(emit_stat_for_leader_behind,
+            false,
+            "Flag to control whether to emit a stat when the leader is behind the follower during a sync request.");
 
 
 namespace {
@@ -236,6 +239,13 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
   auto db = shared_from_this();
   std::weak_ptr<ReplicatedDB> weak_db = db;
   auto seq_no = static_cast<rocksdb::SequenceNumber>(request->seq_no);
+
+  // Inverse of predicate below: if requested sequence number is HIGHER than latest sequence number on leader, emit a stat)
+  auto leaderSeqNum = db->db_->GetLatestSequenceNumber();
+  if (FLAGS_emit_stat_for_leader_behind && leaderSeqNum < seq_no) {
+    logMetric(kReplicatorLeaderSequenceNumbersBehind, seq_no - leaderSeqNum, db ->db_name_);
+  }
+
   if (FLAGS_replicator_replication_mode == 1 ||
       FLAGS_replicator_replication_mode == 2) {
     // post the largest sequence number the Slave has committed
