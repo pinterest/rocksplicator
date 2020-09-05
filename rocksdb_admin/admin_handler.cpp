@@ -55,6 +55,7 @@
 #include "thrift/lib/cpp2/protocol/Serializer.h"
 #if __GNUC__ >= 8
 #include "folly/executors/CPUThreadPoolExecutor.h"
+#include "folly/system/ThreadName.h"
 #else
 #include "wangle/concurrent/CPUThreadPoolExecutor.h"
 #endif
@@ -120,6 +121,15 @@ DEFINE_int32(num_s3_upload_download_threads, 8,
 
 DEFINE_int64(max_s3_upload_download_task_queue_size, 1000, "The queue size in the executor");
 
+DEFINE_bool(enable_async_delete_dbs, false, "Enable delete db files in async way");
+
+DEFINE_int32(async_delete_dbs_frequency_sec,
+             20,
+             "How frequently in sec to check the dbs need deleting in async way");
+DEFINE_int32(async_delete_dbs_wait_sec,
+             60,
+             "How long in sec to wait between the dbs deletion");
+
 #if __GNUC__ >= 8
 using folly::CPUThreadPoolExecutor;
 using folly::LifoSemMPMCQueue;
@@ -160,6 +170,7 @@ const std::string kHDFSBackupMs = "hdfs_backup_ms";
 const std::string kHDFSRestoreMs = "hdfs_restore_ms";
 const std::string kS3BackupMs = "s3_backup_ms";
 const std::string kS3RestoreMs = "s3_restore_ms";
+const std::string kDeleteDBFailure = "delete_db_failure";
 
 int64_t GetMessageTimestampSecs(const RdKafka::Message& message) {
   const auto ts = message.timestamp();
@@ -389,6 +400,32 @@ CPUThreadPoolExecutor* S3UploadAndDownloadExecutor() {
   return &executor;
 }
 
+// The dbs moved to db_tmp/ shouldnt be re-used or re-opened, so we can
+// delete them via boost filesystem operations rather than rocksdb::DestroyDB()
+void deleteTmpDBs() {
+  static const std::string db_tmp_path = FLAGS_rocksdb_dir + "db_tmp/";
+  boost::system::error_code dir_itr_err;
+  boost::filesystem::directory_iterator itr(db_tmp_path, dir_itr_err);
+  if (dir_itr_err) {
+    LOG(ERROR) << "Can't list files in db_tmp/:" << dir_itr_err.message();
+    return;
+  }
+  for (; itr != boost::filesystem::directory_iterator(); ++itr) {
+    if (itr->path().filename() == "." || itr->path().filename() == "..") {
+      continue;
+    }
+    boost::system::error_code remove_err;
+    boost::filesystem::remove_all(itr->path(), remove_err);
+    if (remove_err) {
+      common::Stats::get()->Incr(kDeleteDBFailure);
+      LOG(ERROR) << "Cant delete db: " << itr->path() << remove_err.message();
+    } else {
+      LOG(INFO) << "Done deleting db: " << itr->path();
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_delete_dbs_wait_sec));
+  }
+}
+
 }  // anonymous namespace
 
 namespace admin {
@@ -403,7 +440,8 @@ AdminHandler::AdminHandler(
   , s3_util_lock_()
   , meta_db_(OpenMetaDB())
   , allow_overlapping_keys_segments_()
-  , num_current_s3_sst_downloadings_(0) {
+  , num_current_s3_sst_downloadings_(0)
+  , stop_db_deletion_thread_(false) {
   if (db_manager_ == nullptr) {
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
@@ -415,8 +453,39 @@ AdminHandler::AdminHandler(
   CHECK(FLAGS_max_s3_sst_loading_concurrency > 0)
     << "Invalid FLAGS_max_s3_sst_loading_concurrency: "
     << FLAGS_max_s3_sst_loading_concurrency;
+
+  if (FLAGS_enable_async_delete_dbs) {
+    static const std::string db_tmp_path = FLAGS_rocksdb_dir + "db_tmp/";
+    if (!boost::filesystem::exists(db_tmp_path)) {
+      boost::system::error_code create_err;
+      boost::filesystem::create_directories(db_tmp_path, create_err);
+      if (create_err) {
+        LOG(ERROR) << "Failed to create dir: " << db_tmp_path << create_err.message();
+        return;
+      }
+    }
+
+    db_deletion_thread_ = std::make_unique<std::thread>([this] {
+      if (!folly::setThreadName("DBDeleter")) {
+        LOG(ERROR) << "Failed to set thread name for DB deletion thread";
+      }
+
+      LOG(INFO) << "Starting DB deletion thread ...";
+      while (!stop_db_deletion_thread_.load()) {
+        deleteTmpDBs();
+        std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_delete_dbs_frequency_sec));
+      }
+      LOG(INFO) << "Stopping DB deletioin thread ...";
+    });
+  }
 }
 
+AdminHandler::~AdminHandler() {
+  if (FLAGS_enable_async_delete_dbs) {
+    stop_db_deletion_thread_ = true;
+    db_deletion_thread_->join();
+  }
+}
 
 std::shared_ptr<ApplicationDB> AdminHandler::getDB(
     const std::string& db_name,
@@ -1254,15 +1323,37 @@ void AdminHandler::async_tm_clearDB(
   auto db_path = FLAGS_rocksdb_dir + request->db_name;
   LOG(INFO) << "Clearing DB: " << request->db_name;
   clearMetaData(request->db_name);
-  auto status = rocksdb::DestroyDB(db_path, options);
-  if (!OKOrSetException(status,
-                        AdminErrorCode::DB_ADMIN_ERROR,
-                        &callback)) {
-    LOG(ERROR) << "Failed to clear DB " << request->db_name << " "
-               << status.ToString();
-    return;
+
+  if (FLAGS_enable_async_delete_dbs) {
+    // Move db to db_tmp/ to be cleared in the async way
+    auto db_tmp_path = FLAGS_rocksdb_dir + "db_tmp/" + request->db_name + "/";
+    boost::system::error_code rename_err;
+    boost::filesystem::rename(db_path, db_tmp_path, rename_err);
+    if (rename_err) {
+      admin::AdminException e;
+      e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+      e.message = folly::stringPrintf("Cannot mv db: %s to %s: %s",
+                                      db_path.c_str(),
+                                      db_tmp_path.c_str(),
+                                      rename_err.message().c_str());
+      LOG(ERROR) << e.message ;
+      callback.release()->exceptionInThread(std::move(e));
+      return;
+    }
+
+    LOG(INFO) << "Delay clearing DB: " << request->db_name;
+  } else {
+    auto status = rocksdb::DestroyDB(db_path, options);
+    if (!OKOrSetException(status,
+                          AdminErrorCode::DB_ADMIN_ERROR,
+                          &callback)) {
+      LOG(ERROR) << "Failed to clear DB " << request->db_name << " "
+                 << status.ToString();
+      return;
+    }
+
+    LOG(INFO) << "Done clearing DB: " << request->db_name;
   }
-  LOG(INFO) << "Done clearing DB: " << request->db_name;
 
   if (request->reopen_db && need_to_reopen) {
     LOG(INFO) << "Open DB: " << request->db_name;
