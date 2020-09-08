@@ -106,8 +106,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
 
   @Override
   @PreFetch(enabled = false)
-  public void onExternalViewChange(List<ExternalView> externalViewList,
-                                   NotificationContext changeContext) {
+  public void onExternalViewChange(List<ExternalView> externalViewList, NotificationContext changeContext) {
     generateShardConfig();
   }
 
@@ -134,7 +133,6 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
       if (externalView == null) {
         monitor.incrementConfigGeneratorNullExternalView();
         LOG.error("Failed to get externalView for resource: " + resource);
-        continue;
       }
       Set<String> partitions = externalView.getPartitionSet();
 

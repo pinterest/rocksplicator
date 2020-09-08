@@ -152,7 +152,7 @@ public class Spectator {
   }
 
   private void startListener(String postUrl) throws Exception {
-    ConfigGenerator configGenerator = new ConfigGenerator(helixManager.getClusterName(), helixManager, postUrl);
+    ConfigGenerator configGenerator = new ConfigGenerator(helixManager.getClusterName(), helixManager, postUrl, monitor);
     helixManager.addExternalViewChangeListener(configGenerator);
     helixManager.addConfigChangeListener(configGenerator);
   }
