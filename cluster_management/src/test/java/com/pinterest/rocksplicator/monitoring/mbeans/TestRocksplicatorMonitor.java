@@ -47,7 +47,8 @@ public class TestRocksplicatorMonitor {
         // thus, specific the Mbean name to query
         Set<ObjectInstance> existingInstances =
             _server
-                .queryMBeans(new ObjectName(_domain + ":cluster=*,instanceName=localhost"), null);
+                .queryMBeans(new ObjectName(
+                    _domain + String.format(":cluster=%s,instanceName=*", TEST_CLUSTER)), null);
         for (ObjectInstance instance : existingInstances) {
           String mbeanName = instance.getObjectName().toString();
           // System.out.println("mbeanName: " + mbeanName);
