@@ -18,6 +18,8 @@
 
 package com.pinterest.rocksplicator;
 
+import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
+
 import org.apache.helix.api.listeners.PreFetch;
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixConstants;
@@ -36,6 +38,7 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.google.common.base.Stopwatch;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -47,6 +50,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class ConfigGenerator extends RoutingTableProvider implements CustomCodeCallbackHandler {
+
   private static final Logger LOG = LoggerFactory.getLogger(ConfigGenerator.class);
 
   private final String clusterName;
@@ -56,8 +60,15 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   private JSONObject dataParameters;
   private String lastPostedContent;
   private Set<String> disabledHosts;
+  private RocksplicatorMonitor monitor;
 
   public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
+    this(clusterName, helixManager, configPostUrl,
+        new RocksplicatorMonitor(clusterName, helixManager.getInstanceName()));
+  }
+
+  public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl,
+                         RocksplicatorMonitor monitor) {
     this.clusterName = clusterName;
     this.helixManager = helixManager;
     this.hostToHostWithDomain = new HashMap<String, String>();
@@ -69,6 +80,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     this.dataParameters.put("content", "{}");
     this.lastPostedContent = null;
     this.disabledHosts = new HashSet<>();
+    this.monitor = monitor;
   }
 
   @Override
@@ -99,6 +111,9 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   }
 
   private void generateShardConfig() {
+    monitor.incrementConfigGeneratorCalledCount();
+    Stopwatch stopwatch = Stopwatch.createStarted();
+
     HelixAdmin admin = helixManager.getClusterManagmentTool();
 
     List<String> resources = admin.getResourcesInCluster(clusterName);
@@ -115,6 +130,10 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
       }
 
       ExternalView externalView = admin.getResourceExternalView(clusterName, resource);
+      if (externalView == null) {
+        monitor.incrementConfigGeneratorNullExternalView();
+        LOG.error("Failed to get externalView for resource: " + resource);
+      }
       Set<String> partitions = externalView.getPartitionSet();
 
       // compose resource config
@@ -204,6 +223,10 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     } catch (Exception e) {
       LOG.error("Failed to post the new config", e);
     }
+
+    stopwatch.stop();
+    long elapsedMs = stopwatch.elapsed(TimeUnit.MILLISECONDS);
+    monitor.reportConfigGeneratorLatency(elapsedMs);
   }
 
   private String getHostWithDomain(String host) {
