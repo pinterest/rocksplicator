@@ -17,7 +17,7 @@ public class RocksplicatorMonitor {
   public static final String INSTANCE_DN_KEY = "instanceName";
 
   private MBeanServer beanServer;
-  private RocksplicatorSpectatorMonitor statsMonitor;
+  private RocksplicatorSpectatorMonitor spectatorStatsMonitor;
   private String cluster;
 
   public RocksplicatorMonitor(String clusterName, String instanceName) {
@@ -25,9 +25,9 @@ public class RocksplicatorMonitor {
     cluster = clusterName;
 
     try {
-      statsMonitor = new RocksplicatorSpectatorMonitor(instanceName);
+      spectatorStatsMonitor = new RocksplicatorSpectatorMonitor(instanceName);
 
-      register(statsMonitor, getObjectName(getInstanceBeanName(instanceName)));
+      register(spectatorStatsMonitor, getObjectName(getInstanceBeanName(instanceName)));
     } catch (Exception e) {
       LOG.warn(e.toString());
       e.printStackTrace();
@@ -36,15 +36,16 @@ public class RocksplicatorMonitor {
   }
 
   public void incrementConfigGeneratorCalledCount() {
-    statsMonitor.incrementConfigGeneratorCalledCount(1);
+    spectatorStatsMonitor.incrementConfigGeneratorCalledCount(1);
   }
 
   public void incrementConfigGeneratorNullExternalView() {
-    statsMonitor.incrementConfigGeneratorNullExternalView(1);
+    spectatorStatsMonitor.incrementConfigGeneratorNullExternalView(1);
   }
 
   public void reportConfigGeneratorLatency(double latency) {
-    statsMonitor.addLatency(RocksplicatorSpectatorMonitor.LATENCY_TYPE.CONFIG_GENERATOR_EXECUTION, latency);
+    spectatorStatsMonitor
+        .addLatency(RocksplicatorSpectatorMonitor.LATENCY_TYPE.CONFIG_GENERATOR_EXECUTION, latency);
   }
 
   private ObjectName getObjectName(String name) throws MalformedObjectNameException {
