@@ -45,7 +45,7 @@ namespace common {
 
 namespace detail {
 
-enum class Role { MASTER, SLAVE, ANY };
+enum class Role { MASTER, SLAVE, LEADER, FOLLOWER, ANY };
 enum class Quantity { ONE, TWO, ALL };
 enum ReturnCode { OK, NOT_FOUND, BAD_HOST, UNKNOWN_SEGMENT, UNKNOWN_SHARD };
 using ShardID = uint32_t;

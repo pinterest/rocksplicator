@@ -65,8 +65,10 @@ struct LogExtractor : public rocksdb::WriteBatch::Handler {
 };
 
 enum class DBRole {
-  MASTER,
-  SLAVE,
+  MASTER, // Will be Deprecated
+  SLAVE,  // Will be Deprecated
+  LEADER,
+  FOLLOWER,
   NOOP, // Don't perform any replication with this DB
 };
 
@@ -74,9 +76,9 @@ enum class ReturnCode {
   OK = 0,
   DB_NOT_FOUND = 1,
   DB_PRE_EXIST = 2,
-  WRITE_TO_SLAVE = 3,
+  WRITE_TO_FOLLOWER = 3,
   WRITE_ERROR = 4,
-  WAIT_SLAVE_TIMEOUT = 5,
+  WAIT_FOLLOWER_TIMEOUT = 5,
 };
 
 /*
@@ -90,8 +92,8 @@ class RocksDBReplicator {
     // 1) seq_no, it will be filled with a sequence # after applying the
     // updates. This is useful to implement read-after-write consistency at
     // higher level.
-    // 2) WRITE_TO_SLAVE will be thrown if this is a SLAVE db.
-    // 3) WAIT_SLAVE_TIMEOUT will be thrown if replication mode 1 and 2 is
+    // 2) WRITE_TO_FOLLOWER will be thrown if this is a SLAVE db.
+    // 3) WAIT_FOLLOWER_TIMEOUT will be thrown if replication mode 1 and 2 is
     // enabled, and no slave gets back to us in time. In this case, the update
     // is guaranteed to be committed to Master. Slaves may or may not have got
     // the update.
@@ -179,7 +181,7 @@ class RocksDBReplicator {
    * If seq_no is not nullptr, it is filled with a sequence # after applying the
    * updates. This is useful to implement read-after-write consistency at higher
    * level.
-   * If the db is SLAVE, WRITE_TO_SLAVE is returned, and the updates won't be
+   * If the db is SLAVE, WRITE_TO_FOLLOWER is returned, and the updates won't be
    * applied.
    * If rocksdb::DB::Write() fails, WRITE_ERROR is returned.
    * Otherwise, OK is returned.

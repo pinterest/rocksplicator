@@ -84,7 +84,7 @@ TEST(RocksDBReplicatorTest, Basics) {
   WriteBatch updates;
   updates.Put("key", "value");
   EXPECT_EQ(replicator->write("slave", options, &updates),
-            ReturnCode::WRITE_TO_SLAVE);
+            ReturnCode::WRITE_TO_FOLLOWER);
   EXPECT_THROW(replicated_db_slave->Write(options, &updates), ReturnCode);
   EXPECT_EQ(replicator->write("master", options, &updates),
             ReturnCode::OK);
@@ -383,11 +383,11 @@ TEST(RocksDBReplicatorTest, Stress) {
       updates.Put(str + "key", str + "value");
 
       auto code = host_1.replicator_->write(shard, options, &updates);
-      EXPECT_TRUE(code == ReturnCode::OK || code == ReturnCode::WRITE_TO_SLAVE);
+      EXPECT_TRUE(code == ReturnCode::OK || code == ReturnCode::WRITE_TO_FOLLOWER);
       code = host_2.replicator_->write(shard, options, &updates);
-      EXPECT_TRUE(code == ReturnCode::OK || code == ReturnCode::WRITE_TO_SLAVE);
+      EXPECT_TRUE(code == ReturnCode::OK || code == ReturnCode::WRITE_TO_FOLLOWER);
       code = host_3.replicator_->write(shard, options, &updates);
-      EXPECT_TRUE(code == ReturnCode::OK || code == ReturnCode::WRITE_TO_SLAVE);
+      EXPECT_TRUE(code == ReturnCode::OK || code == ReturnCode::WRITE_TO_FOLLOWER);
     }
   }
 

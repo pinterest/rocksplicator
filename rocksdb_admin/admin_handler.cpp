@@ -53,10 +53,13 @@
 #include "rocksdb_admin/utils.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
+
 #if __GNUC__ >= 8
 #include "folly/executors/CPUThreadPoolExecutor.h"
 #else
+
 #include "wangle/concurrent/CPUThreadPoolExecutor.h"
+
 #endif
 
 DEFINE_string(hdfs_name_node, "hdfs://hbasebak-infra-namenode-prod1c01-001:8020",
@@ -71,7 +74,7 @@ DEFINE_int32(num_hdfs_access_threads, 8,
 DEFINE_int32(port, 9090, "Port of the server");
 
 DEFINE_string(shard_config_path, "",
-             "Local path of file storing shard mapping for Aperture");
+              "Local path of file storing shard mapping for Aperture");
 
 // For rocksdb_allow_overlapping_keys and allow_overlapping_keys_segments,
 // we take the logical OR of the bool and if the set contains the segment
@@ -105,7 +108,7 @@ DEFINE_bool(enable_logging_consumer_log_with_payload, false,
             "Enable logging consumer messages at given log frequency");
 
 DEFINE_int32(consumer_log_frequency, 100,
-  "only output one log in every log_frequency of logs");
+             "only output one log in every log_frequency of logs");
 
 DECLARE_int32(kafka_consumer_timeout_ms);
 
@@ -180,7 +183,7 @@ std::string ToUTC(const int64_t time_secs) {
 }
 
 std::string getConsumerGroupId(
-    const std::string& db_name) {
+  const std::string& db_name) {
   return common::getLocalIPAddress() + '_' + db_name;
 }
 
@@ -208,17 +211,17 @@ std::unique_ptr<rocksdb::DB> GetRocksdb(const std::string& dir,
 }
 
 folly::Future<std::unique_ptr<rocksdb::DB>> GetRocksdbFuture(
-    const std::string& dir,
-    const rocksdb::Options&options) {
+  const std::string& dir,
+  const rocksdb::Options& options) {
   folly::Promise<std::unique_ptr<rocksdb::DB>> promise;
   auto future = promise.getFuture();
 
   std::thread opener([dir, options,
-                      promise = std::move(promise)] () mutable {
-      LOG(INFO) << "Start opening " << dir;
-      promise.setValue(GetRocksdb(dir, options));
-      LOG(INFO) << "Finished opening " << dir;
-    });
+                       promise = std::move(promise)]() mutable {
+    LOG(INFO) << "Start opening " << dir;
+    promise.setValue(GetRocksdb(dir, options));
+    LOG(INFO) << "Finished opening " << dir;
+  });
 
   opener.detach();
 
@@ -227,7 +230,7 @@ folly::Future<std::unique_ptr<rocksdb::DB>> GetRocksdbFuture(
 
 
 std::unique_ptr<::admin::ApplicationDBManager> CreateDBBasedOnConfig(
-    const admin::RocksDBOptionsGeneratorType& rocksdb_options) {
+  const admin::RocksDBOptionsGeneratorType& rocksdb_options) {
   auto db_manager = std::make_unique<::admin::ApplicationDBManager>();
   std::string content;
   CHECK(folly::readFile(FLAGS_shard_config_path.c_str(), content));
@@ -271,29 +274,55 @@ std::unique_ptr<::admin::ApplicationDBManager> CreateDBBasedOnConfig(
           }
         }
       }
+      else if (my_role == common::detail::Role::FOLLOWER) {
+        for (const auto& host : shard) {
+          if (host.second == common::detail::Role::LEADER) {
+            upstream_addr =
+              std::make_unique<folly::SocketAddress>(host.first->addr);
+            upstream_addr->setPort(FLAGS_rocksdb_replicator_port);
+            break;
+          }
+        }
+      }
 
       ops.push_back(
         [db_name = std::move(db_name),
-         db_future = folly::makeMoveWrapper(std::move(db_future)),
-         upstream_addr = folly::makeMoveWrapper(std::move(upstream_addr)),
-         my_role, &db_manager] () mutable {
+          db_future = folly::makeMoveWrapper(std::move(db_future)),
+          upstream_addr = folly::makeMoveWrapper(std::move(upstream_addr)),
+          my_role, &db_manager]() mutable {
           std::string err_msg;
           auto db = std::move(*db_future).get();
           CHECK(db);
-          if (my_role == common::detail::Role::MASTER) {
-            LOG(ERROR) << "Hosting master " << db_name;
-            CHECK(db_manager->addDB(db_name, std::move(db),
-                                    replicator::DBRole::MASTER,
-                                    &err_msg)) << err_msg;
-            return;
+          if (my_role == common::detail::Role::MASTER || my_role == common::detail::Role::LEADER) {
+            if (my_role == common::detail::Role::MASTER) {
+              LOG(ERROR) << "Hosting master " << db_name;
+              CHECK(db_manager->addDB(db_name, std::move(db),
+                                      replicator::DBRole::MASTER,
+                                      &err_msg)) << err_msg;
+              return;
+            } else {
+              LOG(ERROR) << "Hosting leader " << db_name;
+              CHECK(db_manager->addDB(db_name, std::move(db),
+                                      replicator::DBRole::LEADER,
+                                      &err_msg)) << err_msg;
+              return;
+            }
           }
 
-          CHECK(my_role == common::detail::Role::SLAVE);
-          LOG(ERROR) << "Hosting slave " << db_name;
-          CHECK(db_manager->addDB(db_name, std::move(db),
-                                  replicator::DBRole::SLAVE,
-                                  std::move(*upstream_addr),
-                                  &err_msg)) << err_msg;
+          CHECK(my_role == common::detail::Role::SLAVE || my_role == common::detail::Role::FOLLOWER);
+          if (my_role == common::detail::Role::SLAVE) {
+            LOG(ERROR) << "Hosting slave " << db_name;
+            CHECK(db_manager->addDB(db_name, std::move(db),
+                                    replicator::DBRole::SLAVE,
+                                    std::move(*upstream_addr),
+                                    &err_msg)) << err_msg;
+          } else {
+            LOG(ERROR) << "Hosting follower " << db_name;
+            CHECK(db_manager->addDB(db_name, std::move(db),
+                                    replicator::DBRole::FOLLOWER,
+                                    std::move(*upstream_addr),
+                                    &err_msg)) << err_msg;
+          }
         });
     }
   }
@@ -347,11 +376,11 @@ bool SetAddressOrException(const std::string& ip,
   }
 }
 
-template <typename T>
+template<typename T>
 bool DecodeThriftStruct(const void* data, const size_t size, T* obj) {
   try {
     apache::thrift::BinarySerializer::deserialize(
-        folly::StringPiece(static_cast<const char *>(data), size), *obj);
+      folly::StringPiece(static_cast<const char*>(data), size), *obj);
   } catch (const std::exception& ex) {
     LOG(ERROR) << "Error when decoding message : " << ex.what();
     return false;
@@ -360,14 +389,14 @@ bool DecodeThriftStruct(const void* data, const size_t size, T* obj) {
 }
 
 bool DeserializeKafkaPayload(
-    const void* kafka_payload,
-    const size_t payload_len,
-    admin::KafkaOperationCode* op_code,
-    std::string* value) {
+  const void* kafka_payload,
+  const size_t payload_len,
+  admin::KafkaOperationCode* op_code,
+  std::string* value) {
   admin::KafkaMessagePayload msg_payload;
 
   if (DecodeThriftStruct<admin::KafkaMessagePayload>(kafka_payload, payload_len,
-      &msg_payload)) {
+                                                     &msg_payload)) {
     *op_code = msg_payload.op_code;
     if (msg_payload.__isset.value) {
       *value = std::move(msg_payload.value);
@@ -381,10 +410,10 @@ bool DeserializeKafkaPayload(
 
 CPUThreadPoolExecutor* S3UploadAndDownloadExecutor() {
   static CPUThreadPoolExecutor executor(
-      FLAGS_num_s3_upload_download_threads,
-      std::make_unique<LifoSemMPMCQueue<CPUThreadPoolExecutor::CPUTask>>(
+    FLAGS_num_s3_upload_download_threads,
+    std::make_unique<LifoSemMPMCQueue<CPUThreadPoolExecutor::CPUTask>>(
       FLAGS_max_s3_upload_download_task_queue_size),
-      std::make_shared<common::IdenticalNameThreadFactory>("s3-upload-download"));
+    std::make_shared<common::IdenticalNameThreadFactory>("s3-upload-download"));
 
   return &executor;
 }
@@ -394,33 +423,27 @@ CPUThreadPoolExecutor* S3UploadAndDownloadExecutor() {
 namespace admin {
 
 AdminHandler::AdminHandler(
-    std::unique_ptr<ApplicationDBManager> db_manager,
-    RocksDBOptionsGeneratorType rocksdb_options)
-  : db_admin_lock_()
-  , db_manager_(std::move(db_manager))
-  , rocksdb_options_(std::move(rocksdb_options))
-  , s3_util_()
-  , s3_util_lock_()
-  , meta_db_(OpenMetaDB())
-  , allow_overlapping_keys_segments_()
-  , num_current_s3_sst_downloadings_(0) {
+  std::unique_ptr<ApplicationDBManager> db_manager,
+  RocksDBOptionsGeneratorType rocksdb_options)
+  : db_admin_lock_(), db_manager_(std::move(db_manager)), rocksdb_options_(std::move(rocksdb_options)), s3_util_(),
+    s3_util_lock_(), meta_db_(OpenMetaDB()), allow_overlapping_keys_segments_(), num_current_s3_sst_downloadings_(0) {
   if (db_manager_ == nullptr) {
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
   folly::splitTo<std::string>(
-      ",", FLAGS_allow_overlapping_keys_segments,
-      std::inserter(allow_overlapping_keys_segments_,
-                    allow_overlapping_keys_segments_.begin()));
+    ",", FLAGS_allow_overlapping_keys_segments,
+    std::inserter(allow_overlapping_keys_segments_,
+                  allow_overlapping_keys_segments_.begin()));
 
   CHECK(FLAGS_max_s3_sst_loading_concurrency > 0)
-    << "Invalid FLAGS_max_s3_sst_loading_concurrency: "
-    << FLAGS_max_s3_sst_loading_concurrency;
+  << "Invalid FLAGS_max_s3_sst_loading_concurrency: "
+  << FLAGS_max_s3_sst_loading_concurrency;
 }
 
 
 std::shared_ptr<ApplicationDB> AdminHandler::getDB(
-    const std::string& db_name,
-    AdminException* ex) {
+  const std::string& db_name,
+  AdminException* ex) {
   std::string err_msg;
   auto db = db_manager_->getDB(db_name, &err_msg);
   if (db == nullptr && ex) {
@@ -432,8 +455,8 @@ std::shared_ptr<ApplicationDB> AdminHandler::getDB(
 }
 
 std::unique_ptr<rocksdb::DB> AdminHandler::removeDB(
-    const std::string& db_name,
-    AdminException* ex) {
+  const std::string& db_name,
+  AdminException* ex) {
   std::string err_msg;
   auto db = db_manager_->removeDB(db_name, &err_msg);
   if (db == nullptr && ex) {
@@ -466,10 +489,10 @@ bool AdminHandler::clearMetaData(const std::string& db_name) {
 }
 
 bool AdminHandler::writeMetaData(
-    const std::string& db_name,
-    const std::string& s3_bucket,
-    const std::string& s3_path,
-    const int64_t last_kafka_msg_timestamp_ms) {
+  const std::string& db_name,
+  const std::string& s3_bucket,
+  const std::string& s3_path,
+  const int64_t last_kafka_msg_timestamp_ms) {
   DBMetaData meta;
   meta.db_name = db_name;
   meta.set_s3_bucket(s3_bucket);
@@ -486,9 +509,9 @@ bool AdminHandler::writeMetaData(
 }
 
 void AdminHandler::async_tm_addDB(
-      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-          AddDBResponse>>> callback,
-      std::unique_ptr<AddDBRequest> request) {
+  std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+    AddDBResponse>>> callback,
+  std::unique_ptr<AddDBRequest> request) {
   db_admin_lock_.Lock(request->db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
@@ -565,8 +588,8 @@ void AdminHandler::async_tm_addDB(
 }
 
 void AdminHandler::async_tm_ping(
-    std::unique_ptr<apache::thrift::HandlerCallback<void>> callback) {
-    callback->done();
+  std::unique_ptr<apache::thrift::HandlerCallback<void>> callback) {
+  callback->done();
 }
 
 bool AdminHandler::backupDBHelper(const std::string& db_name,
@@ -600,7 +623,7 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
 
   rocksdb::BackupEngine* backup_engine;
   auto status = rocksdb::BackupEngine::Open(
-      rocksdb::Env::Default(), options, &backup_engine);
+    rocksdb::Env::Default(), options, &backup_engine);
   if (!status.ok()) {
     e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
     e->message = status.ToString();
@@ -641,7 +664,7 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
 
   rocksdb::BackupEngine* backup_engine;
   auto status = rocksdb::BackupEngine::Open(
-      rocksdb::Env::Default(), options, &backup_engine);
+    rocksdb::Env::Default(), options, &backup_engine);
   if (!status.ok()) {
     e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
     e->message = status.ToString();
@@ -680,9 +703,9 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
 }
 
 void AdminHandler::async_tm_backupDB(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      BackupDBResponse>>> callback,
-    std::unique_ptr<BackupDBRequest> request) {
+  std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+    BackupDBResponse>>> callback,
+  std::unique_ptr<BackupDBRequest> request) {
   auto full_path = FLAGS_hdfs_name_node + request->hdfs_backup_dir;
   rocksdb::Env* hdfs_env;
   auto status = rocksdb::NewHdfsEnv(&hdfs_env, full_path);
@@ -696,7 +719,8 @@ void AdminHandler::async_tm_backupDB(
   common::Timer timer(kHDFSBackupMs);
   LOG(INFO) << "HDFS Backup " << request->db_name << " to " << full_path;
   AdminException e;
-  const bool share_files_with_checksum = request->__isset.share_files_with_checksum && request->share_files_with_checksum;
+  const bool share_files_with_checksum =
+    request->__isset.share_files_with_checksum && request->share_files_with_checksum;
   if (!backupDBHelper(request->db_name,
                       full_path,
                       std::unique_ptr<rocksdb::Env>(hdfs_env),
@@ -715,9 +739,9 @@ void AdminHandler::async_tm_backupDB(
 }
 
 void AdminHandler::async_tm_restoreDB(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      RestoreDBResponse>>> callback,
-    std::unique_ptr<RestoreDBRequest> request) {
+  std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+    RestoreDBResponse>>> callback,
+  std::unique_ptr<RestoreDBRequest> request) {
   auto upstream_addr = std::make_unique<folly::SocketAddress>();
   if (!SetAddressOrException(request->upstream_ip,
                              FLAGS_rocksdb_replicator_port,
@@ -773,19 +797,19 @@ inline std::string ensure_ends_with_pathsep(const std::string& s) {
 }
 
 void AdminHandler::async_tm_backupDBToS3(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      BackupDBToS3Response>>> callback,
-    std::unique_ptr<BackupDBToS3Request> request) {
+  std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+    BackupDBToS3Response>>> callback,
+  std::unique_ptr<BackupDBToS3Request> request) {
   AdminException e;
   const auto n = num_current_s3_sst_uploadings_.fetch_add(1);
   SCOPE_EXIT {
-    num_current_s3_sst_uploadings_.fetch_sub(1);
-  };
+               num_current_s3_sst_uploadings_.fetch_sub(1);
+             };
 
   if (n >= FLAGS_max_s3_sst_loading_concurrency) {
     auto err_str =
-        folly::stringPrintf("Concurrent uploading/downloading limit hits %d by %s",
-                            n, request->db_name.c_str());
+      folly::stringPrintf("Concurrent uploading/downloading limit hits %d by %s",
+                          n, request->db_name.c_str());
     SetException(err_str, AdminErrorCode::DB_ADMIN_ERROR, &callback);
     LOG(ERROR) << err_str;
     common::Stats::get()->Incr(kS3BackupFailure);
@@ -868,7 +892,7 @@ void AdminHandler::async_tm_backupDBToS3(
         if (file == "." || file == "..") {
           continue;
         }
-        file_batches[i%FLAGS_checkpoint_backup_batch_num_upload].push_back(file);
+        file_batches[i % FLAGS_checkpoint_backup_batch_num_upload].push_back(file);
       }
 
       std::vector<folly::Future<bool>> futures;
@@ -877,15 +901,15 @@ void AdminHandler::async_tm_backupDBToS3(
         futures.push_back(p.getFuture());
 
         S3UploadAndDownloadExecutor()->add(
-            [&, files = std::move(files), p = std::move(p)]() mutable {
-              for (const auto& file : files) {
-                if (!upload_func(formatted_s3_dir_path + file, formatted_checkpoint_local_path + file)) {
-                  p.setValue(false);
-                  return;
-                }
+          [&, files = std::move(files), p = std::move(p)]() mutable {
+            for (const auto& file : files) {
+              if (!upload_func(formatted_s3_dir_path + file, formatted_checkpoint_local_path + file)) {
+                p.setValue(false);
+                return;
               }
-              p.setValue(true);
-            });
+            }
+            p.setValue(true);
+          });
       }
 
       for (auto& f : futures) {
@@ -939,19 +963,19 @@ void AdminHandler::async_tm_backupDBToS3(
 }
 
 void AdminHandler::async_tm_restoreDBFromS3(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      RestoreDBFromS3Response>>> callback,
-    std::unique_ptr<RestoreDBFromS3Request> request) {
+  std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+    RestoreDBFromS3Response>>> callback,
+  std::unique_ptr<RestoreDBFromS3Request> request) {
   AdminException e;
   auto n = num_current_s3_sst_downloadings_.fetch_add(1);
   SCOPE_EXIT {
-    num_current_s3_sst_downloadings_.fetch_sub(1);
-  };
+               num_current_s3_sst_downloadings_.fetch_sub(1);
+             };
 
   if (n >= FLAGS_max_s3_sst_loading_concurrency) {
     auto err_str =
-        folly::stringPrintf("Concurrent uploading/downloading limit hits %d by %s",
-                            n, request->db_name.c_str());
+      folly::stringPrintf("Concurrent uploading/downloading limit hits %d by %s",
+                          n, request->db_name.c_str());
     SetException(err_str, AdminErrorCode::DB_ADMIN_ERROR, &callback);
     LOG(ERROR) << err_str;
     common::Stats::get()->Incr(kS3RestoreFailure);
@@ -966,10 +990,10 @@ void AdminHandler::async_tm_restoreDBFromS3(
   boost::filesystem::remove_all(local_path, remove_err);
   boost::filesystem::create_directories(local_path, create_err);
   SCOPE_EXIT {
-    if (!FLAGS_enable_checkpoint_backup) {
-      boost::filesystem::remove_all(local_path, remove_err);
-    }
-  };
+               if (!FLAGS_enable_checkpoint_backup) {
+                 boost::filesystem::remove_all(local_path, remove_err);
+               }
+             };
   if (remove_err || create_err) {
     SetException("Cannot remove/create dir for restore: " + local_path, AdminErrorCode::DB_ADMIN_ERROR, &callback);
     common::Stats::get()->Incr(kS3RestoreFailure);
@@ -996,8 +1020,8 @@ void AdminHandler::async_tm_restoreDBFromS3(
     auto resp = local_s3_util->listAllObjects(formatted_s3_dir_path);
     if (!resp.Error().empty()) {
       auto err_msg = folly::stringPrintf(
-          "Error happened when fetching files in checkpoint from S3: %s under path: %s",
-          resp.Error().c_str(), formatted_s3_dir_path.c_str());
+        "Error happened when fetching files in checkpoint from S3: %s under path: %s",
+        resp.Error().c_str(), formatted_s3_dir_path.c_str());
       LOG(ERROR) << err_msg;
       SetException(err_msg, AdminErrorCode::DB_ADMIN_ERROR, &callback);
       common::Stats::get()->Incr(kS3RestoreFailure);
@@ -1006,9 +1030,9 @@ void AdminHandler::async_tm_restoreDBFromS3(
 
     auto download_func = [&](const std::string& s3_path) {
       auto get_resp = local_s3_util->getObject(
-          s3_path,
-          formatted_local_path + s3_path.substr(formatted_s3_dir_path.size()),
-          FLAGS_s3_direct_io);
+        s3_path,
+        formatted_local_path + s3_path.substr(formatted_s3_dir_path.size()),
+        FLAGS_s3_direct_io);
       if (!get_resp.Error().empty()) {
         LOG(ERROR) << "Error happened when downloading the file in checkpoint from S3 to local: "
                    << get_resp.Error();
@@ -1017,11 +1041,11 @@ void AdminHandler::async_tm_restoreDBFromS3(
       return true;
     };
 
-    if (FLAGS_checkpoint_backup_batch_num_download> 1) {
+    if (FLAGS_checkpoint_backup_batch_num_download > 1) {
       // Download checkpoint files to s3 in parallel
       std::vector<std::vector<std::string>> file_batches(FLAGS_checkpoint_backup_batch_num_download);
       for (size_t i = 0; i < resp.Body().objects.size(); ++i) {
-        file_batches[i%FLAGS_checkpoint_backup_batch_num_download].push_back(resp.Body().objects[i]);
+        file_batches[i % FLAGS_checkpoint_backup_batch_num_download].push_back(resp.Body().objects[i]);
       }
 
       std::vector<folly::Future<bool>> futures;
@@ -1030,15 +1054,15 @@ void AdminHandler::async_tm_restoreDBFromS3(
         futures.push_back(p.getFuture());
 
         S3UploadAndDownloadExecutor()->add(
-            [&, files = std::move(files), p = std::move(p)]() mutable {
-              for (const auto& file : files) {
-                if (!download_func(file)) {
-                  p.setValue(false);
-                  return;
-                }
+          [&, files = std::move(files), p = std::move(p)]() mutable {
+            for (const auto& file : files) {
+              if (!download_func(file)) {
+                p.setValue(false);
+                return;
               }
-              p.setValue(true);
-            });
+            }
+            p.setValue(true);
+          });
       }
 
       for (auto& f : futures) {
@@ -1088,7 +1112,7 @@ void AdminHandler::async_tm_restoreDBFromS3(
   } else {
     std::string formatted_s3_dir_path = rtrim(request->s3_backup_dir, '/');
     rocksdb::Env* s3_env = new rocksdb::S3Env(
-        formatted_s3_dir_path, std::move(local_path), std::move(local_s3_util));
+      formatted_s3_dir_path, std::move(local_path), std::move(local_s3_util));
 
     if (!restoreDBHelper(request->db_name,
                          formatted_s3_dir_path,
@@ -1109,9 +1133,9 @@ void AdminHandler::async_tm_restoreDBFromS3(
 }
 
 void AdminHandler::async_tm_checkDB(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      CheckDBResponse>>> callback,
-    std::unique_ptr<CheckDBRequest> request) {
+  std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+    CheckDBResponse>>> callback,
+  std::unique_ptr<CheckDBRequest> request) {
   AdminException e;
   auto db = getDB(request->db_name, &e);
   if (db == nullptr) {
@@ -1122,7 +1146,7 @@ void AdminHandler::async_tm_checkDB(
   CheckDBResponse response;
   response.set_seq_num(db->rocksdb()->GetLatestSequenceNumber());
   response.set_wal_ttl_seconds(db->rocksdb()->GetOptions().WAL_ttl_seconds);
-  response.set_is_master(!db->IsSlave());
+  response.set_is_leader(!db->IsSlave());
 
   // If there is at least one update
   if (response.seq_num != 0) {
@@ -1143,9 +1167,9 @@ void AdminHandler::async_tm_checkDB(
 }
 
 void AdminHandler::async_tm_closeDB(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      CloseDBResponse>>> callback,
-    std::unique_ptr<CloseDBRequest> request) {
+  std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+    CloseDBResponse>>> callback,
+  std::unique_ptr<CloseDBRequest> request) {
   db_admin_lock_.Lock(request->db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
@@ -1159,9 +1183,9 @@ void AdminHandler::async_tm_closeDB(
 }
 
 void AdminHandler::async_tm_changeDBRoleAndUpStream(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      ChangeDBRoleAndUpstreamResponse>>> callback,
-    std::unique_ptr<ChangeDBRoleAndUpstreamRequest> request) {
+  std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+    ChangeDBRoleAndUpstreamResponse>>> callback,
+  std::unique_ptr<ChangeDBRoleAndUpstreamRequest> request) {
   db_admin_lock_.Lock(request->db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
@@ -1210,9 +1234,9 @@ void AdminHandler::async_tm_changeDBRoleAndUpStream(
 }
 
 void AdminHandler::async_tm_getSequenceNumber(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      GetSequenceNumberResponse>>> callback,
-    std::unique_ptr<GetSequenceNumberRequest> request) {
+  std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+    GetSequenceNumberResponse>>> callback,
+  std::unique_ptr<GetSequenceNumberRequest> request) {
   AdminException e;
   auto db = getDB(request->db_name, &e);
   if (db == nullptr) {
@@ -1226,9 +1250,9 @@ void AdminHandler::async_tm_getSequenceNumber(
 }
 
 void AdminHandler::async_tm_clearDB(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      ClearDBResponse>>> callback,
-    std::unique_ptr<ClearDBRequest> request) {
+  std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+    ClearDBResponse>>> callback,
+  std::unique_ptr<ClearDBRequest> request) {
   db_admin_lock_.Lock(request->db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
@@ -1240,7 +1264,7 @@ void AdminHandler::async_tm_clearDB(
     if (db) {
       need_to_reopen = true;
       db_role = db->IsSlave() ? replicator::DBRole::SLAVE :
-        replicator::DBRole::MASTER;
+                replicator::DBRole::MASTER;
       if (db->upstream_addr()) {
         upstream_addr =
           std::make_unique<folly::SocketAddress>(*(db->upstream_addr()));
@@ -1289,14 +1313,14 @@ void AdminHandler::async_tm_clearDB(
 }
 
 inline bool should_new_s3_client(
-    const common::S3Util& s3_util, const uint32_t s3_download_limit_mb, const std::string& s3_bucket) {
+  const common::S3Util& s3_util, const uint32_t s3_download_limit_mb, const std::string& s3_bucket) {
   return s3_util.getBucket() != s3_bucket ||
          s3_util.getRateLimit() != s3_download_limit_mb;
 }
 
 std::shared_ptr<common::S3Util> AdminHandler::createLocalS3Util(
-    const uint32_t read_ratelimit_mb,
-    const std::string& bucket) {
+  const uint32_t read_ratelimit_mb,
+  const std::string& bucket) {
   // Though it is claimed that AWS s3 sdk is a light weight library. However,
   // we couldn't afford to create a new client for every SST file downloading
   // request, which is not even on any critical code path. Otherwise, we will
@@ -1325,9 +1349,9 @@ std::shared_ptr<common::S3Util> AdminHandler::createLocalS3Util(
 }
 
 void AdminHandler::async_tm_addS3SstFilesToDB(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      AddS3SstFilesToDBResponse>>> callback,
-    std::unique_ptr<AddS3SstFilesToDBRequest> request) {
+  std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+    AddS3SstFilesToDBResponse>>> callback,
+  std::unique_ptr<AddS3SstFilesToDBRequest> request) {
   admin::AdminException e;
   e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
 
@@ -1356,8 +1380,8 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   // loadings.
   auto n = num_current_s3_sst_downloadings_.fetch_add(1);
   SCOPE_EXIT {
-    num_current_s3_sst_downloadings_.fetch_sub(1);
-  };
+               num_current_s3_sst_downloadings_.fetch_sub(1);
+             };
 
   if (n >= FLAGS_max_s3_sst_loading_concurrency) {
     auto err_str =
@@ -1388,7 +1412,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   }
   auto local_s3_util = createLocalS3Util(request->s3_download_limit_mb, request->s3_bucket);
   auto responses = local_s3_util->getObjects(request->s3_path,
-                                      local_path, "/", FLAGS_s3_direct_io);
+                                             local_path, "/", FLAGS_s3_direct_io);
   if (!responses.Error().empty() || responses.Body().size() == 0) {
     e.message = "Failed to list any object from " + request->s3_path;
 
@@ -1429,15 +1453,15 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
 
   auto segment = admin::DbNameToSegment(request->db_name);
   bool allow_overlapping_keys =
-      allow_overlapping_keys_segments_.find(segment) !=
-      allow_overlapping_keys_segments_.end();
+    allow_overlapping_keys_segments_.find(segment) !=
+    allow_overlapping_keys_segments_.end();
   // OR with the flag to make backwards compatibility
   allow_overlapping_keys =
-      allow_overlapping_keys || FLAGS_rocksdb_allow_overlapping_keys;
+    allow_overlapping_keys || FLAGS_rocksdb_allow_overlapping_keys;
   if (!allow_overlapping_keys) {
     // clear DB if overlapping keys are not allowed
     auto db_role = db->IsSlave() ?
-      replicator::DBRole::SLAVE : replicator::DBRole::MASTER;
+                   replicator::DBRole::SLAVE : replicator::DBRole::MASTER;
     std::unique_ptr<folly::SocketAddress> upstream_addr;
     if (db_role == replicator::DBRole::SLAVE &&
         db->upstream_addr() != nullptr) {
@@ -1506,9 +1530,9 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
 }
 
 void AdminHandler::async_tm_startMessageIngestion(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      StartMessageIngestionResponse>>> callback,
-    std::unique_ptr<StartMessageIngestionRequest> request) {
+  std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+    StartMessageIngestionResponse>>> callback,
+  std::unique_ptr<StartMessageIngestionRequest> request) {
 
   admin::AdminException e;
   e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
@@ -1567,22 +1591,22 @@ void AdminHandler::async_tm_startMessageIngestion(
   const std::unordered_set<uint32_t> partition_ids_set({partition_id});
 
   auto kafka_broker_file_watcher = detail::KafkaBrokerFileWatcherManager
-      ::getInstance().getFileWatcher(kafka_broker_serverset_path);
+  ::getInstance().getFileWatcher(kafka_broker_serverset_path);
 
   const auto kafka_consumer_pool = std::make_shared<::kafka::KafkaConsumerPool>(
-      kKafkaConsumerPoolSize,
-      partition_ids_set,
-      // TODO: fix this to return a string object rather than a reference
-      kafka_broker_file_watcher->GetKafkaBrokerList(),
-      std::unordered_set<std::string>({topic_name}),
-      getConsumerGroupId(db_name),
-      folly::stringPrintf("%s_%s", kKafkaConsumerType, segment.c_str()));
+    kKafkaConsumerPoolSize,
+    partition_ids_set,
+    // TODO: fix this to return a string object rather than a reference
+    kafka_broker_file_watcher->GetKafkaBrokerList(),
+    std::unordered_set<std::string>({topic_name}),
+    getConsumerGroupId(db_name),
+    folly::stringPrintf("%s_%s", kKafkaConsumerType, segment.c_str()));
 
   auto kafka_watcher = std::make_shared<KafkaWatcher>(
-      folly::stringPrintf("%s_%s", kKafkaWatcherName, segment.c_str()),
-      kafka_consumer_pool,
-      -1, // kafka_init_blocking_consume_timeout_ms
-      FLAGS_kafka_consumer_timeout_ms);
+    folly::stringPrintf("%s_%s", kKafkaWatcherName, segment.c_str()),
+    kafka_consumer_pool,
+    -1, // kafka_init_blocking_consume_timeout_ms
+    FLAGS_kafka_consumer_timeout_ms);
 
   {
     std::lock_guard<std::mutex> lock(kafka_watcher_lock_);
@@ -1597,123 +1621,124 @@ void AdminHandler::async_tm_startMessageIngestion(
   // calling thread then returns after spawning a new thread to consume
   // live messages.
   kafka_watcher->StartWith(
-      replay_timestamp_ms,
-      [message_count, db_name, db, should_deserialize,
-       segment = std::move(segment), this](
-          std::shared_ptr<const RdKafka::Message> message,
-          const bool is_replay) mutable {
-    if (message == nullptr) {
-      LOG(ERROR) << "Message nullptr";
-      return;
-    }
-    const int64_t msg_timestamp_secs = GetMessageTimestampSecs(*message);
-    message_count++;
-
-    // Logs for debugging, only enabled if flag is specified.
-    // In case of sensitive data... we shouldn't be logging message, unless
-    // explicitly configured to do so (may be in order to debug)
-    if (FLAGS_enable_logging_consumer_log) {
-      LOG_EVERY_N(INFO, FLAGS_consumer_log_frequency)
-        << "DB name: " << db_name << ", Key " << folly::hexlify(*message->key())
-        << ", "
-        << "value "
-        << ((FLAGS_enable_logging_consumer_log_with_payload)
-          ? (folly::hexlify(folly::StringPiece(
-            static_cast<const char *>(message->payload()), message->len())))
-          : ("***REDACTED***"))
-        << ", "
-        << "partition: " << message->partition() << ", "
-        << "offset: " << message->offset() << ", "
-        << "payload len: " << message->len() << ", "
-        << "msg_timestamp: " << ToUTC(msg_timestamp_secs) << " or "
-        << std::to_string(msg_timestamp_secs) << " secs";
-    }
-
-    if (!is_replay) {
-      auto latency_ms = common::timeutil::GetCurrentTimestamp(
-          common::timeutil::TimeUnit::kMillisecond)
-                        - message->timestamp().timestamp;
-      common::Stats::get()->AddMetric(folly::stringPrintf("%s segment=%s",
-          kKafkaConsumerLatency.c_str(), segment.c_str()), latency_ms);
-    }
-
-    auto key = rocksdb::Slice(static_cast<const char *>(message->key_pointer()),
-                              message->key_len());
-
-    // Deserialize the kafka payload
-    KafkaOperationCode op_code;
-    std::string deser_val;
-    rocksdb::Slice value;
-    if (should_deserialize) {
-      if (DeserializeKafkaPayload(message->payload(),
-          message->len(), &op_code, &deser_val)) {
-        value = rocksdb::Slice(deser_val);
-      } else {
-        LOG(ERROR) << "Failed to deserialize. Ignoring kafka message";
+    replay_timestamp_ms,
+    [message_count, db_name, db, should_deserialize,
+      segment = std::move(segment), this](
+      std::shared_ptr<const RdKafka::Message> message,
+      const bool is_replay) mutable {
+      if (message == nullptr) {
+        LOG(ERROR) << "Message nullptr";
         return;
       }
-    } else {
-      // If serialization is not required, just put the value to rocksdb
-      op_code = KafkaOperationCode::PUT;
-      value = rocksdb::Slice(static_cast<const char *>(message->payload()),
-          message->len());
-    }
+      const int64_t msg_timestamp_secs = GetMessageTimestampSecs(*message);
+      message_count++;
 
-    // Write the message to rocksdb
-    rocksdb::Status status;
-    static const rocksdb::WriteOptions write_options;
+      // Logs for debugging, only enabled if flag is specified.
+      // In case of sensitive data... we shouldn't be logging message, unless
+      // explicitly configured to do so (may be in order to debug)
+      if (FLAGS_enable_logging_consumer_log) {
+        LOG_EVERY_N(INFO, FLAGS_consumer_log_frequency)
+          << "DB name: " << db_name << ", Key " << folly::hexlify(*message->key())
+          << ", "
+          << "value "
+          << ((FLAGS_enable_logging_consumer_log_with_payload)
+              ? (folly::hexlify(folly::StringPiece(
+              static_cast<const char*>(message->payload()), message->len())))
+              : ("***REDACTED***"))
+          << ", "
+          << "partition: " << message->partition() << ", "
+          << "offset: " << message->offset() << ", "
+          << "payload len: " << message->len() << ", "
+          << "msg_timestamp: " << ToUTC(msg_timestamp_secs) << " or "
+          << std::to_string(msg_timestamp_secs) << " secs";
+      }
 
-    switch (op_code) {
-      case KafkaOperationCode::PUT:
-        common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
-            kKafkaDbPutMessage.c_str(), segment.c_str()));
+      if (!is_replay) {
+        auto latency_ms = common::timeutil::GetCurrentTimestamp(
+          common::timeutil::TimeUnit::kMillisecond)
+                          - message->timestamp().timestamp;
+        common::Stats::get()->AddMetric(folly::stringPrintf("%s segment=%s",
+                                                            kKafkaConsumerLatency.c_str(), segment.c_str()),
+                                        latency_ms);
+      }
 
-        status = db->rocksdb()->Put(write_options, key, value);
-        if (!status.ok()) {
-          LOG(ERROR) << "Failure while writing to " << db_name << ": "
-                     << status.ToString();
-          common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
-              kKafkaDbPutErrors.c_str(), segment.c_str()));
+      auto key = rocksdb::Slice(static_cast<const char*>(message->key_pointer()),
+                                message->key_len());
+
+      // Deserialize the kafka payload
+      KafkaOperationCode op_code;
+      std::string deser_val;
+      rocksdb::Slice value;
+      if (should_deserialize) {
+        if (DeserializeKafkaPayload(message->payload(),
+                                    message->len(), &op_code, &deser_val)) {
+          value = rocksdb::Slice(deser_val);
+        } else {
+          LOG(ERROR) << "Failed to deserialize. Ignoring kafka message";
+          return;
         }
+      } else {
+        // If serialization is not required, just put the value to rocksdb
+        op_code = KafkaOperationCode::PUT;
+        value = rocksdb::Slice(static_cast<const char*>(message->payload()),
+                               message->len());
+      }
 
-        break;
-      case KafkaOperationCode::DELETE:
-        common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
-            kKafkaDbDelMessage.c_str(), segment.c_str()));
-        status = db->rocksdb()->Delete(write_options, key);
-        if (!status.ok()) {
-          LOG(ERROR) << "Failure while deleting from " << db_name << ": "
-                     << status.ToString();
-          common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
-              kKafkaDbDeleteErrors.c_str(), segment.c_str()));
-        }
-        break;
-      case KafkaOperationCode::MERGE:
-        common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
-            kKafkaDbMergeMessage.c_str(), segment.c_str()));
-        status = db->rocksdb()->Merge(write_options, key, value);
-        if (!status.ok()) {
-          LOG(ERROR) << "Failure while merging to " << db_name << ": "
-                     << status.ToString();
-          common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
-              kKafkaDbMergeErrors.c_str(), segment.c_str()));
-        }
-        break;
-      default:
-        common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
-            kKafkaInvalidOpcode.c_str(), segment.c_str()));
-        LOG(ERROR) << "Invalid op_code in kafka payload";
-    }
+      // Write the message to rocksdb
+      rocksdb::Status status;
+      static const rocksdb::WriteOptions write_options;
 
-    // Update meta_db with kafka message timestamp periodically.
-    if (message_count % FLAGS_kafka_ts_update_interval == 0) {
-      const auto timestamp_ms = message->timestamp().timestamp;
-      const auto meta = getMetaData(db_name);
-      writeMetaData(db_name, meta.s3_bucket, meta.s3_path, timestamp_ms);
-      LOG(INFO) << "[meta_db] Writing timestamp " << timestamp_ms
-                << " for db: " << db_name;
-    }
-  });
+      switch (op_code) {
+        case KafkaOperationCode::PUT:
+          common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
+                                                         kKafkaDbPutMessage.c_str(), segment.c_str()));
+
+          status = db->rocksdb()->Put(write_options, key, value);
+          if (!status.ok()) {
+            LOG(ERROR) << "Failure while writing to " << db_name << ": "
+                       << status.ToString();
+            common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
+                                                           kKafkaDbPutErrors.c_str(), segment.c_str()));
+          }
+
+          break;
+        case KafkaOperationCode::DELETE:
+          common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
+                                                         kKafkaDbDelMessage.c_str(), segment.c_str()));
+          status = db->rocksdb()->Delete(write_options, key);
+          if (!status.ok()) {
+            LOG(ERROR) << "Failure while deleting from " << db_name << ": "
+                       << status.ToString();
+            common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
+                                                           kKafkaDbDeleteErrors.c_str(), segment.c_str()));
+          }
+          break;
+        case KafkaOperationCode::MERGE:
+          common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
+                                                         kKafkaDbMergeMessage.c_str(), segment.c_str()));
+          status = db->rocksdb()->Merge(write_options, key, value);
+          if (!status.ok()) {
+            LOG(ERROR) << "Failure while merging to " << db_name << ": "
+                       << status.ToString();
+            common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
+                                                           kKafkaDbMergeErrors.c_str(), segment.c_str()));
+          }
+          break;
+        default:
+          common::Stats::get()->Incr(folly::stringPrintf("%s segment=%s",
+                                                         kKafkaInvalidOpcode.c_str(), segment.c_str()));
+          LOG(ERROR) << "Invalid op_code in kafka payload";
+      }
+
+      // Update meta_db with kafka message timestamp periodically.
+      if (message_count % FLAGS_kafka_ts_update_interval == 0) {
+        const auto timestamp_ms = message->timestamp().timestamp;
+        const auto meta = getMetaData(db_name);
+        writeMetaData(db_name, meta.s3_bucket, meta.s3_path, timestamp_ms);
+        LOG(INFO) << "[meta_db] Writing timestamp " << timestamp_ms
+                  << " for db: " << db_name;
+      }
+    });
 
   LOG(INFO) << "Now consuming live messages for " << db_name;
 
@@ -1724,9 +1749,9 @@ void AdminHandler::async_tm_startMessageIngestion(
 }
 
 void AdminHandler::async_tm_stopMessageIngestion(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      StopMessageIngestionResponse>>> callback,
-    std::unique_ptr<StopMessageIngestionRequest> request) {
+  std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+    StopMessageIngestionResponse>>> callback,
+  std::unique_ptr<StopMessageIngestionRequest> request) {
 
   admin::AdminException e;
   e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
@@ -1772,9 +1797,9 @@ void AdminHandler::async_tm_stopMessageIngestion(
 }
 
 void AdminHandler::async_tm_setDBOptions(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      SetDBOptionsResponse>>> callback,
-    std::unique_ptr<SetDBOptionsRequest> request) {
+  std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+    SetDBOptionsResponse>>> callback,
+  std::unique_ptr<SetDBOptionsRequest> request) {
   std::unordered_map<string, string> options;
   for (auto& option_pair : request->options) {
     options.emplace(std::move(option_pair));
@@ -1798,9 +1823,9 @@ void AdminHandler::async_tm_setDBOptions(
 }
 
 void AdminHandler::async_tm_compactDB(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      CompactDBResponse>>> callback,
-    std::unique_ptr<CompactDBRequest> request) {
+  std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
+    CompactDBResponse>>> callback,
+  std::unique_ptr<CompactDBRequest> request) {
   ::admin::AdminException e;
   auto db = getDB(request->db_name, &e);
   if (db == nullptr) {
@@ -1809,7 +1834,7 @@ void AdminHandler::async_tm_compactDB(
   }
 
   auto status = db->CompactRange(
-      rocksdb::CompactRangeOptions(), nullptr, nullptr);
+    rocksdb::CompactRangeOptions(), nullptr, nullptr);
   if (!status.ok()) {
     e.message = status.ToString();
     e.errorCode = AdminErrorCode::DB_ERROR;
@@ -1824,7 +1849,7 @@ std::string AdminHandler::DumpDBStatsAsText() const {
 }
 
 std::vector<std::string> AdminHandler::getAllDBNames() {
-    return db_manager_->getAllDBNames();
+  return db_manager_->getAllDBNames();
 }
 
 }  // namespace admin

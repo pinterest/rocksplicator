@@ -53,8 +53,8 @@ using std::thread;
 using std::to_string;
 using std::vector;
 
-DEFINE_bool(is_master, false, "Master or Slave?");
-DEFINE_bool(verify_data, false, "Verify data on slave(s)?");
+DEFINE_bool(is_leader, false, "Leader or Follower?");
+DEFINE_bool(verify_data, false, "Verify data on followers(s)?");
 DEFINE_int32(num_shards, 200, "Number of shards");
 DEFINE_int32(num_write_threads, 2, "Number of threads issuing writes");
 DEFINE_int32(num_keys_per_shard_thread, 10 * 1024,
@@ -118,12 +118,12 @@ int main(int argc, char** argv) {
     auto db_name = "shard" + to_string(i);
     SocketAddress addr(FLAGS_upstream_ip, FLAGS_rocksdb_replicator_port);
     replicator->addDB(db_name, cleanAndOpenDB(FLAGS_db_path + db_name, options),
-                      FLAGS_is_master ? DBRole::MASTER : DBRole::SLAVE, addr,
+                      FLAGS_is_leader ? DBRole::MASTER : DBRole::SLAVE, addr,
                       &db);
     dbs.push_back(db);
   }
 
-  if (FLAGS_is_master) {
+  if (FLAGS_is_leader) {
     sleep_for(seconds(3));
     LOG(INFO) << "Starting write threads...";
     const auto start = GetCurrentTime();

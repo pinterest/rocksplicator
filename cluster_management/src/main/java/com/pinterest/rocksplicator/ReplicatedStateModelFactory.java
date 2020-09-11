@@ -421,7 +421,7 @@ public class ReplicatedStateModelFactory {
 
           if (role.equalsIgnoreCase(sinkRoleName)) {
             upstream = hostPort;
-            if (Utils.isMasterReplica(hostName, port, dbName)) {
+            if (Utils.isLeaderReplica(hostName, port, dbName)) {
               break;
             }
           }

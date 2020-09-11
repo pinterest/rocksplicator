@@ -67,7 +67,7 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
     rocksdb::WriteBatch* updates,
     rocksdb::SequenceNumber* seq_no) {
   if (role_ == DBRole::SLAVE) {
-    throw ReturnCode::WRITE_TO_SLAVE;
+    throw ReturnCode::WRITE_TO_FOLLOWER;
   }
 
   incCounter(kReplicatorWriteBytes, updates->GetDataSize(), db_name_);
@@ -96,7 +96,7 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
       // consider having a dedicated set of worker threads for admin requests,
       // and/or provide async write API when this turns out to be a problem.
       if (!max_seq_no_acked_.wait(cur_seq_no, FLAGS_replicator_timeout_ms)) {
-        throw ReturnCode::WAIT_SLAVE_TIMEOUT;
+        throw ReturnCode::WAIT_FOLLOWER_TIMEOUT;
       }
       break;
     default:

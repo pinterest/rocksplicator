@@ -438,20 +438,25 @@ public class Utils {
     }
   }
 
+  @Deprecated
+  public static boolean isMasterReplica(String host, int adminPort, String dbName) {
+    return isLeaderReplica(host, adminPort, dbName);
+  }
+
   /**
-   * Check if the DB on host:adminPort is Master. If the CheckDBRequest request fails, return false.
+   * Check if the DB on host:adminPort is Leader. If the CheckDBRequest request fails, return false.
    * @param host
    * @param adminPort
    * @param dbName
    * @return
    */
-  public static boolean isMasterReplica(String host, int adminPort, String dbName) {
+  public static boolean isLeaderReplica(String host, int adminPort, String dbName) {
     try {
       Admin.Client client = getAdminClient(host, adminPort);
 
       CheckDBRequest req = new CheckDBRequest(dbName);
       CheckDBResponse res = client.checkDB(req);
-      return res.is_master;
+      return res.is_leader;
     } catch (TException e) {
       LOG.error("Failed to check DB: ", e.toString());
       return false;
