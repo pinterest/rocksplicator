@@ -354,6 +354,8 @@ bool KafkaWatcher::Start(int64_t initial_kafka_seek_timestamp_ms) {
 void KafkaWatcher::StartWatchLoop() {
   uint64_t cycle_end_timestamp_ms;
 
+  // initialize topic partition offset map
+  TopicPartitionToValueMap<int64_t> topic_partition_to_prev_offset;
   // ensure all consunmers get
   while (!is_stopped_.load()) {
     cycle_end_timestamp_ms =
@@ -375,9 +377,6 @@ void KafkaWatcher::StartWatchLoop() {
         // 3) Consume and apply the kafka updates
         // kafka consumption uses whatever time budget is left for this cycle.
         if (kafka_consumer != nullptr && kafka_consumer->IsHealthy()) {
-          const auto& topic_names = kafka_consumer->GetTopicNames();
-          TopicPartitionToValueMap<int64_t> topic_partition_to_prev_offset;
-          topic_partition_to_prev_offset.reserve(topic_names.size());
           const auto message = std::shared_ptr<const RdKafka::Message>(
               kafka_consumer->Consume(kafka_consumer_timeout_ms_));
           if (message == nullptr) {
