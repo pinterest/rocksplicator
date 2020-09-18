@@ -311,9 +311,15 @@ class ThriftClientPool {
           // won't keep a !good() channels for a long period of time.
           if (itor->second.first.use_count() == 0) {
             itor = channels_.erase(itor);
-          } else {
-            ++itor;
+            continue;
           }
+
+          auto c = itor->second.first.lock();
+          if (c && !(itor->second.second->is_good.load())) {
+            c->closeNow();
+          }
+
+          ++itor;
         }
       }
     }
