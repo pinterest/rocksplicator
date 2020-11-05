@@ -204,6 +204,17 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
       return;
     }
 
+    // Write the shard config to local
+    try {
+      FileWriter shard_config_writer = new FileWriter("/var/log/helixspectator/shard_config");
+      shard_config_writer.write(newContent);
+      shard_config_writer.close();
+      LOG.error("Successfully wrote the shard config to the local.");
+    } catch (IOException e) {
+      LOG.error("An error occurred when writing shard config to local");
+      e.printStackTrace();
+    }
+
     // Write the config to ZK
     LOG.error("Generating a new shard config...");
 
