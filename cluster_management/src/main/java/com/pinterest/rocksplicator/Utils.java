@@ -464,7 +464,7 @@ public class Utils {
     }
   }
 
-  public static void checkStateTransition(
+  public static void checkSanity(
       String fromState, String toState, Message message,
       String resourceName, String partitionName) {
     if (fromState.equalsIgnoreCase(message.getFromState())
