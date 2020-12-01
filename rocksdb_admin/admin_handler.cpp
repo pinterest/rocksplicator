@@ -1636,10 +1636,12 @@ void AdminHandler::async_tm_startMessageIngestion(
     std::lock_guard<std::mutex> lock(kafka_watcher_lock_);
     // Check if there's already a thread consuming the same partition.
     if (kafka_watcher_map_.find(db_name) != kafka_watcher_map_.end()) {
-      e.message = db_name + " is already being consumed";
-      callback.release()->exceptionInThread(std::move(e));
+      // This can happen if there are duplicate state transition messages from helix.
+      // Since there is aleady a thread consuming kafka messages for this db,
+      // just log and return.
       LOG(ERROR) << "Already consuming messages to " << db_name <<
                  "in another thread";
+      callback.release()->result(StartMessageIngestionResponse());
       return;
     }
   }
@@ -1840,8 +1842,8 @@ void AdminHandler::async_tm_stopMessageIngestion(
     auto iter = kafka_watcher_map_.find(db_name);
     // Verify that there is thread consuming messages for this db.
     if (iter == kafka_watcher_map_.end()) {
-      e.message = db_name + " is not being consumed";
-      callback.release()->exceptionInThread(std::move(e));
+      // Log and return if there is no thread consuming kafka messages.
+      callback.release()->result(StopMessageIngestionResponse());
       LOG(ERROR) << db_name << " is not being currently consumed";
       return;
     }
