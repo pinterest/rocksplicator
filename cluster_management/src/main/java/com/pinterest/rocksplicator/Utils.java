@@ -513,7 +513,7 @@ public class Utils {
               "MetaDataPath (%s) not visible or doesn't exist yet: ", metadataPath), exp);
           // By throwing the OperationTimeoutException, we force the retry, as NoNode exception is
           // not retryable.
-          if (retryCount.incrementAndGet() < max_retries) {
+          if (retryCount.get() < max_retries) {
             throw new KeeperException.OperationTimeoutException();
           } else {
             // Throws back the last retry exception if it happens.
