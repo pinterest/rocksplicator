@@ -87,7 +87,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
      * We first make sure the DB is open and then load SST files into the DB.
      */
     public void onBecomeOnlineFromOffline(Message message, NotificationContext context) {
-      Utils.checkSanity("OFFLINE", "ONLINE", message, resourceName, partitionName);
+      Utils.checkStateTransitions("OFFLINE", "ONLINE", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       Utils.addDB(Utils.getDbName(partitionName), adminPort);
@@ -125,7 +125,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
      * The callback simply close the DB.
      */
     public void onBecomeOfflineFromOnline(Message message, NotificationContext context) {
-      Utils.checkSanity("ONLINE", "OFFLINE", message, resourceName, partitionName);
+      Utils.checkStateTransitions("ONLINE", "OFFLINE", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       Utils.closeDB(Utils.getDbName(partitionName), adminPort);
@@ -137,7 +137,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
      * The callback simply clear the DB.
      */
     public void onBecomeDroppedFromOffline(Message message, NotificationContext context) {
-      Utils.checkSanity("OFFLINE", "DROPPED", message, resourceName, partitionName);
+      Utils.checkStateTransitions("OFFLINE", "DROPPED", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       Utils.clearDB(Utils.getDbName(partitionName), adminPort);
@@ -149,7 +149,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
      * The callback simply clear the DB.
      */
     public void onBecomeDroppedFromError(Message message, NotificationContext context) {
-      Utils.checkSanity("ERROR", "DROPPED", message, resourceName, partitionName);
+      Utils.checkStateTransitions("ERROR", "DROPPED", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       Utils.clearDB(Utils.getDbName(partitionName), adminPort);
@@ -161,7 +161,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
      * The callback does nothing
      */
     public void onBecomeOfflineFromError(Message message, NotificationContext context) {
-      Utils.checkSanity("ERROR", "OFFLINE", message, resourceName, partitionName);
+      Utils.checkStateTransitions("ERROR", "OFFLINE", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
       Utils.logTransitionCompletionMessage(message);
     }

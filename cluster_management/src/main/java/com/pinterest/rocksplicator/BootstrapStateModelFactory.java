@@ -122,7 +122,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
      * We first make sure the DB is open and then load SST files into the DB.
      */
     public void onBecomeBootstrapFromOffline(Message message, NotificationContext context) {
-      Utils.checkSanity("OFFLINE", "BOOTSTRAP", message, resourceName, partitionName);
+      Utils.checkStateTransitions("OFFLINE", "BOOTSTRAP", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       try{
@@ -165,7 +165,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
      * The callback will stop the kafka ingestion then close the db
      */
     public void onBecomeOfflineFromOnline(Message message, NotificationContext context) {
-      Utils.checkSanity("ONLINE", "OFFLINE", message, resourceName, partitionName);
+      Utils.checkStateTransitions("ONLINE", "OFFLINE", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       try {
@@ -188,7 +188,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
      * or if we reset the resource while it is in BOOTSTRAP->ONLINE
      */
     public void onBecomeOfflineFromBootstrap(Message message, NotificationContext context) {
-      Utils.checkSanity("BOOTSTRAP", "OFFLINE", message, resourceName, partitionName);
+      Utils.checkStateTransitions("BOOTSTRAP", "OFFLINE", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       try {
@@ -209,7 +209,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
      * We will tail kafka until we hit EOF and then return
      */
     public void onBecomeOnlineFromBootstrap(Message message, NotificationContext context) {
-      Utils.checkSanity("BOOTSTRAP", "ONLINE", message, resourceName, partitionName);
+      Utils.checkStateTransitions("BOOTSTRAP", "ONLINE", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       try {
@@ -237,7 +237,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
      * The callback simply clear the DB.
      */
     public void onBecomeDroppedFromOffline(Message message, NotificationContext context) {
-      Utils.checkSanity("OFFLINE", "DROPPED", message, resourceName, partitionName);
+      Utils.checkStateTransitions("OFFLINE", "DROPPED", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       Utils.clearDB(Utils.getDbName(partitionName), adminPort);
@@ -249,7 +249,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
      * The callback simply clear the DB.
      */
     public void onBecomeDroppedFromError(Message message, NotificationContext context) {
-      Utils.checkSanity("ERROR", "DROPPED", message, resourceName, partitionName);
+      Utils.checkStateTransitions("ERROR", "DROPPED", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       Utils.clearDB(Utils.getDbName(partitionName), adminPort);
@@ -261,7 +261,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
      * The callback does nothing
      */
     public void onBecomeOfflineFromError(Message message, NotificationContext context) {
-      Utils.checkSanity("ERROR", "OFFLINE", message, resourceName, partitionName);
+      Utils.checkStateTransitions("ERROR", "OFFLINE", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
       Utils.logTransitionCompletionMessage(message);
     }
