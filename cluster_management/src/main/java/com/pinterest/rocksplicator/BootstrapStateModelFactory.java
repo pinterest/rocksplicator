@@ -28,7 +28,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
-import org.apache.curator.retry.ExponentialBackoffRetry;
+import org.apache.curator.retry.BoundedExponentialBackoffRetry;
 import org.apache.helix.NotificationContext;
 import org.apache.helix.model.Message;
 import org.apache.helix.participant.statemachine.StateModel;
@@ -73,6 +73,7 @@ import org.slf4j.LoggerFactory;
  */
 
 public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
+  private static final int MAX_ZK_RETRIES = 7;
   private final int adminPort;
   private final String cluster;
   private CuratorFramework zkClient;
@@ -83,7 +84,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
     this.adminPort = adminPort;
     this.cluster = cluster;
     this.zkClient = CuratorFrameworkFactory.newClient(zkConnectString,
-        new ExponentialBackoffRetry(1000, 3));
+        new BoundedExponentialBackoffRetry(1000,  10000, MAX_ZK_RETRIES));
     zkClient.start();
   }
 
@@ -121,7 +122,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
      * We first make sure the DB is open and then load SST files into the DB.
      */
     public void onBecomeBootstrapFromOffline(Message message, NotificationContext context) {
-      Utils.checkSanity("OFFLINE", "BOOTSTRAP", message, resourceName, partitionName);
+      Utils.checkStateTransitions("OFFLINE", "BOOTSTRAP", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       try{
@@ -131,9 +132,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
       }
 
       try {
-        zkClient.sync().forPath(Utils.getMetaLocation(cluster, resourceName));
-        String meta =
-                new String(zkClient.getData().forPath(Utils.getMetaLocation(cluster, resourceName)));
+        String meta = Utils.getMetaData(zkClient, cluster, resourceName, MAX_ZK_RETRIES);
         JsonObject jsonObject = new JsonParser().parse(meta).getAsJsonObject();
 
         String s3Path = jsonObject.get("s3_path").getAsString();
@@ -166,7 +165,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
      * The callback will stop the kafka ingestion then close the db
      */
     public void onBecomeOfflineFromOnline(Message message, NotificationContext context) {
-      Utils.checkSanity("ONLINE", "OFFLINE", message, resourceName, partitionName);
+      Utils.checkStateTransitions("ONLINE", "OFFLINE", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       try {
@@ -189,7 +188,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
      * or if we reset the resource while it is in BOOTSTRAP->ONLINE
      */
     public void onBecomeOfflineFromBootstrap(Message message, NotificationContext context) {
-      Utils.checkSanity("BOOTSTRAP", "OFFLINE", message, resourceName, partitionName);
+      Utils.checkStateTransitions("BOOTSTRAP", "OFFLINE", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       try {
@@ -210,11 +209,11 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
      * We will tail kafka until we hit EOF and then return
      */
     public void onBecomeOnlineFromBootstrap(Message message, NotificationContext context) {
-      Utils.checkSanity("BOOTSTRAP", "ONLINE", message, resourceName, partitionName);
+      Utils.checkStateTransitions("BOOTSTRAP", "ONLINE", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       try {
-        String meta = new String(zkClient.getData().forPath(Utils.getMetaLocation(cluster, resourceName)));
+        String meta = Utils.getMetaData(zkClient, cluster, resourceName, MAX_ZK_RETRIES);
         JsonObject jsonObject = new JsonParser().parse(meta).getAsJsonObject();
         long replay_timestamp_ms = jsonObject.get("replay_timestamp_ms").getAsLong();
         String kafkaBrokerServersetPath = jsonObject.get("kafka_broker_serverset_path").getAsString();
@@ -238,7 +237,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
      * The callback simply clear the DB.
      */
     public void onBecomeDroppedFromOffline(Message message, NotificationContext context) {
-      Utils.checkSanity("OFFLINE", "DROPPED", message, resourceName, partitionName);
+      Utils.checkStateTransitions("OFFLINE", "DROPPED", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       Utils.clearDB(Utils.getDbName(partitionName), adminPort);
@@ -250,7 +249,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
      * The callback simply clear the DB.
      */
     public void onBecomeDroppedFromError(Message message, NotificationContext context) {
-      Utils.checkSanity("ERROR", "DROPPED", message, resourceName, partitionName);
+      Utils.checkStateTransitions("ERROR", "DROPPED", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
       Utils.clearDB(Utils.getDbName(partitionName), adminPort);
@@ -262,7 +261,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
      * The callback does nothing
      */
     public void onBecomeOfflineFromError(Message message, NotificationContext context) {
-      Utils.checkSanity("ERROR", "OFFLINE", message, resourceName, partitionName);
+      Utils.checkStateTransitions("ERROR", "OFFLINE", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
       Utils.logTransitionCompletionMessage(message);
     }

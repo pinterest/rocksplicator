@@ -35,13 +35,19 @@ import com.pinterest.rocksdb_admin.thrift.RestoreDBRequest;
 import com.pinterest.rocksdb_admin.thrift.RestoreDBFromS3Request;
 import com.pinterest.rocksdb_admin.thrift.CompactDBRequest;
 
+import org.apache.curator.RetryLoop;
+import org.apache.curator.framework.CuratorFramework;
 import org.apache.helix.model.Message;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransportException;
+import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class Utils {
 
@@ -458,8 +464,8 @@ public class Utils {
     }
   }
 
-  public static void checkSanity(String fromState, String toState, Message message,
-                                 String resourceName, String partitionName) {
+  public static void checkStateTransitions(String fromState, String toState, Message message,
+                                           String resourceName, String partitionName) {
     if (fromState.equalsIgnoreCase(message.getFromState())
         && toState.equalsIgnoreCase(message.getToState())
         && resourceName.equalsIgnoreCase(message.getResourceName())
@@ -471,9 +477,54 @@ public class Utils {
     LOG.error("From " + fromState + " to " + toState + " for " + partitionName);
   }
 
-  public static String getMetaLocation(String cluster, String resourceName) {
-    return "/metadata/" + cluster + "/" + resourceName + "/resource_meta";
+  public static String getMetaParentClusterLocation(String cluster) {
+    return "/metadata/" + cluster;
   }
+
+  public static String getMetaParentResourceLocation(String cluster, String resourceName) {
+    return getMetaParentClusterLocation(cluster) + "/" + resourceName;
+  }
+
+  public static String getMetaLocation(String cluster, String resourceName) {
+    return  getMetaParentResourceLocation(cluster, resourceName) + "/resource_meta";
+  }
+
+  public static String getMetaData(
+      final CuratorFramework zkClient,
+      final String cluster,
+      final String resourceName,
+      final int max_retries) throws Exception {
+    final String clusterMetaPath = Utils.getMetaParentClusterLocation(cluster);
+    final String resourceMetaPath = Utils.getMetaParentResourceLocation(cluster, resourceName);
+    final String metadataPath = Utils.getMetaLocation(cluster, resourceName);
+
+    final AtomicInteger retryCount = new AtomicInteger(0);
+    return RetryLoop.callWithRetry(zkClient.getZookeeperClient(), new Callable<String>() {
+      @Override
+      public String call() throws Exception {
+        retryCount.incrementAndGet();
+        try {
+          zkClient.sync().forPath(clusterMetaPath);
+          zkClient.sync().forPath(resourceMetaPath);
+          zkClient.sync().forPath(metadataPath);
+          return new String(zkClient.getData().forPath(metadataPath));
+        } catch (KeeperException.NoNodeException exp) {
+          LOG.error(String.format(
+              "MetaDataPath (%s) not visible or doesn't exist yet: ", metadataPath), exp);
+          // By throwing the OperationTimeoutException, we force the retry, as NoNode exception is
+          // not retryable.
+          if (retryCount.get() < max_retries) {
+            throw new KeeperException.OperationTimeoutException();
+          } else {
+            // Throws back the last retry exception if it happens.
+            throw exp;
+          }
+        }
+      }
+    });
+  }
+
+
 
   // partition name is in format: test_0
   // S3 part prefix is in format: part-00000-
