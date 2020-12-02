@@ -28,7 +28,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
-import org.apache.curator.retry.ExponentialBackoffRetry;
+import org.apache.curator.retry.BoundedExponentialBackoffRetry;
 import org.apache.helix.NotificationContext;
 import org.apache.helix.model.Message;
 import org.apache.helix.participant.statemachine.StateModel;
@@ -73,6 +73,7 @@ import org.slf4j.LoggerFactory;
  */
 
 public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
+  private static final int MAX_ZK_RETRIES = 7;
   private final int adminPort;
   private final String cluster;
   private CuratorFramework zkClient;
@@ -83,7 +84,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
     this.adminPort = adminPort;
     this.cluster = cluster;
     this.zkClient = CuratorFrameworkFactory.newClient(zkConnectString,
-        new ExponentialBackoffRetry(1000, 3));
+        new BoundedExponentialBackoffRetry(1000,  10000, MAX_ZK_RETRIES));
     zkClient.start();
   }
 
@@ -131,9 +132,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
       }
 
       try {
-        zkClient.sync().forPath(Utils.getMetaLocation(cluster, resourceName));
-        String meta =
-                new String(zkClient.getData().forPath(Utils.getMetaLocation(cluster, resourceName)));
+        String meta = Utils.getMetaData(zkClient, cluster, resourceName, MAX_ZK_RETRIES);
         JsonObject jsonObject = new JsonParser().parse(meta).getAsJsonObject();
 
         String s3Path = jsonObject.get("s3_path").getAsString();
@@ -214,7 +213,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
       Utils.logTransitionMessage(message);
 
       try {
-        String meta = new String(zkClient.getData().forPath(Utils.getMetaLocation(cluster, resourceName)));
+        String meta = Utils.getMetaData(zkClient, cluster, resourceName, MAX_ZK_RETRIES);
         JsonObject jsonObject = new JsonParser().parse(meta).getAsJsonObject();
         long replay_timestamp_ms = jsonObject.get("replay_timestamp_ms").getAsLong();
         String kafkaBrokerServersetPath = jsonObject.get("kafka_broker_serverset_path").getAsString();
