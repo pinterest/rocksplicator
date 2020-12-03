@@ -1,0 +1,46 @@
+{
+  "id" : "LeaderFollower",
+  "simpleFields" : {
+    "INITIAL_STATE" : "OFFLINE"
+  },
+  "mapFields" : {
+    "DROPPED.meta" : {
+      "count" : "-1"
+    },
+    "ERROR.meta" : {
+      "count" : "-1"
+    },
+    "ERROR.next" : {
+      "DROPPED" : "DROPPED",
+      "OFFLINE" : "OFFLINE"
+    },
+    "LEADER.meta" : {
+      "count" : "1"
+    },
+    "LEADER.next" : {
+      "FOLLOWER" : "FOLLOWER",
+      "DROPPED" : "FOLLOWER",
+      "OFFLINE" : "FOLLOWER"
+    },
+    "OFFLINE.meta" : {
+      "count" : "-1"
+    },
+    "OFFLINE.next" : {
+      "FOLLOWER" : "FOLLOWER",
+      "LEADER" : "FOLLOWER",
+      "DROPPED" : "DROPPED"
+    },
+    "FOLLOWER.meta" : {
+      "count" : "R"
+    },
+    "FOLLOWER.next" : {
+      "LEADER" : "LEADER",
+      "DROPPED" : "OFFLINE",
+      "OFFLINE" : "OFFLINE"
+    }
+  },
+  "listFields" : {
+    "STATE_PRIORITY_LIST" : [ "LEADER", "FOLLOWER", "OFFLINE", "DROPPED", "ERROR" ],
+    "STATE_TRANSITION_PRIORITYLIST" : [ "LEADER-FOLLOWER", "FOLLOWER-LEADER", "OFFLINE-FOLLOWER", "FOLLOWER-OFFLINE", "OFFLINE-DROPPED" ]
+  }
+}
