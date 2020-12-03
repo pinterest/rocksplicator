@@ -29,11 +29,11 @@ import com.pinterest.rocksdb_admin.thrift.CheckDBRequest;
 import com.pinterest.rocksdb_admin.thrift.CheckDBResponse;
 import com.pinterest.rocksdb_admin.thrift.ClearDBRequest;
 import com.pinterest.rocksdb_admin.thrift.CloseDBRequest;
+import com.pinterest.rocksdb_admin.thrift.CompactDBRequest;
 import com.pinterest.rocksdb_admin.thrift.GetSequenceNumberRequest;
 import com.pinterest.rocksdb_admin.thrift.GetSequenceNumberResponse;
-import com.pinterest.rocksdb_admin.thrift.RestoreDBRequest;
 import com.pinterest.rocksdb_admin.thrift.RestoreDBFromS3Request;
-import com.pinterest.rocksdb_admin.thrift.CompactDBRequest;
+import com.pinterest.rocksdb_admin.thrift.RestoreDBRequest;
 
 import org.apache.curator.RetryLoop;
 import org.apache.curator.framework.CuratorFramework;
@@ -473,8 +473,12 @@ public class Utils {
       return;
     }
 
-    LOG.error("Invalid meesage: " + message.toString());
-    LOG.error("From " + fromState + " to " + toState + " for " + partitionName);
+    LOG.error(String.format(
+        "Invalid message: %s\nFrom stats=%s to state=%s for partition=%s",
+        message.toString(),
+        fromState,
+        toState,
+        partitionName));
   }
 
   public static String getMetaParentClusterLocation(String cluster) {
@@ -504,10 +508,24 @@ public class Utils {
       public String call() throws Exception {
         retryCount.incrementAndGet();
         try {
+          LOG.info(String
+              .format("Trying (try no = %d), sync from cluster base zk path: %s", retryCount.get(),
+                  clusterMetaPath));
           zkClient.sync().forPath(clusterMetaPath);
+          LOG.info(String
+              .format("Trying (try no = %d), sync from resource base zk path: %s", retryCount.get(),
+                  resourceMetaPath));
           zkClient.sync().forPath(resourceMetaPath);
+          LOG.info(String
+              .format("Trying (try no = %d), sync from metadata zk path: %s", retryCount.get(),
+                  metadataPath));
           zkClient.sync().forPath(metadataPath);
-          return new String(zkClient.getData().forPath(metadataPath));
+          LOG.info(String
+              .format("Trying (try no = %d), getData from metadata zk path: %s", retryCount.get(),
+                  metadataPath));
+          String metaData = new String(zkClient.getData().forPath(metadataPath));
+          LOG.info(String.format("get_meta Retrieved : %s", metaData));
+          return metaData;
         } catch (KeeperException.NoNodeException exp) {
           LOG.error(String.format(
               "MetaDataPath (%s) not visible or doesn't exist yet: ", metadataPath), exp);
