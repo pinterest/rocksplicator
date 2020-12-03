@@ -1,0 +1,37 @@
+{
+  "id" : "Bootstrap",
+  "mapFields" : {
+    "DROPPED.meta" : {
+      "count" : "-1"
+    },
+    "OFFLINE.meta" : {
+      "count" : "-1"
+    },
+    "OFFLINE.next" : {
+      "DROPPED" : "DROPPED",
+      "ONLINE" : "BOOTSTRAP"
+    },
+    "ONLINE.meta" : {
+      "count" : "R"
+    },
+    "ONLINE.next" : {
+      "DROPPED" : "OFFLINE",
+      "OFFLINE" : "OFFLINE"
+    },
+    "BOOTSTRAP.meta" : {
+      "count" : "-1"
+    },
+    "BOOTSTRAP.next" : {
+      "ONLINE" : "ONLINE",
+      "OFFLINE" : "OFFLINE",
+      "DROPPED" : "OFFLINE"
+    }
+  },
+  "simpleFields" : {
+    "INITIAL_STATE" : "OFFLINE"
+  },
+  "listFields" : {
+    "STATE_PRIORITY_LIST" : [ "ONLINE", "BOOTSTRAP", "OFFLINE", "DROPPED" ],
+    "STATE_TRANSITION_PRIORITYLIST" : [ "BOOTSTRAP-ONLINE", "OFFLINE-BOOTSTRAP", "ONLINE-OFFLINE", "BOOTSTRAP-OFFLINE", "OFFLINE-DROPPED" ]
+  }
+}
