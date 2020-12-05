@@ -40,6 +40,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.google.common.base.Stopwatch;
 
+import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -63,6 +64,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   private String lastPostedContent;
   private Set<String> disabledHosts;
   private RocksplicatorMonitor monitor;
+  private final boolean enableDumpToLocal;
 
   public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
     this(clusterName, helixManager, configPostUrl,
@@ -83,6 +85,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     this.lastPostedContent = null;
     this.disabledHosts = new HashSet<>();
     this.monitor = monitor;
+    this.enableDumpToLocal = new File("/var/log/helixspectator").canWrite();
   }
 
   @Override
@@ -207,14 +210,16 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     }
 
     // Write the shard config to local
-    try {
-      FileWriter shard_config_writer = new FileWriter("/var/log/helixspectator/shard_config");
-      shard_config_writer.write(newContent);
-      shard_config_writer.close();
-      LOG.error("Successfully wrote the shard config to the local.");
-    } catch (IOException e) {
-      LOG.error("An error occurred when writing shard config to local");
-      e.printStackTrace();
+    if (enableDumpToLocal) {
+      try {
+        FileWriter shard_config_writer = new FileWriter("/var/log/helixspectator/shard_config");
+        shard_config_writer.write(newContent);
+        shard_config_writer.close();
+        LOG.error("Successfully wrote the shard config to the local.");
+      } catch (IOException e) {
+        LOG.error("An error occurred when writing shard config to local");
+        e.printStackTrace();
+      }
     }
 
     // Write the config to ZK
