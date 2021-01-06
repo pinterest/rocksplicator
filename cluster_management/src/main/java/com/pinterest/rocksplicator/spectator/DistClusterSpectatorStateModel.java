@@ -15,11 +15,14 @@ import org.slf4j.LoggerFactory;
 })
 public class DistClusterSpectatorStateModel extends AbstractHelixLeaderStandbyStateModel {
   private static Logger logger = LoggerFactory.getLogger(DistClusterSpectatorStateModel.class);
-  protected HelixManager _spectator = null;
-  protected SpectatorLeadershipCallback _spectatorCallbk = null;
+  private HelixManager _spectatorManager = null;
+  private SpectatorLeadershipCallback _spectatorCallbk = null;
 
-  public DistClusterSpectatorStateModel(String zkAddr) {
+  public DistClusterSpectatorStateModel(
+      SpectatorLeadershipCallback callback,
+      String zkAddr) {
     super(zkAddr);
+    _spectatorCallbk = callback;
   }
 
   @Override
@@ -35,14 +38,17 @@ public class DistClusterSpectatorStateModel extends AbstractHelixLeaderStandbySt
 
     logger.info(spectatorInstanceName + " becoming leader from standby for " + clusterName);
 
-    if (_spectator == null) {
-      _spectator =
+    if (_spectatorManager == null) {
+      _spectatorManager =
           HelixManagerFactory.getZKHelixManager(clusterName, spectatorInstanceName,
               InstanceType.SPECTATOR, _zkAddr);
-      _spectator.connect();
+      _spectatorManager.connect();
+      if (_spectatorCallbk != null) {
+        _spectatorCallbk.onAcquire(_spectatorManager);
+      }
       logStateTransition("STANDBY", "LEADER", clusterName, spectatorInstanceName);
     } else {
-      logger.error("spectator already exists:" + _spectator.getInstanceName() + " for "
+      logger.error("spectator already exists:" + _spectatorManager.getInstanceName() + " for "
           + clusterName);
     }
 
@@ -55,7 +61,10 @@ public class DistClusterSpectatorStateModel extends AbstractHelixLeaderStandbySt
 
     logger.info(controllerName + " becoming standby from leader for " + clusterName);
 
-    if (_spectator != null) {
+    if (_spectatorManager != null) {
+      if (_spectatorCallbk != null) {
+        _spectatorCallbk.onRelease(_spectatorManager);
+      }
       reset();
       logStateTransition("LEADER", "STANDBY", clusterName, controllerName);
     } else {
@@ -82,9 +91,9 @@ public class DistClusterSpectatorStateModel extends AbstractHelixLeaderStandbySt
 
   @Override
   public void reset() {
-    if (_spectator != null) {
-      _spectator.disconnect();
-      _spectator = null;
+    if (_spectatorManager != null) {
+      _spectatorManager.disconnect();
+      _spectatorManager = null;
     }
 
   }
