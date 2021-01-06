@@ -20,11 +20,12 @@ package com.pinterest.rocksplicator;
 
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
 
-import org.apache.helix.api.listeners.PreFetch;
+import com.google.common.base.Stopwatch;
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixConstants;
 import org.apache.helix.HelixManager;
 import org.apache.helix.NotificationContext;
+import org.apache.helix.api.listeners.PreFetch;
 import org.apache.helix.model.ExternalView;
 import org.apache.helix.model.IdealState;
 import org.apache.helix.model.InstanceConfig;
@@ -38,7 +39,6 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.google.common.base.Stopwatch;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -51,20 +51,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class ConfigGenerator extends RoutingTableProvider implements CustomCodeCallbackHandler {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConfigGenerator.class);
 
   private final String clusterName;
-  private HelixManager helixManager;
-  private Map<String, String> hostToHostWithDomain;
   private final String postUrl;
-  private JSONObject dataParameters;
+  private final boolean enableDumpToLocal;
+  private final Map<String, String> hostToHostWithDomain;
+  private final JSONObject dataParameters;
+  private final RocksplicatorMonitor monitor;
+  private final ReentrantLock synchronizedCallbackLock;
+  private HelixManager helixManager;
   private String lastPostedContent;
   private Set<String> disabledHosts;
-  private RocksplicatorMonitor monitor;
-  private final boolean enableDumpToLocal;
 
   public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
     this(clusterName, helixManager, configPostUrl,
@@ -86,15 +89,56 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     this.disabledHosts = new HashSet<>();
     this.monitor = monitor;
     this.enableDumpToLocal = new File("/var/log/helixspectator").canWrite();
+    this.synchronizedCallbackLock = new ReentrantLock();
+  }
+
+  private static class AutoCloseableLock implements AutoCloseable {
+
+    private final Lock lock;
+
+    private AutoCloseableLock(Lock lock) {
+      this.lock = lock;
+      this.lock.lock();
+    }
+
+    public static AutoCloseableLock lock(Lock lock) {
+      return new AutoCloseableLock(lock);
+    }
+
+    @Override
+    public void close() {
+      this.lock.unlock();
+    }
+  }
+
+  /**
+   * We are not 100% confident on behaviour of helix agent w.r.t. threading and execution model
+   * for callback functions call from helix agent. Especially is is possible to get multiple
+   * callbacks, of same of different types, sources to be called by helix in parallel.
+   *
+   * In order to ensure that only one callback is actively being processed at any time, we
+   * explicitly guard any callback function body with a single re-entrant lock. This provides
+   * explicit guarantee around the behaviour of how shard_maps are processed, generated and
+   * published.
+   */
+  @Override
+  public void onCallback(NotificationContext notificationContext) {
+    try (AutoCloseableLock autoLock = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
+      LOG.error("Received notification: " + notificationContext.getChangeType());
+      if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
+        generateShardConfig();
+      } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.INSTANCE_CONFIG) {
+        if (updateDisabledHosts()) {
+          generateShardConfig();
+        }
+      }
+    }
   }
 
   @Override
-  public void onCallback(NotificationContext notificationContext) {
-    LOG.error("Received notification: " + notificationContext.getChangeType());
-
-    if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
-      generateShardConfig();
-    } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.INSTANCE_CONFIG) {
+  @PreFetch(enabled = false)
+  public void onConfigChange(List<InstanceConfig> configs, NotificationContext changeContext) {
+    try (AutoCloseableLock autoLock = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
       if (updateDisabledHosts()) {
         generateShardConfig();
       }
@@ -103,16 +147,11 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
 
   @Override
   @PreFetch(enabled = false)
-  public void onConfigChange(List<InstanceConfig> configs, NotificationContext changeContext) {
-    if (updateDisabledHosts()) {
+  public void onExternalViewChange(List<ExternalView> externalViewList,
+                                   NotificationContext changeContext) {
+    try (AutoCloseableLock autoLock = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
       generateShardConfig();
     }
-  }
-
-  @Override
-  @PreFetch(enabled = false)
-  public void onExternalViewChange(List<ExternalView> externalViewList, NotificationContext changeContext) {
-    generateShardConfig();
   }
 
   private void generateShardConfig() {
@@ -138,6 +177,22 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
       if (externalView == null) {
         monitor.incrementConfigGeneratorNullExternalView();
         LOG.error("Failed to get externalView for resource: " + resource);
+        /**
+         * In some situations, we may encounter a null externalView for a given resource.
+         * This can happen, since there exists a race condition between retrieving list of resources
+         * and then iterating over each of those resources to retrieve corresponding externalView
+         * and potential deletion of a resource in between.
+         *
+         * Another situation where we may receive null externalView for a resource is in case where
+         * a resource is newly created but it's externalView has not yet been generated by helix
+         * controller.
+         *
+         * There can be quite a few race conditions which are difficult to enumerate and under such
+         * scenarios, we can't guarantee that externalView for a given resource exists at a specific
+         * moment. In such cases, it is safe to ignore such resource until it's externalView is
+         * accessible and not null.
+         */
+        continue;
       }
       Set<String> partitions = externalView.getPartitionSet();
 
@@ -156,6 +211,11 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
         for (Map.Entry<String, String> entry : hostToState.entrySet()) {
           existingHosts.add(entry.getKey());
 
+          /**TODO: gopalrajpurohit
+           * Add a LiveInstanceListener and remove any temporary / permanently dead hosts
+           * from consideration. This is to ensure that during deploys, we take into account
+           * downed instances faster then potentially available through externalViews.
+           */
           if (disabledHosts.contains(entry.getKey())) {
             // exclude disabled hosts from the shard map config
             continue;
@@ -225,6 +285,10 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     // Write the config to ZK
     LOG.error("Generating a new shard config...");
 
+    /**
+     * TODO: gopalrajpurohit
+     * Move shard_map updating logic into separate method.
+     */
     this.dataParameters.remove("content");
     this.dataParameters.put("content", newContent);
     HttpPost httpPost = new HttpPost(this.postUrl);
@@ -277,7 +341,6 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
       LOG.error("No changes to disabled instances");
       return false;
     }
-
     disabledHosts = latestDisabledInstances;
     return true;
   }
