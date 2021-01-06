@@ -51,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class ConfigGenerator extends RoutingTableProvider implements CustomCodeCallbackHandler {
@@ -63,7 +64,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   private final Map<String, String> hostToHostWithDomain;
   private final JSONObject dataParameters;
   private final RocksplicatorMonitor monitor;
-  private final ReentrantLock updateLock;
+  private final ReentrantLock synchronizedCallbackLock;
   private HelixManager helixManager;
   private volatile String lastPostedContent;
   private volatile Set<String> disabledHosts;
@@ -88,16 +89,46 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     this.disabledHosts = new HashSet<>();
     this.monitor = monitor;
     this.enableDumpToLocal = new File("/var/log/helixspectator").canWrite();
-    this.updateLock = new ReentrantLock();
+    this.synchronizedCallbackLock = new ReentrantLock();
+  }
+
+  private static class LockHolder implements AutoCloseable {
+
+    private final Lock lock;
+
+    private LockHolder(Lock lock) {
+      this.lock = lock;
+      this.lock.lock();
+    }
+
+    public static LockHolder create(Lock lock) {
+      return new LockHolder(lock);
+    }
+
+    @Override
+    public void close() {
+      this.lock.unlock();
+    }
   }
 
   @Override
   public void onCallback(NotificationContext notificationContext) {
-    LOG.error("Received notification: " + notificationContext.getChangeType());
+    try (LockHolder holder = LockHolder.create(this.synchronizedCallbackLock)) {
+      LOG.error("Received notification: " + notificationContext.getChangeType());
+      if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
+        generateShardConfig();
+      } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.INSTANCE_CONFIG) {
+        if (updateDisabledHosts()) {
+          generateShardConfig();
+        }
+      }
+    }
+  }
 
-    if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
-      generateShardConfig();
-    } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.INSTANCE_CONFIG) {
+  @Override
+  @PreFetch(enabled = false)
+  public void onConfigChange(List<InstanceConfig> configs, NotificationContext changeContext) {
+    try (LockHolder holder = LockHolder.create(this.synchronizedCallbackLock)) {
       if (updateDisabledHosts()) {
         generateShardConfig();
       }
@@ -106,29 +137,14 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
 
   @Override
   @PreFetch(enabled = false)
-  public void onConfigChange(List<InstanceConfig> configs, NotificationContext changeContext) {
-    if (updateDisabledHosts()) {
+  public void onExternalViewChange(List<ExternalView> externalViewList,
+                                   NotificationContext changeContext) {
+    try (LockHolder holder = LockHolder.create(this.synchronizedCallbackLock)) {
       generateShardConfig();
     }
   }
 
-  @Override
-  @PreFetch(enabled = false)
-  public void onExternalViewChange(List<ExternalView> externalViewList,
-                                   NotificationContext changeContext) {
-    generateShardConfig();
-  }
-
   private void generateShardConfig() {
-    this.updateLock.lock();
-    try {
-      generateShardConfigThreadUnsafe();
-    } finally {
-      this.updateLock.unlock();
-    }
-  }
-
-  private void generateShardConfigThreadUnsafe() {
     monitor.incrementConfigGeneratorCalledCount();
     Stopwatch stopwatch = Stopwatch.createStarted();
 
@@ -310,18 +326,13 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     Set<String> latestDisabledInstances = new HashSet<>(
         admin.getInstancesInClusterWithTag(clusterName, "disabled"));
 
-    this.updateLock.lock();
-    try {
-      if (disabledHosts.equals(latestDisabledInstances)) {
-        // no changes
-        LOG.error("No changes to disabled instances");
-        return false;
-      }
-      disabledHosts = latestDisabledInstances;
-      return true;
-    } finally {
-      this.updateLock.unlock();
+    if (disabledHosts.equals(latestDisabledInstances)) {
+      // no changes
+      LOG.error("No changes to disabled instances");
+      return false;
     }
+    disabledHosts = latestDisabledInstances;
+    return true;
   }
 
   /**
