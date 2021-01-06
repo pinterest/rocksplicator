@@ -130,8 +130,20 @@ public class Spectator {
 
     CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
     zkClient.start();
+
     InterProcessMutex mutex = new InterProcessMutex(zkClient, getClusterLockPath(clusterName));
     LOG.error("Trying to obtain lock");
+
+    /**
+     * TODO: Improve this logic.
+     *
+     * This is an issue if the lock is released without the process going down. This can happen,
+     * if the client looses connection to zookeeper for a period of time. In such a scenario,
+     * the client doesn't have a way to stop spectator from processing shard_map generation.
+     * The lock may subsequently be obtained by another instance of spectator and hence breaking
+     * the semantics of single updator.
+     * In that case, the spectator will continue to listen and generate shard_map.
+     */
     try (Locker locker = new Locker(mutex)) {
       LOG.error("Obtained lock");
       spectator.startListener(postUrl);
