@@ -92,17 +92,17 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     this.synchronizedCallbackLock = new ReentrantLock();
   }
 
-  private static class LockHolder implements AutoCloseable {
+  private static class AutoCloseableLock implements AutoCloseable {
 
     private final Lock lock;
 
-    private LockHolder(Lock lock) {
+    private AutoCloseableLock(Lock lock) {
       this.lock = lock;
       this.lock.lock();
     }
 
-    public static LockHolder create(Lock lock) {
-      return new LockHolder(lock);
+    public static AutoCloseableLock lock(Lock lock) {
+      return new AutoCloseableLock(lock);
     }
 
     @Override
@@ -113,7 +113,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
 
   @Override
   public void onCallback(NotificationContext notificationContext) {
-    try (LockHolder holder = LockHolder.create(this.synchronizedCallbackLock)) {
+    try (AutoCloseableLock holder = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
       LOG.error("Received notification: " + notificationContext.getChangeType());
       if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
         generateShardConfig();
@@ -128,7 +128,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   @Override
   @PreFetch(enabled = false)
   public void onConfigChange(List<InstanceConfig> configs, NotificationContext changeContext) {
-    try (LockHolder holder = LockHolder.create(this.synchronizedCallbackLock)) {
+    try (AutoCloseableLock holder = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
       if (updateDisabledHosts()) {
         generateShardConfig();
       }
@@ -139,7 +139,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   @PreFetch(enabled = false)
   public void onExternalViewChange(List<ExternalView> externalViewList,
                                    NotificationContext changeContext) {
-    try (LockHolder holder = LockHolder.create(this.synchronizedCallbackLock)) {
+    try (AutoCloseableLock holder = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
       generateShardConfig();
     }
   }
