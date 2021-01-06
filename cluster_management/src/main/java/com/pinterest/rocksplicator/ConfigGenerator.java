@@ -113,10 +113,13 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
 
   /**
    * We are not 100% confident on behaviour of helix agent w.r.t. threading and execution model
-   * for callback functions call from helix agent.
+   * for callback functions call from helix agent. Especially is is possible to get multiple
+   * callbacks, of same of different types, sources to be called by helix in parallel.
    *
    * In order to ensure that only one callback is actively being processed at any time, we
-   * explicitly guard any callback function body with a single re-entrant lock.
+   * explicitly guard any callback function body with a single re-entrant lock. This provides
+   * explicit guarantee around the behaviour of how shard_maps are processed, generated and
+   * published.
    */
   @Override
   public void onCallback(NotificationContext notificationContext) {
