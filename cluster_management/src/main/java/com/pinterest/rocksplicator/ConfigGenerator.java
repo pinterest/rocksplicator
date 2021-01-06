@@ -113,7 +113,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
 
   @Override
   public void onCallback(NotificationContext notificationContext) {
-    try (AutoCloseableLock holder = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
+    try (AutoCloseableLock autoLock = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
       LOG.error("Received notification: " + notificationContext.getChangeType());
       if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
         generateShardConfig();
@@ -128,7 +128,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   @Override
   @PreFetch(enabled = false)
   public void onConfigChange(List<InstanceConfig> configs, NotificationContext changeContext) {
-    try (AutoCloseableLock holder = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
+    try (AutoCloseableLock autoLock = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
       if (updateDisabledHosts()) {
         generateShardConfig();
       }
@@ -139,7 +139,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   @PreFetch(enabled = false)
   public void onExternalViewChange(List<ExternalView> externalViewList,
                                    NotificationContext changeContext) {
-    try (AutoCloseableLock holder = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
+    try (AutoCloseableLock autoLock = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
       generateShardConfig();
     }
   }
