@@ -80,7 +80,8 @@ public class RestoreTask extends UserContentStore implements Task {
       ExternalView view = admin.getResourceExternalView(taskCluster, resourceName);
       Map<String, String> stateMap = view.getStateMap(partitionName);
       if (stateMap.size() != 0) {
-        if (stateMap.containsValue("SLAVE") || stateMap.containsValue("MASTER")) {
+        if (stateMap.containsValue("SLAVE") || stateMap.containsValue("MASTER") ||
+            stateMap.containsValue("FOLLOWER") || stateMap.containsValue("LEADER")) {
           for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
             String hostPort = instanceNameAndRole.getKey();
             String role = instanceNameAndRole.getValue();

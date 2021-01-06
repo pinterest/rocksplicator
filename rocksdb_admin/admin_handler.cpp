@@ -609,7 +609,7 @@ void AdminHandler::async_tm_addDB(
   std::string err_msg;
   replicator::DBRole role = replicator::DBRole::SLAVE;
   if (request->__isset.db_role) {
-    if (request->db_role == "SLAVE") {
+    if (request->db_role == "SLAVE" || request->db_role == "FOLLOWER") {
       role = replicator::DBRole::SLAVE;
     } else if (request->db_role == "NOOP") {
       role = replicator::DBRole::NOOP;
@@ -1236,9 +1236,9 @@ void AdminHandler::async_tm_changeDBRoleAndUpStream(
 
   AdminException e;
   replicator::DBRole new_role;
-  if (request->new_role == "MASTER") {
+  if (request->new_role == "MASTER" || request->new_role == "LEADER") {
     new_role = replicator::DBRole::MASTER;
-  } else if (request->new_role == "SLAVE") {
+  } else if (request->new_role == "SLAVE" || request->new_role == "FOLLOWER") {
     new_role = replicator::DBRole::SLAVE;
   } else {
     e.errorCode = AdminErrorCode::INVALID_DB_ROLE;
