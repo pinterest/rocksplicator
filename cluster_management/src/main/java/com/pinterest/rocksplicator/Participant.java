@@ -261,7 +261,7 @@ public class Participant {
       // Add callback to create rocksplicator shard config
       HelixCustomCodeRunner codeRunner = new HelixCustomCodeRunner(helixManager, zkConnectString)
           .invoke(new ConfigGenerator(clusterName, helixManager, postUrl, monitor))
-          .on(ConfigGenerator.ALLOWED_CHANGE_TYPES_ARRAY)
+          .on(HelixConstants.ChangeType.EXTERNAL_VIEW, HelixConstants.ChangeType.CONFIG)
           .usingLeaderStandbyModel("ConfigWatcher" + clusterName);
 
       codeRunner.start();

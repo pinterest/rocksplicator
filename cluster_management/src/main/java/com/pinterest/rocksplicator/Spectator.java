@@ -158,8 +158,6 @@ public class Spectator {
     ConfigGenerator configGenerator = new ConfigGenerator(helixManager.getClusterName(), helixManager, postUrl, monitor);
     helixManager.addExternalViewChangeListener(configGenerator);
     helixManager.addConfigChangeListener(configGenerator);
-    helixManager.addInstanceConfigChangeListener(configGenerator);
-    helixManager.addLiveInstanceChangeListener(configGenerator);
   }
 
   private static String getClusterLockPath(String cluster) {

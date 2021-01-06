@@ -20,17 +20,14 @@ package com.pinterest.rocksplicator;
 
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
 
-import com.google.common.base.Stopwatch;
-import com.google.common.collect.ImmutableSet;
+import org.apache.helix.api.listeners.PreFetch;
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixConstants;
 import org.apache.helix.HelixManager;
 import org.apache.helix.NotificationContext;
-import org.apache.helix.api.listeners.PreFetch;
 import org.apache.helix.model.ExternalView;
 import org.apache.helix.model.IdealState;
 import org.apache.helix.model.InstanceConfig;
-import org.apache.helix.model.LiveInstance;
 import org.apache.helix.participant.CustomCodeCallbackHandler;
 import org.apache.helix.spectator.RoutingTableProvider;
 import org.apache.http.HttpResponse;
@@ -41,6 +38,7 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.google.common.base.Stopwatch;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -58,18 +56,9 @@ import java.util.concurrent.locks.ReentrantLock;
 public class ConfigGenerator extends RoutingTableProvider implements CustomCodeCallbackHandler {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConfigGenerator.class);
-  public static final HelixConstants.ChangeType[] ALLOWED_CHANGE_TYPES_ARRAY
-      = new HelixConstants.ChangeType[]{
-          HelixConstants.ChangeType.EXTERNAL_VIEW,
-          HelixConstants.ChangeType.CONFIG,
-          HelixConstants.ChangeType.LIVE_INSTANCE};
-
-  private static final Set<HelixConstants.ChangeType> allowedChangeTypes =
-      ImmutableSet.copyOf(ALLOWED_CHANGE_TYPES_ARRAY);
 
   private final String clusterName;
   private HelixManager helixManager;
-  private HelixAdmin helixAdmin;
   private Map<String, String> hostToHostWithDomain;
   private final String postUrl;
   private JSONObject dataParameters;
@@ -77,7 +66,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   private Set<String> disabledHosts;
   private RocksplicatorMonitor monitor;
   private final boolean enableDumpToLocal;
-  private final ReentrantLock updateLock;
+  private ReentrantLock updateLock;
 
   public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
     this(clusterName, helixManager, configPostUrl,
@@ -88,7 +77,6 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
                          RocksplicatorMonitor monitor) {
     this.clusterName = clusterName;
     this.helixManager = helixManager;
-    this.helixAdmin = helixManager.getClusterManagmentTool();
     this.hostToHostWithDomain = new HashMap<String, String>();
     this.postUrl = configPostUrl;
     this.dataParameters = new JSONObject();
@@ -107,57 +95,35 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   public void onCallback(NotificationContext notificationContext) {
     LOG.error("Received notification: " + notificationContext.getChangeType());
 
-    if (allowedChangeTypes.contains(notificationContext.getChangeType())) {
-      generateShardConfigWithUpdatedDisabledHosts();
+    if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
+      generateShardConfig();
+    } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.INSTANCE_CONFIG) {
+      if (updateDisabledHosts()) {
+        generateShardConfig();
+      }
+    }
+  }
+
+  @Override
+  @PreFetch(enabled = false)
+  public void onConfigChange(List<InstanceConfig> configs, NotificationContext changeContext) {
+    if (updateDisabledHosts()) {
+      generateShardConfig();
     }
   }
 
   @Override
   @PreFetch(enabled = false)
   public void onExternalViewChange(List<ExternalView> externalViewList, NotificationContext changeContext) {
-    super.onExternalViewChange(externalViewList, changeContext);
-    generateShardConfigWithoutUpdatedDisabledHosts();
+    generateShardConfig();
   }
 
-  @Override
-  @PreFetch(enabled = false)
-  public void onConfigChange(List<InstanceConfig> configs, NotificationContext changeContext) {
-    super.onConfigChange(configs, changeContext);
-    generateShardConfigWithUpdatedDisabledHosts();
-  }
-
-  @Override
-  @PreFetch(enabled = false)
-  public void onInstanceConfigChange(List<InstanceConfig> configs,
-                                     NotificationContext changeContext) {
-    super.onInstanceConfigChange(configs, changeContext);
-    generateShardConfigWithUpdatedDisabledHosts();
-  }
-
-  @Override
-  @PreFetch(enabled = false)
-  public void onLiveInstanceChange(List<LiveInstance> liveInstances,
-                                   NotificationContext changeContext) {
-    super.onLiveInstanceChange(liveInstances, changeContext);
-    generateShardConfigWithUpdatedDisabledHosts();
-  }
-
-  private void generateShardConfigWithoutUpdatedDisabledHosts() {
-    updateLock.lock();
+  private void generateShardConfig() {
+    this.updateLock.lock();
     try {
       generateShardConfigThreadUnsafe();
     } finally {
-      updateLock.unlock();
-    }
-  }
-
-  private void generateShardConfigWithUpdatedDisabledHosts() {
-    updateLock.lock();
-    try {
-      updateDisabledHosts();
-      generateShardConfigThreadUnsafe();
-    } finally {
-      updateLock.unlock();
+      this.updateLock.unlock();
     }
   }
 
@@ -165,8 +131,9 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     monitor.incrementConfigGeneratorCalledCount();
     Stopwatch stopwatch = Stopwatch.createStarted();
 
+    HelixAdmin admin = helixManager.getClusterManagmentTool();
 
-    List<String> resources = helixAdmin.getResourcesInCluster(clusterName);
+    List<String> resources = admin.getResourcesInCluster(clusterName);
     filterOutTaskResources(resources);
 
     Set<String> existingHosts = new HashSet<String>();
@@ -179,11 +146,23 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
         continue;
       }
 
-      ExternalView externalView = helixAdmin.getResourceExternalView(clusterName, resource);
+      ExternalView externalView = admin.getResourceExternalView(clusterName, resource);
       if (externalView == null) {
         monitor.incrementConfigGeneratorNullExternalView();
         LOG.error("Failed to get externalView for resource: " + resource);
-        // We must bypass a resource for which we get a null externalView.
+        /**
+         * In some situations, we may encounter a null externalView for a given resource.
+         * This can happen, if due to race condition between retrieving list of resources
+         * and then iterating over each of those resources to retrieve corresponding externalView.
+         * If the resource is deleted in the meanwhile, we will get null externalView.
+         *
+         * Another situation where we may receive null externalView for a resource is if it was
+         * created but it's externalView has not yet been generated... e.g. a resource is created
+         * but it's state transitions failed. There can be quite a few race conditions under which
+         * we can't guarantee that externalView for a resource exists at a specific moment.
+         * In such cases, it is safe to ignore such resource until it's externalView is accessible
+         * and not null.
+         */
         continue;
       }
       Set<String> partitions = externalView.getPartitionSet();
@@ -269,49 +248,29 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
       }
     }
 
-    // Write the config to http service
+    // Write the config to ZK
     LOG.error("Generating a new shard config...");
 
-    // If postUrl is not null and not empty, only then attemp to post newContent
-    if (this.postUrl != null && !this.postUrl.isEmpty()) {
-      Status status = doHttpPost(this.postUrl, this.dataParameters, newContent);
-      if (status == Status.SUCCESS) {
-        lastPostedContent = newContent;
-        try {
-          TimeUnit.SECONDS.sleep(2);
-        } catch (InterruptedException e) {
-          LOG.error("Sleep interrupted", e);
-        }
-      }
-    }
-    stopwatch.stop();
-    long elapsedMs = stopwatch.elapsed(TimeUnit.MILLISECONDS);
-    monitor.reportConfigGeneratorLatency(elapsedMs);
-  }
-
-  enum Status {
-    SUCCESS,
-    API_FAILURE,
-    API_EXCEPTION,
-  };
-
-  private static Status doHttpPost(String postUrl, JSONObject dataParameters, String newContent) {
-    dataParameters.remove("content");
-    dataParameters.put("content", newContent);
-    HttpPost httpPost = new HttpPost(postUrl);
+    this.dataParameters.remove("content");
+    this.dataParameters.put("content", newContent);
+    HttpPost httpPost = new HttpPost(this.postUrl);
     try {
-      httpPost.setEntity(new StringEntity(dataParameters.toString()));
+      httpPost.setEntity(new StringEntity(this.dataParameters.toString()));
       HttpResponse response = new DefaultHttpClient().execute(httpPost);
       if (response.getStatusLine().getStatusCode() == 200) {
-        return Status.SUCCESS;
+        lastPostedContent = newContent;
+        LOG.error("Succeed to generate a new shard config, sleep for 2 seconds");
+        TimeUnit.SECONDS.sleep(2);
       } else {
         LOG.error(response.getStatusLine().getReasonPhrase());
-        return Status.API_FAILURE;
       }
     } catch (Exception e) {
       LOG.error("Failed to post the new config", e);
-      return Status.API_EXCEPTION;
     }
+
+    stopwatch.stop();
+    long elapsedMs = stopwatch.elapsed(TimeUnit.MILLISECONDS);
+    monitor.reportConfigGeneratorLatency(elapsedMs);
   }
 
   private String getHostWithDomain(String host) {
@@ -320,7 +279,9 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
       return hostWithDomain;
     }
 
-    InstanceConfig instanceConfig = helixAdmin.getInstanceConfig(clusterName, host);
+    // local cache missed, read from ZK
+    HelixAdmin admin = helixManager.getClusterManagmentTool();
+    InstanceConfig instanceConfig = admin.getInstanceConfig(clusterName, host);
     String domain = instanceConfig.getDomain();
     String[] parts = domain.split(",");
     String az = parts[0].split("=")[1];
@@ -332,19 +293,24 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
 
   // update disabledHosts, return true if there is any changes
   private boolean updateDisabledHosts() {
-    HelixAdmin admin = helixManager.getClusterManagmentTool();
+    this.updateLock.lock();
+    try {
+      HelixAdmin admin = helixManager.getClusterManagmentTool();
 
-    Set<String> latestDisabledInstances = new HashSet<>(
-        admin.getInstancesInClusterWithTag(clusterName, "disabled"));
+      Set<String> latestDisabledInstances = new HashSet<>(
+          admin.getInstancesInClusterWithTag(clusterName, "disabled"));
 
-    if (disabledHosts.equals(latestDisabledInstances)) {
-      // no changes
-      LOG.error("No changes to disabled instances");
-      return false;
+      if (disabledHosts.equals(latestDisabledInstances)) {
+        // no changes
+        LOG.error("No changes to disabled instances");
+        return false;
+      }
+
+      disabledHosts = latestDisabledInstances;
+      return true;
+    } finally {
+      this.updateLock.unlock();
     }
-
-    disabledHosts = latestDisabledInstances;
-    return true;
   }
 
   /**
@@ -352,10 +318,11 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
    * only keep db resources from ideal states
    */
   public void filterOutTaskResources(List<String> resources) {
+    HelixAdmin admin = helixManager.getClusterManagmentTool();
     Iterator<String> iter = resources.iterator();
     while (iter.hasNext()) {
       String res = iter.next();
-      IdealState ideal = helixAdmin.getResourceIdealState(clusterName, res);
+      IdealState ideal = admin.getResourceIdealState(clusterName, res);
       if (ideal != null) {
         String stateMode = ideal.getStateModelDefRef();
         if (stateMode != null && stateMode.equals("Task")) {
@@ -368,4 +335,5 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
       }
     }
   }
+
 }
