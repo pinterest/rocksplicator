@@ -248,8 +248,10 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
           String state = entry.getValue();
           if (!state.equalsIgnoreCase("ONLINE") &&
               !state.equalsIgnoreCase("MASTER") &&
+              !state.equalsIgnoreCase("LEADER") &&
+              !state.equalsIgnoreCase("FOLLOWER") &&
               !state.equalsIgnoreCase("SLAVE")) {
-            // Only ONLINE, MASTER and SLAVE states are ready for serving traffic
+            // Only ONLINE, MASTER, LEADER, FOLLOWER and SLAVE states are ready for serving traffic
             continue;
           }
 
@@ -260,9 +262,9 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
             hostToPartitionList.put(hostWithDomain, partitionList);
           }
 
-          if (state.equalsIgnoreCase("SLAVE")) {
+          if (state.equalsIgnoreCase("SLAVE") || state.equalsIgnoreCase("FOLLOWER")) {
             partitionList.add(partitionNumber + ":S");
-          } else if (state.equalsIgnoreCase("MASTER")) {
+          } else if (state.equalsIgnoreCase("MASTER") || state.equalsIgnoreCase("LEADER")) {
             partitionList.add(partitionNumber + ":M");
           } else {
             partitionList.add(partitionNumber);

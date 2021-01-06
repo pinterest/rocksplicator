@@ -147,7 +147,7 @@ public class Utils {
    * @param dbRole one of SLAVE or NOOP
    */
   public static void addDB(String dbName, int adminPort, String dbRole) throws RuntimeException {
-    if ((dbRole != "SLAVE") && (dbRole != "NOOP")) {
+    if ((dbRole != "SLAVE") && (dbRole != "FOLLOWER") && (dbRole != "NOOP")) {
       throw new RuntimeException("Invalid db role requested for new db " + dbName + " : " + dbRole);
     }
     LOG.error("Add local DB: " + dbName + " with role " + dbRole);
@@ -457,6 +457,27 @@ public class Utils {
 
       CheckDBRequest req = new CheckDBRequest(dbName);
       CheckDBResponse res = client.checkDB(req);
+      return res.is_master;
+    } catch (TException e) {
+      LOG.error("Failed to check DB: ", e.toString());
+      return false;
+    }
+  }
+
+  /**
+   * Check if the DB on host:adminPort is Leader. If the CheckDBRequest request fails, return false.
+   * @param host
+   * @param adminPort
+   * @param dbName
+   * @return
+   */
+  public static boolean isLeaderReplica(String host, int adminPort, String dbName) {
+    try {
+      Admin.Client client = getAdminClient(host, adminPort);
+
+      CheckDBRequest req = new CheckDBRequest(dbName);
+      CheckDBResponse res = client.checkDB(req);
+      // TODO (rajathprasad): add a new field "is_leader" and use that instead.
       return res.is_master;
     } catch (TException e) {
       LOG.error("Failed to check DB: ", e.toString());

@@ -215,6 +215,9 @@ public class Participant {
     } else if (stateModelType.equals("MasterSlave")) {
       stateModelFactory = new MasterSlaveStateModelFactory(instanceName.split("_")[0],
           port, zkConnectString, clusterName, useS3Backup, s3BucketName);
+    } else if (stateModelType.equals("LeaderFollower")) {
+      stateModelFactory = new LeaderFollowerStateModelFactory(instanceName.split("_")[0],
+          port, zkConnectString, clusterName, useS3Backup, s3BucketName);
     } else if (stateModelType.equals("Bootstrap")) {
       stateModelFactory = new BootstrapStateModelFactory(instanceName.split("_")[0],
           port, zkConnectString, clusterName);
@@ -227,7 +230,15 @@ public class Participant {
           .put("Backup", new BackupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
       taskFactoryRegistry
           .put("Restore", new RestoreTaskFactory(clusterName, port, useS3Backup, s3BucketName));
+    } else if (stateModelType.equals("LeaderFollower;Task")) {
+      stateModelType = "LeaderFollower";
+      stateModelFactory = new LeaderFollowerStateModelFactory(instanceName.split("_")[0],
+          port, zkConnectString, clusterName, useS3Backup, s3BucketName);
 
+      taskFactoryRegistry
+          .put("Backup", new BackupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
+      taskFactoryRegistry
+          .put("Restore", new RestoreTaskFactory(clusterName, port, useS3Backup, s3BucketName));
     } else if (stateModelType.equals("Task")) {
       taskFactoryRegistry
           .put("Dedup", new DedupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
