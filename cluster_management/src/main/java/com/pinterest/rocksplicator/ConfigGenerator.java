@@ -20,11 +20,12 @@ package com.pinterest.rocksplicator;
 
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
 
-import org.apache.helix.api.listeners.PreFetch;
+import com.google.common.base.Stopwatch;
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixConstants;
 import org.apache.helix.HelixManager;
 import org.apache.helix.NotificationContext;
+import org.apache.helix.api.listeners.PreFetch;
 import org.apache.helix.model.ExternalView;
 import org.apache.helix.model.IdealState;
 import org.apache.helix.model.InstanceConfig;
@@ -38,7 +39,6 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.google.common.base.Stopwatch;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -58,14 +58,14 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   private static final Logger LOG = LoggerFactory.getLogger(ConfigGenerator.class);
 
   private final String clusterName;
+  private final String postUrl;
+  private final boolean enableDumpToLocal;
   private HelixManager helixManager;
   private Map<String, String> hostToHostWithDomain;
-  private final String postUrl;
   private JSONObject dataParameters;
   private String lastPostedContent;
   private Set<String> disabledHosts;
   private RocksplicatorMonitor monitor;
-  private final boolean enableDumpToLocal;
   private ReentrantLock updateLock;
 
   public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
@@ -114,7 +114,8 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
 
   @Override
   @PreFetch(enabled = false)
-  public void onExternalViewChange(List<ExternalView> externalViewList, NotificationContext changeContext) {
+  public void onExternalViewChange(List<ExternalView> externalViewList,
+                                   NotificationContext changeContext) {
     generateShardConfig();
   }
 
@@ -188,7 +189,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
            * Add a LiveInstanceListener and remove any temporary / permanently dead hosts
            * from consideration. This is to ensure that during deploys, we take into account
            * downed instances faster then potentially available through externalViews.
-          */
+           */
           if (disabledHosts.contains(entry.getKey())) {
             // exclude disabled hosts from the shard map config
             continue;
@@ -304,19 +305,18 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
 
   // update disabledHosts, return true if there is any changes
   private boolean updateDisabledHosts() {
+    HelixAdmin admin = helixManager.getClusterManagmentTool();
+
+    Set<String> latestDisabledInstances = new HashSet<>(
+        admin.getInstancesInClusterWithTag(clusterName, "disabled"));
+
     this.updateLock.lock();
     try {
-      HelixAdmin admin = helixManager.getClusterManagmentTool();
-
-      Set<String> latestDisabledInstances = new HashSet<>(
-          admin.getInstancesInClusterWithTag(clusterName, "disabled"));
-
       if (disabledHosts.equals(latestDisabledInstances)) {
         // no changes
         LOG.error("No changes to disabled instances");
         return false;
       }
-
       disabledHosts = latestDisabledInstances;
       return true;
     } finally {
