@@ -111,6 +111,13 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     }
   }
 
+  /**
+   * We are not 100% confident on behaviour of helix agent w.r.t. threading and execution model
+   * for callback functions call from helix agent.
+   *
+   * In order to ensure that only one callback is actively being processed at any time, we
+   * explicitly guard any callback function body with a single re-entrant lock.
+   */
   @Override
   public void onCallback(NotificationContext notificationContext) {
     try (AutoCloseableLock autoLock = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
