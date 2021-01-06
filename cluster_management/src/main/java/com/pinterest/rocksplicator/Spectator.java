@@ -131,7 +131,9 @@ public class Spectator {
     CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
     zkClient.start();
     InterProcessMutex mutex = new InterProcessMutex(zkClient, getClusterLockPath(clusterName));
+    LOG.error("Trying to obtain lock");
     try (Locker locker = new Locker(mutex)) {
+      LOG.error("Obtained lock");
       spectator.startListener(postUrl);
       Thread.currentThread().join();
     } catch (RuntimeException e) {
@@ -139,6 +141,7 @@ public class Spectator {
     } catch (Exception e) {
       LOG.error("Failed to release the mutex for cluster " + clusterName, e);
     }
+    LOG.error("Returning from main");
   }
 
   public Spectator(String zkConnectString, String clusterName, String instanceName) throws Exception {
@@ -155,6 +158,8 @@ public class Spectator {
     ConfigGenerator configGenerator = new ConfigGenerator(helixManager.getClusterName(), helixManager, postUrl, monitor);
     helixManager.addExternalViewChangeListener(configGenerator);
     helixManager.addConfigChangeListener(configGenerator);
+    helixManager.addInstanceConfigChangeListener(configGenerator);
+    helixManager.addLiveInstanceChangeListener(configGenerator);
   }
 
   private static String getClusterLockPath(String cluster) {
