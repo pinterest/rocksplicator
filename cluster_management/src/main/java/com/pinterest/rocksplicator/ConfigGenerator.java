@@ -60,13 +60,13 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   private final String clusterName;
   private final String postUrl;
   private final boolean enableDumpToLocal;
+  private final Map<String, String> hostToHostWithDomain;
+  private final JSONObject dataParameters;
+  private final RocksplicatorMonitor monitor;
+  private final ReentrantLock updateLock;
   private HelixManager helixManager;
-  private Map<String, String> hostToHostWithDomain;
-  private JSONObject dataParameters;
-  private String lastPostedContent;
-  private Set<String> disabledHosts;
-  private RocksplicatorMonitor monitor;
-  private ReentrantLock updateLock;
+  private volatile String lastPostedContent;
+  private volatile Set<String> disabledHosts;
 
   public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
     this(clusterName, helixManager, configPostUrl,
@@ -185,7 +185,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
         for (Map.Entry<String, String> entry : hostToState.entrySet()) {
           existingHosts.add(entry.getKey());
 
-          /**TODO:
+          /**TODO: gopalrajpurohit
            * Add a LiveInstanceListener and remove any temporary / permanently dead hosts
            * from consideration. This is to ensure that during deploys, we take into account
            * downed instances faster then potentially available through externalViews.
@@ -260,7 +260,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     LOG.error("Generating a new shard config...");
 
     /**
-     * TODO:
+     * TODO: gopalrajpurohit
      * Move shard_map updating logic into separate method.
      */
     this.dataParameters.remove("content");

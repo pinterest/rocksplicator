@@ -135,7 +135,9 @@ public class Spectator {
     LOG.error("Trying to obtain lock");
 
     /**
-     * TODO: Improve this logic.
+     * TODO: gopalrajpurohit
+     *
+     * Improve this logic.
      *
      * This is an issue if the lock is released without the process going down. This can happen,
      * if the client looses connection to zookeeper for a period of time. In such a scenario,
