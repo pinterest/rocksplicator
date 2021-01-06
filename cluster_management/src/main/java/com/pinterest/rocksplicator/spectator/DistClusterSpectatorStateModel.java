@@ -1,4 +1,4 @@
-package com.pinterest.rocksplicator;
+package com.pinterest.rocksplicator.spectator;
 
 import org.apache.helix.HelixManager;
 import org.apache.helix.HelixManagerFactory;
@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 public class DistClusterSpectatorStateModel extends AbstractHelixLeaderStandbyStateModel {
   private static Logger logger = LoggerFactory.getLogger(DistClusterSpectatorStateModel.class);
   protected HelixManager _spectator = null;
+  protected SpectatorLeadershipCallback _spectatorCallbk = null;
 
   public DistClusterSpectatorStateModel(String zkAddr) {
     super(zkAddr);
@@ -39,7 +40,6 @@ public class DistClusterSpectatorStateModel extends AbstractHelixLeaderStandbySt
           HelixManagerFactory.getZKHelixManager(clusterName, spectatorInstanceName,
               InstanceType.SPECTATOR, _zkAddr);
       _spectator.connect();
-      _spectator.startTimerTasks();
       logStateTransition("STANDBY", "LEADER", clusterName, spectatorInstanceName);
     } else {
       logger.error("spectator already exists:" + _spectator.getInstanceName() + " for "

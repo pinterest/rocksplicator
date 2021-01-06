@@ -1,4 +1,4 @@
-package com.pinterest.rocksplicator;
+package com.pinterest.rocksplicator.spectator;
 
 import org.apache.helix.participant.statemachine.StateModelFactory;
 
