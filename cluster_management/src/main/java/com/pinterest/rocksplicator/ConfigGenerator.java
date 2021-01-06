@@ -66,8 +66,8 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   private final RocksplicatorMonitor monitor;
   private final ReentrantLock synchronizedCallbackLock;
   private HelixManager helixManager;
-  private volatile String lastPostedContent;
-  private volatile Set<String> disabledHosts;
+  private String lastPostedContent;
+  private Set<String> disabledHosts;
 
   public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
     this(clusterName, helixManager, configPostUrl,
