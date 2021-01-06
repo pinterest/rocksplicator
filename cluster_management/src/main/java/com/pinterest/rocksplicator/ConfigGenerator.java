@@ -111,6 +111,15 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     }
   }
 
+  private void logUncheckedException(Runnable r) {
+    try {
+      r.run();
+    } catch (Throwable throwable) {
+      LOG.error("Exception in generateShardConfig()", throwable);
+      throw throwable;
+    }
+  }
+
   /**
    * We are not 100% confident on behaviour of helix agent w.r.t. threading and execution model
    * for callback functions call from helix agent. Especially is is possible to get multiple
@@ -122,16 +131,21 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
    * published.
    */
   @Override
-  public void onCallback(NotificationContext notificationContext) {
+  public void onCallback(final NotificationContext notificationContext) {
     try (AutoCloseableLock autoLock = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
-      LOG.error("Received notification: " + notificationContext.getChangeType());
-      if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
-        generateShardConfig();
-      } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.INSTANCE_CONFIG) {
-        if (updateDisabledHosts()) {
-          generateShardConfig();
+      logUncheckedException(new Runnable() {
+        @Override
+        public void run() {
+          LOG.error("Received notification: " + notificationContext.getChangeType());
+          if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
+            generateShardConfig();
+          } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.INSTANCE_CONFIG) {
+            if (updateDisabledHosts()) {
+              generateShardConfig();
+            }
+          }
         }
-      }
+      });
     }
   }
 
@@ -139,9 +153,14 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   @PreFetch(enabled = false)
   public void onConfigChange(List<InstanceConfig> configs, NotificationContext changeContext) {
     try (AutoCloseableLock autoLock = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
-      if (updateDisabledHosts()) {
-        generateShardConfig();
-      }
+      logUncheckedException(new Runnable() {
+        @Override
+        public void run() {
+          if (updateDisabledHosts()) {
+            generateShardConfig();
+          }
+        }
+      });
     }
   }
 
@@ -150,7 +169,14 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   public void onExternalViewChange(List<ExternalView> externalViewList,
                                    NotificationContext changeContext) {
     try (AutoCloseableLock autoLock = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
-      generateShardConfig();
+      logUncheckedException(new Runnable() {
+        @Override
+        public void run() {
+          if (updateDisabledHosts()) {
+            generateShardConfig();
+          }
+        }
+      });
     }
   }
 
