@@ -172,9 +172,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
       logUncheckedException(new Runnable() {
         @Override
         public void run() {
-          if (updateDisabledHosts()) {
-            generateShardConfig();
-          }
+          generateShardConfig();
         }
       });
     }
