@@ -66,6 +66,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   private final RocksplicatorMonitor monitor;
   private final ReentrantLock synchronizedCallbackLock;
   private HelixManager helixManager;
+  private HelixAdmin helixAdmin;
   private String lastPostedContent;
   private Set<String> disabledHosts;
 
@@ -78,6 +79,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
                          RocksplicatorMonitor monitor) {
     this.clusterName = clusterName;
     this.helixManager = helixManager;
+    this.helixAdmin = this.helixManager.getClusterManagmentTool();
     this.hostToHostWithDomain = new HashMap<String, String>();
     this.postUrl = configPostUrl;
     this.dataParameters = new JSONObject();
@@ -182,9 +184,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     monitor.incrementConfigGeneratorCalledCount();
     Stopwatch stopwatch = Stopwatch.createStarted();
 
-    HelixAdmin admin = helixManager.getClusterManagmentTool();
-
-    List<String> resources = admin.getResourcesInCluster(clusterName);
+    List<String> resources = this.helixAdmin.getResourcesInCluster(clusterName);
     filterOutTaskResources(resources);
 
     Set<String> existingHosts = new HashSet<String>();
@@ -197,7 +197,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
         continue;
       }
 
-      ExternalView externalView = admin.getResourceExternalView(clusterName, resource);
+      ExternalView externalView = this.helixAdmin.getResourceExternalView(clusterName, resource);
       if (externalView == null) {
         monitor.incrementConfigGeneratorNullExternalView();
         LOG.error("Failed to get externalView for resource: " + resource);
@@ -342,8 +342,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     }
 
     // local cache missed, read from ZK
-    HelixAdmin admin = helixManager.getClusterManagmentTool();
-    InstanceConfig instanceConfig = admin.getInstanceConfig(clusterName, host);
+    InstanceConfig instanceConfig = this.helixAdmin.getInstanceConfig(clusterName, host);
     String domain = instanceConfig.getDomain();
     String[] parts = domain.split(",");
     String az = parts[0].split("=")[1];
@@ -355,10 +354,8 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
 
   // update disabledHosts, return true if there is any changes
   private boolean updateDisabledHosts() {
-    HelixAdmin admin = helixManager.getClusterManagmentTool();
-
     Set<String> latestDisabledInstances = new HashSet<>(
-        admin.getInstancesInClusterWithTag(clusterName, "disabled"));
+        this.helixAdmin.getInstancesInClusterWithTag(clusterName, "disabled"));
 
     if (disabledHosts.equals(latestDisabledInstances)) {
       // no changes
@@ -374,11 +371,10 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
    * only keep db resources from ideal states
    */
   public void filterOutTaskResources(List<String> resources) {
-    HelixAdmin admin = helixManager.getClusterManagmentTool();
     Iterator<String> iter = resources.iterator();
     while (iter.hasNext()) {
       String res = iter.next();
-      IdealState ideal = admin.getResourceIdealState(clusterName, res);
+      IdealState ideal = this.helixAdmin.getResourceIdealState(clusterName, res);
       if (ideal != null) {
         String stateMode = ideal.getStateModelDefRef();
         if (stateMode != null && stateMode.equals("Task")) {
