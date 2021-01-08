@@ -128,7 +128,7 @@ public class Spectator {
     final String instanceName = host + "_" + port;
 
     LOG.error("Starting spectator with ZK:" + zkConnectString);
-    Spectator spectator= new Spectator(zkConnectString, clusterName, instanceName);
+    final Spectator spectator = new Spectator(zkConnectString, clusterName, instanceName);
 
     CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
 
@@ -141,6 +141,12 @@ public class Spectator {
       // on restarting to re-acquire the inter-process lock.
         if (newState == ConnectionState.LOST || newState == ConnectionState.SUSPENDED) {
           LOG.error("ZK lock is lost and the process needs to be terminated");
+          // Stop all the listeners before exiting
+          try {
+            spectator.stopListeners();
+          } catch (Exception e) {
+            LOG.error("Failed to stop the listeners", e);
+          }
           System.exit(0);
         }
       }
@@ -177,6 +183,12 @@ public class Spectator {
     ConfigGenerator configGenerator = new ConfigGenerator(helixManager.getClusterName(), helixManager, postUrl, monitor);
     helixManager.addExternalViewChangeListener(configGenerator);
     helixManager.addConfigChangeListener(configGenerator);
+  }
+
+  private void stopListeners() throws Exception {
+    if (helixManager != null) {
+      helixManager.disconnect();
+    }
   }
 
   private static String getClusterLockPath(String cluster) {
