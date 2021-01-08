@@ -33,6 +33,8 @@ import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
 import org.apache.curator.framework.recipes.locks.Locker;
+import org.apache.curator.framework.state.ConnectionState;
+import org.apache.curator.framework.state.ConnectionStateListener;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.helix.HelixConstants;
 import org.apache.helix.HelixManager;
@@ -129,23 +131,26 @@ public class Spectator {
     Spectator spectator= new Spectator(zkConnectString, clusterName, instanceName);
 
     CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
+
+    zkClient.getConnectionStateListenable().addListener(new ConnectionStateListener() {
+      @Override
+      public void stateChanged(CuratorFramework client, ConnectionState newState) {
+      // If the connection state changes to LOST/SUSPENDED, then it means it
+      // already lost the lock/would release the lock and the current leader
+      // role is not legal any more. Here we simply terminate it and rely
+      // on restarting to re-acquire the inter-process lock.
+        if (newState == ConnectionState.LOST || newState == ConnectionState.SUSPENDED) {
+          LOG.error("ZK lock is lost and the process needs to be terminated");
+          System.exit(0);
+        }
+      }
+    });
+
     zkClient.start();
 
     InterProcessMutex mutex = new InterProcessMutex(zkClient, getClusterLockPath(clusterName));
     LOG.error("Trying to obtain lock");
 
-    /**
-     * TODO: gopalrajpurohit
-     *
-     * Improve this logic.
-     *
-     * This is an issue if the lock is released without the process going down. This can happen,
-     * if the client looses connection to zookeeper for a period of time. In such a scenario,
-     * the client doesn't have a way to stop spectator from processing shard_map generation.
-     * The lock may subsequently be obtained by another instance of spectator and hence breaking
-     * the semantics of single updator.
-     * In that case, the spectator will continue to listen and generate shard_map.
-     */
     try (Locker locker = new Locker(mutex)) {
       LOG.error("Obtained lock");
       spectator.startListener(postUrl);
