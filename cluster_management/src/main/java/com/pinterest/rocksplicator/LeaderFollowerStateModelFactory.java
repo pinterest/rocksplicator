@@ -153,10 +153,11 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
       try (Locker locker = new Locker(partitionMutex)) {
         HelixAdmin admin = context.getManager().getClusterManagmentTool();
         Map<String, String> stateMap = null;
+        ExternalView view = null;
 
         // sanity check no existing Leader for up to 59 seconds
         for (int i = 0; i < 60; ++i) {
-          ExternalView view = admin.getResourceExternalView(cluster, resourceName);
+          view = admin.getResourceExternalView(cluster, resourceName);
           stateMap = view.getStateMap(partitionName);
 
           if (!stateMap.containsValue("LEADER")) {
@@ -225,6 +226,9 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
         Utils.changeDBRoleAndUpStream("localhost", adminPort, dbName, "LEADER",
         "", adminPort);
 
+        // Get the latest external view and state map
+        view = admin.getResourceExternalView(cluster, resourceName);
+        stateMap = view.getStateMap(partitionName);
         // changeDBRoleAndUpStream(all_other_followers_or_offlines, "Follower", "my_ip_port")
         for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
           String hostName = instanceNameAndRole.getKey().split("_")[0];
