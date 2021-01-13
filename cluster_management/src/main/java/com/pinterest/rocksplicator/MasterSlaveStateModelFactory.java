@@ -153,10 +153,11 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
       try (Locker locker = new Locker(partitionMutex)) {
         HelixAdmin admin = context.getManager().getClusterManagmentTool();
         Map<String, String> stateMap = null;
+        ExternalView view = null;
 
         // sanity check no existing Master for up to 59 seconds
         for (int i = 0; i < 60; ++i) {
-          ExternalView view = admin.getResourceExternalView(cluster, resourceName);
+          view = admin.getResourceExternalView(cluster, resourceName);
           stateMap = view.getStateMap(partitionName);
 
           if (!stateMap.containsValue("MASTER")) {
@@ -225,6 +226,9 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         Utils.changeDBRoleAndUpStream("localhost", adminPort, dbName, "MASTER",
         "", adminPort);
 
+        // Get the latest external view and state map
+        view = admin.getResourceExternalView(cluster, resourceName);
+        stateMap = view.getStateMap(partitionName);
         // changeDBRoleAndUpStream(all_other_slaves_or_offlines, "Slave", "my_ip_port")
         for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
           String hostName = instanceNameAndRole.getKey().split("_")[0];
