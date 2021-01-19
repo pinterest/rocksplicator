@@ -51,8 +51,8 @@ enum LeaderEventType {
   # it observes the state change for leader.
   SPECTATOR_OBSERVED_LEADER_DOWN = 100,
   SPECTATOR_OBSERVED_LEADER_UP   = 101,
-  SPECTATOR_POSTED_SHARDMAP_LEADER_UP = 101,
-  SPECTATOR_POSTED_SHARDMAP_LEADER_DOWN = 102,
+  SPECTATOR_POSTED_SHARDMAP_LEADER_UP = 102,
+  SPECTATOR_POSTED_SHARDMAP_LEADER_DOWN = 103,
 
   # All of the following events are / will be
   # logged from a client that watches the shard_map
