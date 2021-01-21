@@ -27,7 +27,7 @@ enum SerializationProtocol {
 }
 
 struct WrappedData {
-  1: required binary data,
-  2: required binary serialization_protocol,
-  3: required binary compression_algorithm,
+  1: required binary serialization_protocol,
+  2: required binary compression_algorithm,
+  3: required binary data,
 }
