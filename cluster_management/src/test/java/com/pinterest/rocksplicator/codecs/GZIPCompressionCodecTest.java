@@ -15,19 +15,23 @@ public class GZIPCompressionCodecTest extends CodecTestBase {
     Codec<LeaderEventsHistory, byte[]> thriftCodec =
         Codecs.createThriftCodec(LeaderEventsHistory.class, SerializationProtocol.BINARY);
     GZIPCompressionCodec<LeaderEventsHistory> gzipCodec = new GZIPCompressionCodec<>(thriftCodec);
-    byte[] binaryData = gzipCodec.encode(history);
+    byte[] compressedBinaryData = gzipCodec.encode(history);
 
-    LeaderEventsHistory decodedHistory = gzipCodec.decode(binaryData);
+    LeaderEventsHistory decodedHistory = gzipCodec.decode(compressedBinaryData);
     assertEquals(history, decodedHistory);
 
     // Ensure binaryData is decodable seperately.
     GZIPCompressionCodec<byte[]>
-        binaryGZIPCodec =
+        binaryGZipCodec =
         new GZIPCompressionCodec<>(IdentityCodec.<byte[]>createIdentityCodec());
-    byte[] deserializedData = binaryGZIPCodec.decode(binaryData);
+
+    byte[] uncompressedData = binaryGZipCodec.decode(compressedBinaryData);
     byte[] serializedData = thriftCodec.encode(history);
-    assertArrayEquals(serializedData, deserializedData);
-    assertEquals(history, thriftCodec.decode(deserializedData));
+    byte[] recompressedData = binaryGZipCodec.encode(serializedData);
+
+    assertArrayEquals(serializedData, uncompressedData);
+    assertArrayEquals(recompressedData, compressedBinaryData);
+    assertEquals(history, thriftCodec.decode(uncompressedData));
   }
 
   @Test
@@ -35,17 +39,22 @@ public class GZIPCompressionCodecTest extends CodecTestBase {
     Codec<LeaderEventsHistory, byte[]> thriftCodec =
         Codecs.createThriftCodec(LeaderEventsHistory.class, SerializationProtocol.COMPACT);
     GZIPCompressionCodec<LeaderEventsHistory> gzipCodec = new GZIPCompressionCodec<>(thriftCodec);
-    byte[] binaryData = gzipCodec.encode(history);
-    LeaderEventsHistory decodedHistory = gzipCodec.decode(binaryData);
+    byte[] compressedBinaryData = gzipCodec.encode(history);
+
+    LeaderEventsHistory decodedHistory = gzipCodec.decode(compressedBinaryData);
     assertEquals(history, decodedHistory);
 
     // Ensure binaryData is decodable seperately.
     GZIPCompressionCodec<byte[]>
-        binaryGZIPCodec =
+        binaryGZipCodec =
         new GZIPCompressionCodec<>(IdentityCodec.<byte[]>createIdentityCodec());
-    byte[] deserializedData = binaryGZIPCodec.decode(binaryData);
+
+    byte[] uncompressedData = binaryGZipCodec.decode(compressedBinaryData);
     byte[] serializedData = thriftCodec.encode(history);
-    assertArrayEquals(serializedData, deserializedData);
-    assertEquals(history, thriftCodec.decode(deserializedData));
+    byte[] recompressedData = binaryGZipCodec.encode(serializedData);
+
+    assertArrayEquals(serializedData, uncompressedData);
+    assertArrayEquals(recompressedData, compressedBinaryData);
+    assertEquals(history, thriftCodec.decode(uncompressedData));
   }
 }

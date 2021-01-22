@@ -15,19 +15,23 @@ public class SnappyCompressionCodecTest extends CodecTestBase {
     Codec<LeaderEventsHistory, byte[]> thriftCodec =
         Codecs.createThriftCodec(LeaderEventsHistory.class, SerializationProtocol.BINARY);
     SnappyCompressionCodec<LeaderEventsHistory> snappyCodec = new SnappyCompressionCodec<>(thriftCodec);
-    byte[] binaryData = snappyCodec.encode(history);
+    byte[] compressedBinaryData = snappyCodec.encode(history);
 
-    LeaderEventsHistory decodedHistory = snappyCodec.decode(binaryData);
+    LeaderEventsHistory decodedHistory = snappyCodec.decode(compressedBinaryData);
     assertEquals(history, decodedHistory);
 
     // Ensure binaryData is decodable seperately.
     SnappyCompressionCodec<byte[]>
         binarySnappyCodec =
         new SnappyCompressionCodec<>(IdentityCodec.<byte[]>createIdentityCodec());
-    byte[] deserializedData = binarySnappyCodec.decode(binaryData);
+
+    byte[] uncompressedData = binarySnappyCodec.decode(compressedBinaryData);
     byte[] serializedData = thriftCodec.encode(history);
-    assertArrayEquals(serializedData, deserializedData);
-    assertEquals(history, thriftCodec.decode(deserializedData));
+    byte[] recompressedData = binarySnappyCodec.encode(serializedData);
+
+    assertArrayEquals(serializedData, uncompressedData);
+    assertArrayEquals(recompressedData, compressedBinaryData);
+    assertEquals(history, thriftCodec.decode(uncompressedData));
   }
 
   @Test
@@ -35,17 +39,22 @@ public class SnappyCompressionCodecTest extends CodecTestBase {
     Codec<LeaderEventsHistory, byte[]> thriftCodec =
         Codecs.createThriftCodec(LeaderEventsHistory.class, SerializationProtocol.COMPACT);
     SnappyCompressionCodec<LeaderEventsHistory> snappyCodec = new SnappyCompressionCodec<>(thriftCodec);
-    byte[] binaryData = snappyCodec.encode(history);
-    LeaderEventsHistory decodedHistory = snappyCodec.decode(binaryData);
+    byte[] compressedBinaryData = snappyCodec.encode(history);
+
+    LeaderEventsHistory decodedHistory = snappyCodec.decode(compressedBinaryData);
     assertEquals(history, decodedHistory);
 
     // Ensure binaryData is decodable seperately.
     SnappyCompressionCodec<byte[]>
         binarySnappyCodec =
         new SnappyCompressionCodec<>(IdentityCodec.<byte[]>createIdentityCodec());
-    byte[] deserializedData = binarySnappyCodec.decode(binaryData);
+
+    byte[] uncompressedData = binarySnappyCodec.decode(compressedBinaryData);
     byte[] serializedData = thriftCodec.encode(history);
-    assertArrayEquals(serializedData, deserializedData);
-    assertEquals(history, thriftCodec.decode(deserializedData));
+    byte[] recompressedData = binarySnappyCodec.encode(serializedData);
+
+    assertArrayEquals(serializedData, uncompressedData);
+    assertArrayEquals(recompressedData, compressedBinaryData);
+    assertEquals(history, thriftCodec.decode(uncompressedData));
   }
 }
