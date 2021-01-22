@@ -15,19 +15,19 @@
 
 namespace java com.pinterest.rocksplicator.thrift.commons.io
 
+enum SerializationProtocol {
+  BINARY = 1
+  COMPACT = 2
+}
+
 enum CompressionAlgorithm {
   UNCOMPRESSED = 0,
   SNAPPY = 1,
   GZIP = 2
 }
 
-enum SerializationProtocol {
-  BINARY = 1
-  COMPACT = 2
-}
-
 struct WrappedData {
-  1: required binary serialization_protocol,
-  2: required binary compression_algorithm,
+  1: required SerializationProtocol serialization_protocol,
+  2: required CompressionAlgorithm compression_algorithm,
   3: required binary data,
 }
