@@ -34,7 +34,7 @@ public class Codecs {
     return compressedCodec;
   }
 
-  public static <S extends TBase<S, ?>> ThriftCodec<S> createThriftCodec(
+  public static <S extends TBase<S, ?>> Codec<S, byte[]> createThriftCodec(
       final Class<S> thriftClazz,
       final SerializationProtocol serializationProtocol) {
     Preconditions.checkNotNull(thriftClazz);
