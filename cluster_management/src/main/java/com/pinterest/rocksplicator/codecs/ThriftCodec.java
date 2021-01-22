@@ -34,7 +34,7 @@ public class ThriftCodec<S extends TBase<S, ?>> implements BinaryArrayCodec<S> {
   }
 
   public static <S extends TBase<S, ?>> ThriftCodec<S> createCompactCodec(Class<S> clazz) {
-    return new ThriftCodec<>(clazz, ThriftProtocol.BINARY_PROTOCOL);
+    return new ThriftCodec<>(clazz, ThriftProtocol.COMPACT_PROTOCOL);
   }
 
   @Override
