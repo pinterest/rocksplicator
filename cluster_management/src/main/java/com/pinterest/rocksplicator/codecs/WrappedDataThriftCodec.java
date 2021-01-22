@@ -25,11 +25,17 @@ public class WrappedDataThriftCodec<S extends TBase<S, ?>> implements Codec<S, b
     this.serializationProtocol = Preconditions.checkNotNull(serializationProtocol);
     this.compressionAlgorithm = Preconditions.checkNotNull(compressionAlgorithm);
     this.thriftClazz = Preconditions.checkNotNull(thriftClazz);
+<<<<<<< HEAD
     this.wrappedDataBinaryCodec = ThriftCodec.<WrappedData>createBinaryCodec(WrappedData.class);
+=======
+    this.wrappedDataBinaryCodec =
+        Codecs.createThriftCodec(WrappedData.class, SerializationProtocol.BINARY);
+>>>>>>> master
 
     ImmutableMap.Builder<SerializationProtocol, Map<CompressionAlgorithm, Codec<S, byte[]>>>
         allCodecsPairsBuilder =
         ImmutableMap.builder();
+<<<<<<< HEAD
     for (SerializationProtocol sProto : SerializationProtocol.values()) {
       Codec<S, byte[]> baseCodec = null;
       switch (sProto) {
@@ -66,6 +72,20 @@ public class WrappedDataThriftCodec<S extends TBase<S, ?>> implements Codec<S, b
         compressionCodecBuilder.put(algorithm, compressedCodec);
       }
       allCodecsPairsBuilder.put(sProto, compressionCodecBuilder.build());
+=======
+    for (SerializationProtocol protocol : SerializationProtocol.values()) {
+      Codec<S, byte[]> thriftCodec = Codecs.createThriftCodec(thriftClazz, protocol);
+
+      ImmutableMap.Builder<CompressionAlgorithm, Codec<S, byte[]>>
+          compressedCodecsBuilder =
+          ImmutableMap.builder();
+      for (CompressionAlgorithm algorithm : CompressionAlgorithm.values()) {
+        Codec<S, byte[]> compressedCodec =
+            Codecs.getCompressedCodec(thriftCodec, algorithm);
+        compressedCodecsBuilder.put(algorithm, compressedCodec);
+      }
+      allCodecsPairsBuilder.put(protocol, compressedCodecsBuilder.build());
+>>>>>>> master
     }
     this.allCodecsPairs = allCodecsPairsBuilder.build();
   }

@@ -1,5 +1,10 @@
 package com.pinterest.rocksplicator.codecs;
 
+<<<<<<< HEAD
+=======
+import com.pinterest.rocksplicator.thrift.commons.io.SerializationProtocol;
+
+>>>>>>> master
 import com.google.common.base.Preconditions;
 import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
@@ -12,11 +17,16 @@ import org.apache.thrift.transport.TIOStreamTransport;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 
+<<<<<<< HEAD
 public class ThriftCodec<S extends TBase<S, ?>> implements BinaryArrayCodec<S> {
+=======
+class ThriftCodec<S extends TBase<S, ?>> implements BinaryArrayCodec<S> {
+>>>>>>> master
 
   private final TProtocolFactory protocolFactory;
   private final Class<S> clazz;
 
+<<<<<<< HEAD
   private ThriftCodec(Class<S> clazz, ThriftProtocol protocol) {
     Preconditions.checkNotNull(protocol);
     if (protocol == ThriftProtocol.BINARY_PROTOCOL) {
@@ -37,6 +47,14 @@ public class ThriftCodec<S extends TBase<S, ?>> implements BinaryArrayCodec<S> {
     return new ThriftCodec<>(clazz, ThriftProtocol.BINARY_PROTOCOL);
   }
 
+=======
+  ThriftCodec(Class<S> clazz, TProtocolFactory protocolFactory) {
+    Preconditions.checkNotNull(protocolFactory);
+    this.protocolFactory = protocolFactory;
+    this.clazz = Preconditions.checkNotNull(clazz);
+  }
+
+>>>>>>> master
   @Override
   public byte[] encode(S obj) throws CodecException {
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -65,9 +83,12 @@ public class ThriftCodec<S extends TBase<S, ?>> implements BinaryArrayCodec<S> {
       throw new CodecException("Decoding Error:", e);
     }
   }
+<<<<<<< HEAD
 
   public enum ThriftProtocol {
     BINARY_PROTOCOL,
     COMPACT_PROTOCOL
   }
+=======
+>>>>>>> master
 }

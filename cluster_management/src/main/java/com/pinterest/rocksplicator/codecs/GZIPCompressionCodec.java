@@ -1,5 +1,6 @@
 package com.pinterest.rocksplicator.codecs;
 
+<<<<<<< HEAD
 import com.google.common.base.Preconditions;
 
 import java.io.ByteArrayInputStream;
@@ -49,5 +50,27 @@ public class GZIPCompressionCodec<S> implements BinaryArrayCodec<S> {
     } catch (IOException e) {
       throw new CodecException(e);
     }
+=======
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
+
+class GZIPCompressionCodec<S> extends AbstractCompressionCodec<S> {
+
+  GZIPCompressionCodec(Codec<S, byte[]> delegate) {
+    super(delegate);
+  }
+
+  @Override
+  protected OutputStream createCompressedOutputStream(OutputStream stream) throws IOException {
+    return new GZIPOutputStream(stream);
+  }
+
+  @Override
+  protected InputStream createDecompressedInputStream(InputStream stream) throws IOException {
+    return new GZIPInputStream(stream);
+>>>>>>> master
   }
 }
