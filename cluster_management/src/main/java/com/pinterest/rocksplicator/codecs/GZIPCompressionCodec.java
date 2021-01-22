@@ -38,12 +38,10 @@ public class GZIPCompressionCodec<S> implements BinaryArrayCodec<S> {
       byte[] buffer = new byte[128];
       while (true ) {
         int read_bytes = gis.read(buffer);
-        if (read_bytes != 0) {
-          bos.write(buffer, 0, read_bytes);
-        }
-        if (read_bytes < 128) {
+        if (read_bytes < 0) {
           break;
         }
+        bos.write(buffer, 0, read_bytes);
       }
       return delegate.decode(bos.toByteArray());
     } catch (IOException e) {
