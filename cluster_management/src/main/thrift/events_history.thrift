@@ -74,7 +74,6 @@ struct LeaderEvent {
   # while performing state transitions. Hence participant
   # can skip populating it, as it will be same as
   # originating node.
-  #
   3: optional string observed_leader_node,
   # the timestamp in milliseconds of the
   # event as close to  when the event actually was
