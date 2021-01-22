@@ -1,10 +1,7 @@
 package com.pinterest.rocksplicator.codecs;
 
 public class IdentityCodec<S> implements Codec<S, S> {
-<<<<<<< HEAD
-=======
 
->>>>>>> master
   private IdentityCodec() {}
 
   public static <S> IdentityCodec<S> createIdentityCodec() {

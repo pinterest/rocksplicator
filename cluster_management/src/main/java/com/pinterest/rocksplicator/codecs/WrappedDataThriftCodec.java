@@ -25,54 +25,12 @@ public class WrappedDataThriftCodec<S extends TBase<S, ?>> implements Codec<S, b
     this.serializationProtocol = Preconditions.checkNotNull(serializationProtocol);
     this.compressionAlgorithm = Preconditions.checkNotNull(compressionAlgorithm);
     this.thriftClazz = Preconditions.checkNotNull(thriftClazz);
-<<<<<<< HEAD
-    this.wrappedDataBinaryCodec = ThriftCodec.<WrappedData>createBinaryCodec(WrappedData.class);
-=======
     this.wrappedDataBinaryCodec =
         Codecs.createThriftCodec(WrappedData.class, SerializationProtocol.BINARY);
->>>>>>> master
 
     ImmutableMap.Builder<SerializationProtocol, Map<CompressionAlgorithm, Codec<S, byte[]>>>
         allCodecsPairsBuilder =
         ImmutableMap.builder();
-<<<<<<< HEAD
-    for (SerializationProtocol sProto : SerializationProtocol.values()) {
-      Codec<S, byte[]> baseCodec = null;
-      switch (sProto) {
-        case BINARY:
-          baseCodec = ThriftCodec.<S>createBinaryCodec(thriftClazz);
-          break;
-        case COMPACT:
-          baseCodec = ThriftCodec.<S>createCompactCodec(thriftClazz);
-          break;
-        default:
-          throw new RuntimeException(
-              String.format("serialization protocol : %s not implemented", sProto));
-      }
-      ImmutableMap.Builder<CompressionAlgorithm, Codec<S, byte[]>>
-          compressionCodecBuilder =
-          ImmutableMap.builder();
-
-      for (CompressionAlgorithm algorithm : CompressionAlgorithm.values()) {
-        Codec<S, byte[]> compressedCodec = null;
-        switch (algorithm) {
-          case UNCOMPRESSED:
-            compressedCodec = baseCodec;
-            break;
-          case GZIP:
-            compressedCodec = new GZIPCompressionCodec<>(baseCodec);
-            break;
-          case SNAPPY:
-            compressedCodec = new SnappyCompressionCodec<>(baseCodec);
-            break;
-          default:
-            throw new RuntimeException(
-                String.format("compression algorithm: %s not implemented", algorithm));
-        }
-        compressionCodecBuilder.put(algorithm, compressedCodec);
-      }
-      allCodecsPairsBuilder.put(sProto, compressionCodecBuilder.build());
-=======
     for (SerializationProtocol protocol : SerializationProtocol.values()) {
       Codec<S, byte[]> thriftCodec = Codecs.createThriftCodec(thriftClazz, protocol);
 
@@ -85,7 +43,6 @@ public class WrappedDataThriftCodec<S extends TBase<S, ?>> implements Codec<S, b
         compressedCodecsBuilder.put(algorithm, compressedCodec);
       }
       allCodecsPairsBuilder.put(protocol, compressedCodecsBuilder.build());
->>>>>>> master
     }
     this.allCodecsPairs = allCodecsPairsBuilder.build();
   }
