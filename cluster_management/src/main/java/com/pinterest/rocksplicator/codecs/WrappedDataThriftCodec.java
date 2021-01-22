@@ -18,7 +18,7 @@ public class WrappedDataThriftCodec<S extends TBase<S, ?>> implements Codec<S, b
   final Map<SerializationProtocol, Map<CompressionAlgorithm, Codec<S, byte[]>>> allCodecsPairs;
   private Codec<WrappedData, byte[]> wrappedDataBinaryCodec;
 
-  private WrappedDataThriftCodec(
+  public WrappedDataThriftCodec(
       final Class<S> thriftClazz,
       final SerializationProtocol serializationProtocol,
       final CompressionAlgorithm compressionAlgorithm) {
@@ -73,14 +73,22 @@ public class WrappedDataThriftCodec<S extends TBase<S, ?>> implements Codec<S, b
   @Override
   public byte[] encode(S obj) throws CodecException {
     WrappedData wrappedData = new WrappedData();
-    wrappedData
+    Codec<S, byte[]>
+        codec =
+        this.allCodecsPairs.get(this.serializationProtocol).get(this.compressionAlgorithm);
+    wrappedData.setSerialization_protocol(this.serializationProtocol)
+        .setCompression_algorithm(this.compressionAlgorithm)
+        .setData(codec.encode(obj));
     return this.wrappedDataBinaryCodec.encode(wrappedData);
   }
 
   @Override
   public S decode(byte[] data) throws CodecException {
     WrappedData wrappedData = wrappedDataBinaryCodec.decode(data);
-
-    return null;
+    Codec<S, byte[]>
+        codec =
+        this.allCodecsPairs.get(wrappedData.getSerialization_protocol())
+            .get(wrappedData.getCompression_algorithm());
+    return codec.decode(wrappedData.getData());
   }
 }
