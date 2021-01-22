@@ -28,15 +28,15 @@ public class WrappedDataThriftCodecTest extends CodecTestBase {
             CompressionAlgorithm.SNAPPY);
     WrappedDataThriftCodec<LeaderEventsHistory>
         wrappedCodecCU =
-        new WrappedDataThriftCodec(LeaderEventsHistory.class, SerializationProtocol.BINARY,
+        new WrappedDataThriftCodec(LeaderEventsHistory.class, SerializationProtocol.COMPACT,
             CompressionAlgorithm.UNCOMPRESSED);
     WrappedDataThriftCodec<LeaderEventsHistory>
         wrappedCodecCG =
-        new WrappedDataThriftCodec(LeaderEventsHistory.class, SerializationProtocol.BINARY,
+        new WrappedDataThriftCodec(LeaderEventsHistory.class, SerializationProtocol.COMPACT,
             CompressionAlgorithm.GZIP);
     WrappedDataThriftCodec<LeaderEventsHistory>
         wrappedCodecCS =
-        new WrappedDataThriftCodec(LeaderEventsHistory.class, SerializationProtocol.BINARY,
+        new WrappedDataThriftCodec(LeaderEventsHistory.class, SerializationProtocol.COMPACT,
             CompressionAlgorithm.SNAPPY);
 
     byte[] buBytes = wrappedCodecBU.encode(history);
