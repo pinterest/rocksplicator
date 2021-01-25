@@ -20,7 +20,7 @@ class SingleLeaderEventMergeOperator
   final String partitionName;
   final Optional<Integer> maxEventsToKeep;
 
-  public SingleLeaderEventMergeOperator(
+  SingleLeaderEventMergeOperator(
       final String resourcName,
       final String partitionName,
       final Optional<Integer> maxEventsToKeep) {
