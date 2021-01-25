@@ -28,6 +28,7 @@ import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEvent;
 import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEventType;
 import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEventsHistory;
 
+import com.google.common.collect.ImmutableList;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.RetryOneTime;
@@ -74,7 +75,7 @@ public class LeaderEventHistoryStoreTest {
         .setEvent_timestamp_ms(++now);
 
     leaderEventHistory.addToEvents(leaderEvent);
-    leaderEventHistoryStore.append(RESOURCE_NAME, PARTITION_NAME, leaderEvent);
+    leaderEventHistoryStore.batchAppend(RESOURCE_NAME, PARTITION_NAME, ImmutableList.of(leaderEvent));
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -84,7 +85,7 @@ public class LeaderEventHistoryStoreTest {
 
     leaderEventHistory.addToEvents(leaderEvent);
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
-    leaderEventHistoryStore.append(RESOURCE_NAME, PARTITION_NAME, leaderEvent);
+    leaderEventHistoryStore.batchAppend(RESOURCE_NAME, PARTITION_NAME, ImmutableList.of(leaderEvent));
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -94,7 +95,7 @@ public class LeaderEventHistoryStoreTest {
 
     leaderEventHistory.addToEvents(leaderEvent);
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
-    leaderEventHistoryStore.append(RESOURCE_NAME, PARTITION_NAME, leaderEvent);
+    leaderEventHistoryStore.batchAppend(RESOURCE_NAME, PARTITION_NAME, ImmutableList.of(leaderEvent));
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -104,7 +105,7 @@ public class LeaderEventHistoryStoreTest {
 
     leaderEventHistory.addToEvents(leaderEvent);
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
-    leaderEventHistoryStore.append(RESOURCE_NAME, PARTITION_NAME, leaderEvent);
+    leaderEventHistoryStore.batchAppend(RESOURCE_NAME, PARTITION_NAME, ImmutableList.of(leaderEvent));
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -114,7 +115,7 @@ public class LeaderEventHistoryStoreTest {
 
     leaderEventHistory.addToEvents(leaderEvent);
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
-    leaderEventHistoryStore.append(RESOURCE_NAME, PARTITION_NAME, leaderEvent);
+    leaderEventHistoryStore.batchAppend(RESOURCE_NAME, PARTITION_NAME, ImmutableList.of(leaderEvent));
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -124,7 +125,7 @@ public class LeaderEventHistoryStoreTest {
 
     leaderEventHistory.addToEvents(leaderEvent);
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
-    leaderEventHistoryStore.append(RESOURCE_NAME, PARTITION_NAME, leaderEvent);
+    leaderEventHistoryStore.batchAppend(RESOURCE_NAME, PARTITION_NAME, ImmutableList.of(leaderEvent));
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -134,7 +135,7 @@ public class LeaderEventHistoryStoreTest {
 
     leaderEventHistory.addToEvents(leaderEvent);
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
-    leaderEventHistoryStore.append(RESOURCE_NAME, PARTITION_NAME, leaderEvent);
+    leaderEventHistoryStore.batchAppend(RESOURCE_NAME, PARTITION_NAME, ImmutableList.of(leaderEvent));
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -144,7 +145,7 @@ public class LeaderEventHistoryStoreTest {
 
     leaderEventHistory.addToEvents(leaderEvent);
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
-    leaderEventHistoryStore.append(RESOURCE_NAME, PARTITION_NAME, leaderEvent);
+    leaderEventHistoryStore.batchAppend(RESOURCE_NAME, PARTITION_NAME, ImmutableList.of(leaderEvent));
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -154,7 +155,7 @@ public class LeaderEventHistoryStoreTest {
 
     leaderEventHistory.addToEvents(leaderEvent);
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
-    leaderEventHistoryStore.append(RESOURCE_NAME, PARTITION_NAME, leaderEvent);
+    leaderEventHistoryStore.batchAppend(RESOURCE_NAME, PARTITION_NAME, ImmutableList.of(leaderEvent));
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -164,7 +165,7 @@ public class LeaderEventHistoryStoreTest {
 
     leaderEventHistory.addToEvents(leaderEvent);
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
-    leaderEventHistoryStore.append(RESOURCE_NAME, PARTITION_NAME, leaderEvent);
+    leaderEventHistoryStore.batchAppend(RESOURCE_NAME, PARTITION_NAME, ImmutableList.of(leaderEvent));
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
   }
 

@@ -104,6 +104,16 @@ public class LeaderEventHistoryStore implements Closeable {
 
     this.zkStoreCache = CacheBuilder.newBuilder()
         .expireAfterAccess(10, TimeUnit.MINUTES)
+        .removalListener(
+            new RemovalListener<String, LoadingCache<String,
+                MergeableReadWriteStore<LeaderEventsHistory, LeaderEvent>>>() {
+              @Override
+              public void onRemoval(
+                  RemovalNotification<String, LoadingCache<String,
+                      MergeableReadWriteStore<LeaderEventsHistory, LeaderEvent>>> notification) {
+                notification.getValue().invalidateAll();
+              }
+            })
         .build(new CacheLoader<String,
             LoadingCache<String, MergeableReadWriteStore<LeaderEventsHistory, LeaderEvent>>>() {
           @Override
@@ -134,9 +144,6 @@ public class LeaderEventHistoryStore implements Closeable {
                     return new ZkMergeableEventStore<>(zkClient, clusterName,
                         resourceName, partitionName, leaderEventsHistoryCodec,
                         LeaderEventsHistory::new,
-                        MergeOperators
-                            .createSingleMergeOperator(resourceName, partitionName,
-                                maxEventsToKeep),
                         MergeOperators
                             .createBatchMergeOperator(resourceName, partitionName,
                                 maxEventsToKeep));
@@ -191,8 +198,9 @@ public class LeaderEventHistoryStore implements Closeable {
   }
 
   public void asyncAppend(String resourceName, String partitionName, LeaderEvent event) {
-    ExecutorService service = getExecutorService(clusterName, resourceName, partitionName);
-    service.submit(() -> append(resourceName, partitionName, event));
+    List<LeaderEvent> leaderEvents = new ArrayList<>();
+    leaderEvents.add(event);
+    asyncBatchAppend(resourceName, partitionName, leaderEvents);
   }
 
   public void asyncBatchAppend(String resourceName, String partitionName,
@@ -250,48 +258,6 @@ public class LeaderEventHistoryStore implements Closeable {
       localHistoryCache.getUnchecked(resource).put(partition, mergedHistory);
     } catch (Throwable e) {
       LOGGER.error(String.format("Error processing leaderevents: %s", leaderEvents), e);
-    } finally {
-      lock.unlock();
-    }
-  }
-
-
-  /**
-   * Blocks the calling thread, hence not available directly to client code.
-   */
-  @VisibleForTesting
-  void append(String resource, String partition, LeaderEvent leaderEvent) {
-    Preconditions.checkNotNull(resource);
-    Preconditions.checkNotNull(partition);
-    Preconditions.checkArgument(leaderEvent.isSetEvent_type());
-    Preconditions.checkArgument(leaderEvent.isSetEvent_timestamp_ms());
-    Preconditions.checkArgument(leaderEvent.isSetOriginating_node());
-
-    Lock lock = getLock(clusterName, resource, partition);
-
-    lock.lock();
-    try {
-      LeaderEventsHistory
-          cachedHistory =
-          localHistoryCache.getUnchecked(resource).getIfPresent(partition);
-      if (cachedHistory == null) {
-        try {
-          cachedHistory = zkStoreCache.getUnchecked(resource).getUnchecked(partition).read();
-          localHistoryCache.getUnchecked(resource).put(partition, cachedHistory);
-          if (!isEligible(cachedHistory, leaderEvent)) {
-            return;
-          }
-        } catch (IOException exp) {
-          // Do nothing. This happens when we are writing for the first time.
-        }
-      }
-
-      LeaderEventsHistory mergedHistory =
-          zkStoreCache.getUnchecked(resource).getUnchecked(partition).merge(leaderEvent);
-      localHistoryCache.getUnchecked(resource).put(partition, mergedHistory);
-
-    } catch (Throwable e) {
-      LOGGER.error(String.format("Error processing leader_event: %s", leaderEvent), e);
     } finally {
       lock.unlock();
     }

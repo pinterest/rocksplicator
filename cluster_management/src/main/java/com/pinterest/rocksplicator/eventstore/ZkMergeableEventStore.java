@@ -39,8 +39,7 @@ public class ZkMergeableEventStore<R, E> implements MergeableReadWriteStore<R, E
   private final AtomicBoolean pathExists;
   private final String eventHistoryPath;
   private final String partitionLockPath;
-  private final SingleMergeOperator<R, E> singleMergeOperator;
-  private final BatchMergeOperator<R> batchMergeOperator;
+  private final BatchMergeOperator<R> mergeOperator;
   private final Supplier<R> zeroSupplier;
   private final Codec<R, byte[]> recordCodec;
   private final CuratorFramework zkClient;
@@ -55,16 +54,13 @@ public class ZkMergeableEventStore<R, E> implements MergeableReadWriteStore<R, E
       final String partitionName,
       final Codec<R, byte[]> recordCodec,
       final Supplier<R> zeroSupplier,
-      final SingleMergeOperator<R, E> singleMergeOperator,
-      final BatchMergeOperator<R> batchMergeOperator) {
+      final BatchMergeOperator<R> mergeOperator) {
     Preconditions.checkNotNull(clusterName);
     Preconditions.checkNotNull(resourceName);
     Preconditions.checkNotNull(partitionName);
     this.zkClient = Preconditions.checkNotNull(zkClient);
     this.pathExists = new AtomicBoolean(false);
-
-    this.singleMergeOperator = Preconditions.checkNotNull(singleMergeOperator);
-    this.batchMergeOperator = Preconditions.checkNotNull(batchMergeOperator);
+    this.mergeOperator = Preconditions.checkNotNull(mergeOperator);
     this.recordCodec = Preconditions.checkNotNull(recordCodec);
     this.zeroSupplier = Preconditions.checkNotNull(zeroSupplier);
 
@@ -187,41 +183,6 @@ public class ZkMergeableEventStore<R, E> implements MergeableReadWriteStore<R, E
   }
 
   @Override
-  public synchronized R merge(E event) throws IOException {
-    ipMutexGuard.acquireUninterruptibly();
-    try {
-      if (interProcessPartitionMutex == null) {
-        throw new IOException("interProcessPartitionMutex couldn't be obtained");
-      }
-      try (Locker locker = new Locker(interProcessPartitionMutex)) {
-        ensurePathExists();
-        try {
-          zkClient.sync().forPath(eventHistoryPath);
-          byte[] dataFromStore = zkClient.getData().forPath(eventHistoryPath);
-          if (dataFromStore == null) {
-            dataFromStore = recordCodec.encode(zeroSupplier.get());
-          }
-          R record = recordCodec.decode(dataFromStore);
-          R mergedRecord = singleMergeOperator.apply(record, event);
-          byte[] appendedData = recordCodec.encode(mergedRecord);
-          zkClient.setData().forPath(eventHistoryPath, appendedData);
-          return mergedRecord;
-        } catch (CodecException e) {
-          throw new IOException(e);
-        } catch (Exception e) {
-          throw new IOException(e);
-        }
-      } catch (IOException e) {
-        throw e;
-      } catch (Exception e) {
-        throw new IOException(e);
-      }
-    } finally {
-      ipMutexGuard.release();
-    }
-  }
-
-  @Override
   public R mergeBatch(R updateRecord) throws IOException {
     ipMutexGuard.acquireUninterruptibly();
     try {
@@ -237,7 +198,7 @@ public class ZkMergeableEventStore<R, E> implements MergeableReadWriteStore<R, E
             dataFromStore = recordCodec.encode(zeroSupplier.get());
           }
           R record = recordCodec.decode(dataFromStore);
-          R mergedRecord = batchMergeOperator.apply(record, updateRecord);
+          R mergedRecord = mergeOperator.apply(record, updateRecord);
           byte[] appendedData = recordCodec.encode(mergedRecord);
           zkClient.setData().forPath(eventHistoryPath, appendedData);
           return mergedRecord;
