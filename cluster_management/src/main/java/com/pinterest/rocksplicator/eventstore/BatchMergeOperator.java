@@ -18,5 +18,7 @@
 
 package com.pinterest.rocksplicator.eventstore;
 
-public interface BatchMergeOperator<R> extends SingleMergeOperator<R, R> {
+import java.util.function.BiFunction;
+
+public interface BatchMergeOperator<R> extends BiFunction<R, R, R> {
 }
