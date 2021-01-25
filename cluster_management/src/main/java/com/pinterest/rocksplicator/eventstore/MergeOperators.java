@@ -18,7 +18,6 @@
 
 package com.pinterest.rocksplicator.eventstore;
 
-import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEvent;
 import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEventsHistory;
 
 import java.util.Optional;
