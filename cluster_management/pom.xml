@@ -136,6 +136,7 @@
       <groupId>org.testng</groupId>
       <artifactId>testng</artifactId>
       <version>6.0.1</version>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.helix</groupId>
@@ -148,13 +149,13 @@
         <groupId>org.apache.curator</groupId>
         <artifactId>curator-test</artifactId>
         <version>2.12.0</version>
-        <exclusions>
+      <scope>test</scope>
+      <exclusions>
             <exclusion>
                 <groupId>org.apache.zookeeper</groupId>
                 <artifactId>zookeeper</artifactId>
             </exclusion>
         </exclusions>
-        <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.xerial.snappy</groupId>
