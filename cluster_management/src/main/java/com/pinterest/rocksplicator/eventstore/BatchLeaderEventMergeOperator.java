@@ -77,10 +77,12 @@ class BatchLeaderEventMergeOperator
       mergedHistory.setEvents(events);
     }
 
-    LOGGER.debug(String
-        .format("resource: %s partitionName: %s, size: %d, ts_ms: %d", resourcName, partitionName,
-            mergedHistory.getEventsSize(),
-            mergedHistory.getEvents().get(0).getEvent_timestamp_ms()));
+    if (LOGGER.isDebugEnabled()) {
+      LOGGER.debug(String
+          .format("resource: %s partitionName: %s, size: %d, ts_ms: %d", resourcName, partitionName,
+              mergedHistory.getEventsSize(),
+              mergedHistory.getEvents().get(0).getEvent_timestamp_ms()));
+    }
     return mergedHistory;
   }
 }
