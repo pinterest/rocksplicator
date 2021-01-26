@@ -63,7 +63,7 @@ import java.util.function.BiConsumer;
 public class LeaderEventHistoryStore implements Closeable {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(LeaderEventHistoryStore.class);
-  private static final int NUM_PARALLEL_THREADS = 16;
+  private static final int NUM_PARALLEL_THREADS = 64;
 
   private final String zkConnectString;
   private final String clusterName;
@@ -100,6 +100,7 @@ public class LeaderEventHistoryStore implements Closeable {
       this.zkClient.blockUntilConnected(60, TimeUnit.SECONDS);
     } catch (InterruptedException e) {
       LOGGER.error(String.format("Can't connect to zookeeper: %s", zkConnectString), e);
+      throw new RuntimeException(e);
     }
 
     this.zkStoreCache = CacheBuilder.newBuilder()
@@ -157,8 +158,8 @@ public class LeaderEventHistoryStore implements Closeable {
     for (int i = 0; i < NUM_PARALLEL_THREADS; ++i) {
       this.executorServices.add(Executors.newSingleThreadExecutor());
     }
-    this.clusterResourcePartitionLock = new ArrayList<>(128);
-    for (int i = 0; i < 128; ++i) {
+    this.clusterResourcePartitionLock = new ArrayList<>(NUM_PARALLEL_THREADS);
+    for (int i = 0; i < NUM_PARALLEL_THREADS; ++i) {
       this.clusterResourcePartitionLock.add(new ReentrantLock());
     }
 
