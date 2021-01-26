@@ -83,7 +83,7 @@ public class ZkMergeableEventStoreTest {
     leaderEventHistory.addToEvents(leaderEvent);
     LeaderEventsHistory singleEvent = new LeaderEventsHistory();
     singleEvent.addToEvents(leaderEvent);
-    zkStore.mergeBatch(singleEvent);
+    zkStore.merge(singleEvent);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -95,7 +95,7 @@ public class ZkMergeableEventStoreTest {
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
     singleEvent = new LeaderEventsHistory();
     singleEvent.addToEvents(leaderEvent);
-    zkStore.mergeBatch(singleEvent);
+    zkStore.merge(singleEvent);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -107,7 +107,7 @@ public class ZkMergeableEventStoreTest {
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
     singleEvent = new LeaderEventsHistory();
     singleEvent.addToEvents(leaderEvent);
-    zkStore.mergeBatch(singleEvent);
+    zkStore.merge(singleEvent);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -119,7 +119,7 @@ public class ZkMergeableEventStoreTest {
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
     singleEvent = new LeaderEventsHistory();
     singleEvent.addToEvents(leaderEvent);
-    zkStore.mergeBatch(singleEvent);
+    zkStore.merge(singleEvent);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -131,7 +131,7 @@ public class ZkMergeableEventStoreTest {
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
     singleEvent = new LeaderEventsHistory();
     singleEvent.addToEvents(leaderEvent);
-    zkStore.mergeBatch(singleEvent);
+    zkStore.merge(singleEvent);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -143,7 +143,7 @@ public class ZkMergeableEventStoreTest {
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
     singleEvent = new LeaderEventsHistory();
     singleEvent.addToEvents(leaderEvent);
-    zkStore.mergeBatch(singleEvent);
+    zkStore.merge(singleEvent);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -155,7 +155,7 @@ public class ZkMergeableEventStoreTest {
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
     singleEvent = new LeaderEventsHistory();
     singleEvent.addToEvents(leaderEvent);
-    zkStore.mergeBatch(singleEvent);
+    zkStore.merge(singleEvent);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -167,7 +167,7 @@ public class ZkMergeableEventStoreTest {
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
     singleEvent = new LeaderEventsHistory();
     singleEvent.addToEvents(leaderEvent);
-    zkStore.mergeBatch(singleEvent);
+    zkStore.merge(singleEvent);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -179,7 +179,7 @@ public class ZkMergeableEventStoreTest {
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
     singleEvent = new LeaderEventsHistory();
     singleEvent.addToEvents(leaderEvent);
-    zkStore.mergeBatch(singleEvent);
+    zkStore.merge(singleEvent);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     leaderEvent = new LeaderEvent()
@@ -191,7 +191,7 @@ public class ZkMergeableEventStoreTest {
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
     singleEvent = new LeaderEventsHistory();
     singleEvent.addToEvents(leaderEvent);
-    zkStore.mergeBatch(singleEvent);
+    zkStore.merge(singleEvent);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
   }
 
@@ -222,7 +222,7 @@ public class ZkMergeableEventStoreTest {
     batchHistory.addToEvents(leaderEvent);
 
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
-    zkStore.mergeBatch(batchHistory);
+    zkStore.merge(batchHistory);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     /** Second Batch **/
@@ -245,7 +245,7 @@ public class ZkMergeableEventStoreTest {
     batchHistory.addToEvents(leaderEvent);
 
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
-    zkStore.mergeBatch(batchHistory);
+    zkStore.merge(batchHistory);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     /** Third Batch **/
@@ -260,7 +260,7 @@ public class ZkMergeableEventStoreTest {
     batchHistory.addToEvents(leaderEvent);
 
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
-    zkStore.mergeBatch(batchHistory);
+    zkStore.merge(batchHistory);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     /** Fourth Batch **/
@@ -283,7 +283,7 @@ public class ZkMergeableEventStoreTest {
     batchHistory.addToEvents(leaderEvent);
 
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
-    zkStore.mergeBatch(batchHistory);
+    zkStore.merge(batchHistory);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     /** Fifth Batch **/
@@ -306,7 +306,7 @@ public class ZkMergeableEventStoreTest {
     batchHistory.addToEvents(leaderEvent);
 
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
-    zkStore.mergeBatch(batchHistory);
+    zkStore.merge(batchHistory);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
 
     /** Sixth Batch **/
@@ -321,7 +321,7 @@ public class ZkMergeableEventStoreTest {
     batchHistory.addToEvents(leaderEvent);
 
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
-    zkStore.mergeBatch(batchHistory);
+    zkStore.merge(batchHistory);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
   }
 

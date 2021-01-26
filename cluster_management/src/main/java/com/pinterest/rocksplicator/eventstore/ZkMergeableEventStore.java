@@ -183,7 +183,7 @@ public class ZkMergeableEventStore<R, E> implements MergeableReadWriteStore<R, E
   }
 
   @Override
-  public R mergeBatch(R updateRecord) throws IOException {
+  public R merge(R updateRecord) throws IOException {
     ipMutexGuard.acquireUninterruptibly();
     try {
       if (interProcessPartitionMutex == null) {
