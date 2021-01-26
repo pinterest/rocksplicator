@@ -253,8 +253,7 @@ public class LeaderEventHistoryStore implements Closeable {
       LeaderEventsHistory batchUpdateHistory = new LeaderEventsHistory().setEvents(leaderEvents);
 
       LeaderEventsHistory mergedHistory =
-          zkStoreCache.getUnchecked(resource).getUnchecked(partition)
-              .mergeBatch(batchUpdateHistory);
+          zkStoreCache.getUnchecked(resource).getUnchecked(partition).merge(batchUpdateHistory);
       localHistoryCache.getUnchecked(resource).put(partition, mergedHistory);
     } catch (Throwable e) {
       LOGGER.error(String.format("Error processing leaderevents: %s", leaderEvents), e);
