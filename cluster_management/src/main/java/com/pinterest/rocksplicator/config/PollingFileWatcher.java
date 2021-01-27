@@ -77,7 +77,7 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
     if (DEFAULT_INSTANCE == null) {
       synchronized (PollingFileWatcher.class) {
         if (DEFAULT_INSTANCE == null) {
-          DEFAULT_INSTANCE = new PollingFileWatcher(DEFAULT_POLL_PERIOD_MILLIS);
+          DEFAULT_INSTANCE = new PollingFileWatcher(DEFAULT_POLL_PERIOD_MILLIS, TimeUnit.MILLISECONDS);
         }
       }
     }
@@ -86,12 +86,12 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
   }
 
   @VisibleForTesting
-  PollingFileWatcher(int pollPeriodMillis) {
+  PollingFileWatcher(int pollPeriod, TimeUnit timeUnit) {
     ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor(
         new ThreadFactoryBuilder().setDaemon(true).setNameFormat("PollingFileWatcher-%d").build());
     this.watcherTask = new WatcherTask();
     service.scheduleWithFixedDelay(
-        watcherTask, pollPeriodMillis, pollPeriodMillis, TimeUnit.MILLISECONDS);
+        watcherTask, pollPeriod, pollPeriod, timeUnit);
   }
 
   /**
