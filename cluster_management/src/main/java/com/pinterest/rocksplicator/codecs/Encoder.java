@@ -18,5 +18,6 @@
 
 package com.pinterest.rocksplicator.codecs;
 
-public interface Codec<S, T> extends Encoder<S, T>, Decoder <T, S> {
+public interface Encoder<S, T> {
+  T encode(final S obj) throws CodecException;
 }

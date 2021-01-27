@@ -16,7 +16,9 @@
 // @author Gopal Rajpurohit (grajpurohit@pinterest.com)
 //
 
-package com.pinterest.rocksplicator.codecs;
+package com.pinterest.rocksplicator.config;
 
-public interface Codec<S, T> extends Encoder<S, T>, Decoder <T, S> {
+public enum ConfigCodecEnum {
+  LINE_TERMINATED,
+  JSON_ARRAY
 }

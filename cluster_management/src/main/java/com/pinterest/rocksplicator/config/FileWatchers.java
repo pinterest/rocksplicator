@@ -16,7 +16,10 @@
 // @author Gopal Rajpurohit (grajpurohit@pinterest.com)
 //
 
-package com.pinterest.rocksplicator.codecs;
+package com.pinterest.rocksplicator.config;
 
-public interface Codec<S, T> extends Encoder<S, T>, Decoder <T, S> {
+public class FileWatchers {
+  public static FileWatcher<byte[]> getPollingFileWatcher() {
+    return PollingFileWatcher.defaultInstance();
+  }
 }
