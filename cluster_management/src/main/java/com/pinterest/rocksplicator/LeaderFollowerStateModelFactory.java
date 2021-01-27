@@ -23,6 +23,7 @@ import com.pinterest.rocksplicator.eventstore.LeaderEventsCollector;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEventType;
 
+import com.google.common.base.Preconditions;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
@@ -97,8 +98,13 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
   private final LeaderEventsLogger leaderEventsLogger;
 
   public LeaderFollowerStateModelFactory(
-      String host, int adminPort, String zkConnectString, String cluster, boolean useS3Backup, String s3Bucket,
-      LeaderEventsLogger leaderEventsLogger) {
+      final String host,
+      final int adminPort,
+      final String zkConnectString,
+      final String cluster,
+      final boolean useS3Backup,
+      final String s3Bucket,
+      final LeaderEventsLogger leaderEventsLogger) {
     this.host = host;
     this.adminPort = adminPort;
     this.cluster = cluster;
@@ -114,7 +120,15 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
   public StateModel createNewStateModel(String resourceName, String partitionName) {
     LOG.error("Create a new state for " + partitionName);
     return new LeaderFollowerStateModel(
-        resourceName, partitionName, host, adminPort, cluster, zkClient, useS3Backup, s3Bucket, leaderEventsLogger);
+        resourceName,
+        partitionName,
+        host,
+        adminPort,
+        cluster,
+        zkClient,
+        useS3Backup,
+        s3Bucket,
+        leaderEventsLogger);
   }
 
 
@@ -136,9 +150,16 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
     /**
      * State model that handles the state machine of a single replica
      */
-    public LeaderFollowerStateModel(String resourceName, String partitionName, String host,
-                                  int adminPort, String cluster, CuratorFramework zkClient,
-                                  boolean useS3Backup, String s3Bucket, LeaderEventsLogger leaderEventsLogger) {
+    public LeaderFollowerStateModel(
+        final String resourceName,
+        final String partitionName,
+        final String host,
+        final int adminPort,
+        final String cluster,
+        final CuratorFramework zkClient,
+        final boolean useS3Backup,
+        final String s3Bucket,
+        final LeaderEventsLogger leaderEventsLogger) {
       this.resourceName = resourceName;
       this.partitionName = partitionName;
       this.host = host;

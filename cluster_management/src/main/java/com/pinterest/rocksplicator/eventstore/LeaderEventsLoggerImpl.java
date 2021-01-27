@@ -7,6 +7,8 @@ import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEvent;
 import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEventType;
 import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEventsHistory;
 
+import com.google.common.base.Preconditions;
+
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.Optional;
@@ -104,6 +106,9 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
     }
 
     public LeaderEventsCollector addEvent(LeaderEventType eventType, String leaderNode) {
+      if (LeaderEventTypes.participantEventTypes.contains(eventType)) {
+        Preconditions.checkArgument(leaderNode == null);
+      }
       if (!committed.getAndSet(true)) {
         LeaderEvent leaderEvent = new LeaderEvent();
         leaderEvent.setEvent_timestamp_ms(System.currentTimeMillis())

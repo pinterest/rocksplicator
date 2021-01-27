@@ -97,8 +97,13 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
   private final LeaderEventsLogger leaderEventsLogger;
 
   public MasterSlaveStateModelFactory(
-      String host, int adminPort, String zkConnectString, String cluster, boolean useS3Backup, String s3Bucket,
-      LeaderEventsLogger leaderEventsLogger) {
+      final String host,
+      final int adminPort,
+      final String zkConnectString,
+      final String cluster,
+      final boolean useS3Backup,
+      final String s3Bucket,
+      final LeaderEventsLogger leaderEventsLogger) {
     this.host = host;
     this.adminPort = adminPort;
     this.cluster = cluster;
@@ -114,7 +119,15 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
   public StateModel createNewStateModel(String resourceName, String partitionName) {
     LOG.error("Create a new state for " + partitionName);
     return new MasterSlaveStateModel(
-        resourceName, partitionName, host, adminPort, cluster, zkClient, useS3Backup, s3Bucket, leaderEventsLogger);
+        resourceName,
+        partitionName,
+        host,
+        adminPort,
+        cluster,
+        zkClient,
+        useS3Backup,
+        s3Bucket,
+        leaderEventsLogger);
   }
 
 
@@ -136,9 +149,15 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
     /**
      * State model that handles the state machine of a single replica
      */
-    public MasterSlaveStateModel(String resourceName, String partitionName, String host,
-                                  int adminPort, String cluster, CuratorFramework zkClient,
-                                  boolean useS3Backup, String s3Bucket) {
+    public MasterSlaveStateModel(
+        final String resourceName,
+        final String partitionName,
+        final String host,
+        final int adminPort,
+        final String cluster,
+        final CuratorFramework zkClient,
+        final boolean useS3Backup, String s3Bucket,
+        final LeaderEventsLogger leaderEventsLogger) {
       this.resourceName = resourceName;
       this.partitionName = partitionName;
       this.host = host;
