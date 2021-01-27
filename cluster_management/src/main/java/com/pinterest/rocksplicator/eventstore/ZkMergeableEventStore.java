@@ -125,14 +125,13 @@ public class ZkMergeableEventStore<R, E> implements MergeableReadWriteStore<R, E
 
   public static String getPartitionLockPath(String cluster, String resourceName,
                                             String partitionName) {
-    return "/rocksplicator/eventhistory/" + cluster + "/" + resourceName + "/" + partitionName
-        + "/lock";
+    return "/rocksplicator/eventhistory/lock/" + cluster + "/" + resourceName + "/" + partitionName;
   }
 
   public static String getLeaderEventHistoryPath(String cluster, String resourceName,
                                                  String partitionName) {
-    return "/rocksplicator/eventhistory/" + cluster + "/" + resourceName + "/" + partitionName
-        + "/eventhistory";
+    return "/rocksplicator/eventhistory/history/" + cluster + "/" + resourceName + "/"
+        + partitionName;
   }
 
   private void ensurePathExists() {
