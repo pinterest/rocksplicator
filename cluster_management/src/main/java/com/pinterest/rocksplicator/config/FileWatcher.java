@@ -16,7 +16,13 @@
 // @author Gopal Rajpurohit (grajpurohit@pinterest.com)
 //
 
-package com.pinterest.rocksplicator.codecs;
+package com.pinterest.rocksplicator.config;
 
-public interface Codec<S, T> extends Encoder<S, T>, Decoder <T, S> {
+import java.io.IOException;
+import java.util.function.Function;
+
+public interface FileWatcher<R> {
+
+  void addWatch(String filePath, Function<R, Void> onUpdate) throws IOException;
 }
+
