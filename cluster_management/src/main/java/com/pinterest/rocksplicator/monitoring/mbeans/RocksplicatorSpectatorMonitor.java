@@ -13,6 +13,7 @@ public class RocksplicatorSpectatorMonitor
 
   private final String instanceName;
   private long configGeneratorCalledCount = 0;
+  private long configGeneratorFailCount = 0;
   private long configGeneratorNullExternalView = 0;
 
   private ConcurrentHashMap<LATENCY_TYPE, StatCollector> latencyMonitorMap =
@@ -30,6 +31,10 @@ public class RocksplicatorSpectatorMonitor
     configGeneratorCalledCount += count;
   }
 
+  public void incrementConfigGeneratorFailCount(int count) {
+    configGeneratorFailCount += count;
+  }
+
   void addLatency(LATENCY_TYPE type, double latency) {
     assert (latencyMonitorMap.containsKey(type));
     latencyMonitorMap.get(type).addData(latency);
@@ -42,6 +47,11 @@ public class RocksplicatorSpectatorMonitor
   @Override
   public long getConfigGeneratorCalledCount() {
     return configGeneratorCalledCount;
+  }
+
+  @Override
+  public long getConfigGeneratorFailCount() {
+    return configGeneratorFailCount;
   }
 
   @Override

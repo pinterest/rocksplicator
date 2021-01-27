@@ -117,6 +117,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     try {
       r.run();
     } catch (Throwable throwable) {
+      this.monitor.incrementConfigGeneratorFailCount();
       LOG.error("Exception in generateShardConfig()", throwable);
       throw throwable;
     }
@@ -181,7 +182,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   }
 
   private void generateShardConfig() {
-    monitor.incrementConfigGeneratorCalledCount();
+    this.monitor.incrementConfigGeneratorCalledCount();
     Stopwatch stopwatch = Stopwatch.createStarted();
 
     List<String> resources = this.helixAdmin.getResourcesInCluster(clusterName);
@@ -199,7 +200,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
 
       ExternalView externalView = this.helixAdmin.getResourceExternalView(clusterName, resource);
       if (externalView == null) {
-        monitor.incrementConfigGeneratorNullExternalView();
+        this.monitor.incrementConfigGeneratorNullExternalView();
         LOG.error("Failed to get externalView for resource: " + resource);
         /**
          * In some situations, we may encounter a null externalView for a given resource.
@@ -334,7 +335,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
 
     stopwatch.stop();
     long elapsedMs = stopwatch.elapsed(TimeUnit.MILLISECONDS);
-    monitor.reportConfigGeneratorLatency(elapsedMs);
+    this.monitor.reportConfigGeneratorLatency(elapsedMs);
   }
 
   private String getHostWithDomain(String host) {
