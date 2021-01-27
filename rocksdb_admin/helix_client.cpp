@@ -35,6 +35,16 @@ DEFINE_bool(use_s3_backup, false,
 DEFINE_string(s3_bucket_backup, "pinterest-jackson",
               "S3 bucket would be used for rocksdb backup & restore");
 
+DEFINE_string(handoff_event_history_zkSvr,
+  "",
+  "[Optional]: zk server to store event history for leader handoff events");
+DEFINE_string(handoff_event_history_config_path,
+  "",
+  "[Optional]: config path providing resources for which we need to log event history for leader events");
+DEFINE_string(handoff_event_history_config_type,
+  "",
+  "[Optional]: Must be one of JSON_ARRAY / LINE_TERMINATED");
+
 namespace {
 
 JNIEnv* createVM(const std::string& class_path) {
@@ -92,34 +102,51 @@ void invokeClass(JNIEnv* env,
                                       "main",
                                       "([Ljava/lang/String;)V");
 
-  args = env->NewObjectArray(14 + (FLAGS_use_s3_backup ? 2 : 0) + (disable_spectator ? 1 : 0),
-                             env->FindClass("java/lang/String"), nullptr);
+  std::vector<std::string> arguments;
 
-  env->SetObjectArrayElement(args, 0, env->NewStringUTF("--zkSvr"));
-  env->SetObjectArrayElement(
-    args, 1, env->NewStringUTF(zk_connect_str.c_str()));
-  env->SetObjectArrayElement(args, 2, env->NewStringUTF("--cluster"));
-  env->SetObjectArrayElement(args, 3, env->NewStringUTF(cluster.c_str()));
-  env->SetObjectArrayElement(args, 4, env->NewStringUTF("--host"));
-  auto ip = common::getLocalIPAddress();
-  env->SetObjectArrayElement(args, 5, env->NewStringUTF(ip.c_str()));
-  env->SetObjectArrayElement(args, 6, env->NewStringUTF("--port"));
-  auto port = std::to_string(FLAGS_port);
-  env->SetObjectArrayElement(args, 7, env->NewStringUTF(port.c_str()));
-  env->SetObjectArrayElement(args, 8, env->NewStringUTF("--stateModelType"));
-  env->SetObjectArrayElement(
-    args, 9, env->NewStringUTF(state_model_type.c_str()));
-  env->SetObjectArrayElement(args, 10, env->NewStringUTF("--domain"));
-  env->SetObjectArrayElement(args, 11, env->NewStringUTF(domain.c_str()));
-  env->SetObjectArrayElement(args, 12, env->NewStringUTF("--configPostUrl"));
-  env->SetObjectArrayElement(args, 13,
-                             env->NewStringUTF(config_post_url.c_str()));
+  arguments.push_back(std::string("--zkSvr"));
+  arguments.push_back(std::string(zk_connect_str));
+  arguments.push_back(std::string("--cluster"));
+  arguments.push_back(std::string(cluster));
+  arguments.push_back(std::string("--host"));
+  arguments.push_back(std::string(common::getLocalIPAddress()));
+  arguments.push_back(std::string("--port"));
+  arguments.push_back(std::string(std::to_string(FLAGS_port)));
+  arguments.push_back(std::string("--stateModelType"));
+  arguments.push_back(std::string(state_model_type));
+  arguments.push_back(std::string("--domain"));
+  arguments.push_back(std::string(domain));
+  arguments.push_back(std::string("--configPostUrl"));
+  arguments.push_back(std::string(config_post_url));
   if (FLAGS_use_s3_backup) {
-    env->SetObjectArrayElement(args, 14, env->NewStringUTF("--s3Bucket"));
-    env->SetObjectArrayElement(args, 15, env->NewStringUTF(FLAGS_s3_bucket_backup.c_str()));
+    arguments.push_back(std::string("--s3Bucket"));
+    arguments.push_back(std::string(FLAGS_s3_bucket_backup));
   }
   if (disable_spectator) {
-    env->SetObjectArrayElement(args, FLAGS_use_s3_backup ? 16 : 14, env->NewStringUTF("--disableSpectator"));
+    arguments.push_back(std::string("--disableSpectator"));
+  }
+  if (!FLAGS_handoff_event_history_zkSvr.empty()) {
+    arguments.push_back(std::string("--handoffEventHistoryzkSvr"));
+    arguments.push_back(std::string(FLAGS_handoff_event_history_zkSvr));
+  }
+  if (!FLAGS_handoff_event_history_config_path.empty()) {
+    arguments.push_back(std::string("--handoffEventHistoryConfigPath"));
+    arguments.push_back(std::string(FLAGS_handoff_event_history_config_path));
+  }
+  if (!FLAGS_handoff_event_history_config_type.empty()) {
+    arguments.push_back(std::string("--handoffEventHistoryConfigType"));
+    arguments.push_back(std::string(FLAGS_handoff_event_history_config_type));
+  }
+
+  int totalArgumentsSize = arguments.size();
+
+
+  args = env->NewObjectArray(totalArgumentsSize, env->FindClass("java/lang/String"), nullptr);
+
+  int argumentNum = 0;
+  for (const std::string& nextArg : arguments) {
+    env->SetObjectArrayElement(args, argumentNum, env->NewStringUTF(nextArg.c_str()));
+    ++argumentNum;
   }
 
   env->CallStaticVoidMethod(ParticipantClass, mainMethod, args);

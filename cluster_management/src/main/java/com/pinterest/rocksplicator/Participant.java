@@ -71,7 +71,7 @@ public class Participant {
   private static final String configPostUrl = "configPostUrl";
   private static final String s3Bucket = "s3Bucket";
   private static final String disableSpectator = "disableSpectator";
-  private static final String zkEventHistory = "zkEventHistory";
+  private static final String handoffEventHistoryzkSvr = "handoffEventHistoryzkSvr";
   private static final String handoffEventHistoryConfigPath = "handoffEventHistoryConfigPath";
   private static final String handoffEventHistoryConfigType = "handoffEventHistoryConfigType";
 
@@ -134,13 +134,13 @@ public class Participant {
     disableSpectatorOption.setRequired(false);
     disableSpectatorOption.setArgName("Disable Spectator (Optional)");
 
-    Option zkEventHistoryOption =
-        OptionBuilder.withLongOpt(zkEventHistory)
+    Option handoffEventHistoryzkSvrOption =
+        OptionBuilder.withLongOpt(handoffEventHistoryzkSvr)
             .withDescription(
                 "zk Connect String to enable state transitions event history logging").create();
-    zkEventHistoryOption.setArgs(1);
-    zkEventHistoryOption.setRequired(false);
-    zkEventHistoryOption.setArgName(
+    handoffEventHistoryzkSvrOption.setArgs(1);
+    handoffEventHistoryzkSvrOption.setRequired(false);
+    handoffEventHistoryzkSvrOption.setArgName(
         "Zk connect string for logging state transitions for leader handoff profiling (Optional)");
 
     Option  handoffEventHistoryConfigPathOption =
@@ -173,7 +173,7 @@ public class Participant {
         .addOption(configPostUrlOption)
         .addOption(s3BucketOption)
         .addOption(disableSpectatorOption)
-        .addOption(zkEventHistoryOption)
+        .addOption(handoffEventHistoryzkSvrOption)
         .addOption(handoffEventHistoryConfigPathOption)
         .addOption(handoffEventHistoryConfigTypeOption);
     return options;
@@ -210,7 +210,7 @@ public class Participant {
     }
     final boolean runSpectator = !cmd.hasOption(disableSpectator);
 
-    final String zkEventHistoryStr = cmd.getOptionValue(zkEventHistory, "");
+    final String zkEventHistoryStr = cmd.getOptionValue(handoffEventHistoryzkSvr, "");
     final String resourceConfigPath = cmd.getOptionValue(handoffEventHistoryConfigPath, "");
     final String resourceConfigType = cmd.getOptionValue(handoffEventHistoryConfigType, "");
 
