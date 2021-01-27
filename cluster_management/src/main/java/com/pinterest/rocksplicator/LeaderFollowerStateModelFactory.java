@@ -19,6 +19,9 @@
 package com.pinterest.rocksplicator;
 
 import com.pinterest.rocksdb_admin.thrift.CheckDBResponse;
+import com.pinterest.rocksplicator.eventstore.LeaderEventsCollector;
+import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
+import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEventType;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -91,9 +94,11 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
   private CuratorFramework zkClient;
   private final boolean useS3Backup;
   private final String s3Bucket;
+  private final LeaderEventsLogger leaderEventsLogger;
 
   public LeaderFollowerStateModelFactory(
-      String host, int adminPort, String zkConnectString, String cluster, boolean useS3Backup, String s3Bucket) {
+      String host, int adminPort, String zkConnectString, String cluster, boolean useS3Backup, String s3Bucket,
+      LeaderEventsLogger leaderEventsLogger) {
     this.host = host;
     this.adminPort = adminPort;
     this.cluster = cluster;
@@ -102,13 +107,14 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
     this.zkClient = CuratorFrameworkFactory.newClient(zkConnectString,
         new ExponentialBackoffRetry(1000, 3));
     zkClient.start();
+    this.leaderEventsLogger = leaderEventsLogger;
   }
 
   @Override
   public StateModel createNewStateModel(String resourceName, String partitionName) {
     LOG.error("Create a new state for " + partitionName);
     return new LeaderFollowerStateModel(
-        resourceName, partitionName, host, adminPort, cluster, zkClient, useS3Backup, s3Bucket);
+        resourceName, partitionName, host, adminPort, cluster, zkClient, useS3Backup, s3Bucket, leaderEventsLogger);
   }
 
 
@@ -124,6 +130,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
     private final boolean useS3Backup;
     private final String s3Bucket;
     private InterProcessMutex partitionMutex;
+    private final LeaderEventsLogger leaderEventsLogger;
 
 
     /**
@@ -131,7 +138,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
      */
     public LeaderFollowerStateModel(String resourceName, String partitionName, String host,
                                   int adminPort, String cluster, CuratorFramework zkClient,
-                                  boolean useS3Backup, String s3Bucket) {
+                                  boolean useS3Backup, String s3Bucket, LeaderEventsLogger leaderEventsLogger) {
       this.resourceName = resourceName;
       this.partitionName = partitionName;
       this.host = host;
@@ -142,12 +149,18 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
       this.s3Bucket = s3Bucket;
       this.partitionMutex = new InterProcessMutex(zkClient,
           getLockPath(cluster, resourceName, partitionName));
+      this.leaderEventsLogger = leaderEventsLogger;
     }
 
     /**
      * 1) Follower to Leader
      */
     public void onBecomeLeaderFromFollower(Message message, NotificationContext context) {
+      LeaderEventsCollector leaderEventsCollector
+          = leaderEventsLogger.newEventsCollector(resourceName, partitionName);
+
+      leaderEventsCollector.addEvent(LeaderEventType.PARTICIPANT_LEADER_UP_INIT, null);
+
       Utils.logTransitionMessage(message);
 
       try (Locker locker = new Locker(partitionMutex)) {
@@ -249,12 +262,18 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
             LOG.error("Failed to set upstream for " + dbName + " on " + hostName + e.toString());
           }
         }
+        leaderEventsCollector
+            .addEvent(LeaderEventType.PARTICIPANT_LEADER_UP_SUCCESS, null);
       } catch (RuntimeException e) {
+        leaderEventsCollector.addEvent(LeaderEventType.PARTICIPANT_LEADER_UP_FAILURE, null);
         LOG.error(e.toString());
         throw e;
       } catch (Exception e) {
+        leaderEventsCollector.addEvent(LeaderEventType.PARTICIPANT_LEADER_UP_FAILURE, null);
         LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
             e);
+      } finally {
+        leaderEventsCollector.commit();
       }
       Utils.logTransitionCompletionMessage(message);
     }
@@ -263,16 +282,25 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
      * 2) Leader to Follower
      */
     public void onBecomeFollowerFromLeader(Message message, NotificationContext context) {
+      LeaderEventsCollector leaderEventsCollector
+          = leaderEventsLogger.newEventsCollector(resourceName, partitionName);
+
+      leaderEventsCollector.addEvent(LeaderEventType.PARTICIPANT_LEADER_DOWN_INIT, null);
       Utils.logTransitionMessage(message);
 
       try (Locker locker = new Locker(partitionMutex)) {
         Utils.changeDBRoleAndUpStream("localhost", adminPort, Utils.getDbName(partitionName),
             "FOLLOWER", "127.0.0.1", adminPort);
+        leaderEventsCollector.addEvent(LeaderEventType.PARTICIPANT_LEADER_DOWN_SUCCESS, null);
       } catch (RuntimeException e) {
+        leaderEventsCollector.addEvent(LeaderEventType.PARTICIPANT_LEADER_DOWN_FAILURE, null);
         throw e;
       } catch (Exception e) {
+        leaderEventsCollector.addEvent(LeaderEventType.PARTICIPANT_LEADER_DOWN_FAILURE, null);
         LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
             e);
+      } finally {
+        leaderEventsCollector.commit();
       }
       Utils.logTransitionCompletionMessage(message);
     }
