@@ -25,6 +25,7 @@ import org.junit.After;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Base class for tests that deal directly or indirectly with the ConfigFileWatcher.
@@ -37,7 +38,7 @@ public class ConfigTestBase {
   public static PollingFileWatcher createPollingFileWatcher() {
     // Note: we run the watcher task directly rather than rely on polling, to avoid test timing
     // issues. Hence we can just set a high poll period.
-    return new PollingFileWatcher(1000000 /*pollPeriodSeconds*/);
+    return new PollingFileWatcher(1000, TimeUnit.SECONDS /*pollPeriodSeconds*/);
   }
 
   public static void writeContentToFile(File file, String content) throws IOException {
