@@ -39,6 +39,10 @@ public class RocksplicatorMonitor {
     spectatorStatsMonitor.incrementConfigGeneratorCalledCount(1);
   }
 
+  public void incrementConfigGeneratorFailCount() {
+    spectatorStatsMonitor.incrementConfigGeneratorFailCount(1);
+  }
+
   public void incrementConfigGeneratorNullExternalView() {
     spectatorStatsMonitor.incrementConfigGeneratorNullExternalView(1);
   }
