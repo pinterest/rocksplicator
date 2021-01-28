@@ -26,6 +26,7 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
   private final String resourcesEnabledConfigType;
   private final LeaderEventHistoryStore leaderEventHistoryStore;
   private final ConfigStore<Set<String>> configStore;
+  private final Optional<Integer> maxEventsToKeep;
   private final String instanceId;
   private final boolean isEnabled;
 
@@ -34,12 +35,14 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
       final String zkConnectString,
       final String clusterName,
       final String resourcesEnabledConfigPath,
-      final String resourcesEnabledConfigType) {
+      final String resourcesEnabledConfigType,
+      final Optional<Integer> maxEventsToKeep) {
     this.instanceId = instanceId;
     this.zkConnectString = zkConnectString;
     this.clusterName = clusterName;
     this.resourcesEnabledConfigPath = resourcesEnabledConfigPath;
     this.resourcesEnabledConfigType = resourcesEnabledConfigType;
+    this.maxEventsToKeep = maxEventsToKeep;
 
     Decoder<byte[], Set<String>> decoder = null;
     try {
@@ -60,7 +63,7 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
 
     if (this.configStore != null) {
       this.leaderEventHistoryStore = new LeaderEventHistoryStore(
-          zkConnectString, clusterName, Optional.empty());
+          zkConnectString, clusterName, maxEventsToKeep);
     } else {
       this.leaderEventHistoryStore = null;
     }

@@ -27,6 +27,7 @@ import com.pinterest.rocksplicator.task.RestoreTaskFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -215,9 +216,12 @@ public class Participant {
     final String resourceConfigPath = cmd.getOptionValue(handoffEventHistoryConfigPath, "");
     final String resourceConfigType = cmd.getOptionValue(handoffEventHistoryConfigType, "");
 
+    /**
+     * Note the last parameter is empty, since we don't dictate maxEventsToKeep from participants.
+     */
     leaderEventsLogger =
         new LeaderEventsLoggerImpl(instanceName,
-            zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType);
+            zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType, Optional.empty());
 
     LOG.error("Starting participant with ZK:" + zkConnectString);
     Participant participant = new Participant(zkConnectString, clusterName, instanceName,
