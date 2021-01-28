@@ -35,7 +35,7 @@ DEFINE_bool(use_s3_backup, false,
 DEFINE_string(s3_bucket_backup, "pinterest-jackson",
               "S3 bucket would be used for rocksdb backup & restore");
 
-DEFINE_string(handoff_event_history_zksvr,
+DEFINE_string(handoff_event_history_zkSvr,
   "",
   "[Optional]: zk server to store event history for leader handoff events");
 DEFINE_string(handoff_event_history_config_path,
