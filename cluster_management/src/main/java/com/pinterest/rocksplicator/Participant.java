@@ -75,7 +75,8 @@ public class Participant {
   private static final String handoffEventHistoryConfigPath = "handoffEventHistoryConfigPath";
   private static final String handoffEventHistoryConfigType = "handoffEventHistoryConfigType";
 
-  private static HelixManager helixManager;
+  private static HelixManager helixManager = null;
+  private static LeaderEventsLogger leaderEventsLogger = null;
   private StateModelFactory<StateModel> stateModelFactory;
   private final RocksplicatorMonitor monitor;
 
@@ -214,7 +215,7 @@ public class Participant {
     final String resourceConfigPath = cmd.getOptionValue(handoffEventHistoryConfigPath, "");
     final String resourceConfigType = cmd.getOptionValue(handoffEventHistoryConfigType, "");
 
-    final LeaderEventsLogger leaderEventsLogger =
+    leaderEventsLogger =
         new LeaderEventsLoggerImpl(instanceName,
             zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType);
 
@@ -235,10 +236,19 @@ public class Participant {
     Thread.currentThread().join();
   }
 
-  public static void disconnectHelixManager() throws Exception {
+  /**
+   * This method is called from CPP code, when the service is about to do down.
+   * This will cause all states to transition to offline eventually.
+   */
+  public static void shutDownParticipant() throws Exception {
     LOG.error("Disconnect the helixManager");
     if (helixManager != null) {
       helixManager.disconnect();
+      helixManager = null;
+    }
+    if (leaderEventsLogger != null) {
+      leaderEventsLogger.close();
+      leaderEventsLogger = null;
     }
   }
 
@@ -312,6 +322,7 @@ public class Participant {
     helixManager.connect();
     helixManager.getMessagingService().registerMessageHandlerFactory(
         Message.MessageType.STATE_TRANSITION.name(), stateMach);
+
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
 
     if (runSpectator) {

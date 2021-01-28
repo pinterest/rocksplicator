@@ -8,6 +8,8 @@ import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEventType;
 import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEventsHistory;
 
 import com.google.common.base.Preconditions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -16,12 +18,13 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
+  private static final Logger LOGGER = LoggerFactory.getLogger(LeaderEventsLoggerImpl.class);
 
   private final String zkConnectString;
   private final String clusterName;
   private final String resourcesEnabledConfigPath;
   private final String resourcesEnabledConfigType;
-  private final LeaderEventHistoryStore store;
+  private final LeaderEventHistoryStore leaderEventHistoryStore;
   private final ConfigStore<Set<String>> configStore;
   private final String instanceId;
   private final boolean isEnabled;
@@ -56,12 +59,13 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
     this.configStore = localConfigStore;
 
     if (this.configStore != null) {
-      this.store = new LeaderEventHistoryStore(zkConnectString, clusterName, Optional.empty());
+      this.leaderEventHistoryStore = new LeaderEventHistoryStore(
+          zkConnectString, clusterName, Optional.empty());
     } else {
-      this.store = null;
+      this.leaderEventHistoryStore = null;
     }
 
-    this.isEnabled = (this.store != null);
+    this.isEnabled = (this.leaderEventHistoryStore != null);
   }
 
   public boolean isEnabled() {
@@ -73,15 +77,44 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
     if (isEnabled() && configStore.get().contains(resourceName)) {
       return new LeaderEventsCollectorImpl(resourceName, partitionName);
     } else {
-      return new DoNothingEventsCollectorImpl();
+      if (isEnabled()) {
+        return new ResourceDisabledLeaderEventsCollector(resourceName, partitionName);
+      } else {
+        return new LoggingDisabledLeaderEventsCollector();
+      }
     }
   }
 
-  private class DoNothingEventsCollectorImpl implements LeaderEventsCollector {
+  @Override
+  public void close() throws IOException {
+    leaderEventHistoryStore.close();
+  }
 
+  private static class LoggingDisabledLeaderEventsCollector implements LeaderEventsCollector {
     @Override
     public LeaderEventsCollector addEvent(LeaderEventType eventType, String leaderNode) {
       // Ignore
+      return this;
+    }
+
+    @Override
+    public void commit() {
+      // Ignore
+    }
+  }
+
+  private static class ResourceDisabledLeaderEventsCollector implements LeaderEventsCollector {
+    private final String resourceName;
+    private final String partitionName;
+
+    ResourceDisabledLeaderEventsCollector(String resourceName, String partitionName) {
+      this.resourceName = resourceName;
+      this.partitionName = partitionName;
+    }
+
+    @Override
+    public LeaderEventsCollector addEvent(LeaderEventType eventType, String leaderNode) {
+      LOGGER.info(String.format("Ignoring disabled Resource: %s Partition:%s LeaderEventType: %s", resourceName, partitionName, eventType));
       return this;
     }
 
@@ -130,7 +163,7 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
     public void commit() {
       if (!committed.getAndSet(true)) {
         if (history.getEventsSize() > 0) {
-          LeaderEventsLoggerImpl.this.store
+          LeaderEventsLoggerImpl.this.leaderEventHistoryStore
               .asyncBatchAppend(resourceName, partitionName, history.getEvents());
         }
       } else {

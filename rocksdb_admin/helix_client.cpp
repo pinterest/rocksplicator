@@ -35,7 +35,7 @@ DEFINE_bool(use_s3_backup, false,
 DEFINE_string(s3_bucket_backup, "pinterest-jackson",
               "S3 bucket would be used for rocksdb backup & restore");
 
-DEFINE_string(handoff_event_history_zkSvr,
+DEFINE_string(handoff_event_history_zksvr,
   "",
   "[Optional]: zk server to store event history for leader handoff events");
 DEFINE_string(handoff_event_history_config_path,
@@ -188,7 +188,7 @@ void DisconnectHelixManager() {
     JNIEnv* env;
     JavaVM* jvm;
     jclass ParticipantClass;
-    jmethodID disconnectHelixManagerMethod;
+    jmethodID shutDownParticipantMethod;
     jsize nVMs;
 
     // Get the a reference to the created javaVM
@@ -220,17 +220,17 @@ void DisconnectHelixManager() {
         return;
     }
 
-    disconnectHelixManagerMethod = env->GetStaticMethodID(ParticipantClass,
-                                            "disconnectHelixManager",
+    shutDownParticipantMethod = env->GetStaticMethodID(ParticipantClass,
+                                            "shutDownParticipant",
                                             "()V");
-    if (!disconnectHelixManagerMethod) {
+    if (!shutDownParticipantMethod) {
         LOG(ERROR) << "Failed to GetStaticMethodID";
         env->ExceptionDescribe();
         return;
     }
 
     LOG(INFO) << "Disconnecting helix manager";
-    env->CallStaticVoidMethod(ParticipantClass, disconnectHelixManagerMethod);
+    env->CallStaticVoidMethod(ParticipantClass, shutDownParticipantMethod);
 }
 
 }  // namespace admin
