@@ -106,6 +106,7 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
     }
 
     public LeaderEventsCollector addEvent(LeaderEventType eventType, String leaderNode) {
+      Preconditions.checkNotNull(eventType);
       if (LeaderEventTypes.participantEventTypes.contains(eventType)) {
         Preconditions.checkArgument(leaderNode == null);
       }
@@ -127,7 +128,7 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
 
     @Override
     public void commit() {
-      if (committed.getAndSet(true)) {
+      if (!committed.getAndSet(true)) {
         if (history.getEventsSize() > 0) {
           LeaderEventsLoggerImpl.this.store
               .asyncBatchAppend(resourceName, partitionName, history.getEvents());
