@@ -21,7 +21,6 @@ package com.pinterest.rocksplicator.eventstore;
 import static org.junit.Assert.assertEquals;
 
 import com.pinterest.rocksplicator.codecs.Codec;
-import com.pinterest.rocksplicator.codecs.ThriftStringEncoder;
 import com.pinterest.rocksplicator.codecs.WrappedDataThriftCodec;
 import com.pinterest.rocksplicator.thrift.commons.io.CompressionAlgorithm;
 import com.pinterest.rocksplicator.thrift.commons.io.SerializationProtocol;
@@ -324,16 +323,6 @@ public class ZkMergeableEventStoreTest {
     leaderEventHistory.getEvents().sort(new DescendingTimestampLeaderEventComparator());
     zkStore.merge(batchHistory);
     assertEquals(leaderEventHistory.getEvents(), getData().getEvents());
-
-    final ThriftStringEncoder<LeaderEvent>
-        eventJsonEncoder =
-        ThriftStringEncoder.createToStringEncoder(LeaderEvent.class);
-
-    for (int eventId = 0; eventId < leaderEventHistory.getEventsSize(); ++eventId) {
-      System.out.println(
-          String.format("\t event: %s", eventJsonEncoder.encode(leaderEventHistory.getEvents().get(eventId))));
-    }
-
   }
 
   private LeaderEventsHistory getData() throws Exception {
