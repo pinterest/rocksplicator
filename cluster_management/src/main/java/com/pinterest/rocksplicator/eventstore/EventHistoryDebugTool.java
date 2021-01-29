@@ -18,7 +18,11 @@ import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
+import org.apache.curator.framework.state.ConnectionState;
+import org.apache.curator.framework.state.ConnectionStateListener;
 import org.apache.curator.retry.ExponentialBackoffRetry;
+
+import java.util.concurrent.TimeUnit;
 
 public class EventHistoryDebugTool {
 
@@ -26,7 +30,7 @@ public class EventHistoryDebugTool {
   private static final String cluster = "cluster";
   private static final String resource = "resource";
   private static final String min_partition = "min_partition";
-  private static final String max_partition = "max_partition";
+  private static final String num_partitions = "num_partitions";
 
   private static Options constructCommandLineOptions() {
     Option zkServerOption =
@@ -53,8 +57,8 @@ public class EventHistoryDebugTool {
     clusterOption.setRequired(false);
     clusterOption.setArgName("min partition number (Optional, default to 0)");
 
-    Option maxPartitionOption =
-        OptionBuilder.withLongOpt(max_partition).withDescription("Provide cluster name").create();
+    Option numPartitionsOption =
+        OptionBuilder.withLongOpt(num_partitions).withDescription("Provide cluster name").create();
     clusterOption.setArgs(1);
     clusterOption.setRequired(false);
     clusterOption.setArgName("max partition number (Optional, default to 0)");
@@ -64,7 +68,7 @@ public class EventHistoryDebugTool {
         .addOption(clusterOption)
         .addOption(resourceOption)
         .addOption(minPartitionOption)
-        .addOption(maxPartitionOption);
+        .addOption(numPartitionsOption);
     return options;
   }
 
@@ -87,13 +91,38 @@ public class EventHistoryDebugTool {
     final String clusterName = cmd.getOptionValue(cluster);
     final String resourceName = cmd.getOptionValue(resource);
     final int minPartitionId = Integer.parseInt(cmd.getOptionValue(min_partition, "0"));
-    final int maxPartitionId = Integer.parseInt(cmd.getOptionValue(max_partition, "0"));
+    final int numPartitions = Integer.parseInt(cmd.getOptionValue(num_partitions, "1"));
+
+    System.out.println(String.format("zkSvr: %s", zkConnectString));
+    System.out.println(String.format("cluster: %s", clusterName));
+    System.out.println(String.format("resource: %s", resourceName));
+    System.out.println(String.format("partitionId (start): %s", minPartitionId));
+    System.out.println(String.format("numPartitions: %s", numPartitions));
+
+    System.out.println(String.format("Connecting to zk: %s", zkConnectString));
 
     final CuratorFramework
         zkClient =
         CuratorFrameworkFactory.newClient(Preconditions.checkNotNull(zkConnectString),
             new ExponentialBackoffRetry(1000, 3));
     zkClient.start();
+
+    zkClient.getConnectionStateListenable().addListener(new ConnectionStateListener() {
+      @Override
+      public void stateChanged(CuratorFramework client, ConnectionState newState) {
+        switch (newState) {
+          case CONNECTED:
+            System.out.println(String.format("Connected to zk: %s", zkConnectString));
+        }
+      }
+    });
+    try {
+      zkClient.blockUntilConnected(10, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+      System.out.println("Cannot connect to zk in 10 seconds");
+      throw new RuntimeException(e);
+    }
 
     final Codec<LeaderEventsHistory, byte[]> leaderEventsHistoryCodec = new WrappedDataThriftCodec(
         LeaderEventsHistory.class, SerializationProtocol.COMPACT, CompressionAlgorithm.GZIP);
@@ -102,12 +131,12 @@ public class EventHistoryDebugTool {
         jsonEncoder =
         ThriftJSONEncoder.createJSONEncoder(LeaderEvent.class);
 
-    for (int partitionId = minPartitionId; partitionId <= maxPartitionId; ++partitionId) {
-      String partitionName = String.format("%s_%d", resourceName, partitionId);
-      String
-          partitionPath =
+    for (int partitionId = minPartitionId; partitionId < numPartitions; ++partitionId) {
+      final String partitionName = String.format("%s_%d", resourceName, partitionId);
+      final String partitionPath =
           ZkMergeableEventStore.getLeaderEventHistoryPath(clusterName, resourceName, partitionName);
       try {
+        System.err.println(String.format("Retrieving %s", partitionPath));
         zkClient.sync().forPath(partitionPath);
         byte[] data = zkClient.getData().forPath(partitionPath);
         LeaderEventsHistory history = leaderEventsHistoryCodec.decode(data);
