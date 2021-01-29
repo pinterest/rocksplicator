@@ -1,7 +1,7 @@
 package com.pinterest.rocksplicator.eventstore;
 
 import com.pinterest.rocksplicator.codecs.Codec;
-import com.pinterest.rocksplicator.codecs.ThriftJSONEncoder;
+import com.pinterest.rocksplicator.codecs.ThriftStringEncoder;
 import com.pinterest.rocksplicator.codecs.WrappedDataThriftCodec;
 import com.pinterest.rocksplicator.thrift.commons.io.CompressionAlgorithm;
 import com.pinterest.rocksplicator.thrift.commons.io.SerializationProtocol;
@@ -127,9 +127,9 @@ public class EventHistoryDebugTool {
     final Codec<LeaderEventsHistory, byte[]> leaderEventsHistoryCodec = new WrappedDataThriftCodec(
         LeaderEventsHistory.class, SerializationProtocol.COMPACT, CompressionAlgorithm.GZIP);
 
-    final ThriftJSONEncoder<LeaderEvent>
+    final ThriftStringEncoder<LeaderEvent>
         jsonEncoder =
-        ThriftJSONEncoder.createJSONEncoder(LeaderEvent.class);
+        ThriftStringEncoder.createToStringEncoder(LeaderEvent.class);
 
     for (int partitionId = minPartitionId; partitionId < numPartitions; ++partitionId) {
       final String partitionName = String.format("%s_%d", resourceName, partitionId);
