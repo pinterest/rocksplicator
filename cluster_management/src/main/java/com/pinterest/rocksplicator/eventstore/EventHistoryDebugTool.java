@@ -46,22 +46,22 @@ public class EventHistoryDebugTool {
     clusterOption.setArgName("Cluster name (Required)");
 
     Option resourceOption =
-        OptionBuilder.withLongOpt(resource).withDescription("Provide cluster name").create();
-    clusterOption.setArgs(1);
-    clusterOption.setRequired(true);
-    clusterOption.setArgName("Resource name (Required)");
+        OptionBuilder.withLongOpt(resource).withDescription("Provide resource name").create();
+    resourceOption.setArgs(1);
+    resourceOption.setRequired(true);
+    resourceOption.setArgName("Resource name (Required)");
 
     Option minPartitionOption =
         OptionBuilder.withLongOpt(min_partition).withDescription("Provide cluster name").create();
-    clusterOption.setArgs(1);
-    clusterOption.setRequired(false);
-    clusterOption.setArgName("min partition number (Optional, default to 0)");
+    minPartitionOption.setArgs(1);
+    minPartitionOption.setRequired(false);
+    minPartitionOption.setArgName("min partition number (Optional, default to 0)");
 
     Option numPartitionsOption =
         OptionBuilder.withLongOpt(num_partitions).withDescription("Provide cluster name").create();
-    clusterOption.setArgs(1);
-    clusterOption.setRequired(false);
-    clusterOption.setArgName("max partition number (Optional, default to 0)");
+    numPartitionsOption.setArgs(1);
+    numPartitionsOption.setRequired(false);
+    numPartitionsOption.setArgName("max partition number (Optional, default to 0)");
 
     Options options = new Options();
     options.addOption(zkServerOption)
