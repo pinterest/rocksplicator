@@ -18,6 +18,8 @@
 
 package com.pinterest.rocksplicator;
 
+import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
+import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
 import com.pinterest.rocksplicator.task.BackupTaskFactory;
 import com.pinterest.rocksplicator.task.DedupTaskFactory;
@@ -25,6 +27,7 @@ import com.pinterest.rocksplicator.task.RestoreTaskFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -69,8 +72,12 @@ public class Participant {
   private static final String configPostUrl = "configPostUrl";
   private static final String s3Bucket = "s3Bucket";
   private static final String disableSpectator = "disableSpectator";
+  private static final String handoffEventHistoryzkSvr = "handoffEventHistoryzkSvr";
+  private static final String handoffEventHistoryConfigPath = "handoffEventHistoryConfigPath";
+  private static final String handoffEventHistoryConfigType = "handoffEventHistoryConfigType";
 
-  private static HelixManager helixManager;
+  private static HelixManager helixManager = null;
+  private static LeaderEventsLogger leaderEventsLogger = null;
   private StateModelFactory<StateModel> stateModelFactory;
   private final RocksplicatorMonitor monitor;
 
@@ -129,6 +136,35 @@ public class Participant {
     disableSpectatorOption.setRequired(false);
     disableSpectatorOption.setArgName("Disable Spectator (Optional)");
 
+    Option handoffEventHistoryzkSvrOption =
+        OptionBuilder.withLongOpt(handoffEventHistoryzkSvr)
+            .withDescription(
+                "zk Connect String to enable state transitions event history logging").create();
+    handoffEventHistoryzkSvrOption.setArgs(1);
+    handoffEventHistoryzkSvrOption.setRequired(false);
+    handoffEventHistoryzkSvrOption.setArgName(
+        "Zk connect string for logging state transitions for leader handoff profiling (Optional)");
+
+    Option  handoffEventHistoryConfigPathOption =
+        OptionBuilder.withLongOpt(handoffEventHistoryConfigPath)
+            .withDescription(
+                "local disk path to config containing resources to enable for handoff events history tracking")
+            .create();
+    handoffEventHistoryConfigPathOption.setArgs(1);
+    handoffEventHistoryConfigPathOption.setRequired(false);
+    handoffEventHistoryConfigPathOption.setArgName(
+        "config path containing resources to enabled for handoff events history (Optional)");
+
+    Option  handoffEventHistoryConfigTypeOption =
+        OptionBuilder.withLongOpt(handoffEventHistoryConfigType)
+            .withDescription(
+                "format of config for resources to track handoff events [LINE_TERMINATED / JSON_ARRAY]")
+            .create();
+    handoffEventHistoryConfigTypeOption.setArgs(1);
+    handoffEventHistoryConfigTypeOption.setRequired(false);
+    handoffEventHistoryConfigTypeOption.setArgName(
+        "format of config for resources to track handoff events [LINE_TERMINATED / JSON_ARRAY] (Optional)");
+
     Options options = new Options();
     options.addOption(zkServerOption)
         .addOption(clusterOption)
@@ -138,7 +174,10 @@ public class Participant {
         .addOption(stateModelOption)
         .addOption(configPostUrlOption)
         .addOption(s3BucketOption)
-        .addOption(disableSpectatorOption);
+        .addOption(disableSpectatorOption)
+        .addOption(handoffEventHistoryzkSvrOption)
+        .addOption(handoffEventHistoryConfigPathOption)
+        .addOption(handoffEventHistoryConfigTypeOption);
     return options;
   }
 
@@ -173,9 +212,20 @@ public class Participant {
     }
     final boolean runSpectator = !cmd.hasOption(disableSpectator);
 
+    final String zkEventHistoryStr = cmd.getOptionValue(handoffEventHistoryzkSvr, "");
+    final String resourceConfigPath = cmd.getOptionValue(handoffEventHistoryConfigPath, "");
+    final String resourceConfigType = cmd.getOptionValue(handoffEventHistoryConfigType, "");
+
+    /**
+     * Note the last parameter is empty, since we don't dictate maxEventsToKeep from participants.
+     */
+    leaderEventsLogger =
+        new LeaderEventsLoggerImpl(instanceName,
+            zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType, Optional.empty());
+
     LOG.error("Starting participant with ZK:" + zkConnectString);
     Participant participant = new Participant(zkConnectString, clusterName, instanceName,
-        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator);
+        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator, leaderEventsLogger);
 
     HelixAdmin helixAdmin = new ZKHelixAdmin(zkConnectString);
     HelixConfigScope scope =
@@ -190,16 +240,26 @@ public class Participant {
     Thread.currentThread().join();
   }
 
-  public static void disconnectHelixManager() throws Exception {
+  /**
+   * This method is called from CPP code, when the service is about to do down.
+   * This will cause all states to transition to offline eventually.
+   */
+  public static void shutDownParticipant() throws Exception {
     LOG.error("Disconnect the helixManager");
     if (helixManager != null) {
       helixManager.disconnect();
+      helixManager = null;
+    }
+    if (leaderEventsLogger != null) {
+      leaderEventsLogger.close();
+      leaderEventsLogger = null;
     }
   }
 
   private Participant(String zkConnectString, String clusterName, String instanceName,
                       String stateModelType, int port, String postUrl, boolean useS3Backup,
-                      String s3BucketName, boolean runSpectator) throws Exception {
+                      String s3BucketName, boolean runSpectator, LeaderEventsLogger leaderEventsLogger)
+      throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
 
@@ -214,17 +274,17 @@ public class Participant {
       stateModelFactory = new CacheStateModelFactory();
     } else if (stateModelType.equals("MasterSlave")) {
       stateModelFactory = new MasterSlaveStateModelFactory(instanceName.split("_")[0],
-          port, zkConnectString, clusterName, useS3Backup, s3BucketName);
+          port, zkConnectString, clusterName, useS3Backup, s3BucketName, leaderEventsLogger);
     } else if (stateModelType.equals("LeaderFollower")) {
       stateModelFactory = new LeaderFollowerStateModelFactory(instanceName.split("_")[0],
-          port, zkConnectString, clusterName, useS3Backup, s3BucketName);
+          port, zkConnectString, clusterName, useS3Backup, s3BucketName, leaderEventsLogger);
     } else if (stateModelType.equals("Bootstrap")) {
       stateModelFactory = new BootstrapStateModelFactory(instanceName.split("_")[0],
           port, zkConnectString, clusterName);
     } else if (stateModelType.equals("MasterSlave;Task")) {
       stateModelType = "MasterSlave";
       stateModelFactory = new MasterSlaveStateModelFactory(instanceName.split("_")[0],
-          port, zkConnectString, clusterName, useS3Backup, s3BucketName);
+          port, zkConnectString, clusterName, useS3Backup, s3BucketName, leaderEventsLogger);
 
       taskFactoryRegistry
           .put("Backup", new BackupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
@@ -233,7 +293,7 @@ public class Participant {
     } else if (stateModelType.equals("LeaderFollower;Task")) {
       stateModelType = "LeaderFollower";
       stateModelFactory = new LeaderFollowerStateModelFactory(instanceName.split("_")[0],
-          port, zkConnectString, clusterName, useS3Backup, s3BucketName);
+          port, zkConnectString, clusterName, useS3Backup, s3BucketName, leaderEventsLogger);
 
       taskFactoryRegistry
           .put("Backup", new BackupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
@@ -266,6 +326,7 @@ public class Participant {
     helixManager.connect();
     helixManager.getMessagingService().registerMessageHandlerFactory(
         Message.MessageType.STATE_TRANSITION.name(), stateMach);
+
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
 
     if (runSpectator) {
