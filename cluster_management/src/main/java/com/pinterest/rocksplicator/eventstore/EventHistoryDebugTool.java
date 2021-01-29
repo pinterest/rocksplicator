@@ -93,6 +93,7 @@ public class EventHistoryDebugTool {
         zkClient =
         CuratorFrameworkFactory.newClient(Preconditions.checkNotNull(zkConnectString),
             new ExponentialBackoffRetry(1000, 3));
+    zkClient.start();
 
     final Codec<LeaderEventsHistory, byte[]> leaderEventsHistoryCodec = new WrappedDataThriftCodec(
         LeaderEventsHistory.class, SerializationProtocol.COMPACT, CompressionAlgorithm.GZIP);
@@ -101,7 +102,7 @@ public class EventHistoryDebugTool {
         jsonEncoder =
         ThriftJSONEncoder.createJSONEncoder(LeaderEvent.class);
 
-    for (int partitionId = minPartitionId; partitionId < maxPartitionId; ++partitionId) {
+    for (int partitionId = minPartitionId; partitionId <= maxPartitionId; ++partitionId) {
       String partitionName = String.format("%s_%d", resourceName, partitionId);
       String
           partitionPath =
