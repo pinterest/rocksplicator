@@ -1,7 +1,6 @@
 package com.pinterest.rocksplicator.eventstore;
 
 import com.pinterest.rocksplicator.codecs.Codec;
-import com.pinterest.rocksplicator.codecs.ThriftStringEncoder;
 import com.pinterest.rocksplicator.codecs.WrappedDataThriftCodec;
 import com.pinterest.rocksplicator.thrift.commons.io.CompressionAlgorithm;
 import com.pinterest.rocksplicator.thrift.commons.io.SerializationProtocol;
@@ -31,6 +30,7 @@ public class EventHistoryDebugTool {
   private static final String resource = "resource";
   private static final String min_partition = "min_partition";
   private static final String num_partitions = "num_partitions";
+  private static final String max_events = "max_events";
 
   private static Options constructCommandLineOptions() {
     Option zkServerOption =
@@ -52,23 +52,34 @@ public class EventHistoryDebugTool {
     resourceOption.setArgName("Resource name (Required)");
 
     Option minPartitionOption =
-        OptionBuilder.withLongOpt(min_partition).withDescription("Provide cluster name").create();
+        OptionBuilder.withLongOpt(min_partition).withDescription("starting partition to display")
+            .create();
     minPartitionOption.setArgs(1);
     minPartitionOption.setRequired(false);
     minPartitionOption.setArgName("min partition number (Optional, default to 0)");
 
     Option numPartitionsOption =
-        OptionBuilder.withLongOpt(num_partitions).withDescription("Provide cluster name").create();
+        OptionBuilder.withLongOpt(num_partitions).withDescription("number of partitions to display")
+            .create();
     numPartitionsOption.setArgs(1);
     numPartitionsOption.setRequired(false);
-    numPartitionsOption.setArgName("max partition number (Optional, default to 0)");
+    numPartitionsOption.setArgName("num of partitions to display (Optional, default to 1)");
+
+    Option maxEventsOption =
+        OptionBuilder.withLongOpt(max_events)
+            .withDescription("maximum number of events to display per partition").create();
+    maxEventsOption.setArgs(1);
+    maxEventsOption.setRequired(false);
+    maxEventsOption
+        .setArgName("max number of events to display per partition (Optional, default to 25)");
 
     Options options = new Options();
     options.addOption(zkServerOption)
         .addOption(clusterOption)
         .addOption(resourceOption)
         .addOption(minPartitionOption)
-        .addOption(numPartitionsOption);
+        .addOption(numPartitionsOption)
+        .addOption(maxEventsOption);
     return options;
   }
 
@@ -92,12 +103,14 @@ public class EventHistoryDebugTool {
     final String resourceName = cmd.getOptionValue(resource);
     final int minPartitionId = Integer.parseInt(cmd.getOptionValue(min_partition, "0"));
     final int numPartitions = Integer.parseInt(cmd.getOptionValue(num_partitions, "1"));
+    final int maxEvents = Integer.parseInt(cmd.getOptionValue(max_events, "25"));
 
     System.out.println(String.format("zkSvr: %s", zkConnectString));
     System.out.println(String.format("cluster: %s", clusterName));
     System.out.println(String.format("resource: %s", resourceName));
     System.out.println(String.format("partitionId (start): %s", minPartitionId));
     System.out.println(String.format("numPartitions: %s", numPartitions));
+    System.out.println(String.format("maxEvents: %s", maxEvents));
 
     System.out.println(String.format("Connecting to zk: %s", zkConnectString));
 
@@ -105,7 +118,6 @@ public class EventHistoryDebugTool {
         zkClient =
         CuratorFrameworkFactory.newClient(Preconditions.checkNotNull(zkConnectString),
             new ExponentialBackoffRetry(1000, 3));
-    zkClient.start();
 
     zkClient.getConnectionStateListenable().addListener(new ConnectionStateListener() {
       @Override
@@ -116,6 +128,7 @@ public class EventHistoryDebugTool {
         }
       }
     });
+    zkClient.start();
     try {
       zkClient.blockUntilConnected(10, TimeUnit.SECONDS);
     } catch (InterruptedException e) {
@@ -127,11 +140,8 @@ public class EventHistoryDebugTool {
     final Codec<LeaderEventsHistory, byte[]> leaderEventsHistoryCodec = new WrappedDataThriftCodec(
         LeaderEventsHistory.class, SerializationProtocol.COMPACT, CompressionAlgorithm.GZIP);
 
-    final ThriftStringEncoder<LeaderEvent>
-        jsonEncoder =
-        ThriftStringEncoder.createToStringEncoder(LeaderEvent.class);
-
-    for (int partitionId = minPartitionId; partitionId < numPartitions; ++partitionId) {
+    for (int partitionId = minPartitionId; partitionId < minPartitionId + numPartitions;
+         ++partitionId) {
       final String partitionName = String.format("%s_%d", resourceName, partitionId);
       final String partitionPath =
           ZkMergeableEventStore.getLeaderEventHistoryPath(clusterName, resourceName, partitionName);
@@ -143,12 +153,32 @@ public class EventHistoryDebugTool {
         System.out.println(String
             .format("cluster: %s, resource: %s, partition: %s, history_size:%s", clusterName,
                 resourceName, partitionName, history.getEventsSize()));
-        for (int eventId = 0; eventId < history.getEventsSize(); ++eventId) {
-          System.out.println(
-              String.format("\t event: %s", jsonEncoder.encode(history.getEvents().get(eventId))));
+
+        int numEvents = Math.min(history.getEventsSize(), maxEvents);
+
+        long lastEventTimeMillis = (history.getEventsSize() > 0)? history.getEvents().get(0).getEvent_timestamp_ms() : -1;
+        // Print them in reverse order, with latest first.
+        for (int eventId = 0; eventId < Math.min(history.getEventsSize(), maxEvents); ++eventId) {
+          LeaderEvent leaderEvent = history.getEvents().get(numEvents - eventId - 1);
+          processLeaderEvent(leaderEvent);
+          System.out.println(String.format(
+              "event: ts:%d, before: %8d ms, origin: %-18s, leader: %-18s, event: %s",
+              leaderEvent.getEvent_timestamp_ms(),
+              lastEventTimeMillis - leaderEvent.getEvent_timestamp_ms(),
+              leaderEvent.getOriginating_node(),
+              (leaderEvent.isSetObserved_leader_node())? leaderEvent.getObserved_leader_node():"not_known",
+              leaderEvent.getEvent_type()));
         }
       } catch (Exception e) {
         e.printStackTrace();
+      }
+    }
+  }
+
+  private static void processLeaderEvent(LeaderEvent leaderEvent) {
+    if (LeaderEventTypes.participantEventTypes.contains(leaderEvent.getEvent_type())) {
+      if (!leaderEvent.isSetObserved_leader_node()) {
+        leaderEvent.setObserved_leader_node(leaderEvent.getOriginating_node());
       }
     }
   }
