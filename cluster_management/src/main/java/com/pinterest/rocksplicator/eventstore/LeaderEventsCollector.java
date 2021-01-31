@@ -6,5 +6,7 @@ public interface LeaderEventsCollector {
 
   LeaderEventsCollector addEvent(LeaderEventType eventType, String leaderNode);
 
+  LeaderEventsCollector addEvent(LeaderEventType eventType, String leaderNode, long eventTimeMillis);
+
   void commit();
 }

@@ -18,8 +18,12 @@
 
 package com.pinterest.rocksplicator;
 
+import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventLogger;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
+import com.pinterest.rocksplicator.utils.AutoCloseableLock;
+import com.pinterest.rocksplicator.utils.ExternalViewUtils;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixConstants;
@@ -40,6 +44,7 @@ import org.json.simple.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -51,10 +56,121 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class ConfigGenerator extends RoutingTableProvider implements CustomCodeCallbackHandler {
+/**
+
+ The Config Generator current produces the shard_map config in json format and posts it to
+ provided url. The top level json object contains jsonobjects per resource.
+ For each resource, we have one entry num_shards specifying the number of partitions
+ available in the resource.
+
+ Within given resource, we aggregrate at per instance level, all the partitions that are in
+ serving state.
+
+ The instance on which any partition of a given resource is hosted, is specified in following
+ format.
+ ${ip_address}:${thrift_service_port}:${az}:${pg}
+
+ The thrift service port is the port where the applications api endpoints are available
+ for thrift rpc calls.
+
+ The partition is specified as a partition number between 0 and num_shards. The partition numbers
+ are padded with leading zero, and is of fixed length of size 5.
+ The format is as follows
+ [0000]${partition_id}[:[M,S]]. The partition is specified with M or S state specifier in case of
+ LeaderFollower / MasterSlave model. In case of OnlineOffline / Bootstrap statemodels, only
+ serving partitions are Online state. Hence in that case the state specified is not appended to the
+ partition id.
+
+ <code>
+
+ Following is the shard_map config for MasterSlave / LeaderFollower statemodel.
+ {
+ "resource_name": {
+ "instance1:port:us-east-1d_us-east-1d": [
+ "00000:S",
+ "00001:S",       <-- :S signifies that it is a follower/slave
+ "00002:M",       <-- :M signifies that it is a leader/master
+ "00003:S",       <-- the partition number are padded with leading zero, and is fixed length
+ "00004:S",
+ "00005:M",
+ "00006:M",
+ "00007:S",
+ "00008:S"
+ ],
+ "instance2:port:us-east-1e_us-east-1e": [
+ "00000:S",
+ "00001:M",
+ "00002:S",
+ "00003:M",
+ "00004:M",
+ "00005:S",
+ "00006:S",
+ "00007:S",
+ "00008:S"
+ ],
+ "instance3:port:us-east-1a_us-east-1a": [
+ "00000:M",
+ "00001:S",
+ "00002:S",
+ "00003:S",
+ "00004:S",
+ "00005:S",
+ "00006:S",
+ "00007:M",
+ "00008:M"
+ ],
+ "num_shards": 9
+ }
+ }
+
+ In case of OnlineOffline / Bootstrap model, the :M, :S specifier is not available.
+
+ {
+ "resource_name": {
+ "instance1:port:us-east-1d_us-east-1d": [
+ "00000",
+ "00001",
+ "00002",
+ "00003",
+ "00004",
+ "00005",
+ "00006",
+ "00007",
+ "00008"
+ ],
+ "instance2:port:us-east-1e_us-east-1e": [
+ "00000",
+ "00001",
+ "00002",
+ "00003",
+ "00004",
+ "00005",
+ "00006",
+ "00007",
+ "00008"
+ ],
+ "instance3:port:us-east-1a_us-east-1a": [
+ "00000",
+ "00001",
+ "00002",
+ "00003",
+ "00004",
+ "00005",
+ "00006",
+ "00007",
+ "00008"
+ ],
+ "num_shards": 9
+ }
+ }
+ </code>
+
+
+ */
+public class ConfigGenerator extends RoutingTableProvider implements CustomCodeCallbackHandler,
+                                                                     Closeable {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConfigGenerator.class);
 
@@ -69,14 +185,17 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   private HelixAdmin helixAdmin;
   private String lastPostedContent;
   private Set<String> disabledHosts;
+  private ExternalViewLeaderEventLogger externalViewLeaderEventLogger;
 
-  public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
+  @VisibleForTesting
+  ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
     this(clusterName, helixManager, configPostUrl,
-        new RocksplicatorMonitor(clusterName, helixManager.getInstanceName()));
+        new RocksplicatorMonitor(clusterName, helixManager.getInstanceName()), null);
   }
 
   public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl,
-                         RocksplicatorMonitor monitor) {
+                         RocksplicatorMonitor monitor,
+                         ExternalViewLeaderEventLogger externalViewLeaderEventLogger) {
     this.clusterName = clusterName;
     this.helixManager = helixManager;
     this.helixAdmin = this.helixManager.getClusterManagmentTool();
@@ -92,25 +211,8 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     this.monitor = monitor;
     this.enableDumpToLocal = new File("/var/log/helixspectator").canWrite();
     this.synchronizedCallbackLock = new ReentrantLock();
-  }
+    this.externalViewLeaderEventLogger = externalViewLeaderEventLogger;
 
-  private static class AutoCloseableLock implements AutoCloseable {
-
-    private final Lock lock;
-
-    private AutoCloseableLock(Lock lock) {
-      this.lock = lock;
-      this.lock.lock();
-    }
-
-    public static AutoCloseableLock lock(Lock lock) {
-      return new AutoCloseableLock(lock);
-    }
-
-    @Override
-    public void close() {
-      this.lock.unlock();
-    }
   }
 
   private void logUncheckedException(Runnable r) {
@@ -142,7 +244,8 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
           LOG.error("Received notification: " + notificationContext.getChangeType());
           if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
             generateShardConfig();
-          } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.INSTANCE_CONFIG) {
+          } else if (notificationContext.getChangeType()
+              == HelixConstants.ChangeType.INSTANCE_CONFIG) {
             if (updateDisabledHosts()) {
               generateShardConfig();
             }
@@ -182,6 +285,8 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   }
 
   private void generateShardConfig() {
+    final long generationStartTimeMillis = System.currentTimeMillis();
+
     this.monitor.incrementConfigGeneratorCalledCount();
     Stopwatch stopwatch = Stopwatch.createStarted();
 
@@ -189,6 +294,11 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     filterOutTaskResources(resources);
 
     Set<String> existingHosts = new HashSet<String>();
+
+    List<ExternalView> externalViewsToProcess = null;
+    if (externalViewLeaderEventLogger != null) {
+      externalViewsToProcess = new ArrayList<>();
+    }
 
     // compose cluster config
     JSONObject config = new JSONObject();
@@ -219,6 +329,11 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
          */
         continue;
       }
+
+      if (externalViewLeaderEventLogger != null && externalViewsToProcess != null) {
+        externalViewsToProcess.add(externalView);
+      }
+
       Set<String> partitions = externalView.getPartitionSet();
 
       // compose resource config
@@ -247,12 +362,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
           }
 
           String state = entry.getValue();
-          if (!state.equalsIgnoreCase("ONLINE") &&
-              !state.equalsIgnoreCase("MASTER") &&
-              !state.equalsIgnoreCase("LEADER") &&
-              !state.equalsIgnoreCase("FOLLOWER") &&
-              !state.equalsIgnoreCase("SLAVE")) {
-            // Only ONLINE, MASTER, LEADER, FOLLOWER and SLAVE states are ready for serving traffic
+          if (!ExternalViewUtils.isServing(state)) {
             continue;
           }
 
@@ -262,14 +372,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
             partitionList = new ArrayList<String>();
             hostToPartitionList.put(hostWithDomain, partitionList);
           }
-
-          if (state.equalsIgnoreCase("SLAVE") || state.equalsIgnoreCase("FOLLOWER")) {
-            partitionList.add(partitionNumber + ":S");
-          } else if (state.equalsIgnoreCase("MASTER") || state.equalsIgnoreCase("LEADER")) {
-            partitionList.add(partitionNumber + ":M");
-          } else {
-            partitionList.add(partitionNumber);
-          }
+          partitionList.add(partitionNumber + ExternalViewUtils.getShortHandState(state));
         }
       }
 
@@ -296,6 +399,45 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
       return;
     }
 
+    // Write the config to ZK
+    LOG.error("Generating a new shard config...");
+
+    /**
+     * TODO: gopalrajpurohit
+     * Move shard_map updating logic into separate method.
+     */
+    this.dataParameters.remove("content");
+    this.dataParameters.put("content", newContent);
+    HttpPost httpPost = new HttpPost(this.postUrl);
+
+    long shardPostingTimeMillis = System.currentTimeMillis();
+
+    try {
+      httpPost.setEntity(new StringEntity(this.dataParameters.toString()));
+      HttpResponse response = new DefaultHttpClient().execute(httpPost);
+      if (response.getStatusLine().getStatusCode() == 200) {
+        lastPostedContent = newContent;
+        LOG.error("Succeed to generate a new shard config");
+      } else {
+        shardPostingTimeMillis = -1;
+        LOG.error(response.getStatusLine().getReasonPhrase());
+      }
+    } catch (Exception e) {
+      shardPostingTimeMillis = -1;
+      LOG.error("Failed to post the new config", e);
+    }
+
+    stopwatch.stop();
+    long elapsedMs = stopwatch.elapsed(TimeUnit.MILLISECONDS);
+    this.monitor.reportConfigGeneratorLatency(elapsedMs);
+
+    // All side-effects must be done, after the shard-map is posted...
+    if (externalViewLeaderEventLogger != null) {
+      LOG.error("Processing ExternalViews for LeaderEventsLogger");
+      externalViewLeaderEventLogger.process(
+          externalViewsToProcess, disabledHosts, generationStartTimeMillis, shardPostingTimeMillis);
+    }
+
     // Write the shard config to local
     if (enableDumpToLocal) {
       try {
@@ -308,34 +450,6 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
         e.printStackTrace();
       }
     }
-
-    // Write the config to ZK
-    LOG.error("Generating a new shard config...");
-
-    /**
-     * TODO: gopalrajpurohit
-     * Move shard_map updating logic into separate method.
-     */
-    this.dataParameters.remove("content");
-    this.dataParameters.put("content", newContent);
-    HttpPost httpPost = new HttpPost(this.postUrl);
-    try {
-      httpPost.setEntity(new StringEntity(this.dataParameters.toString()));
-      HttpResponse response = new DefaultHttpClient().execute(httpPost);
-      if (response.getStatusLine().getStatusCode() == 200) {
-        lastPostedContent = newContent;
-        LOG.error("Succeed to generate a new shard config, sleep for 2 seconds");
-        TimeUnit.SECONDS.sleep(2);
-      } else {
-        LOG.error(response.getStatusLine().getReasonPhrase());
-      }
-    } catch (Exception e) {
-      LOG.error("Failed to post the new config", e);
-    }
-
-    stopwatch.stop();
-    long elapsedMs = stopwatch.elapsed(TimeUnit.MILLISECONDS);
-    this.monitor.reportConfigGeneratorLatency(elapsedMs);
   }
 
   private String getHostWithDomain(String host) {
@@ -391,4 +505,15 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     }
   }
 
+  @Override
+  public void close() throws IOException {
+    // ensure the while we are closing the ConfigGenerator, we are not processing any callback
+    // at the moment.
+    try (AutoCloseableLock lock = new AutoCloseableLock(this.synchronizedCallbackLock)) {
+      // Cleanup any remaining items.
+      externalViewLeaderEventLogger.close();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
 }

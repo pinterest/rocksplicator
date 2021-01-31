@@ -18,10 +18,17 @@
 
 package com.pinterest.rocksplicator;
 
+import static org.apache.curator.framework.state.ConnectionState.CONNECTED;
+
+import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
+import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
+import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.io.IOException;
+import java.util.Optional;
+import java.util.concurrent.TimeUnit;
+
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
@@ -36,15 +43,10 @@ import org.apache.curator.framework.recipes.locks.Locker;
 import org.apache.curator.framework.state.ConnectionState;
 import org.apache.curator.framework.state.ConnectionStateListener;
 import org.apache.curator.retry.ExponentialBackoffRetry;
-import org.apache.helix.HelixConstants;
 import org.apache.helix.HelixManager;
 import org.apache.helix.HelixManagerFactory;
 import org.apache.helix.InstanceType;
 import org.apache.helix.manager.zk.HelixManagerShutdownHook;
-import org.apache.helix.manager.zk.ZKHelixAdmin;
-import org.apache.helix.model.HelixConfigScope;
-import org.apache.helix.model.Message;
-import org.apache.helix.model.builder.HelixConfigScopeBuilder;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.ConsoleAppender;
 import org.apache.log4j.Level;
@@ -61,8 +63,15 @@ public class Spectator {
   private static final String hostPort = "port";
   private static final String configPostUrl = "configPostUrl";
 
-  private HelixManager helixManager;
+  private static final String handoffEventHistoryzkSvr = "handoffEventHistoryzkSvr";
+  private static final String handoffEventHistoryConfigPath = "handoffEventHistoryConfigPath";
+  private static final String handoffEventHistoryConfigType = "handoffEventHistoryConfigType";
+
+  private final HelixManager helixManager;
   private final RocksplicatorMonitor monitor;
+  private final LeaderEventsLogger spectatorLeaderEventsLogger;
+
+  private ConfigGenerator configGenerator = null;
 
   private static Options constructCommandLineOptions() {
     Option zkServerOption =
@@ -94,6 +103,35 @@ public class Spectator {
     configPostUrlOption.setArgs(1);
     configPostUrlOption.setRequired(true);
     configPostUrlOption.setArgName("URL to post config (Required)");
+
+    Option handoffEventHistoryzkSvrOption =
+        OptionBuilder.withLongOpt(handoffEventHistoryzkSvr)
+            .withDescription(
+                "zk Connect String to enable state transitions event history logging").create();
+    handoffEventHistoryzkSvrOption.setArgs(1);
+    handoffEventHistoryzkSvrOption.setRequired(false);
+    handoffEventHistoryzkSvrOption.setArgName(
+        "Zk connect string for logging state transitions for leader handoff profiling (Optional)");
+
+    Option  handoffEventHistoryConfigPathOption =
+        OptionBuilder.withLongOpt(handoffEventHistoryConfigPath)
+            .withDescription(
+                "local disk path to config containing resources to enable for handoff events history tracking")
+            .create();
+    handoffEventHistoryConfigPathOption.setArgs(1);
+    handoffEventHistoryConfigPathOption.setRequired(false);
+    handoffEventHistoryConfigPathOption.setArgName(
+        "config path containing resources to enabled for handoff events history (Optional)");
+
+    Option  handoffEventHistoryConfigTypeOption =
+        OptionBuilder.withLongOpt(handoffEventHistoryConfigType)
+            .withDescription(
+                "format of config for resources to track handoff events [LINE_TERMINATED / JSON_ARRAY]")
+            .create();
+    handoffEventHistoryConfigTypeOption.setArgs(1);
+    handoffEventHistoryConfigTypeOption.setRequired(false);
+    handoffEventHistoryConfigTypeOption.setArgName(
+        "format of config for resources to track handoff events [LINE_TERMINATED / JSON_ARRAY] (Optional)");
 
     Options options = new Options();
     options.addOption(zkServerOption)
@@ -127,8 +165,18 @@ public class Spectator {
     final String postUrl = cmd.getOptionValue(configPostUrl);
     final String instanceName = host + "_" + port;
 
+    final String zkEventHistoryStr = cmd.getOptionValue(handoffEventHistoryzkSvr, "");
+    final String resourceConfigPath = cmd.getOptionValue(handoffEventHistoryConfigPath, "");
+    final String resourceConfigType = cmd.getOptionValue(handoffEventHistoryConfigType, "");
+
+    LeaderEventsLogger spectatorLeaderEventsLogger =
+        new LeaderEventsLoggerImpl(instanceName,
+            zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType,
+            Optional.of(128));
+
     LOG.error("Starting spectator with ZK:" + zkConnectString);
-    final Spectator spectator = new Spectator(zkConnectString, clusterName, instanceName);
+    final Spectator spectator = new Spectator(zkConnectString, clusterName, instanceName,
+        spectatorLeaderEventsLogger);
 
     CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
 
@@ -148,11 +196,20 @@ public class Spectator {
             LOG.error("Failed to stop the listeners", e);
           }
           System.exit(0);
+        } else if (newState == CONNECTED) {
+          LOG.error("Connected to zk: " + zkConnectString);
         }
       }
     });
-
     zkClient.start();
+
+    try {
+      zkClient.blockUntilConnected(60, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+      System.out.println("Cannot connect to zk in 60 seconds");
+      throw new RuntimeException(e);
+    }
 
     InterProcessMutex mutex = new InterProcessMutex(zkClient, getClusterLockPath(clusterName));
     LOG.error("Trying to obtain lock");
@@ -169,25 +226,66 @@ public class Spectator {
     LOG.error("Returning from main");
   }
 
-  public Spectator(String zkConnectString, String clusterName, String instanceName) throws Exception {
+  public Spectator(String zkConnectString, String clusterName, String instanceName,
+                   LeaderEventsLogger spectatorLeaderEventsLogger) throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
 
     monitor = new RocksplicatorMonitor(clusterName, instanceName);
-
+    this.spectatorLeaderEventsLogger = spectatorLeaderEventsLogger;
     helixManager.connect();
 
-    Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      @Override
+      public void run() {
+        try {
+          stopListeners();
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
+      }
+    });
   }
 
   private void startListener(String postUrl) throws Exception {
-    ConfigGenerator configGenerator = new ConfigGenerator(helixManager.getClusterName(), helixManager, postUrl, monitor);
-    helixManager.addExternalViewChangeListener(configGenerator);
-    helixManager.addConfigChangeListener(configGenerator);
+    if (this.configGenerator == null) {
+      this.configGenerator = new ConfigGenerator(
+          helixManager.getClusterName(),
+          helixManager,
+          postUrl,
+          monitor, new ExternalViewLeaderEventsLoggerImpl(spectatorLeaderEventsLogger));
+
+      /**
+       * Add to the helixManager, message handlers.
+       */
+      helixManager.addExternalViewChangeListener(configGenerator);
+      helixManager.addConfigChangeListener(configGenerator);
+    }
   }
 
   private void stopListeners() throws Exception {
     if (helixManager != null) {
-      helixManager.disconnect();
+      Thread thread = new HelixManagerShutdownHook(helixManager);
+      thread.start();
+      thread.join();
+    }
+
+    if (configGenerator == null) {
+      try {
+        LOG.error("Stopping ConfigGenerator");
+        configGenerator.close();
+        configGenerator = null;
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+
+    if (spectatorLeaderEventsLogger != null) {
+      try {
+        LOG.error("Stopping Spectator LeaderEventsLogger");
+        spectatorLeaderEventsLogger.close();
+      } catch (IOException io) {
+        io.printStackTrace();
+      }
     }
   }
 
