@@ -61,8 +61,11 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
 
   private static final Logger LOG = LoggerFactory.getLogger(PollingFileWatcher.class);
   private static final HashFunction HASH_FUNCTION = Hashing.md5();
-  public static final int DEFAULT_POLL_PERIOD_MILLIS = 10000;
+  private static final int DEFAULT_POLL_PERIOD_MILLIS = 10000;
+  private static final int DEFAULT_HIGH_RESOLUTION_POLL_PERIOD_MILLIS = 1000;
+
   private static volatile PollingFileWatcher DEFAULT_INSTANCE = null;
+  private static volatile PollingFileWatcher HIGH_RESOLUTION_INSTANCE = null;
 
   // Thread safety note: only addWatch() can add new entries to this map, and that method
   // is synchronized. The reason for using a concurrent map is only to allow the watcher
@@ -73,7 +76,7 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
   /**
    * Creates the default ConfigFileWatcher instance on demand.
    */
-  public static PollingFileWatcher defaultInstance() {
+  public static PollingFileWatcher defaultPerTenSecondsWatcher() {
     if (DEFAULT_INSTANCE == null) {
       synchronized (PollingFileWatcher.class) {
         if (DEFAULT_INSTANCE == null) {
@@ -83,6 +86,22 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
     }
 
     return DEFAULT_INSTANCE;
+  }
+
+  /**
+   * Creates the default ConfigFileWatcher instance on demand.
+   */
+  public static PollingFileWatcher defaultPerSecondWatcher() {
+    if (HIGH_RESOLUTION_INSTANCE == null) {
+      synchronized (PollingFileWatcher.class) {
+        if (HIGH_RESOLUTION_INSTANCE == null) {
+          HIGH_RESOLUTION_INSTANCE = new PollingFileWatcher(
+              DEFAULT_HIGH_RESOLUTION_POLL_PERIOD_MILLIS, TimeUnit.MILLISECONDS);
+        }
+      }
+    }
+
+    return HIGH_RESOLUTION_INSTANCE;
   }
 
   @VisibleForTesting
@@ -107,7 +126,8 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
    *                 important that the function be non-blocking.
    */
   @Override
-  public synchronized void addWatch(String filePath, Function<byte[], Void> onUpdate)
+  public synchronized void addWatch(String filePath,
+                                    Function<WatchedFileContext<byte[]>, Void> onUpdate)
       throws IOException {
     Preconditions.checkNotNull(filePath);
     Preconditions.checkArgument(!filePath.isEmpty());
@@ -115,8 +135,9 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
 
     // Read the file and make the initial onUpdate call.
     File file = new File(filePath);
+    long lastModifiedTimeMillis = file.lastModified();
     byte[] contents = read(file);
-    onUpdate.apply(contents);
+    onUpdate.apply(new WatchedFileContext<>(contents, lastModifiedTimeMillis));
 
     // Add the file to our map if it isn't already there, and register the new change watcher.
     ConfigFileInfo configFileInfo = watchedFileMap.get(filePath);
@@ -158,9 +179,9 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
             if (!newContentHash.equals(configFileInfo.contentHash)) {
               configFileInfo.contentHash = newContentHash;
               LOG.info("File {} was modified at {}, notifying watchers.", filePath, lastModified);
-              for (Function<byte[], Void> watchers : configFileInfo.changeWatchers) {
+              for (Function<WatchedFileContext<byte[]>, Void> watchers : configFileInfo.changeWatchers) {
                 try {
-                  watchers.apply(newContents);
+                  watchers.apply(new WatchedFileContext<>(newContents, lastModified));
                 } catch (Exception e) {
                   LOG.error(
                       "Exception in watcher callback for {}, ignoring. New file contents were: {}",
@@ -216,7 +237,7 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
    */
   private static class ConfigFileInfo {
 
-    private final List<Function<byte[], Void>> changeWatchers = new CopyOnWriteArrayList<>();
+    private final List<Function<WatchedFileContext<byte[]>, Void>> changeWatchers = new CopyOnWriteArrayList<>();
     private long lastModifiedTimestampMillis;
     private HashCode contentHash;
 

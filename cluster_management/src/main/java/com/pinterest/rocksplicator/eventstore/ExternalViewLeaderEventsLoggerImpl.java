@@ -120,27 +120,11 @@ public class ExternalViewLeaderEventsLoggerImpl implements ExternalViewLeaderEve
     for (ExecutorService service : executorServices) {
       while (!service.isTerminated()) {
         try {
-          service.awaitTermination(1000, TimeUnit.SECONDS);
+          service.awaitTermination(100, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
           LOGGER.error("Interrupted: ", e);
         }
       }
-    }
-  }
-
-  private enum LeaderState {
-    LEADER_UP,
-    LEADER_DOWN
-  }
-
-  private static class Leader {
-
-    private String leaderInstanceId;
-    private LeaderState state;
-
-    public Leader(String leaderInstanceId, LeaderState state) {
-      this.leaderInstanceId = leaderInstanceId;
-      this.state = state;
     }
   }
 
@@ -233,10 +217,10 @@ public class ExternalViewLeaderEventsLoggerImpl implements ExternalViewLeaderEve
             leaderFound = true;
             if (disabledHosts.contains(host)) {
               if (previouslyKnownLeader == null
-                  || previouslyKnownLeader.state == LeaderState.LEADER_UP
-                  || (previouslyKnownLeader.state == LeaderState.LEADER_DOWN
-                          && (previouslyKnownLeader.leaderInstanceId == null || !host
-                  .equals(previouslyKnownLeader.leaderInstanceId)))) {
+                  || previouslyKnownLeader.getState() == LeaderState.LEADER_UP
+                  || (previouslyKnownLeader.getState() == LeaderState.LEADER_DOWN
+                          && (previouslyKnownLeader.getLeaderInstanceId() == null || !host
+                  .equals(previouslyKnownLeader.getLeaderInstanceId())))) {
                 /**
                  * We publish the event as LEADER_DOWN if
                  * either previously there was no information about this partition
@@ -258,10 +242,10 @@ public class ExternalViewLeaderEventsLoggerImpl implements ExternalViewLeaderEve
               }
             } else {
               if (previouslyKnownLeader == null
-                  || previouslyKnownLeader.state == LeaderState.LEADER_DOWN
-                  || (previouslyKnownLeader.state == LeaderState.LEADER_UP
-                          && (previouslyKnownLeader.leaderInstanceId == null || !host
-                  .equals(previouslyKnownLeader.leaderInstanceId)))) {
+                  || previouslyKnownLeader.getState() == LeaderState.LEADER_DOWN
+                  || (previouslyKnownLeader.getState() == LeaderState.LEADER_UP
+                          && (previouslyKnownLeader.getLeaderInstanceId() == null || !host
+                  .equals(previouslyKnownLeader.getLeaderInstanceId())))) {
                 /**
                  * We publish the event as LEADER_DOWN if
                  * either previously there was no information about this partition
@@ -296,20 +280,21 @@ public class ExternalViewLeaderEventsLoggerImpl implements ExternalViewLeaderEve
             resourceLeaderCache.put(partitionName, new Leader(null, LeaderState.LEADER_DOWN));
             publishStatus(resourceName, partitionName, null, LeaderState.LEADER_DOWN);
           } else {
-            if (previouslyKnownLeader.state == LeaderState.LEADER_UP) {
+            if (previouslyKnownLeader.getState() == LeaderState.LEADER_UP) {
               // Previously known leader was up, and now it is down. Hence publish the event.
-              String prevLeaderHost = previouslyKnownLeader.leaderInstanceId;
+              String prevLeaderHost = previouslyKnownLeader.getLeaderInstanceId();
               LOGGER.error(String
                   .format("LEADER_DOWN (Published) resource:%s, partition=%s, leader:%s",
                       resourceName, partitionName, prevLeaderHost));
               resourceLeaderCache.put(partitionName,
                   new Leader(prevLeaderHost, LeaderState.LEADER_DOWN));
               publishStatus(resourceName, partitionName, prevLeaderHost, LeaderState.LEADER_DOWN);
-            } else if (previouslyKnownLeader.state == LeaderState.LEADER_DOWN) {
+            } else if (previouslyKnownLeader.getState() == LeaderState.LEADER_DOWN) {
               // Duplicate event of downed instance; whether we know or not which host it was,
               // no point in publishing this event again.
               LOGGER.error(String
-                  .format("LEADER_DOWN (Duplicate/Skipped) resource:%s, partition=%s, leader:unknown",
+                  .format(
+                      "LEADER_DOWN (Duplicate/Skipped) resource:%s, partition=%s, leader:unknown",
                       resourceName, partitionName));
               doNothing();
             }

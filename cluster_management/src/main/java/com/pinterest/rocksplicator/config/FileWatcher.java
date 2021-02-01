@@ -23,6 +23,6 @@ import java.util.function.Function;
 
 public interface FileWatcher<R> {
 
-  void addWatch(String filePath, Function<R, Void> onUpdate) throws IOException;
+  void addWatch(String filePath, Function<WatchedFileContext<R>, Void> onUpdate) throws IOException;
 }
 

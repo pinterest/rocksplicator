@@ -21,29 +21,26 @@ package com.pinterest.rocksplicator.config;
 import com.pinterest.rocksplicator.codecs.CodecException;
 import com.pinterest.rocksplicator.codecs.Decoder;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class ConfigStore<R> {
 
   private Decoder<byte[], R> decoder;
-  private AtomicReference<R> ref;
+  private AtomicReference<R> configRef;
 
   public ConfigStore(Decoder<byte[], R> decoder, String filePath) throws IOException {
     this(decoder, filePath, FileWatchers.getPollingFileWatcher());
   }
 
-  @VisibleForTesting
-  ConfigStore(Decoder<byte[], R> decoder, String filePath, FileWatcher<byte[]> fileWatcher)
+  public ConfigStore(Decoder<byte[], R> decoder, String filePath, FileWatcher<byte[]> fileWatcher)
       throws IOException {
     this.decoder = decoder;
-    this.ref = new AtomicReference<>();
-    fileWatcher.addWatch(filePath, bytes -> {
+    this.configRef = new AtomicReference<>();
+    fileWatcher.addWatch(filePath, context -> {
       try {
-        R newInstance = ConfigStore.this.decoder.decode(bytes);
-        ref.set(newInstance);
+        R newConfigRef = ConfigStore.this.decoder.decode(context.getData());
+        ConfigStore.this.configRef.set(newConfigRef);
       } catch (CodecException e) {
         e.printStackTrace();
       }
@@ -52,6 +49,6 @@ public class ConfigStore<R> {
   }
 
   public R get() {
-    return ref.get();
+    return configRef.get();
   }
 }
