@@ -462,7 +462,7 @@ public class LeaderEventHistoryStore implements Closeable {
     for (ExecutorService service : executorServices) {
       while (!service.isTerminated()) {
         try {
-          service.awaitTermination(1000, TimeUnit.SECONDS);
+          service.awaitTermination(100, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
           LOGGER.error("Interrupted: ", e);
         }
