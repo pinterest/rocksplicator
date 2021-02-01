@@ -19,6 +19,7 @@
 package com.pinterest.rocksplicator;
 
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
+import com.pinterest.rocksplicator.utils.AutoCloseableLock;
 
 import com.google.common.base.Stopwatch;
 import org.apache.helix.HelixAdmin;
@@ -51,7 +52,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class ConfigGenerator extends RoutingTableProvider implements CustomCodeCallbackHandler {
@@ -92,25 +92,6 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     this.monitor = monitor;
     this.enableDumpToLocal = new File("/var/log/helixspectator").canWrite();
     this.synchronizedCallbackLock = new ReentrantLock();
-  }
-
-  private static class AutoCloseableLock implements AutoCloseable {
-
-    private final Lock lock;
-
-    private AutoCloseableLock(Lock lock) {
-      this.lock = lock;
-      this.lock.lock();
-    }
-
-    public static AutoCloseableLock lock(Lock lock) {
-      return new AutoCloseableLock(lock);
-    }
-
-    @Override
-    public void close() {
-      this.lock.unlock();
-    }
   }
 
   private void logUncheckedException(Runnable r) {
