@@ -121,6 +121,7 @@ public class ExternalViewLeaderEventsLoggerImpl implements ExternalViewLeaderEve
       while (!service.isTerminated()) {
         try {
           service.awaitTermination(100, TimeUnit.MILLISECONDS);
+          service.awaitTermination(1000, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
           LOGGER.error("Interrupted: ", e);
         }
@@ -300,7 +301,6 @@ public class ExternalViewLeaderEventsLoggerImpl implements ExternalViewLeaderEve
             }
           }
         }
-
       }
     }
   }
