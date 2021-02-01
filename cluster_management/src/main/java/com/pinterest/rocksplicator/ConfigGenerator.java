@@ -212,7 +212,6 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     this.enableDumpToLocal = new File("/var/log/helixspectator").canWrite();
     this.synchronizedCallbackLock = new ReentrantLock();
     this.externalViewLeaderEventLogger = externalViewLeaderEventLogger;
-
   }
 
   private void logUncheckedException(Runnable r) {
