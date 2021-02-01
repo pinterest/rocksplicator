@@ -53,19 +53,16 @@ public class ClientLeaderEventLoggerImpl implements ClientLeaderEventLogger {
 
     ConfigNotifier<JSONObject> localNotifier = null;
 
-    if (this.leaderEventsLogger != null && leaderEventsLogger.isLoggingEnabled()) {
-      try {
-        localNotifier = new ConfigNotifier<>(
-            new SimpleJsonObjectDecoder(),
-            shardMapPath,
-            FileWatchers.getPollingPerSecondFileWatcher(),
-            jsonObjectContext -> {
-              process(jsonObjectContext);
-              return null;
-            });
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
+    if (this.leaderEventsLogger != null && leaderEventsLogger.isLoggingEnabled()
+        && shardMapPath != null && !shardMapPath.isEmpty()) {
+      localNotifier = new ConfigNotifier<>(
+          new SimpleJsonObjectDecoder(),
+          shardMapPath,
+          FileWatchers.getPollingPerSecondFileWatcher(),
+          jsonObjectContext -> {
+            process(jsonObjectContext);
+            return null;
+          });
     }
     this.notifier = localNotifier;
 
@@ -88,6 +85,24 @@ public class ClientLeaderEventLoggerImpl implements ClientLeaderEventLogger {
   }
 
   @Override
+  public void start() {
+    if (this.notifier != null) {
+      try {
+        this.notifier.start();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+  }
+
+  @Override
+  public void stop() {
+    if (this.notifier != null) {
+      this.notifier.stop();
+    }
+  }
+
+  @Override
   public void process(ShardMap shardMap, long shardMapNotificationTimeMillis) {
     if (leaderEventsLogger == null || !leaderEventsLogger.isLoggingEnabled()) {
       return;
@@ -105,7 +120,8 @@ public class ClientLeaderEventLoggerImpl implements ClientLeaderEventLogger {
       ResourceMap resourceMap = shardMap.getResourceMap(resourceName);
 
       // Here, process each resource in a separate thread.
-      executorServices.get(IntMath.mod(resourceName.hashCode(), executorServices.size()));
+      executorServices.get(IntMath.mod(resourceName.hashCode(), executorServices.size()))
+          .submit(new ResourceMapProcessor(resourceMap, shardMapNotificationTimeMillis));
     }
   }
 

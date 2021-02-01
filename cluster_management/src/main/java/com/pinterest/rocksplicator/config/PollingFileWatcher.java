@@ -149,6 +149,16 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
     configFileInfo.changeWatchers.add(onUpdate);
   }
 
+  @Override
+  public synchronized void removeWatch(
+      String filePath,
+      Function<WatchedFileContext<byte[]>, Void> onUpdate) {
+    ConfigFileInfo configFileInfo = watchedFileMap.get(filePath);
+    if (configFileInfo != null) {
+      configFileInfo.changeWatchers.remove(onUpdate);
+    }
+  }
+
   @VisibleForTesting
   public void runWatcherTaskNow() {
     watcherTask.run();

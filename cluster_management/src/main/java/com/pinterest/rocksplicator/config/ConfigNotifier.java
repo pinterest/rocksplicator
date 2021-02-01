@@ -4,48 +4,70 @@ import com.pinterest.rocksplicator.codecs.CodecException;
 import com.pinterest.rocksplicator.codecs.Decoder;
 import com.pinterest.rocksplicator.utils.AutoCloseableLock;
 
-import org.jboss.netty.util.internal.NonReentrantLock;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 public class ConfigNotifier<R> implements Closeable {
 
   private final Decoder<byte[], R> decoder;
-  private final Lock exclusionLock = new NonReentrantLock();
+  private final Lock exclusionLock = new ReentrantLock();
   private final AtomicBoolean isClosed = new AtomicBoolean(false);
+  private final AtomicBoolean isStarted = new AtomicBoolean(false);
+  private final WatchedFileNotificationCallback callback;
+  private final FileWatcher<byte[]> fileWatcher;
+  private final String filePath;
 
   public ConfigNotifier(Decoder<byte[], R> decoder, String filePath,
-                        Function<Context<R>, Void> notifier)
-      throws IOException {
+                        Function<Context<R>, Void> notifier) {
     this(decoder, filePath, FileWatchers.getPollingFileWatcher(), notifier);
   }
 
   public ConfigNotifier(Decoder<byte[], R> decoder, String filePath,
-                        FileWatcher<byte[]> fileWatcher, Function<Context<R>, Void> notifier)
-      throws IOException {
+                        FileWatcher<byte[]> fileWatcher, Function<Context<R>, Void> notifier) {
+    this.filePath = filePath;
+    this.fileWatcher = fileWatcher;
     this.decoder = decoder;
-    fileWatcher.addWatch(filePath, context -> {
-      try (AutoCloseableLock autoLock = new AutoCloseableLock(exclusionLock)) {
-        // If the notifier is already closed, do nothing.
-        if (isClosed.get()) {
-          return null;
-        }
-        long notification_received_time_millis = System.currentTimeMillis();
-        R newConfigRef = ConfigNotifier.this.decoder.decode(context.getData());
-        long
-            deserialization_time_in_millis =
-            notification_received_time_millis - System.currentTimeMillis();
-        notifier.apply(new Context<>(newConfigRef, context.getLastModifiedTimeMillis(),
-            notification_received_time_millis, deserialization_time_in_millis));
-      } catch (CodecException e) {
-        e.printStackTrace();
+    this.callback = new WatchedFileNotificationCallback(notifier);
+  }
+
+  public boolean isStarted() {
+    try (AutoCloseableLock autoLock = new AutoCloseableLock(exclusionLock)) {
+      return this.isStarted.get();
+    }
+  }
+
+  public boolean isClosed() {
+    try (AutoCloseableLock autoLock = new AutoCloseableLock(exclusionLock)) {
+      return this.isClosed.get();
+    }
+  }
+
+  public void start() throws IOException {
+    try (AutoCloseableLock autoLock = new AutoCloseableLock(exclusionLock)) {
+      if (isClosed()) {
+        throw new IOException("Cannot start once closed");
+      } else if (isStarted()) {
+        throw new IOException("Cannot start more then once without stopping in between");
       }
-      return null;
-    });
+      this.fileWatcher.addWatch(filePath, callback);
+      this.isStarted.set(true);
+    }
+  }
+
+  public void stop() {
+    try (AutoCloseableLock autoLock = new AutoCloseableLock(exclusionLock)) {
+      if (isClosed()) {
+        // Do Nothing
+      }
+      if (isStarted()) {
+        this.fileWatcher.removeWatch(filePath, callback);
+        this.isStarted.set(false);
+      }
+    }
   }
 
   @Override
@@ -88,6 +110,36 @@ public class ConfigNotifier<R> implements Closeable {
 
     public long getDeserialization_time_in_millis() {
       return deserialization_time_in_millis;
+    }
+  }
+
+  private class WatchedFileNotificationCallback
+      implements Function<WatchedFileContext<byte[]>, Void> {
+
+    private final Function<Context<R>, Void> notifier;
+
+    public WatchedFileNotificationCallback(Function<Context<R>, Void> notifier) {
+      this.notifier = notifier;
+    }
+
+    @Override
+    public Void apply(WatchedFileContext<byte[]> context) {
+      try (AutoCloseableLock autoLock = new AutoCloseableLock(exclusionLock)) {
+        // If the notifier is already closed, do nothing.
+        if (isClosed.get()) {
+          return null;
+        }
+        long notification_received_time_millis = System.currentTimeMillis();
+        R newConfigRef = ConfigNotifier.this.decoder.decode(context.getData());
+        long
+            deserialization_time_in_millis =
+            notification_received_time_millis - System.currentTimeMillis();
+        notifier.apply(new Context<>(newConfigRef, context.getLastModifiedTimeMillis(),
+            notification_received_time_millis, deserialization_time_in_millis));
+      } catch (CodecException e) {
+        e.printStackTrace();
+      }
+      return null;
     }
   }
 }

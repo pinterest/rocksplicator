@@ -51,7 +51,19 @@ class JsonShardMap implements ShardMap {
 
     JsonResourceMapImpl(String resourceName, JSONObject resourceMapObj) {
       this.resourceName = resourceName;
-      this.numShards = (int) resourceMapObj.get("num_shards");
+      this.replicasByPartition = new HashMap<>();
+      this.replicasByInstance = new HashMap();
+
+      Object numShardsObj = resourceMapObj.get("num_shards");
+      if (numShardsObj.getClass().equals(Integer.class)) {
+        this.numShards = (Integer) numShardsObj;
+      } else if (numShardsObj.getClass().equals(Long.class)) {
+        this.numShards = ((Long) numShardsObj).intValue();
+      } else {
+        throw new RuntimeException("Illegal format for num_shards for resource:" + resourceName + ", json string is " + resourceMapObj.toJSONString());
+      }
+
+
 
       ImmutableSet.Builder<Partition> setBuilder = ImmutableSet.builder();
       for (int partitionId = 0; partitionId < numShards; ++partitionId) {
@@ -66,10 +78,11 @@ class JsonShardMap implements ShardMap {
         }
         String encodedInstanceStr = (String) key;
         Instance instance = new Instance(encodedInstanceStr);
+
         JSONArray partitionsOnInstance = (JSONArray) resourceMapObj.get(key);
         for (Object encodedPartitionObj : partitionsOnInstance) {
           String encodedPartitionStr = (String) encodedPartitionObj;
-          String parts[] = encodedInstanceStr.split(":");
+          String parts[] = encodedPartitionStr.split(":");
           Partition partition = new Partition(parts[0]);
           ReplicaState replicaState = ReplicaState.ONLINE;
           if (parts.length == 2) {
