@@ -249,7 +249,7 @@ public class Participant {
       staticSpectatorLeaderEventsLogger = new LeaderEventsLoggerImpl(instanceName,
           zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType, Optional.of(128));
 
-      if (shardMapPath != null || !shardMapPath.isEmpty()) {
+      if (shardMapPath != null && !shardMapPath.isEmpty()) {
         staticClientLeaderEventsLogger = new LeaderEventsLoggerImpl(instanceName,
             zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType, Optional.empty());
 
@@ -458,31 +458,31 @@ public class Participant {
           try {
             LOG.error("Stopping ConfigGenerator");
             configGenerator.close();
-          } catch (IOException e) {
-            e.printStackTrace();
+          } catch (Throwable throwable) {
+            throwable.printStackTrace();
           }
           if (staticSpectatorLeaderEventsLogger != null) {
             try {
               LOG.error("Stopping Spectator LeaderEventsLogger");
               staticSpectatorLeaderEventsLogger.close();
-            } catch (IOException e) {
-              e.printStackTrace();
+            } catch (Throwable throwable) {
+              throwable.printStackTrace();
             }
           }
-          if (staticClientShardMapLeaderEventLoggerDriver == null) {
+          if (staticClientShardMapLeaderEventLoggerDriver 1= null) {
             try {
               LOG.error("Stopping Spectator Client ShardMapLeaderEventLoggerDriver");
               staticClientShardMapLeaderEventLoggerDriver.close();
-            } catch (IOException e) {
-              e.printStackTrace();
+            } catch (Throwable throwable) {
+              throwable.printStackTrace();
             }
           }
           if (staticClientLeaderEventsLogger != null) {
             try {
               LOG.error("Stopping Spectator Client LeaderEventsLogger");
               staticClientLeaderEventsLogger.close();
-            } catch (IOException e) {
-              e.printStackTrace();
+            } catch (Throwable throwable) {
+              throwable.printStackTrace();
             }
           }
         }
