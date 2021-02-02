@@ -469,7 +469,7 @@ public class Participant {
               throwable.printStackTrace();
             }
           }
-          if (staticClientShardMapLeaderEventLoggerDriver 1= null) {
+          if (staticClientShardMapLeaderEventLoggerDriver != null) {
             try {
               LOG.error("Stopping Spectator Client ShardMapLeaderEventLoggerDriver");
               staticClientShardMapLeaderEventLoggerDriver.close();
