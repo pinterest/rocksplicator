@@ -3,6 +3,7 @@ package com.pinterest.rocksplicator.shardmap;
 import java.util.Objects;
 
 public class Instance {
+
   private final String host;
   private final int port;
   private final String domain;

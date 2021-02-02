@@ -3,6 +3,7 @@ package com.pinterest.rocksplicator.shardmap;
 import java.util.Objects;
 
 public class Partition {
+
   private final String partitionName;
 
   public Partition(String resourceName, int partitionId) {
