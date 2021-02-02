@@ -471,7 +471,7 @@ public class Participant {
           }
           if (staticClientShardMapLeaderEventLoggerDriver == null) {
             try {
-              LOG.error("Stopping Spectator Client LeaderEventsLogger");
+              LOG.error("Stopping Spectator Client ShardMapLeaderEventLoggerDriver");
               staticClientShardMapLeaderEventLoggerDriver.close();
             } catch (IOException e) {
               e.printStackTrace();

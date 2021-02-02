@@ -145,7 +145,8 @@ public class ClientShardMapLeaderEventLoggerImpl implements ClientShardMapLeader
                   new Leader(replica.getInstance().getInstanceId(), LeaderState.LEADER_UP));
               leaderEventsLogger.newEventsCollector(resourceName, partition.getPartitionName())
                   .addEvent(LeaderEventType.CLIENT_OBSERVED_SHARDMAP_LEADER_UP,
-                      replica.getInstance().getInstanceId(), timeOfEventMillis);
+                      replica.getInstance().getInstanceId(), timeOfEventMillis)
+                  .commit();
             } else {
               // Do nothing, as this is potentially a duplicate event.
             }
@@ -159,7 +160,7 @@ public class ClientShardMapLeaderEventLoggerImpl implements ClientShardMapLeader
             String leaderNode =
                 (previousLeader == null || previousLeader.getLeaderInstanceId() == null)
                 ? null : previousLeader.getLeaderInstanceId();
-            LOGGER.error(String
+            LOGGER.info(String
                 .format("LEADER_DOWN (Published) resource:%s, partition=%s, leader:%s",
                     resourceName, partition.getPartitionName(), leaderNode));
             resourceLeaderCache

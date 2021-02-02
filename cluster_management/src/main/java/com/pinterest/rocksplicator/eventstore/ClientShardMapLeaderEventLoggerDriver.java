@@ -49,7 +49,6 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
     this.clientLeaderEventLogger = clientLeaderEventLogger;
     this.zkEventHistoryStr = zkEventHistoryStr;
 
-
     /**
      * This will always start in a stopped state.
      * We need to manually start the notification.
@@ -187,33 +186,49 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
      * release any previously held lock by any previously submitted task.
      * However some thread may be waiting for notify.
      */
-    this.zkClient.close();
+    try {
+      this.zkClient.close();
+    } catch (Exception io) {
+      LOGGER.error("Cannot close the zkClient");
+    }
 
     /**
      * Stop submission of any more tasks.
      */
-    service.shutdown();
+    try {
+      service.shutdown();
+    } catch (Exception e) {
+      LOGGER.error("Cannot shutdown executor service");
+    }
 
     /**
-     * Stop processing all the notification going foward. After this any
+     * Stop processing all the notification going forward. After this any
      * previously submitted tasks will not execute and simply return without
      * performing any task. Any previously submitted and running task that did
      * obtain a zk lock should be waiting to be notified and hence this will
      * release those threads as well.
      */
-    stopNotification();
+    try {
+      stopNotification();
+    } catch (Exception e) {
+      LOGGER.error("Could not stop notifications");
+    }
 
     /**
      * From now on, any execution of remaining tasks will be no-op.
      */
-    if (notifier != null) {
-      synchronized (notifier) {
-        if (!this.notifier.isClosed() && this.notifier.isStarted()) {
-          // Cannot stop notification, as either notifier is already closed or not started yet;
-          this.notifier.close();
-          this.notifier.notifyAll();
+    try {
+      if (notifier != null) {
+        synchronized (notifier) {
+          if (!this.notifier.isClosed() && this.notifier.isStarted()) {
+            // Cannot stop notification, as either notifier is already closed or not started yet;
+            this.notifier.close();
+            this.notifier.notifyAll();
+          }
         }
       }
+    } catch (Exception io) {
+      LOGGER.error("Cannot close the notifier");
     }
 
     /**
@@ -226,6 +241,11 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
         LOGGER.error("Interrupted");
       }
     }
+
+    /**
+     * Finally cleanup the clientShardMapEventsLogger.
+     */
+    clientLeaderEventLogger.close();
   }
 
   private void process(ConfigNotifier.Context<JSONObject> shardMapWithContext) {

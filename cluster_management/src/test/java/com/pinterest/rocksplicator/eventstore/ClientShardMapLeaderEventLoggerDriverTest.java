@@ -1,5 +1,6 @@
 package com.pinterest.rocksplicator.eventstore;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.pinterest.rocksplicator.codecs.Codec;
@@ -29,7 +30,8 @@ public class ClientShardMapLeaderEventLoggerDriverTest {
 
   private static final String CLUSTER_NAME = "myCluster";
   private static final String RESOURCE_NAME = "myResource";
-  private static final String PARTITION_NAME = "myResource_0";
+  private static final String PARTITION_0_NAME = "myResource_0";
+  private static final String PARTITION_1_NAME = "myResource_1";
   private static final String INSTANCE_ID = "10.0.0.2_9090";
 
   private TestingServer zkTestServer;
@@ -97,12 +99,29 @@ public class ClientShardMapLeaderEventLoggerDriverTest {
   }
 
   @Test
-  public void test() throws Exception {
+  public void testEventDriver() throws Exception {
     clientDriver =
         new ClientShardMapLeaderEventLoggerDriver(CLUSTER_NAME, shardMapPath.getAbsolutePath(),
             clientLogger, zkTestServer.getConnectString());
     Thread.currentThread().sleep(1000);
+
+
     clientDriver.close();
+    eventsLogger.close();
+
+    LeaderEventsHistory history = getData(PARTITION_0_NAME);
+
+    assertEquals(1, history.getEventsSize());
+
+    history = getData(PARTITION_1_NAME);
+
+    assertEquals(1, history.getEventsSize());
+  }
+
+  private LeaderEventsHistory getData(String partition) throws Exception {
+    return codec.decode(zkClient.getData()
+        .forPath(ZkMergeableEventStore
+            .getLeaderEventHistoryPath(CLUSTER_NAME, RESOURCE_NAME, partition)));
   }
 
   @After
