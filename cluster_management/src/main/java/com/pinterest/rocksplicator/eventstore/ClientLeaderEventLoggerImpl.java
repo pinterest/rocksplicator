@@ -1,14 +1,10 @@
 package com.pinterest.rocksplicator.eventstore;
 
-import com.pinterest.rocksplicator.codecs.SimpleJsonObjectDecoder;
-import com.pinterest.rocksplicator.config.ConfigNotifier;
-import com.pinterest.rocksplicator.config.FileWatchers;
 import com.pinterest.rocksplicator.shardmap.Partition;
 import com.pinterest.rocksplicator.shardmap.Replica;
 import com.pinterest.rocksplicator.shardmap.ReplicaState;
 import com.pinterest.rocksplicator.shardmap.ResourceMap;
 import com.pinterest.rocksplicator.shardmap.ShardMap;
-import com.pinterest.rocksplicator.shardmap.ShardMaps;
 import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEventType;
 
 import com.google.common.cache.Cache;
@@ -18,7 +14,6 @@ import com.google.common.cache.LoadingCache;
 import com.google.common.cache.RemovalListener;
 import com.google.common.collect.ImmutableList;
 import com.google.common.math.IntMath;
-import org.json.simple.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,11 +32,8 @@ public class ClientLeaderEventLoggerImpl implements ClientLeaderEventLogger {
   private final List<ExecutorService> executorServices;
   private final LoadingCache<String, Cache<String, Leader>> leaderStateCache;
 
-  private final ConfigNotifier<JSONObject> notifier;
-
   public ClientLeaderEventLoggerImpl(
-      final LeaderEventsLogger leaderEventsLogger,
-      final String shardMapPath) {
+      final LeaderEventsLogger leaderEventsLogger) {
 
     this.leaderEventsLogger = leaderEventsLogger;
 
@@ -50,21 +42,6 @@ public class ClientLeaderEventLoggerImpl implements ClientLeaderEventLogger {
       listBuilder.add(Executors.newSingleThreadExecutor());
     }
     this.executorServices = listBuilder.build();
-
-    ConfigNotifier<JSONObject> localNotifier = null;
-
-    if (this.leaderEventsLogger != null && leaderEventsLogger.isLoggingEnabled()
-        && shardMapPath != null && !shardMapPath.isEmpty()) {
-      localNotifier = new ConfigNotifier<>(
-          new SimpleJsonObjectDecoder(),
-          shardMapPath,
-          FileWatchers.getPollingPerSecondFileWatcher(),
-          jsonObjectContext -> {
-            process(jsonObjectContext);
-            return null;
-          });
-    }
-    this.notifier = localNotifier;
 
     this.leaderStateCache = CacheBuilder.newBuilder()
         .removalListener((RemovalListener<String, Cache<String, Leader>>)
@@ -76,30 +53,6 @@ public class ClientLeaderEventLoggerImpl implements ClientLeaderEventLogger {
                 .build();
           }
         });
-  }
-
-  private void process(ConfigNotifier.Context<JSONObject> shardMapWithContext) {
-    JSONObject jsonShardMap = shardMapWithContext.getItem();
-    ShardMap shardMap = ShardMaps.fromJson(jsonShardMap);
-    process(shardMap, shardMapWithContext.getSrc_change_time_millis());
-  }
-
-  @Override
-  public void start() {
-    if (this.notifier != null) {
-      try {
-        this.notifier.start();
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
-    }
-  }
-
-  @Override
-  public void stop() {
-    if (this.notifier != null) {
-      this.notifier.stop();
-    }
   }
 
   @Override
@@ -128,8 +81,6 @@ public class ClientLeaderEventLoggerImpl implements ClientLeaderEventLogger {
   @Override
   public void close() throws IOException {
     // First close the notification of any future events.
-    this.notifier.close();
-
     /**
      * Shutdown all executor services to no longer accept new tasks.
      */
