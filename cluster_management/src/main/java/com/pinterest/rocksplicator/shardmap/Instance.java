@@ -51,4 +51,14 @@ public class Instance {
   public int hashCode() {
     return Objects.hash(host, port, domain, instanceId);
   }
+
+  @Override
+  public String toString() {
+    return "Instance{" +
+        "host='" + host + '\'' +
+        ", port=" + port +
+        ", domain='" + domain + '\'' +
+        ", instanceId='" + instanceId + '\'' +
+        '}';
+  }
 }

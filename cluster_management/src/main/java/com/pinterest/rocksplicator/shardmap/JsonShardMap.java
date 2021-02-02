@@ -83,13 +83,13 @@ class JsonShardMap implements ShardMap {
         for (Object encodedPartitionObj : partitionsOnInstance) {
           String encodedPartitionStr = (String) encodedPartitionObj;
           String parts[] = encodedPartitionStr.split(":");
-          Partition partition = new Partition(parts[0]);
+          Partition partition = new Partition(resourceName, parts[0]);
           ReplicaState replicaState = ReplicaState.ONLINE;
           if (parts.length == 2) {
             String state = parts[1];
             if (":M".equalsIgnoreCase(state)) {
               replicaState = ReplicaState.LEADER;
-            } else {
+            } else if (":S".equalsIgnoreCase(state)) {
               replicaState = ReplicaState.FOLLOWER;
             }
           }

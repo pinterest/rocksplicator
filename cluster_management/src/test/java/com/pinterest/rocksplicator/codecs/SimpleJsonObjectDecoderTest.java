@@ -111,9 +111,15 @@ public class SimpleJsonObjectDecoderTest {
         + "\"host0:port:az:pg\":[\"00000\"],\"host1:port:az:pg\":[\"00001\"]}}\n";
 
     SimpleJsonObjectDecoder decoder = new SimpleJsonObjectDecoder();
-    JSONObject decodedFromCompactJsonStr = decoder.decode(compactJsonStr.getBytes());
     JSONObject decodedFromPrettyPrintedStr = decoder.decode(prettyPrintedJsonStr.getBytes());
-    assertEquals(shardMap, decodedFromCompactJsonStr);
-    assertEquals(shardMap, decodedFromPrettyPrintedStr);
+    JSONObject decodedFromCompactJsonStr = decoder.decode(compactJsonStr.getBytes());
+
+    /**
+     * Note that we can't directly compare JSONObjects since we saw an issue where a numeric
+     * value was being returned as Integer or Long object. Due to this, the test for equality
+     * directly on the JSONObject is flaky.
+     */
+    assertEquals(shardMap.toJSONString(), decodedFromPrettyPrintedStr.toJSONString());
+    assertEquals(shardMap.toJSONString(), decodedFromCompactJsonStr.toJSONString());
   }
 }
