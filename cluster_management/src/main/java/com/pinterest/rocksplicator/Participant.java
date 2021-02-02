@@ -20,11 +20,13 @@ package com.pinterest.rocksplicator;
 
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
+import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
 import com.pinterest.rocksplicator.task.BackupTaskFactory;
 import com.pinterest.rocksplicator.task.DedupTaskFactory;
 import com.pinterest.rocksplicator.task.RestoreTaskFactory;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -77,8 +79,9 @@ public class Participant {
   private static final String handoffEventHistoryConfigType = "handoffEventHistoryConfigType";
 
   private static HelixManager helixManager = null;
-  private static LeaderEventsLogger leaderEventsLogger = null;
-  private StateModelFactory<StateModel> stateModelFactory;
+  private static LeaderEventsLogger staticParticipantLeaderEventsLogger = null;
+  private static LeaderEventsLogger staticSpectatorLeaderEventsLogger = null;
+  private static StateModelFactory<StateModel> stateModelFactory;
   private final RocksplicatorMonitor monitor;
 
   private static Options constructCommandLineOptions() {
@@ -217,16 +220,34 @@ public class Participant {
     final String resourceConfigType = cmd.getOptionValue(handoffEventHistoryConfigType, "");
 
     /**
-     * Note the last parameter is empty, since we don't dictate maxEventsToKeep from participants.
+     * Note that the last parameter is empty, since we don't dictate
+     * maxEventsToKeep from participants.
      */
-    leaderEventsLogger =
+    staticParticipantLeaderEventsLogger =
         new LeaderEventsLoggerImpl(instanceName,
             zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType, Optional.empty());
 
+    if (runSpectator) {
+      staticSpectatorLeaderEventsLogger =
+          new LeaderEventsLoggerImpl(instanceName,
+              zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType,
+              Optional.of(128));
+    }
+
     LOG.error("Starting participant with ZK:" + zkConnectString);
     Participant participant = new Participant(zkConnectString, clusterName, instanceName,
-        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator, leaderEventsLogger);
+        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator,
+        staticParticipantLeaderEventsLogger, staticSpectatorLeaderEventsLogger);
 
+    /** TODO:grajpurohit
+     * This should probably be done right after connecting to the zk with HelixManager.
+     * Ideal way would be to first be able to register a participant and then register the
+     * stateModelFactory with the stateMachine of the helixManager. There is a race
+     * condition here, since we connect to helixManager right after registering the
+     * stateModelFactory. In this case the state transitions can start, even before
+     * we had a chance to setup the participant's domain information, which is critical
+     * to helix when assigning partitions for resources which needs domain-aware assignment.
+     */
     HelixAdmin helixAdmin = new ZKHelixAdmin(zkConnectString);
     HelixConfigScope scope =
         new HelixConfigScopeBuilder(HelixConfigScope.ConfigScopeProperty.PARTICIPANT)
@@ -245,20 +266,49 @@ public class Participant {
    * This will cause all states to transition to offline eventually.
    */
   public static void shutDownParticipant() throws Exception {
-    LOG.error("Disconnect the helixManager");
+
+    /**
+     * TODO: grajpurohit: Improve the logic to cleanly shutdown.
+     *
+     * This is probably not the right way. When a participant is going down,
+     * we need a chance to cleanly offline the currently top-state and second
+     * top-state resources (e.g.. all partitions state should be brought to offline
+     * state) before going down. That will be a graceful shutdown. However, when
+     * helixManager disconnects, it releases all message handlers / listeners there after
+     * there is no way for resources to be brought down through state transition.
+     *
+     * Ideal way will be whereby
+     *
+     * 1. We setup instanceTag "disabled" so that spectator has a first chance to be notified that
+     * this participant is going down without bringing down the hosted partition replicas.
+     *
+     * 2. Wait to ensure that the instanceTag has been added to the participant instance.
+     *
+     * 3. We should then disable this instance (currently this is the only way we figured out to
+     * force controller to issue state transitions to existing current states of all partitions
+     * hosted by this participant) to move to OFFLINE state.
+     *
+     * 4. Wait until all partition replicas hosted by this participant to have moved to OFFLINE state.
+     *
+     * 5. Now we are free to disconnect to HelixManager, so that all listeners and message callback
+     * handlers are properly un-registered.
+     */
     if (helixManager != null) {
       helixManager.disconnect();
       helixManager = null;
     }
-    if (leaderEventsLogger != null) {
-      leaderEventsLogger.close();
-      leaderEventsLogger = null;
+    if (staticParticipantLeaderEventsLogger != null) {
+      LOG.error("Stopping Participant LeaderEventsLogger");
+      staticParticipantLeaderEventsLogger.close();
+      staticParticipantLeaderEventsLogger = null;
     }
   }
 
   private Participant(String zkConnectString, String clusterName, String instanceName,
                       String stateModelType, int port, String postUrl, boolean useS3Backup,
-                      String s3BucketName, boolean runSpectator, LeaderEventsLogger leaderEventsLogger)
+                      String s3BucketName, boolean runSpectator,
+                      LeaderEventsLogger staticParticipantLeaderEventsLogger,
+                      LeaderEventsLogger staticSpectatorLeaderEventsLogger)
       throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
@@ -274,17 +324,20 @@ public class Participant {
       stateModelFactory = new CacheStateModelFactory();
     } else if (stateModelType.equals("MasterSlave")) {
       stateModelFactory = new MasterSlaveStateModelFactory(instanceName.split("_")[0],
-          port, zkConnectString, clusterName, useS3Backup, s3BucketName, leaderEventsLogger);
+          port, zkConnectString, clusterName, useS3Backup, s3BucketName,
+          staticParticipantLeaderEventsLogger);
     } else if (stateModelType.equals("LeaderFollower")) {
       stateModelFactory = new LeaderFollowerStateModelFactory(instanceName.split("_")[0],
-          port, zkConnectString, clusterName, useS3Backup, s3BucketName, leaderEventsLogger);
+          port, zkConnectString, clusterName, useS3Backup, s3BucketName,
+          staticParticipantLeaderEventsLogger);
     } else if (stateModelType.equals("Bootstrap")) {
       stateModelFactory = new BootstrapStateModelFactory(instanceName.split("_")[0],
           port, zkConnectString, clusterName);
     } else if (stateModelType.equals("MasterSlave;Task")) {
       stateModelType = "MasterSlave";
       stateModelFactory = new MasterSlaveStateModelFactory(instanceName.split("_")[0],
-          port, zkConnectString, clusterName, useS3Backup, s3BucketName, leaderEventsLogger);
+          port, zkConnectString, clusterName, useS3Backup, s3BucketName,
+          staticParticipantLeaderEventsLogger);
 
       taskFactoryRegistry
           .put("Backup", new BackupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
@@ -293,7 +346,8 @@ public class Participant {
     } else if (stateModelType.equals("LeaderFollower;Task")) {
       stateModelType = "LeaderFollower";
       stateModelFactory = new LeaderFollowerStateModelFactory(instanceName.split("_")[0],
-          port, zkConnectString, clusterName, useS3Backup, s3BucketName, leaderEventsLogger);
+          port, zkConnectString, clusterName, useS3Backup, s3BucketName,
+          staticParticipantLeaderEventsLogger);
 
       taskFactoryRegistry
           .put("Backup", new BackupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
@@ -324,19 +378,70 @@ public class Participant {
     }
 
     helixManager.connect();
+
     helixManager.getMessagingService().registerMessageHandlerFactory(
         Message.MessageType.STATE_TRANSITION.name(), stateMach);
 
+    /** TODO: grajpurohit
+     * As soon as the helixManager is connected, we should setup the participant's DOMAIN
+     * information here, and not outside this constructor.
+     *
+     * Next we should first give Spectator a chance to remove this participant from
+     * disabled instances so that next state transitions will quickly be picked up and will
+     * start receiving the traffic (if it applies)
+     *
+     * In order to do as above, we should first remove the "disabled" instanceTag from this
+     * instance, if it exists and ensure that the "disabled" tag has been removed.
+     *
+     * Next we should make sure that instance is enabled (e.g. if it was previously disabled)
+     * Until the instance is enabled, we should wait in loop and throw exception if we can't
+     * enable this instance. This will trigger all state transitions for the partition replicas
+     * with their states that would otherwise be assigned to this Participant.
+     *
+     * We do not need to wait here until all offline partitions of this participant moves to next
+     * state. However for the purpose of being sure that the participant is correctly registered,
+     * we should at least wait until at least one of the OFFLINE partitions moves to next up-ward
+     * state (SLAVE, MASTER, FOLLOWER, LEADER, ONLINE...).
+     */
+
+    /**
+     * This is again, as explained above, not the clean / gracious way to shutdown as explained
+     * above. We need to ensure a proper procedure to shutdown the participant is followed, and
+     * graciously handles shutdown. Simply disconnecting from helixManager is not graceful.
+     */
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
 
     if (runSpectator) {
       // Add callback to create rocksplicator shard config
+      ConfigGenerator configGenerator = new ConfigGenerator(clusterName, helixManager, postUrl, monitor,
+          new ExternalViewLeaderEventsLoggerImpl(staticSpectatorLeaderEventsLogger));
+
       HelixCustomCodeRunner codeRunner = new HelixCustomCodeRunner(helixManager, zkConnectString)
-          .invoke(new ConfigGenerator(clusterName, helixManager, postUrl, monitor))
+          .invoke(configGenerator)
           .on(HelixConstants.ChangeType.EXTERNAL_VIEW, HelixConstants.ChangeType.CONFIG)
           .usingLeaderStandbyModel("ConfigWatcher" + clusterName);
 
       codeRunner.start();
+
+      Runtime.getRuntime().addShutdownHook(new Thread() {
+        @Override
+        public void run() {
+          LOG.error("Stopping HelixCustomCodeRunner running spectator config generator");
+          codeRunner.stop();
+          try {
+            LOG.error("Stopping ConfigGenerator");
+            configGenerator.close();
+          } catch (IOException e) {
+            e.printStackTrace();
+          }
+          try {
+            LOG.error("Stopping Spectator LeaderEventsLogger");
+            staticSpectatorLeaderEventsLogger.close();
+          } catch (IOException e) {
+            e.printStackTrace();
+          }
+        }
+      });
     }
   }
 }
