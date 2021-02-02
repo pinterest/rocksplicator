@@ -70,7 +70,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
  The instance on which any partition of a given resource is hosted, is specified in following
  format.
- ${ip_address}:${thrift_service_port}:${az}:${pg}
+ ${ip_address}:${thrift_service_port}:${az}_${pg}
 
  The thrift service port is the port where the applications api endpoints are available
  for thrift rpc calls.
