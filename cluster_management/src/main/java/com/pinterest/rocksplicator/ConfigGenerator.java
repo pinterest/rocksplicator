@@ -243,8 +243,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
           LOG.error("Received notification: " + notificationContext.getChangeType());
           if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
             generateShardConfig();
-          } else if (notificationContext.getChangeType()
-              == HelixConstants.ChangeType.INSTANCE_CONFIG) {
+          } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.INSTANCE_CONFIG) {
             if (updateDisabledHosts()) {
               generateShardConfig();
             }
