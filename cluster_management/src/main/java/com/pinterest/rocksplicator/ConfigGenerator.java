@@ -212,7 +212,6 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     this.enableDumpToLocal = new File("/var/log/helixspectator").canWrite();
     this.synchronizedCallbackLock = new ReentrantLock();
     this.externalViewLeaderEventLogger = externalViewLeaderEventLogger;
-
   }
 
   private void logUncheckedException(Runnable r) {
@@ -244,8 +243,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
           LOG.error("Received notification: " + notificationContext.getChangeType());
           if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
             generateShardConfig();
-          } else if (notificationContext.getChangeType()
-              == HelixConstants.ChangeType.INSTANCE_CONFIG) {
+          } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.INSTANCE_CONFIG) {
             if (updateDisabledHosts()) {
               generateShardConfig();
             }
@@ -399,6 +397,19 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
       return;
     }
 
+    // Write the shard config to local
+    if (enableDumpToLocal) {
+      try {
+        FileWriter shard_config_writer = new FileWriter("/var/log/helixspectator/shard_config");
+        shard_config_writer.write(newContent);
+        shard_config_writer.close();
+        LOG.error("Successfully wrote the shard config to the local.");
+      } catch (IOException e) {
+        LOG.error("An error occurred when writing shard config to local");
+        e.printStackTrace();
+      }
+    }
+
     // Write the config to ZK
     LOG.error("Generating a new shard config...");
 
@@ -436,19 +447,6 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
       LOG.error("Processing ExternalViews for LeaderEventsLogger");
       externalViewLeaderEventLogger.process(
           externalViewsToProcess, disabledHosts, generationStartTimeMillis, shardPostingTimeMillis);
-    }
-
-    // Write the shard config to local
-    if (enableDumpToLocal) {
-      try {
-        FileWriter shard_config_writer = new FileWriter("/var/log/helixspectator/shard_config");
-        shard_config_writer.write(newContent);
-        shard_config_writer.close();
-        LOG.error("Successfully wrote the shard config to the local.");
-      } catch (IOException e) {
-        LOG.error("An error occurred when writing shard config to local");
-        e.printStackTrace();
-      }
     }
   }
 
