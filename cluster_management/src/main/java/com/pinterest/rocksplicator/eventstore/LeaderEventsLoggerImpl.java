@@ -45,14 +45,19 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
     this.maxEventsToKeep = maxEventsToKeep;
 
     Decoder<byte[], Set<String>> decoder = null;
-    try {
-      decoder = ConfigCodecs.getDecoder(resourcesEnabledConfigType);
-    } catch (UnsupportedEncodingException e) {
-      e.printStackTrace();
+    if (resourcesEnabledConfigType != null && !resourcesEnabledConfigType.isEmpty()) {
+      try {
+        decoder = ConfigCodecs.getDecoder(resourcesEnabledConfigType);
+      } catch (UnsupportedEncodingException e) {
+        e.printStackTrace();
+      }
     }
 
+    /**
+     * If there is not valid resourceConfigType available, there is no configStore.
+     */
     ConfigStore<Set<String>> localConfigStore = null;
-    if (decoder != null) {
+    if (decoder != null && resourcesEnabledConfigPath != null && !resourcesEnabledConfigPath.isEmpty()) {
       try {
         localConfigStore = new ConfigStore<Set<String>>(decoder, resourcesEnabledConfigPath);
       } catch (IOException e) {
@@ -61,26 +66,40 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
     }
     this.configStore = localConfigStore;
 
-    if (this.configStore != null) {
+    /**
+     * If there is no configStore or empty zkConnectString, there is no leaderEventHistoryStore
+     */
+    if (this.configStore != null && zkConnectString != null && !zkConnectString.isEmpty()) {
       this.leaderEventHistoryStore = new LeaderEventHistoryStore(
           zkConnectString, clusterName, maxEventsToKeep);
     } else {
       this.leaderEventHistoryStore = null;
     }
 
+    /**
+     * If there is no leaderEventHistoryStore, then the logger implementation is disabled.
+     */
     this.isEnabled = (this.leaderEventHistoryStore != null);
   }
 
-  public boolean isEnabled() {
+  @Override
+  public boolean isLoggingEnabled() {
     return isEnabled;
   }
 
+  @Override
+  public boolean isLoggingEnabledForResource(final String resourceName) {
+    return configStore.get().contains(resourceName);
+  }
 
-  public LeaderEventsCollector newEventsCollector(String resourceName, String partitionName) {
-    if (isEnabled() && configStore.get().contains(resourceName)) {
+  @Override
+  public LeaderEventsCollector newEventsCollector(
+      final String resourceName,
+      final String partitionName) {
+    if (isLoggingEnabled() && isLoggingEnabledForResource(resourceName)) {
       return new LeaderEventsCollectorImpl(resourceName, partitionName);
     } else {
-      if (isEnabled()) {
+      if (isLoggingEnabled()) {
         return new ResourceDisabledLeaderEventsCollector(resourceName, partitionName);
       } else {
         return new LoggingDisabledLeaderEventsCollector();
@@ -97,6 +116,12 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
     @Override
     public LeaderEventsCollector addEvent(LeaderEventType eventType, String leaderNode) {
       // Ignore
+      return this;
+    }
+
+    @Override
+    public LeaderEventsCollector addEvent(LeaderEventType eventType, String leaderNode,
+                                          long eventTimeMillis) {
       return this;
     }
 
@@ -122,6 +147,13 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
     }
 
     @Override
+    public LeaderEventsCollector addEvent(LeaderEventType eventType, String leaderNode,
+                                          long eventTimeMillis) {
+      LOGGER.info(String.format("Ignoring disabled Resource: %s Partition:%s LeaderEventType: %s", resourceName, partitionName, eventType));
+      return this;
+    }
+
+    @Override
     public void commit() {
       // Ignore
     }
@@ -141,14 +173,22 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
       this.committed = new AtomicBoolean(false);
     }
 
+    @Override
     public LeaderEventsCollector addEvent(LeaderEventType eventType, String leaderNode) {
+      return addEvent(eventType, leaderNode, System.currentTimeMillis());
+    }
+
+    @Override
+    public LeaderEventsCollector addEvent(LeaderEventType eventType, String leaderNode,
+                                          long eventTimeMillis) {
       Preconditions.checkNotNull(eventType);
       if (LeaderEventTypes.participantEventTypes.contains(eventType)) {
         Preconditions.checkArgument(leaderNode == null);
       }
+
       if (!committed.getAndSet(true)) {
         LeaderEvent leaderEvent = new LeaderEvent();
-        leaderEvent.setEvent_timestamp_ms(System.currentTimeMillis())
+        leaderEvent.setEvent_timestamp_ms(eventTimeMillis)
             .setEvent_type(eventType)
             .setOriginating_node(instanceId);
         if (leaderNode != null) {
