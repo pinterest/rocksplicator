@@ -35,36 +35,27 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
   private final ClientShardMapLeaderEventLogger clientLeaderEventLogger;
   private final String zkEventHistoryStr;
   private final CuratorFramework zkClient;
-  private final ExecutorService service;
   private final Semaphore ipMutexGuard = new Semaphore(1);
-  private InterProcessMutex interProcessPartitionMutex;
+  private InterProcessMutex ipClusterMutex;
+  private ExecutorService service;
 
   public ClientShardMapLeaderEventLoggerDriver(
       final String clusterName,
       final String shardMapPath,
       final ClientShardMapLeaderEventLogger clientLeaderEventLogger,
-      final String zkEventHistoryStr) {
+      final String zkEventHistoryStr) throws IOException {
     this.clusterName = clusterName;
     this.shardMapPath = shardMapPath;
     this.clientLeaderEventLogger = clientLeaderEventLogger;
     this.zkEventHistoryStr = zkEventHistoryStr;
 
-    this.service = Executors.newSingleThreadExecutor(r -> {
-      Thread thread = new Thread();
-      // Ensure that this thread is a daemon thread, since
-      // this thread may potentially be blocked on obtaining
-      // a global lock.
-      thread.setDaemon(false);
-      System.out.println(thread.getName() + "from : " + Thread.currentThread().getName());
-      return thread;
-    });
 
     /**
      * This will always start in a stopped state.
      * We need to manually start the notification.
      */
     ConfigNotifier<JSONObject> localNotifier = null;
-    if (shardMapPath != null && !shardMapPath.isEmpty()) {
+    if (this.shardMapPath != null && !this.shardMapPath.isEmpty()) {
       localNotifier = new ConfigNotifier<>(
           new SimpleJsonObjectDecoder(),
           shardMapPath,
@@ -76,76 +67,73 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
     }
     this.notifier = localNotifier;
 
-    this.zkClient = CuratorFrameworkFactory
-        .newClient(zkEventHistoryStr, new ExponentialBackoffRetry(1000, 3));
+    this.service = Executors.newSingleThreadExecutor();
 
-    this.zkClient.getConnectionStateListenable().addListener(new ConnectionStateListener() {
-      @Override
-      public void stateChanged(CuratorFramework client, ConnectionState newState) {
-        switch (newState) {
-          case LOST:
-          case SUSPENDED:
-          case READ_ONLY:
-            System.out.println("Zk Disconnected : " + newState  + "from : " + Thread.currentThread().getName());
-            ipMutexGuard.acquireUninterruptibly();
-            try {
-              if (interProcessPartitionMutex != null && interProcessPartitionMutex
-                  .isAcquiredInThisProcess()) {
-                try {
-                  interProcessPartitionMutex.release();
-                } catch (Exception e) {
-                  e.printStackTrace();
-                } finally {
-                  interProcessPartitionMutex = null;
+    if (this.notifier == null) {
+      this.zkClient = null;
+    } else {
+      this.zkClient = CuratorFrameworkFactory
+          .newClient(zkEventHistoryStr, new ExponentialBackoffRetry(1000, 3));
+
+      this.zkClient.getConnectionStateListenable().addListener(new ConnectionStateListener() {
+        @Override
+        public void stateChanged(CuratorFramework client, ConnectionState newState) {
+          switch (newState) {
+            case LOST:
+            case SUSPENDED:
+            case READ_ONLY:
+              ipMutexGuard.acquireUninterruptibly();
+              try {
+                if (ipClusterMutex != null && ipClusterMutex
+                    .isAcquiredInThisProcess()) {
+                  try {
+                    ipClusterMutex.release();
+                  } catch (Exception e) {
+                    e.printStackTrace();
+                  } finally {
+                    ipClusterMutex = null;
+                  }
                 }
+              } finally {
+                ipMutexGuard.release();
               }
-            } finally {
-              ipMutexGuard.release();
-            }
-            System.out.println("Stopping notification"  + "from : " + Thread.currentThread().getName());
-            stopNotification();
-            break;
-          case CONNECTED:
-          case RECONNECTED:
-            System.out.println("Zk Connected : " + newState  + "from : " + Thread.currentThread().getName());
-            ipMutexGuard.acquireUninterruptibly();
-            try {
-              if (interProcessPartitionMutex != null && interProcessPartitionMutex
-                  .isAcquiredInThisProcess()) {
-                try {
-                  interProcessPartitionMutex.release();
-                } catch (Exception e) {
-                  e.printStackTrace();
-                } finally {
-                  interProcessPartitionMutex = null;
+              stopNotification();
+              break;
+            case CONNECTED:
+            case RECONNECTED:
+              ipMutexGuard.acquireUninterruptibly();
+              try {
+                if (ipClusterMutex != null && ipClusterMutex
+                    .isAcquiredInThisProcess()) {
+                  try {
+                    ipClusterMutex.release();
+                  } catch (Exception e) {
+                    e.printStackTrace();
+                  } finally {
+                    ipClusterMutex = null;
+                  }
                 }
+                ipClusterMutex =
+                    new InterProcessMutex(zkClient,
+                        getLeaderHandoffClientClusterLockPath(clusterName));
+              } finally {
+                ipMutexGuard.release();
               }
-              interProcessPartitionMutex =
-                  new InterProcessMutex(zkClient,
-                      getLeaderHandoffClientClusterLockPath(clusterName));
-            } finally {
-              ipMutexGuard.release();
-            }
-            System.out.println("Starting notification "  + "from : " + Thread.currentThread().getName());
-            startNotification();
-            System.out.println("Finished notification "  + "from : " + Thread.currentThread().getName());
-            notificationRunner();
-            break;
-          default:
+              startNotification();
+              break;
+            default:
+          }
         }
+      });
+
+      this.zkClient.start();
+
+      try {
+        zkClient.blockUntilConnected(60, TimeUnit.SECONDS);
+      } catch (InterruptedException e) {
+        LOGGER.error("Cannot connect to zk in 60 seconds");
+        throw new RuntimeException(e);
       }
-    });
-
-    System.out.println("Zk Starting :"  + "from : " + Thread.currentThread().getName());
-    this.zkClient.start();
-
-    try {
-      zkClient.blockUntilConnected(60, TimeUnit.SECONDS);
-      System.out.println("Zk unblocked from connected :"  + "from : " + Thread.currentThread().getName());
-    } catch (InterruptedException e) {
-      e.printStackTrace();
-      System.out.println("Cannot connect to zk in 60 seconds"  + "from : " + Thread.currentThread().getName());
-      throw new RuntimeException(e);
     }
   }
 
@@ -153,31 +141,39 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
     return "/leadereventhistory/client-exclusion-lock/" + clusterName;
   }
 
-  private void startNotification() {
-    System.out.println("Called startNotification"  + "from : " + Thread.currentThread().getName());
-    if (this.notifier == null || this.notifier.isStarted() || this.notifier.isClosed()) {
-      LOGGER.error("Either the notification thread already started "
-          + "or is closed and cannot be restarted anymore.");
+  private synchronized void startNotification() {
+    if (this.notifier == null) {
       return;
+    } else {
+      synchronized (notifier) {
+        if (this.notifier.isStarted() || this.notifier.isClosed()) {
+          LOGGER.error("Either the notification thread already started "
+              + "or is closed and cannot be restarted anymore.");
+          return;
+        }
+      }
     }
-    System.out.println("Submitting notificationRunner to be run"  + "from : " + Thread.currentThread().getName());
 
     try {
       service.submit(() -> notificationRunner());
-      System.out.println("Submitted task"  + "from : " + Thread.currentThread().getName());
     } catch (Throwable throwable) {
       System.out.println(throwable);
     }
   }
 
-  private void stopNotification() {
-    System.out.println("Called stopNotification"  + "from : " + Thread.currentThread().getName());
-    if (this.notifier == null || this.notifier.isClosed() || !this.notifier.isStarted()) {
-      // Cannot stop notification, as either notifier is already closed or not started yet
+  private synchronized void stopNotification() {
+    if (this.notifier == null) {
       return;
     }
-    System.out.println("Calling stop on notifier"  + "from : " + Thread.currentThread().getName());
-    this.notifier.stop();
+
+    synchronized (notifier) {
+      if (this.notifier.isClosed() || !this.notifier.isStarted()) {
+        // Cannot stop notification, as either notifier is already closed or not started yet
+        return;
+      }
+      this.notifier.stop();
+      this.notifier.notifyAll();
+    }
   }
 
   @Override
@@ -185,25 +181,41 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
     /**
      * Make sure no more tasks can be submited.
      */
-    System.out.println("Called close "  + "from : " + Thread.currentThread().getName());
-    service.shutdown();
-
-    stopNotification();
-
-    if (this.notifier != null && !this.notifier.isClosed()) {
-      try {
-        this.notifier.close();
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
-    }
 
     /**
-     * Next close the zkClient.
+     * No more events from zk can startNotification. This will also
+     * release any previously held lock by any previously submitted task.
+     * However some thread may be waiting for notify.
      */
     this.zkClient.close();
 
-    notifier.notifyAll();
+    /**
+     * Stop submission of any more tasks.
+     */
+    service.shutdown();
+
+    /**
+     * Stop processing all the notification going foward. After this any
+     * previously submitted tasks will not execute and simply return without
+     * performing any task. Any previously submitted and running task that did
+     * obtain a zk lock should be waiting to be notified and hence this will
+     * release those threads as well.
+     */
+    stopNotification();
+
+    /**
+     * From now on, any execution of remaining tasks will be no-op.
+     */
+    if (notifier != null) {
+      synchronized (notifier) {
+        if (!this.notifier.isClosed() && this.notifier.isStarted()) {
+          // Cannot stop notification, as either notifier is already closed or not started yet;
+          this.notifier.close();
+          this.notifier.notifyAll();
+        }
+      }
+    }
+
     /**
      * Release the service.
      */
@@ -211,13 +223,12 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
       try {
         service.awaitTermination(100, TimeUnit.MILLISECONDS);
       } catch (InterruptedException e) {
-        e.printStackTrace();
+        LOGGER.error("Interrupted");
       }
     }
   }
 
   private void process(ConfigNotifier.Context<JSONObject> shardMapWithContext) {
-    System.out.println("New Json: " + shardMapWithContext.getItem().toJSONString()  + "from : " + Thread.currentThread().getName());
     JSONObject jsonShardMap = shardMapWithContext.getItem();
     ShardMap shardMap = ShardMaps.fromJson(jsonShardMap);
     clientLeaderEventLogger
@@ -225,24 +236,30 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
   }
 
   private void notificationRunner() {
-    System.out.println("starting notificationRunner");
-    System.out.println("Obtaininig lock");
-    System.out.flush();
-    try (Locker locker = new Locker(interProcessPartitionMutex)) {
-      System.out.println("Obtained lock");
-      System.out.println("Starting the notification process");
-      if (!notifier.isClosed() && !notifier.isStarted()) {
-        notifier.start();
-        /**
-         * We must wait here until someone releases us.
-         * There are multiple places where that can happen.
-         * e.g.. if zk connection is lost, we must retry
-         */
-        // Wait in this thread until a condition is not satisfied.
-        System.out.println("Going to wait for someone to tell me to break out of this thread");
+    if (notifier == null) {
+      return;
+    }
+
+    /**
+     * A process is blocked obtaining the lock, until it owns a globally distributed lock.
+     * This is what ensures that there is only one leader performing notifications.
+     */
+    try (Locker locker = new Locker(ipClusterMutex)) {
+      synchronized (notifier) {
+        if (!notifier.isClosed() && !notifier.isStarted()) {
+          notifier.start();
+          /**
+           * We must wait here until someone releases us.
+           * There are multiple places where that can happen.
+           * e.g.. if zk connection is lost, we must retry
+           */
+          // Wait in this thread until a condition is not satisfied.
+          // This will also release the monitor on notifier.
+          notifier.wait();
+        }
       }
     } catch (Exception e) {
-      LOGGER.error("Failed to release the interProcessPartitionMutex for cluster " + clusterName,
+      LOGGER.error("Failed to obtain the ipClusterMutex for cluster " + clusterName,
           e);
     }
   }

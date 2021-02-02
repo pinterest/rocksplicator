@@ -4,14 +4,21 @@ import com.pinterest.rocksplicator.codecs.CodecException;
 import com.pinterest.rocksplicator.codecs.Decoder;
 import com.pinterest.rocksplicator.utils.AutoCloseableLock;
 
+import com.google.common.annotations.VisibleForTesting;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 public class ConfigNotifier<R> implements Closeable {
+  private static final Logger LOGGER = LoggerFactory.getLogger(ConfigNotifier.class);
 
   private final Decoder<byte[], R> decoder;
   private final Lock exclusionLock = new ReentrantLock();
@@ -21,17 +28,33 @@ public class ConfigNotifier<R> implements Closeable {
   private final FileWatcher<byte[]> fileWatcher;
   private final String filePath;
 
-  public ConfigNotifier(Decoder<byte[], R> decoder, String filePath,
-                        Function<Context<R>, Void> notifier) {
+  @VisibleForTesting
+  ConfigNotifier(Decoder<byte[], R> decoder, String filePath,
+                        Function<Context<R>, Void> notifier) throws IOException {
     this(decoder, filePath, FileWatchers.getPollingFileWatcher(), notifier);
   }
 
   public ConfigNotifier(Decoder<byte[], R> decoder, String filePath,
-                        FileWatcher<byte[]> fileWatcher, Function<Context<R>, Void> notifier) {
+                        FileWatcher<byte[]> fileWatcher, Function<Context<R>, Void> notifier)
+      throws IOException {
     this.filePath = filePath;
     this.fileWatcher = fileWatcher;
     this.decoder = decoder;
     this.callback = new WatchedFileNotificationCallback(notifier);
+
+    WatchedFileNotificationCallback fakeCallback = new WatchedFileNotificationCallback(
+        new Function<Context<R>, Void>() {
+          @Override
+          public Void apply(Context<R> rContext) {
+            LOGGER.warn("Successfully");
+            return null;
+          }
+        });
+
+    // Add the watch to ensure the file exists.
+    this.fileWatcher.addWatch(filePath, fakeCallback);
+    // Immediately release the watch.
+    this.fileWatcher.removeWatch(filePath, fakeCallback);
   }
 
   public synchronized boolean isStarted() {
@@ -67,7 +90,7 @@ public class ConfigNotifier<R> implements Closeable {
   }
 
   @Override
-  public void close() throws IOException {
+  public synchronized void close() throws IOException {
     try (AutoCloseableLock autoLock = new AutoCloseableLock(exclusionLock)) {
       isClosed.getAndSet(true);
     }

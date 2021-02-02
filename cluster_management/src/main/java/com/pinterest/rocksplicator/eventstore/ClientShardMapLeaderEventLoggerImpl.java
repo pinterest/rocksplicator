@@ -160,7 +160,7 @@ public class ClientShardMapLeaderEventLoggerImpl implements ClientShardMapLeader
                 (previousLeader == null || previousLeader.getLeaderInstanceId() == null)
                 ? null : previousLeader.getLeaderInstanceId();
             LOGGER.error(String
-                .format("LEADER_UP (Published) resource:%s, partition=%s, leader:%s",
+                .format("LEADER_DOWN (Published) resource:%s, partition=%s, leader:%s",
                     resourceName, partition.getPartitionName(), leaderNode));
             resourceLeaderCache
                 .put(partition.getPartitionName(), new Leader(leaderNode, LeaderState.LEADER_DOWN));

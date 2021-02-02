@@ -30,7 +30,7 @@ public class ClientShardMapLeaderEventLoggerDriverTest {
   private static final String CLUSTER_NAME = "myCluster";
   private static final String RESOURCE_NAME = "myResource";
   private static final String PARTITION_NAME = "myResource_0";
-  private static final String INSTANCE_ID = "myInstanceId_0";
+  private static final String INSTANCE_ID = "10.0.0.2_9090";
 
   private TestingServer zkTestServer;
   private CuratorFramework zkClient;
@@ -72,9 +72,10 @@ public class ClientShardMapLeaderEventLoggerDriverTest {
     writer = new OutputStreamWriter(os);
 
     JSONObject jsonObject = new JSONObject();
-    jsonObject.put("num_shards", 1);
+    jsonObject.put("num_shards", 2);
     JSONArray array = new JSONArray();
     array.add("00000:M");
+    array.add("00001:S");
     jsonObject.put("10.1.1.1:9090:az_pg", array);
     JSONObject shardMapObj = new JSONObject();
     shardMapObj.put(RESOURCE_NAME, jsonObject);
@@ -84,7 +85,6 @@ public class ClientShardMapLeaderEventLoggerDriverTest {
     /**
      * Create shardMap.
      */
-
     eventsLogger =
         new LeaderEventsLoggerImpl(INSTANCE_ID, zkTestServer.getConnectString(), CLUSTER_NAME,
             resourceConfigPath.getAbsolutePath(), "JSON_ARRAY",
@@ -101,7 +101,7 @@ public class ClientShardMapLeaderEventLoggerDriverTest {
     clientDriver =
         new ClientShardMapLeaderEventLoggerDriver(CLUSTER_NAME, shardMapPath.getAbsolutePath(),
             clientLogger, zkTestServer.getConnectString());
-    Thread.currentThread().join();
+    Thread.currentThread().sleep(1000);
     clientDriver.close();
   }
 
