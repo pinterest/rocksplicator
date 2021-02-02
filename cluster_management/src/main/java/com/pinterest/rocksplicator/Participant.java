@@ -18,8 +18,9 @@
 
 package com.pinterest.rocksplicator;
 
-import com.pinterest.rocksplicator.eventstore.ClientLeaderEventLogger;
-import com.pinterest.rocksplicator.eventstore.ClientLeaderEventLoggerImpl;
+import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLogger;
+import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerImpl;
+import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerDriver;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
@@ -84,7 +85,9 @@ public class Participant {
   private static HelixManager helixManager = null;
   private static LeaderEventsLogger staticParticipantLeaderEventsLogger = null;
   private static LeaderEventsLogger staticSpectatorLeaderEventsLogger = null;
-  private static ClientLeaderEventLogger staticClientLeaderEventsLogger = null;
+  private static LeaderEventsLogger staticClientLeaderEventsLogger = null;
+  private static ClientShardMapLeaderEventLogger staticClientShardMapLeaderEventLogger = null;
+  private static ClientShardMapLeaderEventLoggerDriver staticClientShardMapLeaderEventLoggerDriver = null;
   private static StateModelFactory<StateModel> stateModelFactory;
   private final RocksplicatorMonitor monitor;
 
@@ -239,15 +242,23 @@ public class Participant {
      * Note that the last parameter is empty, since we don't dictate
      * maxEventsToKeep from participants.
      */
-    staticParticipantLeaderEventsLogger =
-        new LeaderEventsLoggerImpl(instanceName,
-            zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType, Optional.empty());
+    staticParticipantLeaderEventsLogger = new LeaderEventsLoggerImpl(instanceName,
+        zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType, Optional.empty());
 
     if (runSpectator) {
-      staticSpectatorLeaderEventsLogger =
-          new LeaderEventsLoggerImpl(instanceName,
-              zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType,
-              Optional.of(128));
+      staticSpectatorLeaderEventsLogger = new LeaderEventsLoggerImpl(instanceName,
+          zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType, Optional.of(128));
+
+      if (shardMapPath != null || !shardMapPath.isEmpty()) {
+        staticClientLeaderEventsLogger = new LeaderEventsLoggerImpl(instanceName,
+            zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType, Optional.empty());
+
+        staticClientShardMapLeaderEventLogger =
+            new ClientShardMapLeaderEventLoggerImpl(staticClientLeaderEventsLogger);
+
+        staticClientShardMapLeaderEventLoggerDriver = new ClientShardMapLeaderEventLoggerDriver(
+            clusterName, shardMapPath, staticClientShardMapLeaderEventLogger, zkEventHistoryStr);
+      }
     }
 
     LOG.error("Starting participant with ZK:" + zkConnectString);
@@ -450,11 +461,29 @@ public class Participant {
           } catch (IOException e) {
             e.printStackTrace();
           }
-          try {
-            LOG.error("Stopping Spectator LeaderEventsLogger");
-            staticSpectatorLeaderEventsLogger.close();
-          } catch (IOException e) {
-            e.printStackTrace();
+          if (staticSpectatorLeaderEventsLogger != null) {
+            try {
+              LOG.error("Stopping Spectator LeaderEventsLogger");
+              staticSpectatorLeaderEventsLogger.close();
+            } catch (IOException e) {
+              e.printStackTrace();
+            }
+          }
+          if (staticClientShardMapLeaderEventLoggerDriver == null) {
+            try {
+              LOG.error("Stopping Spectator Client LeaderEventsLogger");
+              staticClientShardMapLeaderEventLoggerDriver.close();
+            } catch (IOException e) {
+              e.printStackTrace();
+            }
+          }
+          if (staticClientLeaderEventsLogger != null) {
+            try {
+              LOG.error("Stopping Spectator Client LeaderEventsLogger");
+              staticClientLeaderEventsLogger.close();
+            } catch (IOException e) {
+              e.printStackTrace();
+            }
           }
         }
       });

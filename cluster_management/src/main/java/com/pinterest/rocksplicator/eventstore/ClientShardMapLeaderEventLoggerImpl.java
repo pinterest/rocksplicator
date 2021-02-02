@@ -23,16 +23,16 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-public class ClientLeaderEventLoggerImpl implements ClientLeaderEventLogger {
+public class ClientShardMapLeaderEventLoggerImpl implements ClientShardMapLeaderEventLogger {
 
   private static final Logger LOGGER =
-      LoggerFactory.getLogger(ClientLeaderEventLoggerImpl.class);
+      LoggerFactory.getLogger(ClientShardMapLeaderEventLoggerImpl.class);
   private static final int NUM_THREADS = 4;
   private final LeaderEventsLogger leaderEventsLogger;
   private final List<ExecutorService> executorServices;
   private final LoadingCache<String, Cache<String, Leader>> leaderStateCache;
 
-  public ClientLeaderEventLoggerImpl(
+  public ClientShardMapLeaderEventLoggerImpl(
       final LeaderEventsLogger leaderEventsLogger) {
 
     this.leaderEventsLogger = leaderEventsLogger;

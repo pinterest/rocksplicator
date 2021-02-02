@@ -34,36 +34,32 @@ public class ConfigNotifier<R> implements Closeable {
     this.callback = new WatchedFileNotificationCallback(notifier);
   }
 
-  public boolean isStarted() {
+  public synchronized boolean isStarted() {
     try (AutoCloseableLock autoLock = new AutoCloseableLock(exclusionLock)) {
       return this.isStarted.get();
     }
   }
 
-  public boolean isClosed() {
+  public synchronized boolean isClosed() {
     try (AutoCloseableLock autoLock = new AutoCloseableLock(exclusionLock)) {
       return this.isClosed.get();
     }
   }
 
-  public void start() throws IOException {
+  public synchronized void start() throws IOException {
     try (AutoCloseableLock autoLock = new AutoCloseableLock(exclusionLock)) {
       if (isClosed()) {
         throw new IOException("Cannot start once closed");
-      } else if (isStarted()) {
-        throw new IOException("Cannot start more then once without stopping in between");
+      } else if (!isStarted()) {
+        this.fileWatcher.addWatch(filePath, callback);
+        this.isStarted.set(true);
       }
-      this.fileWatcher.addWatch(filePath, callback);
-      this.isStarted.set(true);
     }
   }
 
-  public void stop() {
+  public synchronized void stop() {
     try (AutoCloseableLock autoLock = new AutoCloseableLock(exclusionLock)) {
-      if (isClosed()) {
-        // Do Nothing
-      }
-      if (isStarted()) {
+      if (!isClosed() && isStarted()) {
         this.fileWatcher.removeWatch(filePath, callback);
         this.isStarted.set(false);
       }
