@@ -239,15 +239,14 @@ public class Participant {
         stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator,
         staticParticipantLeaderEventsLogger, staticSpectatorLeaderEventsLogger);
 
-    /**
-     * This should probably be done right after connecting to the zk.
-     * Since there is a race condition here. Ideal way would be to
-     * first be able to register a participant and then register the
-     * stateModelFactory with the stateMachine of the helixManager.
-     * However currently, we connect to helixManager after the stateModelFactory.
-     * In this case the state transitions can start, even before we had a change
-     * to setup the participant's domain information, which is critical to helix
-     * when assigning partitions for resources which needs domain-aware assignment.
+    /** TODO:grajpurohit
+     * This should probably be done right after connecting to the zk with HelixManager.
+     * Ideal way would be to first be able to register a participant and then register the
+     * stateModelFactory with the stateMachine of the helixManager. There is a race
+     * condition here, since we connect to helixManager right after registering the
+     * stateModelFactory. In this case the state transitions can start, even before
+     * we had a chance to setup the participant's domain information, which is critical
+     * to helix when assigning partitions for resources which needs domain-aware assignment.
      */
     HelixAdmin helixAdmin = new ZKHelixAdmin(zkConnectString);
     HelixConfigScope scope =
@@ -272,20 +271,20 @@ public class Participant {
      * TODO: grajpurohit: Improve the logic to cleanly shutdown.
      *
      * This is probably not the right way. When a participant is going down,
-     * we need a change to cleanly offline the currently top-state and second
-     * top-state resources (e.g.. all partitions state shoul be brought to offline
+     * we need a chance to cleanly offline the currently top-state and second
+     * top-state resources (e.g.. all partitions state should be brought to offline
      * state) before going down. That will be a graceful shutdown. However, when
      * helixManager disconnects, it releases all message handlers / listeners there after
      * there is no way for resources to be brought down through state transition.
      *
      * Ideal way will be whereby
      *
-     * 1. We setup instanceTag "disabled" so that spectator has a first change to be notified that
+     * 1. We setup instanceTag "disabled" so that spectator has a first chance to be notified that
      * this participant is going down without bringing down the hosted partition replicas.
      *
      * 2. Wait to ensure that the instanceTag has been added to the participant instance.
      *
-     * 3. We should then disable this instance (currently this is the only way we figured to out
+     * 3. We should then disable this instance (currently this is the only way we figured out to
      * force controller to issue state transitions to existing current states of all partitions
      * hosted by this participant) to move to OFFLINE state.
      *
@@ -387,15 +386,15 @@ public class Participant {
      * As soon as the helixManager is connected, we should setup the participant's DOMAIN
      * information here, and not outside this constructor.
      *
-     * Next we should first give Spectator a change to remove this participant from
+     * Next we should first give Spectator a chance to remove this participant from
      * disabled instances so that next state transitions will quickly be picked up and will
      * start receiving the traffic (if it applies)
      *
-     * In order to do as above, we should remove the "disabled" instanceTag from this instance,
-     * if it exists and ensure that the tag has been removed.
+     * In order to do as above, we should first remove the "disabled" instanceTag from this
+     * instance, if it exists and ensure that the "disabled" tag has been removed.
      *
      * Next we should make sure that instance is enabled (e.g. if it was previously disabled)
-     * Until the instance is enabled, we should wait in loop and throw exception if we cann't
+     * Until the instance is enabled, we should wait in loop and throw exception if we can't
      * enable this instance. This will trigger all state transitions for the partition replicas
      * with their states that would otherwise be assigned to this Participant.
      *
@@ -407,8 +406,8 @@ public class Participant {
 
     /**
      * This is again, as explained above, not the clean / gracious way to shutdown as explained
-     * above. We need to ensure a proper procedure to shutdown the participant is followed, and is
-     * graciously handles shutdown. Simply disconnecting from helixManager
+     * above. We need to ensure a proper procedure to shutdown the participant is followed, and
+     * graciously handles shutdown. Simply disconnecting from helixManager is not graceful.
      */
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
 
