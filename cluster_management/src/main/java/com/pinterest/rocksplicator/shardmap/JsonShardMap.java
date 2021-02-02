@@ -87,9 +87,9 @@ class JsonShardMap implements ShardMap {
           ReplicaState replicaState = ReplicaState.ONLINE;
           if (parts.length == 2) {
             String state = parts[1];
-            if (":M".equalsIgnoreCase(state)) {
+            if ("M".equalsIgnoreCase(state)) {
               replicaState = ReplicaState.LEADER;
-            } else if (":S".equalsIgnoreCase(state)) {
+            } else if ("S".equalsIgnoreCase(state)) {
               replicaState = ReplicaState.FOLLOWER;
             }
           }
