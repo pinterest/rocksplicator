@@ -177,6 +177,8 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
 
   @Override
   public synchronized void close() throws IOException {
+    LOGGER.error("Closing ClientShardMapLeaderEventLoggerDriver");
+
     /**
      * Make sure no more tasks can be submited.
      */
@@ -187,18 +189,20 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
      * However some thread may be waiting for notify.
      */
     try {
+      LOGGER.error("Closing zkClient for ClientShardMapLeaderEventLoggerDriver");
       this.zkClient.close();
-    } catch (Exception io) {
-      LOGGER.error("Cannot close the zkClient");
+    } catch (Throwable throwable) {
+      LOGGER.error("Cannot close the zkClient", throwable);
     }
 
     /**
      * Stop submission of any more tasks.
      */
     try {
+      LOGGER.error("Shutting down executor service for ClientShardMapLeaderEventLoggerDriver");
       service.shutdown();
-    } catch (Exception e) {
-      LOGGER.error("Cannot shutdown executor service");
+    } catch (Throwable throwable) {
+      LOGGER.error("Cannot shutdown executor service", throwable);
     }
 
     /**
@@ -209,9 +213,10 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
      * release those threads as well.
      */
     try {
+      LOGGER.error("stopping notifications for shardMap for ClientShardMapLeaderEventLoggerDriver");
       stopNotification();
-    } catch (Exception e) {
-      LOGGER.error("Could not stop notifications");
+    } catch (Throwable throwable) {
+      LOGGER.error("Could not stop notifications", throwable);
     }
 
     /**
@@ -220,27 +225,33 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
     try {
       if (notifier != null) {
         synchronized (notifier) {
-          if (!this.notifier.isClosed() && this.notifier.isStarted()) {
+          if (!this.notifier.isClosed()) {
             // Cannot stop notification, as either notifier is already closed or not started yet;
+            if (this.notifier.isStarted()) {
+              this.notifier.start();
+            }
             this.notifier.close();
             this.notifier.notifyAll();
           }
         }
       }
-    } catch (Exception io) {
-      LOGGER.error("Cannot close the notifier");
+    } catch (Throwable throwable) {
+      LOGGER.error("Cannot close the notifier", throwable);
     }
 
     /**
      * Release the service.
      */
+    LOGGER.error("Wait for executor service to terminate for ClientShardMapLeaderEventLoggerDriver");
     while (!service.isTerminated()) {
       try {
         service.awaitTermination(100, TimeUnit.MILLISECONDS);
       } catch (InterruptedException e) {
-        LOGGER.error("Interrupted");
+        LOGGER.error("Interrupted", e);
       }
     }
+    LOGGER.error("Terminated executor service for ClientShardMapLeaderEventLoggerDriver");
+
 
     /**
      * Finally cleanup the clientShardMapEventsLogger.
@@ -279,8 +290,7 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
         }
       }
     } catch (Exception e) {
-      LOGGER.error("Failed to obtain the ipClusterMutex for cluster " + clusterName,
-          e);
+      LOGGER.error("Failed to obtain the ipClusterMutex for cluster " + clusterName, e);
     }
   }
 }

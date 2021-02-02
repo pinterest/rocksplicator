@@ -263,8 +263,7 @@ public class Participant {
 
     LOG.error("Starting participant with ZK:" + zkConnectString);
     Participant participant = new Participant(zkConnectString, clusterName, instanceName,
-        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator,
-        staticParticipantLeaderEventsLogger, staticSpectatorLeaderEventsLogger);
+        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator);
 
     /** TODO:grajpurohit
      * This should probably be done right after connecting to the zk with HelixManager.
@@ -333,9 +332,7 @@ public class Participant {
 
   private Participant(String zkConnectString, String clusterName, String instanceName,
                       String stateModelType, int port, String postUrl, boolean useS3Backup,
-                      String s3BucketName, boolean runSpectator,
-                      LeaderEventsLogger staticParticipantLeaderEventsLogger,
-                      LeaderEventsLogger staticSpectatorLeaderEventsLogger)
+                      String s3BucketName, boolean runSpectator)
       throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
@@ -467,6 +464,8 @@ public class Participant {
               staticSpectatorLeaderEventsLogger.close();
             } catch (Throwable throwable) {
               throwable.printStackTrace();
+            } finally {
+              staticSpectatorLeaderEventsLogger = null;
             }
           }
           if (staticClientShardMapLeaderEventLoggerDriver != null) {
@@ -475,6 +474,8 @@ public class Participant {
               staticClientShardMapLeaderEventLoggerDriver.close();
             } catch (Throwable throwable) {
               throwable.printStackTrace();
+            } finally {
+              staticClientShardMapLeaderEventLoggerDriver = null;
             }
           }
           if (staticClientLeaderEventsLogger != null) {
@@ -483,6 +484,7 @@ public class Participant {
               staticClientLeaderEventsLogger.close();
             } catch (Throwable throwable) {
               throwable.printStackTrace();
+              staticClientLeaderEventsLogger = null;
             }
           }
         }
