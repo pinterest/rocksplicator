@@ -147,7 +147,7 @@ public class LeaderEventHistoryStore implements Closeable {
                         LeaderEventsHistory::new,
                         MergeOperators
                             .createBatchMergeOperator(resourceName, partitionName,
-                                maxEventsToKeep));
+                                LeaderEventHistoryStore.this.maxEventsToKeep));
                   }
                 });
           }
@@ -210,11 +210,20 @@ public class LeaderEventHistoryStore implements Closeable {
     service.submit(() -> batchAppend(resourceName, partitionName, events));
   }
 
+  @VisibleForTesting
+  void batchAppend(String resource, String partition, List<LeaderEvent> leaderEvents) {
+    try {
+      batchUnProtectedAppend(resource, partition, leaderEvents);
+    } catch (Throwable e) {
+      LOGGER.error("Error processing events", e);
+    }
+  }
+
   /**
    * Blocks the calling thread. Hence not directly available to the client.
    */
   @VisibleForTesting
-  void batchAppend(String resource, String partition, List<LeaderEvent> leaderEvents) {
+  void batchUnProtectedAppend(String resource, String partition, List<LeaderEvent> leaderEvents) {
     Preconditions.checkNotNull(resource);
     Preconditions.checkNotNull(partition);
     Preconditions.checkNotNull(leaderEvents);
@@ -229,14 +238,15 @@ public class LeaderEventHistoryStore implements Closeable {
 
     lock.lock();
     try {
-      LeaderEventsHistory
-          cachedHistory =
+      LeaderEventsHistory cachedHistory =
           localHistoryCache.getUnchecked(resource).getIfPresent(partition);
 
       if (cachedHistory == null) {
         try {
           cachedHistory = zkStoreCache.getUnchecked(resource).getUnchecked(partition).read();
-          localHistoryCache.getUnchecked(resource).put(partition, cachedHistory);
+          if (cachedHistory != null) {
+            localHistoryCache.getUnchecked(resource).put(partition, cachedHistory);
+          }
         } catch (IOException exp) {
           // Do nothing. This happens when we are writing for the first time.
         }
@@ -255,7 +265,9 @@ public class LeaderEventHistoryStore implements Closeable {
 
       LeaderEventsHistory mergedHistory =
           zkStoreCache.getUnchecked(resource).getUnchecked(partition).merge(batchUpdateHistory);
-      localHistoryCache.getUnchecked(resource).put(partition, mergedHistory);
+      if (mergedHistory != null) {
+        localHistoryCache.getUnchecked(resource).put(partition, mergedHistory);
+      }
     } catch (Throwable e) {
       LOGGER.error(String.format("Error processing leaderevents: %s", leaderEvents), e);
     } finally {
@@ -294,7 +306,6 @@ public class LeaderEventHistoryStore implements Closeable {
   @VisibleForTesting
   boolean shouldAddParticipantEvent(LeaderEventsHistory lastKnownHistory,
                                     LeaderEvent currentLeaderEvent) {
-    LeaderEventType currentLeaderEventType = currentLeaderEvent.getEvent_type();
     // we log all participant events, as it is rare occurrence when duplicate transitions gets
     // fired.
     // We can revisit this logic if this is found to be more often.
@@ -302,7 +313,7 @@ public class LeaderEventHistoryStore implements Closeable {
   }
 
   @VisibleForTesting
-  private boolean shouldAddClientEvent(LeaderEventsHistory lastKnownHistory,
+  boolean shouldAddClientEvent(LeaderEventsHistory lastKnownHistory,
                                        LeaderEvent currentLeaderEvent) {
     LeaderEventType currentLeaderEventType = currentLeaderEvent.getEvent_type();
     if (currentLeaderEventType == CLIENT_OBSERVED_SHARDMAP_LEADER_UP) {
@@ -356,7 +367,7 @@ public class LeaderEventHistoryStore implements Closeable {
   }
 
   @VisibleForTesting
-  private boolean shouldAddSpectatorEvent(LeaderEventsHistory lastKnownHistory,
+  boolean shouldAddSpectatorEvent(LeaderEventsHistory lastKnownHistory,
                                           LeaderEvent currentLeaderEvent) {
     LeaderEventType currentLeaderEventType = currentLeaderEvent.getEvent_type();
     if (currentLeaderEventType == SPECTATOR_OBSERVED_LEADER_UP) {
