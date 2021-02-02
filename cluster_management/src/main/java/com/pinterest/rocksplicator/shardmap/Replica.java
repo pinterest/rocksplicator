@@ -3,6 +3,7 @@ package com.pinterest.rocksplicator.shardmap;
 import java.util.Objects;
 
 public class Replica {
+
   private final Instance instance;
   private final Partition partition;
   private final ReplicaState replicaState;

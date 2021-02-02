@@ -60,10 +60,10 @@ class JsonShardMap implements ShardMap {
       } else if (numShardsObj.getClass().equals(Long.class)) {
         this.numShards = ((Long) numShardsObj).intValue();
       } else {
-        throw new RuntimeException("Illegal format for num_shards for resource:" + resourceName + ", json string is " + resourceMapObj.toJSONString());
+        throw new RuntimeException(
+            "Illegal format for num_shards for resource:" + resourceName + ", json string is "
+                + resourceMapObj.toJSONString());
       }
-
-
 
       ImmutableSet.Builder<Partition> setBuilder = ImmutableSet.builder();
       for (int partitionId = 0; partitionId < numShards; ++partitionId) {
