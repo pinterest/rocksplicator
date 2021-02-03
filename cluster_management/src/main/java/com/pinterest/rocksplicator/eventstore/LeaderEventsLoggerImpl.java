@@ -25,7 +25,7 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
   private final String resourcesEnabledConfigPath;
   private final String resourcesEnabledConfigType;
   private final LeaderEventHistoryStore leaderEventHistoryStore;
-  private final ConfigStore<Set<String>> configStore;
+  private final ConfigStore<Set<String>> enabledResourcesCache;
   private final Optional<Integer> maxEventsToKeep;
   private final String instanceId;
   private final boolean isEnabled;
@@ -64,12 +64,12 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
         e.printStackTrace();
       }
     }
-    this.configStore = localConfigStore;
+    this.enabledResourcesCache = localConfigStore;
 
     /**
-     * If there is no configStore or empty zkConnectString, there is no leaderEventHistoryStore
+     * If there is no enabledResourcesCache or empty zkConnectString, there is no leaderEventHistoryStore
      */
-    if (this.configStore != null && zkConnectString != null && !zkConnectString.isEmpty()) {
+    if (this.enabledResourcesCache != null && zkConnectString != null && !zkConnectString.isEmpty()) {
       this.leaderEventHistoryStore = new LeaderEventHistoryStore(
           zkConnectString, clusterName, maxEventsToKeep);
     } else {
@@ -89,7 +89,14 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
 
   @Override
   public boolean isLoggingEnabledForResource(final String resourceName) {
-    return configStore.get().contains(resourceName);
+    return enabledResourcesCache.get().contains(resourceName);
+  }
+
+  @Override
+  public void resetCache() {
+    if (leaderEventHistoryStore != null) {
+      leaderEventHistoryStore.resetCache();
+    }
   }
 
   @Override

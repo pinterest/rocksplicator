@@ -19,4 +19,6 @@ public interface LeaderEventsLogger extends Closeable {
    * True is logging is enabled for a given resource.
    */
   boolean isLoggingEnabledForResource(final String resourceName);
+
+  void resetCache();
 }

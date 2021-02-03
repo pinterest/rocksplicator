@@ -36,17 +36,19 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
   private final String zkEventHistoryStr;
   private final CuratorFramework zkClient;
   private final Semaphore ipMutexGuard = new Semaphore(1);
+  private final LeaderEventsLogger leaderEventsLogger;
   private InterProcessMutex ipClusterMutex;
   private ExecutorService service;
 
   public ClientShardMapLeaderEventLoggerDriver(
       final String clusterName,
       final String shardMapPath,
-      final ClientShardMapLeaderEventLogger clientLeaderEventLogger,
+      final LeaderEventsLogger leaderEventsLogger,
       final String zkEventHistoryStr) throws IOException {
     this.clusterName = clusterName;
     this.shardMapPath = shardMapPath;
-    this.clientLeaderEventLogger = clientLeaderEventLogger;
+    this.leaderEventsLogger = leaderEventsLogger;
+    this.clientLeaderEventLogger = new ClientShardMapLeaderEventLoggerImpl(this.leaderEventsLogger);
     this.zkEventHistoryStr = zkEventHistoryStr;
 
     /**
@@ -72,7 +74,7 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
       this.zkClient = null;
     } else {
       this.zkClient = CuratorFrameworkFactory
-          .newClient(zkEventHistoryStr, new ExponentialBackoffRetry(1000, 3));
+          .newClient(this.zkEventHistoryStr, new ExponentialBackoffRetry(1000, 3));
 
       this.zkClient.getConnectionStateListenable().addListener(new ConnectionStateListener() {
         @Override
@@ -165,6 +167,19 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
       return;
     }
 
+    /**
+     * When we loose leadership for being a client who is supposed to log all
+     * leader events, make sure to reset internal cache of leader events history
+     * store through leaderEventsLogger. This is to ensure, that if we become
+     * the leader of the clients who has to log all leader events, we
+     * start afresh and don't prune out any new events just because there were previous
+     * event history existed in the cache.
+     *
+     */
+    if (leaderEventsLogger != null) {
+      leaderEventsLogger.resetCache();
+    }
+
     synchronized (notifier) {
       if (this.notifier.isClosed() || !this.notifier.isStarted()) {
         // Cannot stop notification, as either notifier is already closed or not started yet
@@ -242,7 +257,8 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
     /**
      * Release the service.
      */
-    LOGGER.error("Wait for executor service to terminate for ClientShardMapLeaderEventLoggerDriver");
+    LOGGER
+        .error("Wait for executor service to terminate for ClientShardMapLeaderEventLoggerDriver");
     while (!service.isTerminated()) {
       try {
         service.awaitTermination(100, TimeUnit.MILLISECONDS);
@@ -251,7 +267,6 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
       }
     }
     LOGGER.error("Terminated executor service for ClientShardMapLeaderEventLoggerDriver");
-
 
     /**
      * Finally cleanup the clientShardMapEventsLogger.
