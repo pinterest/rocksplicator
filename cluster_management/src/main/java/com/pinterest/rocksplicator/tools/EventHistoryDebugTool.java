@@ -1,7 +1,9 @@
-package com.pinterest.rocksplicator.eventstore;
+package com.pinterest.rocksplicator.tools;
 
 import com.pinterest.rocksplicator.codecs.Codec;
 import com.pinterest.rocksplicator.codecs.WrappedDataThriftCodec;
+import com.pinterest.rocksplicator.eventstore.LeaderEventTypes;
+import com.pinterest.rocksplicator.eventstore.ZkMergeableEventStore;
 import com.pinterest.rocksplicator.thrift.commons.io.CompressionAlgorithm;
 import com.pinterest.rocksplicator.thrift.commons.io.SerializationProtocol;
 import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEvent;

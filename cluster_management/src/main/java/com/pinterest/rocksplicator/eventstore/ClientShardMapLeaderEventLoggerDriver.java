@@ -263,7 +263,7 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
     JSONObject jsonShardMap = shardMapWithContext.getItem();
     ShardMap shardMap = ShardMaps.fromJson(jsonShardMap);
     clientLeaderEventLogger
-        .process(shardMap, shardMapWithContext.getNotification_received_time_millis());
+        .process(shardMap, shardMapWithContext.getSrc_change_time_millis());
   }
 
   private void notificationRunner() {
