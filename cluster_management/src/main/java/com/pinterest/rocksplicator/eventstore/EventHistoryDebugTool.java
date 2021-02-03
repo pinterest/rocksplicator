@@ -157,15 +157,13 @@ public class EventHistoryDebugTool {
         int numEvents = Math.min(history.getEventsSize(), maxEvents);
 
         long lastEventTimeMillis = (history.getEventsSize() > 0)? history.getEvents().get(0).getEvent_timestamp_ms() : -1;
-        long currentTimeMillis = System.currentTimeMillis();
         // Print them in reverse order, with latest first.
         for (int eventId = 0; eventId < Math.min(history.getEventsSize(), maxEvents); ++eventId) {
           LeaderEvent leaderEvent = history.getEvents().get(numEvents - eventId - 1);
           processLeaderEvent(leaderEvent);
           System.out.println(String.format(
-              "ts: ts:%d, old: %8d s, delay: %8d ms, origin: %-18s, leader: %-18s, event: %s",
+              "event: ts:%d, before: %8d ms, origin: %-18s, leader: %-18s, event: %s",
               leaderEvent.getEvent_timestamp_ms(),
-              (currentTimeMillis -leaderEvent.getEvent_timestamp_ms())/1000,
               lastEventTimeMillis - leaderEvent.getEvent_timestamp_ms(),
               leaderEvent.getOriginating_node(),
               (leaderEvent.isSetObserved_leader_node())? leaderEvent.getObserved_leader_node():"not_known",
