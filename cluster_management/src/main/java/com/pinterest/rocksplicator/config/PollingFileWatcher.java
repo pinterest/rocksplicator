@@ -61,23 +61,43 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
 
   private static final Logger LOG = LoggerFactory.getLogger(PollingFileWatcher.class);
   private static final HashFunction HASH_FUNCTION = Hashing.md5();
-  public static final int DEFAULT_POLL_PERIOD_MILLIS = 10000;
+  private static final int DEFAULT_POLL_PERIOD_MILLIS = 10000;
+  private static final int DEFAULT_HIGH_RESOLUTION_POLL_PERIOD_MILLIS = 1000;
+
   private static volatile PollingFileWatcher DEFAULT_INSTANCE = null;
+  private static volatile PollingFileWatcher HIGH_RESOLUTION_INSTANCE = null;
 
   // Thread safety note: only addWatch() can add new entries to this map, and that method
   // is synchronized. The reason for using a concurrent map is only to allow the watcher
   // thread to concurrently iterate over it.
   private final ConcurrentMap<String, ConfigFileInfo> watchedFileMap = Maps.newConcurrentMap();
   private final WatcherTask watcherTask;
+  private final boolean relyOnTimestamp;
+
+  @VisibleForTesting
+  PollingFileWatcher(int pollPeriod, TimeUnit timeUnit) {
+    this(pollPeriod, timeUnit, true);
+  }
+
+  @VisibleForTesting
+  PollingFileWatcher(int pollPeriod, TimeUnit timeUnit, boolean relyOnTimestamp) {
+    ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor(
+        new ThreadFactoryBuilder().setDaemon(true).setNameFormat("PollingFileWatcher-%d").build());
+    this.watcherTask = new WatcherTask();
+    this.relyOnTimestamp = relyOnTimestamp;
+    service.scheduleWithFixedDelay(
+        watcherTask, pollPeriod, pollPeriod, timeUnit);
+  }
 
   /**
    * Creates the default ConfigFileWatcher instance on demand.
    */
-  public static PollingFileWatcher defaultInstance() {
+  public static PollingFileWatcher defaultPerTenSecondsWatcher() {
     if (DEFAULT_INSTANCE == null) {
       synchronized (PollingFileWatcher.class) {
         if (DEFAULT_INSTANCE == null) {
-          DEFAULT_INSTANCE = new PollingFileWatcher(DEFAULT_POLL_PERIOD_MILLIS, TimeUnit.MILLISECONDS);
+          DEFAULT_INSTANCE =
+              new PollingFileWatcher(DEFAULT_POLL_PERIOD_MILLIS, TimeUnit.MILLISECONDS, true);
         }
       }
     }
@@ -85,105 +105,20 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
     return DEFAULT_INSTANCE;
   }
 
-  @VisibleForTesting
-  PollingFileWatcher(int pollPeriod, TimeUnit timeUnit) {
-    ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor(
-        new ThreadFactoryBuilder().setDaemon(true).setNameFormat("PollingFileWatcher-%d").build());
-    this.watcherTask = new WatcherTask();
-    service.scheduleWithFixedDelay(
-        watcherTask, pollPeriod, pollPeriod, timeUnit);
-  }
-
   /**
-   * Adds a watch on the specified file. The file must exist, otherwise a FileNotFoundException
-   * is returned. If the file is deleted after a watch is established, the watcher will log errors
-   * but continue to monitor it, and resume watching if it is recreated.
-   *
-   * @param filePath path to the file to watch.
-   * @param onUpdate function to call when a change is detected to the file. The entire contents
-   *                 of the file will be passed in to the function. Note that onUpdate will be
-   *                 called once before this call completes, which facilities initial load of data.
-   *                 This callback is executed synchronously on the watcher thread - it is
-   *                 important that the function be non-blocking.
+   * Creates the default ConfigFileWatcher instance on demand.
    */
-  @Override
-  public synchronized void addWatch(String filePath, Function<byte[], Void> onUpdate)
-      throws IOException {
-    Preconditions.checkNotNull(filePath);
-    Preconditions.checkArgument(!filePath.isEmpty());
-    Preconditions.checkNotNull(onUpdate);
-
-    // Read the file and make the initial onUpdate call.
-    File file = new File(filePath);
-    byte[] contents = read(file);
-    onUpdate.apply(contents);
-
-    // Add the file to our map if it isn't already there, and register the new change watcher.
-    ConfigFileInfo configFileInfo = watchedFileMap.get(filePath);
-    if (configFileInfo == null) {
-      configFileInfo = new ConfigFileInfo(
-          file.lastModified(), HASH_FUNCTION.newHasher().putBytes(contents).hash());
-      watchedFileMap.put(filePath, configFileInfo);
-    }
-    configFileInfo.changeWatchers.add(onUpdate);
-  }
-
-  @VisibleForTesting
-  public void runWatcherTaskNow() {
-    watcherTask.run();
-  }
-
-  /**
-   * Scheduled task that periodically checks each watched file for updates, and if found to have
-   * been changed, triggers notifications on all its watchers.
-   *
-   * Thread safety note: this task must be run in a single threaded executor; i.e. only one run
-   * of the task can be active at any time.
-   */
-  private class WatcherTask implements Runnable {
-
-    @Override
-    public void run() {
-      for (Map.Entry<String, ConfigFileInfo> entry : watchedFileMap.entrySet()) {
-        String filePath = entry.getKey();
-        ConfigFileInfo configFileInfo = entry.getValue();
-        try {
-          File file = new File(filePath);
-          long lastModified = file.lastModified();
-          Preconditions.checkArgument(lastModified > 0L);
-          if (lastModified != configFileInfo.lastModifiedTimestampMillis) {
-            configFileInfo.lastModifiedTimestampMillis = lastModified;
-            byte[] newContents = read(file);
-            HashCode newContentHash = HASH_FUNCTION.newHasher().putBytes(newContents).hash();
-            if (!newContentHash.equals(configFileInfo.contentHash)) {
-              configFileInfo.contentHash = newContentHash;
-              LOG.info("File {} was modified at {}, notifying watchers.", filePath, lastModified);
-              for (Function<byte[], Void> watchers : configFileInfo.changeWatchers) {
-                try {
-                  watchers.apply(newContents);
-                } catch (Exception e) {
-                  LOG.error(
-                      "Exception in watcher callback for {}, ignoring. New file contents were: {}",
-                      filePath, new String(newContents, Charsets.UTF_8), e);
-                }
-              }
-            } else {
-              LOG.info("File {} was modified at {} but content hash is unchanged.",
-                  filePath, lastModified);
-            }
-          } else {
-            LOG.debug("File {} not modified since {}", filePath, lastModified);
-          }
-        } catch (Exception e) {
-          // We catch and log exceptions related to the update of any specific file, but
-          // move on so others aren't affected. Issues can happen for example if the watcher
-          // races with an external file replace operation; in that case, the next run should
-          // pick up the update.
-          // TODO: Consider adding a metric to track this so we can alert on failures.
-          LOG.error("Config update check failed for {}", filePath, e);
+  public static PollingFileWatcher defaultPerSecondWatcher() {
+    if (HIGH_RESOLUTION_INSTANCE == null) {
+      synchronized (PollingFileWatcher.class) {
+        if (HIGH_RESOLUTION_INSTANCE == null) {
+          HIGH_RESOLUTION_INSTANCE = new PollingFileWatcher(
+              DEFAULT_HIGH_RESOLUTION_POLL_PERIOD_MILLIS, TimeUnit.MILLISECONDS, false);
         }
       }
     }
+
+    return HIGH_RESOLUTION_INSTANCE;
   }
 
   private static byte[] read(File file) throws IOException {
@@ -206,6 +141,57 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
   }
 
   /**
+   * Adds a watch on the specified file. The file must exist, otherwise a FileNotFoundException
+   * is returned. If the file is deleted after a watch is established, the watcher will log errors
+   * but continue to monitor it, and resume watching if it is recreated.
+   *
+   * @param filePath path to the file to watch.
+   * @param onUpdate function to call when a change is detected to the file. The entire contents
+   *                 of the file will be passed in to the function. Note that onUpdate will be
+   *                 called once before this call completes, which facilities initial load of data.
+   *                 This callback is executed synchronously on the watcher thread - it is
+   *                 important that the function be non-blocking.
+   */
+  @Override
+  public synchronized void addWatch(String filePath,
+                                    Function<WatchedFileContext<byte[]>, Void> onUpdate)
+      throws IOException {
+    Preconditions.checkNotNull(filePath);
+    Preconditions.checkArgument(!filePath.isEmpty());
+    Preconditions.checkNotNull(onUpdate);
+
+    // Read the file and make the initial onUpdate call.
+    File file = new File(filePath);
+    long lastModifiedTimeMillis = file.lastModified();
+    byte[] contents = read(file);
+    onUpdate.apply(new WatchedFileContext<>(contents, lastModifiedTimeMillis));
+
+    // Add the file to our map if it isn't already there, and register the new change watcher.
+    ConfigFileInfo configFileInfo = watchedFileMap.get(filePath);
+    if (configFileInfo == null) {
+      configFileInfo = new ConfigFileInfo(
+          file, HASH_FUNCTION.newHasher().putBytes(contents).hash());
+      watchedFileMap.put(filePath, configFileInfo);
+    }
+    configFileInfo.changeWatchers.add(onUpdate);
+  }
+
+  @Override
+  public synchronized void removeWatch(
+      String filePath,
+      Function<WatchedFileContext<byte[]>, Void> onUpdate) {
+    ConfigFileInfo configFileInfo = watchedFileMap.get(filePath);
+    if (configFileInfo != null) {
+      configFileInfo.changeWatchers.remove(onUpdate);
+    }
+  }
+
+  @VisibleForTesting
+  public void runWatcherTaskNow() {
+    watcherTask.run();
+  }
+
+  /**
    * Encapsulates state related to each watched config file.
    *
    * Thread safety note:
@@ -216,14 +202,81 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
    */
   private static class ConfigFileInfo {
 
-    private final List<Function<byte[], Void>> changeWatchers = new CopyOnWriteArrayList<>();
+    private final List<Function<WatchedFileContext<byte[]>, Void>>
+        changeWatchers =
+        new CopyOnWriteArrayList<>();
     private long lastModifiedTimestampMillis;
+    private long lastFileLength;
     private HashCode contentHash;
 
-    public ConfigFileInfo(long lastModifiedTimestampMillis, HashCode contentHash) {
-      this.lastModifiedTimestampMillis = lastModifiedTimestampMillis;
+    public ConfigFileInfo(File file, HashCode contentHash) {
+      this.lastModifiedTimestampMillis = file.lastModified();
+      this.lastFileLength = file.length();
       Preconditions.checkArgument(lastModifiedTimestampMillis > 0L);
       this.contentHash = Preconditions.checkNotNull(contentHash);
+    }
+  }
+
+  /**
+   * Scheduled task that periodically checks each watched file for updates, and if found to have
+   * been changed, triggers notifications on all its watchers.
+   *
+   * Thread safety note: this task must be run in a single threaded executor; i.e. only one run
+   * of the task can be active at any time.
+   */
+  private class WatcherTask implements Runnable {
+
+    @Override
+    public void run() {
+      for (Map.Entry<String, ConfigFileInfo> entry : watchedFileMap.entrySet()) {
+        String filePath = entry.getKey();
+        ConfigFileInfo configFileInfo = entry.getValue();
+        try {
+          File file = new File(filePath);
+          long lastModified = file.lastModified();
+          long lastLength = file.length();
+          Preconditions.checkArgument(lastModified > 0L);
+          if (!relyOnTimestamp || lastModified != configFileInfo.lastModifiedTimestampMillis
+              || lastLength != configFileInfo.lastFileLength) {
+            if (relyOnTimestamp) {
+              configFileInfo.lastModifiedTimestampMillis = lastModified;
+              configFileInfo.lastFileLength = lastLength;
+            }
+            byte[] newContents = read(file);
+            HashCode newContentHash = HASH_FUNCTION.newHasher().putBytes(newContents).hash();
+            if (!newContentHash.equals(configFileInfo.contentHash)) {
+              if (!relyOnTimestamp) {
+                configFileInfo.lastModifiedTimestampMillis = lastModified;
+                configFileInfo.lastFileLength = lastLength;
+              }
+              configFileInfo.contentHash = newContentHash;
+              LOG.info("File {} was modified at {}, notifying watchers.", filePath, lastModified);
+              for (Function<WatchedFileContext<byte[]>, Void> watchers :
+                  configFileInfo.changeWatchers) {
+                try {
+                  watchers.apply(new WatchedFileContext<>(newContents, lastModified));
+                } catch (Exception e) {
+                  LOG.error(
+                      "Exception in watcher callback for {}, ignoring. New file contents were: {}",
+                      filePath, new String(newContents, Charsets.UTF_8), e);
+                }
+              }
+            } else {
+              LOG.info("File {} was modified at {} but content hash is unchanged.",
+                  filePath, lastModified);
+            }
+          } else {
+            LOG.debug("File {} not modified since {}", filePath, lastModified);
+          }
+        } catch (Exception e) {
+          // We catch and log exceptions related to the update of any specific file, but
+          // move on so others aren't affected. Issues can happen for example if the watcher
+          // races with an external file replace operation; in that case, the next run should
+          // pick up the update.
+          // TODO: Consider adding a metric to track this so we can alert on failures.
+          LOG.error("Config update check failed for {}", filePath, e);
+        }
+      }
     }
   }
 }

@@ -47,11 +47,11 @@ public class PollingFileWatcherTest extends ConfigTestBase {
     writeContentToFile(testConfigFile, "test1");
 
     // Setup watch and ensure it fires immediately.
-    configFileWatcher.addWatch(testConfigFile.getPath(), new Function<byte[], Void>() {
+    configFileWatcher.addWatch(testConfigFile.getPath(), new Function<WatchedFileContext<byte[]>, Void>() {
       @Override
-      public Void apply(byte[] bytes) {
+      public Void apply(WatchedFileContext<byte[]> context) {
         watchFiredCount.incrementAndGet();
-        contentRetrieved.set(new String(bytes, Charsets.UTF_8));
+        contentRetrieved.set(new String(context.getData(), Charsets.UTF_8));
         return null;
       }
     });
@@ -101,11 +101,11 @@ public class PollingFileWatcherTest extends ConfigTestBase {
       fileContents.add(new AtomicReference<String>());
       writeContentToFile(file, "initial" + i);
       final int index = i;
-      configFileWatcher.addWatch(file.getPath(), new Function<byte[], Void>() {
+      configFileWatcher.addWatch(file.getPath(), new Function<WatchedFileContext<byte[]>, Void>() {
         @Override
-        public Void apply(byte[] bytes) {
+        public Void apply(WatchedFileContext<byte[]> context) {
           watchesFired.incrementAndGet();
-          fileContents.get(index).set(new String(bytes, Charsets.UTF_8));
+          fileContents.get(index).set(new String(context.getData(), Charsets.UTF_8));
           return null;
         }
       });
@@ -174,11 +174,11 @@ public class PollingFileWatcherTest extends ConfigTestBase {
     for (int i = 0; i < 10; i++) {
       fileContents.add(new AtomicReference<String>());
       final int index = i;
-      configFileWatcher.addWatch(testConfigFile.getPath(), new Function<byte[], Void>() {
+      configFileWatcher.addWatch(testConfigFile.getPath(), new Function<WatchedFileContext<byte[]>, Void>() {
         @Override
-        public Void apply(byte[] bytes) {
+        public Void apply(WatchedFileContext<byte[]> context) {
           watchesFired.incrementAndGet();
-          fileContents.get(index).set(new String(bytes, Charsets.UTF_8));
+          fileContents.get(index).set(new String(context.getData(), Charsets.UTF_8));
           return null;
         }
       });
@@ -211,19 +211,19 @@ public class PollingFileWatcherTest extends ConfigTestBase {
 
     // Add a watcher that throws an exception in its callback. It should not prevent other
     // watchers from getting notified.
-    configFileWatcher.addWatch(testConfigFile.getPath(), new Function<byte[], Void>() {
+    configFileWatcher.addWatch(testConfigFile.getPath(), new Function<WatchedFileContext<byte[]>, Void>() {
       @Override
-      public Void apply(byte[] bytes) {
-        if (new String(bytes, Charset.defaultCharset()).equals("update")) {
+      public Void apply(WatchedFileContext<byte[]> context) {
+        if (new String(context.getData(), Charset.defaultCharset()).equals("update")) {
           throw new RuntimeException();
         }
         return null;
       }
     });
 
-    configFileWatcher.addWatch(testConfigFile.getPath(), new Function<byte[], Void>() {
+    configFileWatcher.addWatch(testConfigFile.getPath(), new Function<WatchedFileContext<byte[]>, Void>() {
       @Override
-      public Void apply(byte[] bytes) {
+      public Void apply(WatchedFileContext<byte[]> context) {
         watchesFired.incrementAndGet();
         return null;
       }
@@ -239,9 +239,9 @@ public class PollingFileWatcherTest extends ConfigTestBase {
   @Test(expected = IllegalArgumentException.class)
   public void testEmptyFilePath() throws IOException {
     PollingFileWatcher configFileWatcher = createPollingFileWatcher();
-    configFileWatcher.addWatch("", new Function<byte[], Void>() {
+    configFileWatcher.addWatch("", new Function<WatchedFileContext<byte[]>, Void>() {
       @Override
-      public Void apply(byte[] bytes) {
+      public Void apply(WatchedFileContext<byte[]> context) {
         return null;
       }
     });
@@ -250,9 +250,9 @@ public class PollingFileWatcherTest extends ConfigTestBase {
   @Test(expected = FileNotFoundException.class)
   public void testNonExistentFile() throws IOException {
     PollingFileWatcher configFileWatcher = createPollingFileWatcher();
-    configFileWatcher.addWatch("/foo/bar", new Function<byte[], Void>() {
+    configFileWatcher.addWatch("/foo/bar", new Function<WatchedFileContext<byte[]>, Void>() {
       @Override
-      public Void apply(byte[] bytes) {
+      public Void apply(WatchedFileContext<byte[]> context) {
         return null;
       }
     });
