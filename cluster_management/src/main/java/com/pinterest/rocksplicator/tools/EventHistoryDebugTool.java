@@ -165,7 +165,7 @@ public class EventHistoryDebugTool {
           LeaderEvent leaderEvent = history.getEvents().get(numEvents - eventId - 1);
           processLeaderEvent(leaderEvent);
           System.out.println(String.format(
-              "ts: ts:%d, old: %8d s, delay: %8d ms, origin: %-18s, leader: %-18s, event: %s",
+              "ts:%d msec, age: %8d sec, relative_age: %8d ms, from: %18s, leader: %18s, type: %s",
               leaderEvent.getEvent_timestamp_ms(),
               (currentTimeMillis -leaderEvent.getEvent_timestamp_ms())/1000,
               lastEventTimeMillis - leaderEvent.getEvent_timestamp_ms(),

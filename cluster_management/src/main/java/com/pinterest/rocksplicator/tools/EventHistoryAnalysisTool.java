@@ -268,12 +268,11 @@ public class EventHistoryAnalysisTool {
     for (eventId = 0; eventId < leaderEvents.size(); ++eventId) {
       LeaderEvent leaderEvent = leaderEvents.get(eventId);
       LeaderEventType eventType = leaderEvent.getEvent_type();
-      if (eventType != LeaderEventType.PARTICIPANT_LEADER_UP_SUCCESS) {
-        continue;
+      if (eventType == LeaderEventType.PARTICIPANT_LEADER_UP_SUCCESS) {
+        participantUpIndex = eventId;
+        participantUp = leaderEvent;
+        break;
       }
-      participantUpIndex = eventId;
-      participantUp = leaderEvent;
-      break;
     }
 
     if (participantUpIndex < 0) {
