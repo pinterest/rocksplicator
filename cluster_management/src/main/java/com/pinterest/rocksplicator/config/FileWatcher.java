@@ -24,6 +24,7 @@ import java.util.function.Function;
 public interface FileWatcher<R> {
 
   void addWatch(String filePath, Function<WatchedFileContext<R>, Void> onUpdate) throws IOException;
+
   void removeWatch(String filePath, Function<WatchedFileContext<R>, Void> onUpdate);
 }
 
