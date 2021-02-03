@@ -102,7 +102,7 @@ public class ClientShardMapLeaderEventLoggerDriverTest {
   public void testEventDriver() throws Exception {
     clientDriver =
         new ClientShardMapLeaderEventLoggerDriver(CLUSTER_NAME, shardMapPath.getAbsolutePath(),
-            clientLogger, zkTestServer.getConnectString());
+            eventsLogger, zkTestServer.getConnectString());
     Thread.currentThread().sleep(1000);
 
 

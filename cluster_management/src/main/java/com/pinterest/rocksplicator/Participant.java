@@ -86,7 +86,6 @@ public class Participant {
   private static LeaderEventsLogger staticParticipantLeaderEventsLogger = null;
   private static LeaderEventsLogger staticSpectatorLeaderEventsLogger = null;
   private static LeaderEventsLogger staticClientLeaderEventsLogger = null;
-  private static ClientShardMapLeaderEventLogger staticClientShardMapLeaderEventLogger = null;
   private static ClientShardMapLeaderEventLoggerDriver staticClientShardMapLeaderEventLoggerDriver = null;
   private static StateModelFactory<StateModel> stateModelFactory;
   private final RocksplicatorMonitor monitor;
@@ -253,11 +252,8 @@ public class Participant {
         staticClientLeaderEventsLogger = new LeaderEventsLoggerImpl(instanceName,
             zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType, Optional.empty());
 
-        staticClientShardMapLeaderEventLogger =
-            new ClientShardMapLeaderEventLoggerImpl(staticClientLeaderEventsLogger);
-
         staticClientShardMapLeaderEventLoggerDriver = new ClientShardMapLeaderEventLoggerDriver(
-            clusterName, shardMapPath, staticClientShardMapLeaderEventLogger, zkEventHistoryStr);
+            clusterName, shardMapPath, staticClientLeaderEventsLogger, zkEventHistoryStr);
       }
     }
 

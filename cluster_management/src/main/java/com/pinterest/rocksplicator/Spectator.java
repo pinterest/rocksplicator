@@ -72,7 +72,6 @@ public class Spectator {
   private static final String  handoffClientEventHistoryJsonShardMapPath = "handoffClientEventHistoryJsonShardMapPath";
 
   private static LeaderEventsLogger staticClientLeaderEventsLogger = null;
-  private static ClientShardMapLeaderEventLogger staticClientShardMapLeaderEventLogger = null;
   private static ClientShardMapLeaderEventLoggerDriver
       staticClientShardMapLeaderEventLoggerDriver = null;
 
@@ -203,11 +202,8 @@ public class Spectator {
       staticClientLeaderEventsLogger = new LeaderEventsLoggerImpl(instanceName,
           zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType, Optional.empty());
 
-      staticClientShardMapLeaderEventLogger =
-          new ClientShardMapLeaderEventLoggerImpl(staticClientLeaderEventsLogger);
-
       staticClientShardMapLeaderEventLoggerDriver = new ClientShardMapLeaderEventLoggerDriver(
-          clusterName, shardMapPath, staticClientShardMapLeaderEventLogger, zkEventHistoryStr);
+          clusterName, shardMapPath, staticClientLeaderEventsLogger, zkEventHistoryStr);
     }
 
     LOG.error("Starting spectator with ZK:" + zkConnectString);
