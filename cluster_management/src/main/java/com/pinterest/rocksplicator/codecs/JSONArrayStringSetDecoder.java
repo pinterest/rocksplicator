@@ -19,29 +19,19 @@
 package com.pinterest.rocksplicator.codecs;
 
 import com.google.common.collect.ImmutableSet;
-import org.json.simple.JSONArray;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
 
-import java.io.UnsupportedEncodingException;
 import java.util.Set;
 
 /**
- * Decodes byte[] content as a JSONArray
+ * Decodes byte[] content as a Set of Strings, where content is in JSONArray format.
  * ["first", "second", "third"]
  */
 public class JSONArrayStringSetDecoder implements Decoder<byte[], Set<String>> {
 
+  private final SimpleJsonArrayDecoder decoder = new SimpleJsonArrayDecoder();
+
   @Override
   public Set<String> decode(byte[] data) throws CodecException {
-    JSONParser parser = new JSONParser();
-    try {
-      JSONArray array = (JSONArray) parser.parse(new String(data, "UTF-8"));
-      return ImmutableSet.copyOf(array);
-    } catch (ParseException e) {
-      throw new CodecException(e);
-    } catch (UnsupportedEncodingException e) {
-      throw new CodecException(e);
-    }
+    return ImmutableSet.copyOf(decoder.decode(data));
   }
 }
