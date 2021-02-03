@@ -72,6 +72,22 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
   // thread to concurrently iterate over it.
   private final ConcurrentMap<String, ConfigFileInfo> watchedFileMap = Maps.newConcurrentMap();
   private final WatcherTask watcherTask;
+  private final boolean relyOnTimestamp;
+
+  @VisibleForTesting
+  PollingFileWatcher(int pollPeriod, TimeUnit timeUnit) {
+    this(pollPeriod, timeUnit, true);
+  }
+
+  @VisibleForTesting
+  PollingFileWatcher(int pollPeriod, TimeUnit timeUnit, boolean relyOnTimestamp) {
+    ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor(
+        new ThreadFactoryBuilder().setDaemon(true).setNameFormat("PollingFileWatcher-%d").build());
+    this.watcherTask = new WatcherTask();
+    this.relyOnTimestamp = relyOnTimestamp;
+    service.scheduleWithFixedDelay(
+        watcherTask, pollPeriod, pollPeriod, timeUnit);
+  }
 
   /**
    * Creates the default ConfigFileWatcher instance on demand.
@@ -80,7 +96,8 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
     if (DEFAULT_INSTANCE == null) {
       synchronized (PollingFileWatcher.class) {
         if (DEFAULT_INSTANCE == null) {
-          DEFAULT_INSTANCE = new PollingFileWatcher(DEFAULT_POLL_PERIOD_MILLIS, TimeUnit.MILLISECONDS);
+          DEFAULT_INSTANCE =
+              new PollingFileWatcher(DEFAULT_POLL_PERIOD_MILLIS, TimeUnit.MILLISECONDS, true);
         }
       }
     }
@@ -96,7 +113,7 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
       synchronized (PollingFileWatcher.class) {
         if (HIGH_RESOLUTION_INSTANCE == null) {
           HIGH_RESOLUTION_INSTANCE = new PollingFileWatcher(
-              DEFAULT_HIGH_RESOLUTION_POLL_PERIOD_MILLIS, TimeUnit.MILLISECONDS);
+              DEFAULT_HIGH_RESOLUTION_POLL_PERIOD_MILLIS, TimeUnit.MILLISECONDS, false);
         }
       }
     }
@@ -104,13 +121,23 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
     return HIGH_RESOLUTION_INSTANCE;
   }
 
-  @VisibleForTesting
-  PollingFileWatcher(int pollPeriod, TimeUnit timeUnit) {
-    ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor(
-        new ThreadFactoryBuilder().setDaemon(true).setNameFormat("PollingFileWatcher-%d").build());
-    this.watcherTask = new WatcherTask();
-    service.scheduleWithFixedDelay(
-        watcherTask, pollPeriod, pollPeriod, timeUnit);
+  private static byte[] read(File file) throws IOException {
+    try (FileInputStream stream = new FileInputStream(file)) {
+      ByteArrayOutputStream out = new ByteArrayOutputStream(Math.max(32, stream.available()));
+      copy(stream, out);
+      return out.toByteArray();
+    }
+  }
+
+  private static void copy(InputStream from, OutputStream to) throws IOException {
+    byte[] buf = new byte[8192];
+    while (true) {
+      int r = from.read(buf);
+      if (r == -1) {
+        break;
+      }
+      to.write(buf, 0, r);
+    }
   }
 
   /**
@@ -143,7 +170,7 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
     ConfigFileInfo configFileInfo = watchedFileMap.get(filePath);
     if (configFileInfo == null) {
       configFileInfo = new ConfigFileInfo(
-          file.lastModified(), HASH_FUNCTION.newHasher().putBytes(contents).hash());
+          file, HASH_FUNCTION.newHasher().putBytes(contents).hash());
       watchedFileMap.put(filePath, configFileInfo);
     }
     configFileInfo.changeWatchers.add(onUpdate);
@@ -165,6 +192,32 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
   }
 
   /**
+   * Encapsulates state related to each watched config file.
+   *
+   * Thread safety note:
+   *   1. changeWatchers is thread safe since it uses a copy-on-write array list.
+   *   2. lastModifiedTimestampMillis and contentHash aren't safe to update across threads. We
+   *      initialize in addWatch() at construction time, and thereafter only the watcher task
+   *      thread accesses this state, so we are good.
+   */
+  private static class ConfigFileInfo {
+
+    private final List<Function<WatchedFileContext<byte[]>, Void>>
+        changeWatchers =
+        new CopyOnWriteArrayList<>();
+    private long lastModifiedTimestampMillis;
+    private long lastFileLength;
+    private HashCode contentHash;
+
+    public ConfigFileInfo(File file, HashCode contentHash) {
+      this.lastModifiedTimestampMillis = file.lastModified();
+      this.lastFileLength = file.length();
+      Preconditions.checkArgument(lastModifiedTimestampMillis > 0L);
+      this.contentHash = Preconditions.checkNotNull(contentHash);
+    }
+  }
+
+  /**
    * Scheduled task that periodically checks each watched file for updates, and if found to have
    * been changed, triggers notifications on all its watchers.
    *
@@ -181,15 +234,25 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
         try {
           File file = new File(filePath);
           long lastModified = file.lastModified();
+          long lastLength = file.length();
           Preconditions.checkArgument(lastModified > 0L);
-          if (lastModified != configFileInfo.lastModifiedTimestampMillis) {
-            configFileInfo.lastModifiedTimestampMillis = lastModified;
+          if (!relyOnTimestamp || lastModified != configFileInfo.lastModifiedTimestampMillis
+              || lastLength != configFileInfo.lastFileLength) {
+            if (relyOnTimestamp) {
+              configFileInfo.lastModifiedTimestampMillis = lastModified;
+              configFileInfo.lastFileLength = lastLength;
+            }
             byte[] newContents = read(file);
             HashCode newContentHash = HASH_FUNCTION.newHasher().putBytes(newContents).hash();
             if (!newContentHash.equals(configFileInfo.contentHash)) {
+              if (!relyOnTimestamp) {
+                configFileInfo.lastModifiedTimestampMillis = lastModified;
+                configFileInfo.lastFileLength = lastLength;
+              }
               configFileInfo.contentHash = newContentHash;
               LOG.info("File {} was modified at {}, notifying watchers.", filePath, lastModified);
-              for (Function<WatchedFileContext<byte[]>, Void> watchers : configFileInfo.changeWatchers) {
+              for (Function<WatchedFileContext<byte[]>, Void> watchers :
+                  configFileInfo.changeWatchers) {
                 try {
                   watchers.apply(new WatchedFileContext<>(newContents, lastModified));
                 } catch (Exception e) {
@@ -214,47 +277,6 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
           LOG.error("Config update check failed for {}", filePath, e);
         }
       }
-    }
-  }
-
-  private static byte[] read(File file) throws IOException {
-    try (FileInputStream stream = new FileInputStream(file)) {
-      ByteArrayOutputStream out = new ByteArrayOutputStream(Math.max(32, stream.available()));
-      copy(stream, out);
-      return out.toByteArray();
-    }
-  }
-
-  private static void copy(InputStream from, OutputStream to) throws IOException {
-    byte[] buf = new byte[8192];
-    while (true) {
-      int r = from.read(buf);
-      if (r == -1) {
-        break;
-      }
-      to.write(buf, 0, r);
-    }
-  }
-
-  /**
-   * Encapsulates state related to each watched config file.
-   *
-   * Thread safety note:
-   *   1. changeWatchers is thread safe since it uses a copy-on-write array list.
-   *   2. lastModifiedTimestampMillis and contentHash aren't safe to update across threads. We
-   *      initialize in addWatch() at construction time, and thereafter only the watcher task
-   *      thread accesses this state, so we are good.
-   */
-  private static class ConfigFileInfo {
-
-    private final List<Function<WatchedFileContext<byte[]>, Void>> changeWatchers = new CopyOnWriteArrayList<>();
-    private long lastModifiedTimestampMillis;
-    private HashCode contentHash;
-
-    public ConfigFileInfo(long lastModifiedTimestampMillis, HashCode contentHash) {
-      this.lastModifiedTimestampMillis = lastModifiedTimestampMillis;
-      Preconditions.checkArgument(lastModifiedTimestampMillis > 0L);
-      this.contentHash = Preconditions.checkNotNull(contentHash);
     }
   }
 }
