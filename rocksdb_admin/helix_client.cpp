@@ -45,6 +45,10 @@ DEFINE_string(handoff_event_history_config_type,
   "",
   "[Optional]: Must be one of JSON_ARRAY / LINE_TERMINATED");
 
+DEFINE_string(handoff_client_event_history_json_shard_map_path,
+  "",
+  "[Optional]: path of shard_map generated from spectator in json format");
+
 namespace {
 
 JNIEnv* createVM(const std::string& class_path) {
@@ -137,6 +141,11 @@ void invokeClass(JNIEnv* env,
     arguments.push_back(std::string("--handoffEventHistoryConfigType"));
     arguments.push_back(std::string(FLAGS_handoff_event_history_config_type));
   }
+  if (!FLAGS_handoff_client_event_history_json_shard_map_path.empty()) {
+    arguments.push_back(std::string("--handoffClientEventHistoryJsonShardMapPath"));
+    arguments.push_back(std::string(FLAGS_handoff_client_event_history_json_shard_map_path));
+  }
+
 
   int totalArgumentsSize = arguments.size();
 
