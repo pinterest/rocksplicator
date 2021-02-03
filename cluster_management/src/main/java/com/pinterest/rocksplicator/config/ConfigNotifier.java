@@ -10,14 +10,13 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 public class ConfigNotifier<R> implements Closeable {
+
   private static final Logger LOGGER = LoggerFactory.getLogger(ConfigNotifier.class);
 
   private final Decoder<byte[], R> decoder;
@@ -30,7 +29,7 @@ public class ConfigNotifier<R> implements Closeable {
 
   @VisibleForTesting
   ConfigNotifier(Decoder<byte[], R> decoder, String filePath,
-                        Function<Context<R>, Void> notifier) throws IOException {
+                 Function<Context<R>, Void> notifier) throws IOException {
     this(decoder, filePath, FileWatchers.getPollingFileWatcher(), notifier);
   }
 
