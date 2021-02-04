@@ -1,3 +1,21 @@
+/// Copyright 2021 Pinterest Inc.
+///
+/// Licensed under the Apache License, Version 2.0 (the "License");
+/// you may not use this file except in compliance with the License.
+/// You may obtain a copy of the License at
+///
+/// http://www.apache.org/licenses/LICENSE-2.0
+
+/// Unless required by applicable law or agreed to in writing, software
+/// distributed under the License is distributed on an "AS IS" BASIS,
+/// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+/// See the License for the specific language governing permissions and
+/// limitations under the License.
+
+//
+// @author Gopal Rajpurohit (grajpurohit@pinterest.com)
+//
+
 package com.pinterest.rocksplicator.eventstore;
 
 import com.pinterest.rocksplicator.codecs.SimpleJsonObjectDecoder;
@@ -278,7 +296,7 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
     JSONObject jsonShardMap = shardMapWithContext.getItem();
     ShardMap shardMap = ShardMaps.fromJson(jsonShardMap);
     clientLeaderEventLogger
-        .process(shardMap, shardMapWithContext.getSrc_change_time_millis());
+        .process(shardMap, shardMapWithContext.getNotification_received_time_millis());
   }
 
   private void notificationRunner() {
