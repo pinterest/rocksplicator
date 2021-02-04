@@ -18,18 +18,13 @@
 
 package com.pinterest.rocksplicator;
 
+import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
-import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
 import com.pinterest.rocksplicator.task.BackupTaskFactory;
 import com.pinterest.rocksplicator.task.DedupTaskFactory;
 import com.pinterest.rocksplicator.task.RestoreTaskFactory;
-
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -44,7 +39,6 @@ import org.apache.helix.HelixManager;
 import org.apache.helix.HelixManagerFactory;
 import org.apache.helix.InstanceType;
 import org.apache.helix.manager.zk.HelixManagerShutdownHook;
-import org.apache.helix.manager.zk.ZKHelixAdmin;
 import org.apache.helix.model.HelixConfigScope;
 import org.apache.helix.model.Message;
 import org.apache.helix.model.builder.HelixConfigScopeBuilder;
@@ -60,6 +54,11 @@ import org.apache.log4j.Level;
 import org.apache.log4j.PatternLayout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 
 
 public class Participant {
@@ -82,6 +81,8 @@ public class Participant {
   private static LeaderEventsLogger staticParticipantLeaderEventsLogger = null;
   private static LeaderEventsLogger staticSpectatorLeaderEventsLogger = null;
   private static StateModelFactory<StateModel> stateModelFactory;
+  private static String staticClusterName = null;
+  private static String staticInstanceId = null;
   private final RocksplicatorMonitor monitor;
 
   private static Options constructCommandLineOptions() {
@@ -234,81 +235,20 @@ public class Participant {
               Optional.of(128));
     }
 
-    LOG.error("Starting participant with ZK:" + zkConnectString);
-    Participant participant = new Participant(zkConnectString, clusterName, instanceName,
-        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator,
-        staticParticipantLeaderEventsLogger, staticSpectatorLeaderEventsLogger);
+    staticClusterName = clusterName;
+    staticInstanceId = instanceName;
 
-    /** TODO:grajpurohit
-     * This should probably be done right after connecting to the zk with HelixManager.
-     * Ideal way would be to first be able to register a participant and then register the
-     * stateModelFactory with the stateMachine of the helixManager. There is a race
-     * condition here, since we connect to helixManager right after registering the
-     * stateModelFactory. In this case the state transitions can start, even before
-     * we had a chance to setup the participant's domain information, which is critical
-     * to helix when assigning partitions for resources which needs domain-aware assignment.
-     */
-    HelixAdmin helixAdmin = new ZKHelixAdmin(zkConnectString);
-    HelixConfigScope scope =
-        new HelixConfigScopeBuilder(HelixConfigScope.ConfigScopeProperty.PARTICIPANT)
-            .forCluster(clusterName).forParticipant(instanceName)
-            .build();
-    Map<String, String> properties = new HashMap<String, String>();
-    properties.put("DOMAIN", domainName + ",instance=" + instanceName);
-    helixAdmin.setConfig(scope, properties);
+    LOG.error("Starting participant with ZK:" + zkConnectString);
+    Participant participant = new Participant(zkConnectString, clusterName, instanceName, domainName,
+        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator);
 
     LOG.error("Participant running");
     Thread.currentThread().join();
   }
 
-  /**
-   * This method is called from CPP code, when the service is about to do down.
-   * This will cause all states to transition to offline eventually.
-   */
-  public static void shutDownParticipant() throws Exception {
-
-    /**
-     * TODO: grajpurohit: Improve the logic to cleanly shutdown.
-     *
-     * This is probably not the right way. When a participant is going down,
-     * we need a chance to cleanly offline the currently top-state and second
-     * top-state resources (e.g.. all partitions state should be brought to offline
-     * state) before going down. That will be a graceful shutdown. However, when
-     * helixManager disconnects, it releases all message handlers / listeners there after
-     * there is no way for resources to be brought down through state transition.
-     *
-     * Ideal way will be whereby
-     *
-     * 1. We setup instanceTag "disabled" so that spectator has a first chance to be notified that
-     * this participant is going down without bringing down the hosted partition replicas.
-     *
-     * 2. Wait to ensure that the instanceTag has been added to the participant instance.
-     *
-     * 3. We should then disable this instance (currently this is the only way we figured out to
-     * force controller to issue state transitions to existing current states of all partitions
-     * hosted by this participant) to move to OFFLINE state.
-     *
-     * 4. Wait until all partition replicas hosted by this participant to have moved to OFFLINE state.
-     *
-     * 5. Now we are free to disconnect to HelixManager, so that all listeners and message callback
-     * handlers are properly un-registered.
-     */
-    if (helixManager != null) {
-      helixManager.disconnect();
-      helixManager = null;
-    }
-    if (staticParticipantLeaderEventsLogger != null) {
-      LOG.error("Stopping Participant LeaderEventsLogger");
-      staticParticipantLeaderEventsLogger.close();
-      staticParticipantLeaderEventsLogger = null;
-    }
-  }
-
-  private Participant(String zkConnectString, String clusterName, String instanceName,
+  private Participant(String zkConnectString, String clusterName, String instanceName, String domainName,
                       String stateModelType, int port, String postUrl, boolean useS3Backup,
-                      String s3BucketName, boolean runSpectator,
-                      LeaderEventsLogger staticParticipantLeaderEventsLogger,
-                      LeaderEventsLogger staticSpectatorLeaderEventsLogger)
+                      String s3BucketName, boolean runSpectator)
       throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
@@ -360,6 +300,22 @@ public class Participant {
       LOG.error("Unknown state model: " + stateModelType);
     }
 
+    helixManager.connect();
+
+    registerInstanceDomain(helixManager.getClusterManagmentTool(), clusterName, instanceName, domainName);
+
+    enableInstance(helixManager.getClusterManagmentTool(), clusterName, instanceName);
+
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      @Override
+      public void run() {
+        if (helixManager != null && helixManager.isConnected()) {
+          disableInstance(helixManager.getClusterManagmentTool(), clusterName, instanceName);
+          new HelixManagerShutdownHook(helixManager).run();
+        }
+      }
+    });
+
     StateMachineEngine stateMach = helixManager.getStateMachineEngine();
 
     if (stateModelFactory != null) {
@@ -377,39 +333,8 @@ public class Participant {
       LOG.error(clusterName + " has registered to Tasks: " + taskFactoryRegistry.keySet());
     }
 
-    helixManager.connect();
-
     helixManager.getMessagingService().registerMessageHandlerFactory(
         Message.MessageType.STATE_TRANSITION.name(), stateMach);
-
-    /** TODO: grajpurohit
-     * As soon as the helixManager is connected, we should setup the participant's DOMAIN
-     * information here, and not outside this constructor.
-     *
-     * Next we should first give Spectator a chance to remove this participant from
-     * disabled instances so that next state transitions will quickly be picked up and will
-     * start receiving the traffic (if it applies)
-     *
-     * In order to do as above, we should first remove the "disabled" instanceTag from this
-     * instance, if it exists and ensure that the "disabled" tag has been removed.
-     *
-     * Next we should make sure that instance is enabled (e.g. if it was previously disabled)
-     * Until the instance is enabled, we should wait in loop and throw exception if we can't
-     * enable this instance. This will trigger all state transitions for the partition replicas
-     * with their states that would otherwise be assigned to this Participant.
-     *
-     * We do not need to wait here until all offline partitions of this participant moves to next
-     * state. However for the purpose of being sure that the participant is correctly registered,
-     * we should at least wait until at least one of the OFFLINE partitions moves to next up-ward
-     * state (SLAVE, MASTER, FOLLOWER, LEADER, ONLINE...).
-     */
-
-    /**
-     * This is again, as explained above, not the clean / gracious way to shutdown as explained
-     * above. We need to ensure a proper procedure to shutdown the participant is followed, and
-     * graciously handles shutdown. Simply disconnecting from helixManager is not graceful.
-     */
-    Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
 
     if (runSpectator) {
       // Add callback to create rocksplicator shard config
@@ -443,5 +368,210 @@ public class Participant {
         }
       });
     }
+  }
+
+  /**
+   * This method is called from CPP code, when the service is about to do down.
+   * This will cause all states to transition to offline eventually.
+   */
+  public static void shutDownParticipant() throws Exception {
+
+    /**
+     * TODO: grajpurohit: Improve the logic to cleanly shutdown.
+     *
+     * This is probably not the right way. When a participant is going down,
+     * we need a chance to cleanly offline the currently top-state and second
+     * top-state resources (e.g.. all partitions state should be brought to offline
+     * state) before going down. That will be a graceful shutdown. However, when
+     * helixManager disconnects, it releases all message handlers / listeners there after
+     * there is no way for resources to be brought down through state transition.
+     *
+     * Ideal way will be whereby
+     *
+     * 1. We setup instanceTag "disabled" so that spectator has a first chance to be notified that
+     * this participant is going down without bringing down the hosted partition replicas.
+     *
+     * 2. Wait to ensure that the instanceTag has been added to the participant instance.
+     *
+     * 3. We should then disable this instance (currently this is the only way we figured out to
+     * force controller to issue state transitions to existing current states of all partitions
+     * hosted by this participant) to move to OFFLINE state.
+     *
+     * 4. Wait until all partition replicas hosted by this participant to have moved to OFFLINE state.
+     *
+     * 5. Now we are free to disconnect to HelixManager, so that all listeners and message callback
+     * handlers are properly un-registered.
+     */
+    if (helixManager != null && helixManager.isConnected()) {
+      disableInstance(helixManager.getClusterManagmentTool(), staticClusterName, staticInstanceId);
+    }
+
+    if (helixManager != null) {
+      new HelixManagerShutdownHook(helixManager).run();
+      helixManager = null;
+    }
+    if (staticParticipantLeaderEventsLogger != null) {
+      LOG.error("Stopping Participant LeaderEventsLogger");
+      staticParticipantLeaderEventsLogger.close();
+      staticParticipantLeaderEventsLogger = null;
+    }
+  }
+
+  private static void registerInstanceDomain(
+      final HelixAdmin helixAdmin,
+      final String clusterName,
+      final String instanceName,
+      final String domainName) {
+    HelixConfigScope scope =
+        new HelixConfigScopeBuilder(HelixConfigScope.ConfigScopeProperty.PARTICIPANT)
+            .forCluster(clusterName).forParticipant(instanceName)
+            .build();
+    Map<String, String> properties = new HashMap<String, String>();
+    properties.put("DOMAIN", domainName + ",instance=" + instanceName);
+    helixAdmin.setConfig(scope, properties);
+  }
+
+  private static void disableInstance(
+      final HelixAdmin helixAdmin,
+      final String clusterName,
+      final String instanceId) {
+    retryWithBoundedExponentialBackOff(
+        new ExceptionalAction() {
+          @Override
+          public void apply() throws Exception {
+            LOG.error("Disabling the instance to force offlining existing resources");
+            helixAdmin.enableInstance(clusterName, instanceId, false);
+          }
+        },
+        new ExceptionalCondition() {
+          @Override
+          public boolean apply() throws Exception {
+            // When the instance is no longer enabled
+            return !helixAdmin.getInstanceConfig(clusterName, instanceId).getInstanceEnabled();
+          }
+        }, 10);
+
+    retryWithBoundedExponentialBackOff(
+        new ExceptionalAction() {
+          @Override
+          public void apply() throws Exception {
+            LOG.error(
+                "Adding \"disabled\" instance tag, to force spectator to remove this instance from "
+                    + "shard_map ");
+            helixAdmin.addInstanceTag(clusterName, instanceId, "disabled");
+          }
+        },
+        new ExceptionalCondition() {
+          @Override
+          public boolean apply() throws Exception {
+            // When the instance config tag contains the "disabled" tag.
+            return helixAdmin.getInstanceConfig(clusterName, instanceId).containsTag("disabled");
+          }
+        }, 10);
+
+    /**
+     * Here we need a mechanism to wait for all instances to go offline. However currently that logic
+     * is complicated with available java api. Hence we simply wait for 5 seconds, in the hope
+     * that the resources will be offlined in 5 seconds.
+     */
+    try {
+      Thread.currentThread().sleep(5000);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
+  }
+
+  private static void enableInstance(
+      final HelixAdmin helixAdmin,
+      final String clusterName,
+      final String instanceId) {
+
+    retryWithBoundedExponentialBackOff(
+        new ExceptionalAction() {
+          @Override
+          public void apply() throws Exception {
+            LOG.error(
+                "Removing any previously added \"disabled\" instance tag,"
+                    + " to force spectator to consider this instance in shard_map "
+                    + "potentially even befoer any partitions have been active ");
+            helixAdmin.removeInstanceTag(clusterName, instanceId, "disabled");
+          }
+        },
+        new ExceptionalCondition() {
+          @Override
+          public boolean apply() throws Exception {
+            // When the instance config tag contains the "disabled" tag.
+            return helixAdmin.getInstanceConfig(clusterName, instanceId).containsTag("disabled");
+          }
+        }, 10);
+
+    retryWithBoundedExponentialBackOff(
+        new ExceptionalAction() {
+          @Override
+          public void apply() throws Exception {
+            LOG.error("Enabling the instance to prepare for state transitions");
+            helixAdmin.enableInstance(clusterName, instanceId, true);
+          }
+        },
+        new ExceptionalCondition() {
+          @Override
+          public boolean apply() throws Exception {
+            // When the instance is  enabled
+            return helixAdmin.getInstanceConfig(clusterName, instanceId).getInstanceEnabled();
+          }
+        }, 10);
+  }
+
+  private static void retryWithBoundedExponentialBackOff(
+      ExceptionalAction action, ExceptionalCondition condition, int maxRetries) {
+    long minSleep = 200;
+    double factor = 1.5;
+    long maxSleep = 10000;
+
+    long attemptNum = 0;
+    Throwable lastThrowable = null;
+
+    long currentWaitTimeMillis = minSleep;
+      do {
+        if (attemptNum > maxRetries) {
+          throw new RuntimeException(lastThrowable);
+        }
+
+        try {
+          action.apply();
+        } catch (Exception e) {
+          lastThrowable = e;
+          e.printStackTrace();
+        }
+
+        try {
+          Thread.sleep(currentWaitTimeMillis);
+        } catch (InterruptedException ie) {
+          ie.printStackTrace();
+        }
+
+        try {
+          if (condition.apply()) {
+            break;
+          }
+        } catch (Exception e) {
+          lastThrowable = e;
+          e.printStackTrace();
+        }
+
+        // Update the wait time
+        currentWaitTimeMillis = Math.min(maxSleep, (long) (currentWaitTimeMillis * factor));
+        ++attemptNum;
+      } while (true);
+    }
+
+  private interface ExceptionalAction {
+
+    void apply() throws Exception;
+  }
+
+  private interface ExceptionalCondition {
+
+    boolean apply() throws Exception;
   }
 }
