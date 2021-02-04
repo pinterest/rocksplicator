@@ -24,8 +24,11 @@ import org.apache.curator.framework.state.ConnectionState;
 import org.apache.curator.framework.state.ConnectionStateListener;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 
+import java.io.Console;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Scanner;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -143,6 +146,8 @@ public class EventHistoryAnalysisTool {
       throw new RuntimeException(e);
     }
 
+    long currentTimeMillis = System.currentTimeMillis();
+
     long maxE2EDelay = -1;
     List<LeaderEvent> maxE2EDelayEvents = null;
 
@@ -151,6 +156,7 @@ public class EventHistoryAnalysisTool {
     long[] generateDelays = new long[numPartitions];
     long[] postDelays = new long[numPartitions];
 
+    boolean skipRest = false;
 
     final Codec<LeaderEventsHistory, byte[]> leaderEventsHistoryCodec = new WrappedDataThriftCodec(
         LeaderEventsHistory.class, SerializationProtocol.COMPACT, CompressionAlgorithm.GZIP);
@@ -189,6 +195,14 @@ public class EventHistoryAnalysisTool {
 
         if (maxE2EDelay < e2eLatency) {
           maxE2EDelayEvents = filteredEvents;
+          maxE2EDelay = e2eLatency;
+        }
+
+        if (e2eLatency < 1) {
+          if (!skipRest) {
+            printLeaderEvents(filteredEvents, currentTimeMillis);
+          }
+          skipRest = confirm();
         }
 
       } catch (Exception e) {
@@ -204,7 +218,7 @@ public class EventHistoryAnalysisTool {
     for (int i = 0; i < 20; ++i) {
       int index = (e2eLatencies.length * (i+1) ) / 20 - 1;
       System.out.println(
-          String.format("%2d perentile (ms): %6d %6d %8d %8d",
+          String.format("%2d percentile (ms): %6d %6d %8d %8d",
               ((i+1)*5),
               controllerDelays[index],
               generateDelays[index],
@@ -212,20 +226,45 @@ public class EventHistoryAnalysisTool {
               e2eLatencies[index]));
     }
 
-    long currentTimeMillis = System.currentTimeMillis();
     // Print out all leaderEvents for max latency events.
-    for (int eventId = 0; eventId < maxE2EDelayEvents.size(); ++eventId) {
-      LeaderEvent leaderEvent = maxE2EDelayEvents.get(maxE2EDelayEvents.size() - eventId - 1);
+    printLeaderEvents(maxE2EDelayEvents, currentTimeMillis);
+  }
+
+  private static boolean confirm() {
+    while (true) {
+      System.out.print("Do you want to skip the subsequent leader events? y/n: ");
+      try {
+        int readByte = System.in.read();
+        if (readByte < 0) {
+          return false;
+        } else if (readByte == 'y' || readByte == 'Y') {
+          return true;
+        } else if (readByte == 'n' || readByte == 'N') {
+          return false;
+        }
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+  }
+
+  private static void printLeaderEvents(List<LeaderEvent> leaderEvents, long currentTimeMillis) {
+    // Print out all leaderEvents for max latency events.
+    for (int eventId = 0; eventId < leaderEvents.size(); ++eventId) {
+      LeaderEvent leaderEvent = leaderEvents.get(leaderEvents.size() - eventId - 1);
       System.out.println(String.format(
           "ts:%d msec, age: %8d sec, relative_age: %8d ms, from: %18s, leader: %18s, type: %s",
           leaderEvent.getEvent_timestamp_ms(),
           (currentTimeMillis - leaderEvent.getEvent_timestamp_ms()) / 1000,
-          maxE2EDelayEvents.get(0).getEvent_timestamp_ms() - leaderEvent.getEvent_timestamp_ms(),
+          leaderEvents.get(0).getEvent_timestamp_ms() - leaderEvent.getEvent_timestamp_ms(),
           leaderEvent.getOriginating_node(),
-          (leaderEvent.isSetObserved_leader_node())? leaderEvent.getObserved_leader_node():"not_known",
+          (leaderEvent.isSetObserved_leader_node()) ? leaderEvent.getObserved_leader_node()
+                                                    : "not_known",
           leaderEvent.getEvent_type()));
     }
   }
+
+
 
   private static class Delays {
     private long e2eLatency = -1;
