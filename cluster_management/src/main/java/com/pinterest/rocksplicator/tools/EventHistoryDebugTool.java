@@ -16,7 +16,7 @@
 // @author Gopal Rajpurohit (grajpurohit@pinterest.com)
 //
 
-package com.pinterest.rocksplicator.eventstore;
+package com.pinterest.rocksplicator.tools;
 
 import com.pinterest.rocksplicator.codecs.Codec;
 import com.pinterest.rocksplicator.codecs.WrappedDataThriftCodec;
