@@ -197,6 +197,9 @@ public class ClientShardMapLeaderEventLoggerDriver implements Closeable {
     if (leaderEventsLogger != null) {
       leaderEventsLogger.resetCache();
     }
+    if (clientLeaderEventLogger != null) {
+      clientLeaderEventLogger.resetCache();
+    }
 
     synchronized (notifier) {
       if (this.notifier.isClosed() || !this.notifier.isStarted()) {

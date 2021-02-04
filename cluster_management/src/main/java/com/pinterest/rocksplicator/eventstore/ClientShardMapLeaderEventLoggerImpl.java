@@ -97,6 +97,15 @@ public class ClientShardMapLeaderEventLoggerImpl implements ClientShardMapLeader
   }
 
   @Override
+  public void resetCache() {
+    if (leaderEventsLogger != null) {
+      leaderEventsLogger.resetCache();
+    }
+    leaderStateCache.invalidateAll();
+    leaderStateCache.asMap().clear();
+  }
+
+  @Override
   public void close() throws IOException {
     // First close the notification of any future events.
     /**
