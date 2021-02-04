@@ -201,8 +201,8 @@ public class EventHistoryAnalysisTool {
         if (e2eLatency < 1) {
           if (!skipRest) {
             printLeaderEvents(filteredEvents, currentTimeMillis);
+            skipRest = confirm();
           }
-          skipRest = confirm();
         }
 
       } catch (Exception e) {
@@ -403,3 +403,4 @@ public class EventHistoryAnalysisTool {
     return leaderEvent;
   }
 }
+
