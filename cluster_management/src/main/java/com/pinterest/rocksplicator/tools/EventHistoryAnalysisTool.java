@@ -151,10 +151,10 @@ public class EventHistoryAnalysisTool {
     long maxE2EDelay = -1;
     List<LeaderEvent> maxE2EDelayEvents = null;
 
-    long[] e2eLatencies = new long[numPartitions];
-    long[] controllerDelays = new long[numPartitions];
-    long[] generateDelays = new long[numPartitions];
-    long[] postDelays = new long[numPartitions];
+    long[] e2ePropogationDelays = new long[numPartitions];
+    long[] externalViewDelays = new long[numPartitions];
+    long[] shardMapGenerationDelays = new long[numPartitions];
+    long[] configDistributionDelays = new long[numPartitions];
 
     boolean skipRest = false;
 
@@ -183,47 +183,39 @@ public class EventHistoryAnalysisTool {
             .collect(Collectors.toList());
 
         Delays delay = processE2ELatencyMillis(filteredEvents);
-        long e2eLatency = delay.getE2eLatency();
+        long e2ePropogationDelay = delay.getE2eLatency();
         long externalViewDelay = delay.getExternalViewDelay();
-        long generateDelay = delay.getShardGenDelay();
-        long postDelay = delay.getClientAvailableDelay();
+        long shardMapGenerationDelay = delay.getShardGenDelay();
+        long configDistributionDelay = delay.getClientAvailableDelay();
 
-        e2eLatencies[partitionId - minPartitionId] = e2eLatency;
-        controllerDelays[partitionId - minPartitionId] = externalViewDelay;
-        generateDelays[partitionId - minPartitionId] = generateDelay;
-        postDelays[partitionId - minPartitionId] = postDelay;
+        e2ePropogationDelays[partitionId - minPartitionId] = e2ePropogationDelay;
+        externalViewDelays[partitionId - minPartitionId] = externalViewDelay;
+        shardMapGenerationDelays[partitionId - minPartitionId] = shardMapGenerationDelay;
+        configDistributionDelays[partitionId - minPartitionId] = configDistributionDelay;
 
-        if (maxE2EDelay < e2eLatency) {
+        if (maxE2EDelay < e2ePropogationDelay) {
           maxE2EDelayEvents = filteredEvents;
-          maxE2EDelay = e2eLatency;
+          maxE2EDelay = e2ePropogationDelay;
         }
-
-        if (e2eLatency < 1) {
-          if (!skipRest) {
-            printLeaderEvents(filteredEvents, currentTimeMillis);
-            skipRest = confirm();
-          }
-        }
-
       } catch (Exception e) {
         e.printStackTrace();
       }
     }
 
     // Spit out every 5%
-    Arrays.sort(controllerDelays);
-    Arrays.sort(generateDelays);
-    Arrays.sort(postDelays);
-    Arrays.sort(e2eLatencies);
+    Arrays.sort(externalViewDelays);
+    Arrays.sort(shardMapGenerationDelays);
+    Arrays.sort(configDistributionDelays);
+    Arrays.sort(e2ePropogationDelays);
     for (int i = 0; i < 20; ++i) {
-      int index = (e2eLatencies.length * (i+1) ) / 20 - 1;
+      int index = (e2ePropogationDelays.length * (i+1) ) / 20 - 1;
       System.out.println(
-          String.format("%2d percentile (ms): %6d %6d %8d %8d",
+          String.format("%2d percentile (ms)\t%d\t%d\t%d\t%d",
               ((i+1)*5),
-              controllerDelays[index],
-              generateDelays[index],
-              postDelays[index],
-              e2eLatencies[index]));
+              externalViewDelays[index],
+              shardMapGenerationDelays[index],
+              configDistributionDelays[index],
+              e2ePropogationDelays[index]));
     }
 
     // Print out all leaderEvents for max latency events.

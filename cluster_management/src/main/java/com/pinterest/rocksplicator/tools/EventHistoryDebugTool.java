@@ -157,6 +157,8 @@ public class EventHistoryDebugTool {
       throw new RuntimeException(e);
     }
 
+    long currentTimeMillis = System.currentTimeMillis();
+
     final Codec<LeaderEventsHistory, byte[]> leaderEventsHistoryCodec = new WrappedDataThriftCodec(
         LeaderEventsHistory.class, SerializationProtocol.COMPACT, CompressionAlgorithm.GZIP);
 
@@ -184,6 +186,7 @@ public class EventHistoryDebugTool {
           System.out.println(String.format(
               "ts:%d msec, age: %8d sec, relative_age: %8d ms, from: %18s, leader: %18s, type: %s",
               leaderEvent.getEvent_timestamp_ms(),
+              (currentTimeMillis - leaderEvent.getEvent_timestamp_ms())/1000,
               lastEventTimeMillis - leaderEvent.getEvent_timestamp_ms(),
               leaderEvent.getOriginating_node(),
               (leaderEvent.isSetObserved_leader_node())? leaderEvent.getObserved_leader_node():"not_known",
