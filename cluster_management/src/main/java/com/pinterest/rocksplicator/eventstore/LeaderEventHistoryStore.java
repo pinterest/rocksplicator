@@ -314,7 +314,7 @@ public class LeaderEventHistoryStore implements Closeable {
 
   @VisibleForTesting
   boolean shouldAddClientEvent(LeaderEventsHistory lastKnownHistory,
-                                       LeaderEvent currentLeaderEvent) {
+                               LeaderEvent currentLeaderEvent) {
     LeaderEventType currentLeaderEventType = currentLeaderEvent.getEvent_type();
     if (currentLeaderEventType == CLIENT_OBSERVED_SHARDMAP_LEADER_UP) {
       for (int i = 0; i < lastKnownHistory.getEventsSize(); ++i) {
@@ -368,7 +368,7 @@ public class LeaderEventHistoryStore implements Closeable {
 
   @VisibleForTesting
   boolean shouldAddSpectatorEvent(LeaderEventsHistory lastKnownHistory,
-                                          LeaderEvent currentLeaderEvent) {
+                                  LeaderEvent currentLeaderEvent) {
     LeaderEventType currentLeaderEventType = currentLeaderEvent.getEvent_type();
     if (currentLeaderEventType == SPECTATOR_OBSERVED_LEADER_UP) {
       for (int i = 0; i < lastKnownHistory.getEventsSize(); ++i) {
@@ -465,20 +465,7 @@ public class LeaderEventHistoryStore implements Closeable {
     return false;
   }
 
-  @Override
-  public void close() throws IOException {
-    for (ExecutorService service : executorServices) {
-      service.shutdown();
-    }
-    for (ExecutorService service : executorServices) {
-      while (!service.isTerminated()) {
-        try {
-          service.awaitTermination(100, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-          LOGGER.error("Interrupted: ", e);
-        }
-      }
-    }
+  public void resetCache() {
     this.zkStoreCache.asMap().forEach(
         new BiConsumer<String, LoadingCache<String, MergeableReadWriteStore<LeaderEventsHistory,
             LeaderEvent>>>() {
@@ -504,6 +491,24 @@ public class LeaderEventHistoryStore implements Closeable {
           }
         });
     this.zkStoreCache.invalidateAll();
+  }
+
+  @Override
+  public void close() throws IOException {
+    for (ExecutorService service : executorServices) {
+      service.shutdown();
+    }
+    for (ExecutorService service : executorServices) {
+      while (!service.isTerminated()) {
+        try {
+          service.awaitTermination(100, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+          LOGGER.error("Interrupted: ", e);
+        }
+      }
+    }
+
+    resetCache();
 
     this.zkClient.close();
   }
