@@ -49,6 +49,9 @@ DEFINE_string(handoff_client_event_history_json_shard_map_path,
   "",
   "[Optional]: path of shard_map generated from spectator in json format");
 
+DEFINE_bool(disable_participant_when_exiting, false,
+            "whether we should disable the participant instance when the process is exiting");
+
 namespace {
 
 JNIEnv* createVM(const std::string& class_path) {
@@ -128,6 +131,9 @@ void invokeClass(JNIEnv* env,
   }
   if (disable_spectator) {
     arguments.push_back(std::string("--disableSpectator"));
+  }
+  if (FLAGS_disable_participant_when_exiting) {
+    arguments.push_back(std::string("--disableParticipantWhenExiting"));
   }
   if (!FLAGS_handoff_event_history_zkSvr.empty()) {
     arguments.push_back(std::string("--handoffEventHistoryzkSvr"));

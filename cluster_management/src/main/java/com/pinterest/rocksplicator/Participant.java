@@ -19,8 +19,6 @@
 package com.pinterest.rocksplicator;
 
 import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
-import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLogger;
-import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerDriver;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
@@ -29,6 +27,7 @@ import com.pinterest.rocksplicator.task.BackupTaskFactory;
 import com.pinterest.rocksplicator.task.DedupTaskFactory;
 import com.pinterest.rocksplicator.task.RestoreTaskFactory;
 
+import com.google.common.base.Preconditions;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
@@ -58,7 +57,6 @@ import org.apache.log4j.PatternLayout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -76,6 +74,7 @@ public class Participant {
   private static final String configPostUrl = "configPostUrl";
   private static final String s3Bucket = "s3Bucket";
   private static final String disableSpectator = "disableSpectator";
+  private static final String disableParticipantWhenExiting = "disableParticipantWhenExiting";
   private static final String handoffEventHistoryzkSvr = "handoffEventHistoryzkSvr";
   private static final String handoffEventHistoryConfigPath = "handoffEventHistoryConfigPath";
   private static final String handoffEventHistoryConfigType = "handoffEventHistoryConfigType";
@@ -89,6 +88,7 @@ public class Participant {
   private static StateModelFactory<StateModel> stateModelFactory;
   private static String staticClusterName = null;
   private static String staticInstanceId = null;
+  private static boolean staticDisableParticipantInstanceWhenExiting = false;
   private final RocksplicatorMonitor monitor;
 
   private static Options constructCommandLineOptions() {
@@ -146,6 +146,12 @@ public class Participant {
     disableSpectatorOption.setRequired(false);
     disableSpectatorOption.setArgName("Disable Spectator (Optional)");
 
+    Option disableParticipantWhenExitingOption =
+        OptionBuilder.withLongOpt(disableParticipantWhenExiting).withDescription("Disable Participant").create();
+    disableParticipantWhenExitingOption.setArgs(0);
+    disableParticipantWhenExitingOption.setRequired(false);
+    disableParticipantWhenExitingOption.setArgName("Disable Participant Instance when exiting (Optional)");
+
     Option handoffEventHistoryzkSvrOption =
         OptionBuilder.withLongOpt(handoffEventHistoryzkSvr)
             .withDescription(
@@ -195,6 +201,7 @@ public class Participant {
         .addOption(configPostUrlOption)
         .addOption(s3BucketOption)
         .addOption(disableSpectatorOption)
+        .addOption(disableParticipantWhenExitingOption)
         .addOption(handoffEventHistoryzkSvrOption)
         .addOption(handoffEventHistoryConfigPathOption)
         .addOption(handoffEventHistoryConfigTypeOption)
@@ -219,24 +226,51 @@ public class Participant {
     ));
     CommandLine cmd = processCommandLineArgs(args);
     final String zkConnectString = cmd.getOptionValue(zkServer);
+    LOG.error(String.format("CmdLine: zkServer: %s", zkConnectString));
+
     final String clusterName = cmd.getOptionValue(cluster);
+    LOG.error(String.format("CmdLine: cluster: %s", clusterName));
+
     final String domainName = cmd.getOptionValue(domain);
+    LOG.error(String.format("CmdLine: domain: %s", domainName));
     final String host = cmd.getOptionValue(hostAddress);
+    LOG.error(String.format("CmdLine: host: %s", host));
     final String port = cmd.getOptionValue(hostPort);
+    LOG.error(String.format("CmdLine: hostPort: %s", port));
+
     final String stateModelType = cmd.getOptionValue(stateModel);
+    LOG.error(String.format("CmdLine: stateModel: %s", stateModelType));
     final String postUrl = cmd.getOptionValue(configPostUrl);
+    LOG.error(String.format("CmdLine: configPostUrl: %s", postUrl));
     final String instanceName = host + "_" + port;
+    LOG.error(String.format("Constructed Arg: instanceName: %s", instanceName));
+
     String s3BucketName = "";
     final boolean useS3Backup = cmd.hasOption(s3Bucket);
+    LOG.error(String.format("CmdLine: useS3Backup: %s", Boolean.toString(useS3Backup)));
     if (useS3Backup) {
       s3BucketName = cmd.getOptionValue(s3Bucket);
+      LOG.error(String.format("CmdLine: s3BucketName: %s", s3Bucket));
+
     }
     final boolean runSpectator = !cmd.hasOption(disableSpectator);
+    LOG.error(String.format("CmdLine: disableSpectator: %s", Boolean.toString(runSpectator)));
+    final boolean disableParticipantInstanceWhenExiting = cmd.hasOption(disableParticipantWhenExiting);
+    LOG.error(String.format("CmdLine: disableParticipantWhenExiting: %s", Boolean.toString(disableParticipantInstanceWhenExiting)));
 
     final String zkEventHistoryStr = cmd.getOptionValue(handoffEventHistoryzkSvr, "");
+    LOG.error(String.format("CmdLine: handoffEventHistoryzkSvr: %s", zkEventHistoryStr));
     final String resourceConfigPath = cmd.getOptionValue(handoffEventHistoryConfigPath, "");
+    LOG.error(String.format("CmdLine: handoffEventHistoryConfigPath: %s", resourceConfigPath));
     final String resourceConfigType = cmd.getOptionValue(handoffEventHistoryConfigType, "");
+    LOG.error(String.format("CmdLine: handoffEventHistoryConfigType: %s", resourceConfigType));
     final String shardMapPath = cmd.getOptionValue(handoffClientEventHistoryJsonShardMapPath, "");
+    LOG.error(String.format("CmdLine: handoffClientEventHistoryJsonShardMapPath: %s", shardMapPath));
+
+
+    staticDisableParticipantInstanceWhenExiting = disableParticipantInstanceWhenExiting;
+    staticClusterName = clusterName;
+    staticInstanceId = instanceName;
 
     /**
      * Note that the last parameter is empty, since we don't dictate
@@ -258,12 +292,9 @@ public class Participant {
       }
     }
 
-    staticClusterName = clusterName;
-    staticInstanceId = instanceName;
-
     LOG.error("Starting participant with ZK:" + zkConnectString);
     Participant participant = new Participant(zkConnectString, clusterName, instanceName, domainName,
-        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator);
+        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator, disableParticipantInstanceWhenExiting);
 
     LOG.error("Participant running");
     Thread.currentThread().join();
@@ -271,7 +302,7 @@ public class Participant {
 
   private Participant(String zkConnectString, String clusterName, String instanceName, String domainName,
                       String stateModelType, int port, String postUrl, boolean useS3Backup,
-                      String s3BucketName, boolean runSpectator)
+                      String s3BucketName, boolean runSpectator, boolean disableParticipantInstanceWhenExiting)
       throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
@@ -325,7 +356,18 @@ public class Participant {
 
     helixManager.connect();
 
-    registerInstanceDomain(helixManager.getClusterManagmentTool(), clusterName, instanceName, domainName);
+    /**
+     * If the instance has already been marked for maintenance, we shouldn't re-enable this instance
+     * and load any data.
+     */
+    Preconditions.checkArgument(! isThisInstanceMarkedForMaintenance(
+        helixManager.getClusterManagmentTool(), clusterName, instanceName));
+
+    /**
+     * Register the domain of the instance, before enabling the instance.
+     */
+    registerInstanceDomain(
+        helixManager.getClusterManagmentTool(), clusterName, instanceName, domainName);
 
     enableInstance(helixManager.getClusterManagmentTool(), clusterName, instanceName);
 
@@ -333,8 +375,15 @@ public class Participant {
       @Override
       public void run() {
         if (helixManager != null && helixManager.isConnected()) {
-          disableInstance(helixManager.getClusterManagmentTool(), clusterName, instanceName);
+          /**
+           * Do not automatically disable the instance, unless specifically asked to do so through
+           * flag.
+           */
+          if (disableParticipantInstanceWhenExiting) {
+            disableInstance(helixManager.getClusterManagmentTool(), clusterName, instanceName);
+          }
           new HelixManagerShutdownHook(helixManager).run();
+          helixManager = null;
         }
       }
     });
@@ -449,13 +498,20 @@ public class Participant {
      * handlers are properly un-registered.
      */
     if (helixManager != null && helixManager.isConnected()) {
-      disableInstance(helixManager.getClusterManagmentTool(), staticClusterName, staticInstanceId);
+      if (staticDisableParticipantInstanceWhenExiting) {
+        /**
+         * Do not automatically disable the instance, unless specifically asked to do so through
+         * flag.
+         */
+        disableInstance(helixManager.getClusterManagmentTool(), staticClusterName, staticInstanceId);
+      }
+
+      if (helixManager != null) {
+        new HelixManagerShutdownHook(helixManager).run();
+        helixManager = null;
+      }
     }
 
-    if (helixManager != null) {
-      new HelixManagerShutdownHook(helixManager).run();
-      helixManager = null;
-    }
     if (staticParticipantLeaderEventsLogger != null) {
       LOG.error("Stopping Participant LeaderEventsLogger");
       staticParticipantLeaderEventsLogger.close();
@@ -481,7 +537,11 @@ public class Participant {
       final HelixAdmin helixAdmin,
       final String clusterName,
       final String instanceId) {
+    LOG.error(String.format("Disabling the instance %s, on cluster %s", staticInstanceId, staticClusterName));
+    waitUntilAllPartitionsAreOffline(helixAdmin, clusterName, instanceId);
+
     retryWithBoundedExponentialBackOff(
+        "disableInstance",
         new ExceptionalAction() {
           @Override
           public void apply() throws Exception {
@@ -498,6 +558,7 @@ public class Participant {
         }, 10);
 
     retryWithBoundedExponentialBackOff(
+        "disableInstanceTag",
         new ExceptionalAction() {
           @Override
           public void apply() throws Exception {
@@ -515,24 +576,76 @@ public class Participant {
           }
         }, 10);
 
+    waitUntilAllPartitionsAreOffline(helixAdmin, clusterName, instanceId);
+  }
+
+  private static boolean waitUntilAllPartitionsAreOffline(
+      final HelixAdmin helixAdmin,
+      final String clusterName,
+      final String instanceId) {
+    LOG.error(String.format(
+        "waitUntilAllPartitionsAreOffline cluster: %s instance: %s", clusterName, instanceId));
+
     /**
-     * Here we need a mechanism to wait for all instances to go offline. However currently that logic
-     * is complicated with available java api. Hence we simply wait for 5 seconds, in the hope
-     * that the resources will be offlined in 5 seconds.
+     * Currently we don't have a good way to guarantee that all the partitions of the instance have
+     * been offlined. There doesn't seem to be direct api for the same. We could potentially
+     * attempt to retrieve all resources and their externalViews and then iterate through them
+     * to make sure that this instances doesn't have any replica in non-offline (active) state.
+     * However, for large participant clusters, participant retrieving externalViews for all
+     * resources is bit risky approach since it could generate lot of traffic to the zk, zk may
+     * get overloaded. Until we have better solution to figure out how to retrieve current states
+     * corresponding to this participant for a given session, we will simply wait for 5 seconds
+     * to provide helix controller to generate all necessary state transitions for this instance
+     *
+     * Here we are assuming that this instance has been disabled in helix, before calling this
+     * method.
      */
     try {
-      Thread.currentThread().sleep(5000);
+      Thread.sleep(5000);
     } catch (InterruptedException e) {
       e.printStackTrace();
     }
+
+    return true;
   }
 
+
+  /**
+   * If the instance has been marked for maintenance by an external script this
+   * participant should fail to load and not enable the instance in helix.
+   * This is so that the external scrip performing maintenance work, need some
+   * way of guarantee that when it marks the instance for maintenance or removal
+   * it doesn't conflict with any ongoing deploy that could re-enable this
+   * instance of Participant node.
+   */
+  private static boolean isThisInstanceMarkedForMaintenance(
+      final HelixAdmin helixAdmin,
+      final String clusterName,
+      final String instanceId) {
+    LOG.error(String.format("Attempt to get instanceTag : maintenance"));
+    boolean result = helixAdmin.getInstanceConfig(clusterName, instanceId).containsTag("maintenance");
+    if (result) {
+      LOG.error(String.format("The instance %s in cluster: %s is marked for maintenance with an "
+              + "instance tag 'maintenance'",
+          instanceId, clusterName));
+    }
+    return result;
+  }
+
+  /**
+   * Attempt to enable this instance and remove the "disable" tag.
+   * The order is first to remove the instanceTag, and then enable the instance in helix.
+   * If either of the attempts fail for successive 10 retries, then we throw a RuntimeException
+   * since it is not same to have this participant serve any traffic unless the instance is
+   * enabled and the disabled tag has been removed.
+   */
   private static void enableInstance(
       final HelixAdmin helixAdmin,
       final String clusterName,
       final String instanceId) {
 
     retryWithBoundedExponentialBackOff(
+        "enableInstanceTag",
         new ExceptionalAction() {
           @Override
           public void apply() throws Exception {
@@ -552,6 +665,7 @@ public class Participant {
         }, 10);
 
     retryWithBoundedExponentialBackOff(
+        "enableInstance",
         new ExceptionalAction() {
           @Override
           public void apply() throws Exception {
@@ -569,6 +683,7 @@ public class Participant {
   }
 
   private static void retryWithBoundedExponentialBackOff(
+      final String context,
       ExceptionalAction action, ExceptionalCondition condition, int maxRetries) {
     long minSleep = 200;
     double factor = 1.5;
@@ -580,20 +695,35 @@ public class Participant {
     long currentWaitTimeMillis = minSleep;
       do {
         if (attemptNum > maxRetries) {
-          throw new RuntimeException(lastThrowable);
+          if (lastThrowable != null) {
+            LOG.error(String.format(
+                "retryWithBoundedExponentialBackOff Exhausted All Retries:"
+                    + " %s attempNum: %d, with exception",
+                context, attemptNum), lastThrowable);
+            throw new RuntimeException(lastThrowable);
+          } else {
+            LOG.error(String.format(
+                "retryWithBoundedExponentialBackOff  Exhausted All Retries:"
+                    + " %s attempNum: %d, without exceptions",
+                context, attemptNum));
+            throw new RuntimeException("Exhauted All Retries: " + context);
+          }
         }
+        LOG.error(String.format("retryWithBoundedExponentialBackOff: %s attempNum: %d", context, attemptNum));
 
         try {
           action.apply();
         } catch (Exception e) {
           lastThrowable = e;
-          e.printStackTrace();
+          LOG.error(String.format(
+              "retryWithBoundedExponentialBackOff: %s attempNum: %d, with exception",
+              context, attemptNum), lastThrowable);
         }
 
         try {
           Thread.sleep(currentWaitTimeMillis);
         } catch (InterruptedException ie) {
-          ie.printStackTrace();
+          LOG.error("retryWithBoundedExponentialBackOff: " + context, ie);
         }
 
         try {
@@ -602,7 +732,9 @@ public class Participant {
           }
         } catch (Exception e) {
           lastThrowable = e;
-          e.printStackTrace();
+          LOG.error(String.format(
+              "retryWithBoundedExponentialBackOff: %s attempNum: %d, with exception",
+              context, attemptNum), lastThrowable);
         }
 
         // Update the wait time
