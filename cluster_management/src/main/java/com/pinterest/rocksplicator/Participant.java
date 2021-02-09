@@ -379,10 +379,13 @@ public class Participant {
            * Do not automatically disable the instance, unless specifically asked to do so through
            * flag.
            */
-          if (disableParticipantInstanceWhenExiting) {
-            disableInstance(helixManager.getClusterManagmentTool(), clusterName, instanceName);
+          try {
+            if (disableParticipantInstanceWhenExiting) {
+              disableInstance(helixManager.getClusterManagmentTool(), clusterName, instanceName);
+            }
+          } finally {
+            new HelixManagerShutdownHook(helixManager).run();
           }
-          new HelixManagerShutdownHook(helixManager).run();
           helixManager = null;
         }
       }
