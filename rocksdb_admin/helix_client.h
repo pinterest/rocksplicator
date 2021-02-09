@@ -51,4 +51,10 @@ void JoinCluster(const std::string& zk_connect_str,
  */
 void DisconnectHelixManager();
 
+std::string GetLeaderInstanceId(
+  const std::string& zk_connect_str,
+  const std::string& cluster,
+  const std::string& resource,
+  const std::string& partition);
+
 }  // namespace admin
