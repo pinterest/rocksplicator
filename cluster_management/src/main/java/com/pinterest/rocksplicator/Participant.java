@@ -447,7 +447,7 @@ public class Participant {
           @Override
           public boolean apply() throws Exception {
             // When the instance is no longer enabled
-            return !helixAdmin.getInstanceConfig(clusterName, instanceId).getInstanceEnabled();
+            return ! helixAdmin.getInstanceConfig(clusterName, instanceId).getInstanceEnabled();
           }
         }, 10);
 
@@ -501,7 +501,7 @@ public class Participant {
           @Override
           public boolean apply() throws Exception {
             // When the instance config tag contains the "disabled" tag.
-            return helixAdmin.getInstanceConfig(clusterName, instanceId).containsTag("disabled");
+            return ! helixAdmin.getInstanceConfig(clusterName, instanceId).containsTag("disabled");
           }
         }, 10);
 
