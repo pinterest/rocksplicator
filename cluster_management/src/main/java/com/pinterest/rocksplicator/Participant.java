@@ -18,13 +18,10 @@
 
 package com.pinterest.rocksplicator;
 
-<<<<<<< HEAD
 import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
-=======
 import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLogger;
 import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerDriver;
->>>>>>> master
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
@@ -265,31 +262,8 @@ public class Participant {
     staticInstanceId = instanceName;
 
     LOG.error("Starting participant with ZK:" + zkConnectString);
-<<<<<<< HEAD
     Participant participant = new Participant(zkConnectString, clusterName, instanceName, domainName,
         stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator);
-=======
-    Participant participant = new Participant(zkConnectString, clusterName, instanceName,
-        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator);
-
-    /** TODO:grajpurohit
-     * This should probably be done right after connecting to the zk with HelixManager.
-     * Ideal way would be to first be able to register a participant and then register the
-     * stateModelFactory with the stateMachine of the helixManager. There is a race
-     * condition here, since we connect to helixManager right after registering the
-     * stateModelFactory. In this case the state transitions can start, even before
-     * we had a chance to setup the participant's domain information, which is critical
-     * to helix when assigning partitions for resources which needs domain-aware assignment.
-     */
-    HelixAdmin helixAdmin = new ZKHelixAdmin(zkConnectString);
-    HelixConfigScope scope =
-        new HelixConfigScopeBuilder(HelixConfigScope.ConfigScopeProperty.PARTICIPANT)
-            .forCluster(clusterName).forParticipant(instanceName)
-            .build();
-    Map<String, String> properties = new HashMap<String, String>();
-    properties.put("DOMAIN", domainName + ",instance=" + instanceName);
-    helixAdmin.setConfig(scope, properties);
->>>>>>> master
 
     LOG.error("Participant running");
     Thread.currentThread().join();
