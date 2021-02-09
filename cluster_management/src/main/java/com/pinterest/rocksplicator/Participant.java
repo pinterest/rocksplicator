@@ -434,7 +434,7 @@ public class Participant {
     if (runSpectator) {
       // Add callback to create rocksplicator shard config
       ConfigGenerator configGenerator = new ConfigGenerator(clusterName, helixManager, postUrl, monitor,
-          new ExternalViewLeaderEventsLoggerImpl(staticSpectatorLeaderEventsLogger));
+          new ExternalViewLeaderEventsLoggerImpl(staticSpectatorLeaderEventsLogger), null);
 
       HelixCustomCodeRunner codeRunner = new HelixCustomCodeRunner(helixManager, zkConnectString)
           .invoke(configGenerator)

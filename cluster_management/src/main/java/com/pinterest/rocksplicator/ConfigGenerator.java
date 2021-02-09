@@ -18,13 +18,18 @@
 
 package com.pinterest.rocksplicator;
 
+import com.pinterest.rocksplicator.codecs.Codec;
+import com.pinterest.rocksplicator.codecs.Codecs;
+import com.pinterest.rocksplicator.codecs.JSONObjectCodec;
 import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventLogger;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
+import com.pinterest.rocksplicator.thrift.commons.io.CompressionAlgorithm;
 import com.pinterest.rocksplicator.utils.AutoCloseableLock;
 import com.pinterest.rocksplicator.utils.ExternalViewUtils;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
+import org.apache.curator.framework.CuratorFramework;
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixConstants;
 import org.apache.helix.HelixManager;
@@ -39,6 +44,7 @@ import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.zookeeper.data.Stat;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.slf4j.Logger;
@@ -55,6 +61,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -181,6 +189,8 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   private final JSONObject dataParameters;
   private final RocksplicatorMonitor monitor;
   private final ReentrantLock synchronizedCallbackLock;
+  private final CuratorFramework zkShardMapClient;
+  private final ExecutorService executorService;
   private HelixManager helixManager;
   private HelixAdmin helixAdmin;
   private String lastPostedContent;
@@ -190,12 +200,13 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   @VisibleForTesting
   ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
     this(clusterName, helixManager, configPostUrl,
-        new RocksplicatorMonitor(clusterName, helixManager.getInstanceName()), null);
+        new RocksplicatorMonitor(clusterName, helixManager.getInstanceName()), null, null);
   }
 
   public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl,
                          RocksplicatorMonitor monitor,
-                         ExternalViewLeaderEventLogger externalViewLeaderEventLogger) {
+                         ExternalViewLeaderEventLogger externalViewLeaderEventLogger,
+                         CuratorFramework zkShardMapClient) {
     this.clusterName = clusterName;
     this.helixManager = helixManager;
     this.helixAdmin = this.helixManager.getClusterManagmentTool();
@@ -212,6 +223,12 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     this.enableDumpToLocal = new File("/var/log/helixspectator").canWrite();
     this.synchronizedCallbackLock = new ReentrantLock();
     this.externalViewLeaderEventLogger = externalViewLeaderEventLogger;
+    this.zkShardMapClient = zkShardMapClient;
+    if (this.zkShardMapClient != null) {
+      this.executorService = Executors.newSingleThreadExecutor();
+    } else {
+      this.executorService = null;
+    }
   }
 
   private void logUncheckedException(Runnable r) {
@@ -243,7 +260,8 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
           LOG.error("Received notification: " + notificationContext.getChangeType());
           if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
             generateShardConfig();
-          } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.INSTANCE_CONFIG) {
+          } else if (notificationContext.getChangeType()
+              == HelixConstants.ChangeType.INSTANCE_CONFIG) {
             if (updateDisabledHosts()) {
               generateShardConfig();
             }
@@ -384,6 +402,32 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
         resourceConfig.put(entry.getKey(), jsonArray);
       }
 
+      final JSONObject newShardMap = new JSONObject();
+      newShardMap.put(resource, resourceConfig);
+
+      executorService.submit(new Runnable() {
+        @Override
+        public void run() {
+          // publish to zk.
+          try {
+            String zkPath = String.format("/shard_map/%s/%s", clusterName, resource);
+            byte[] emptyByteArray = new byte[0];
+            Stat stat = zkShardMapClient.checkExists().creatingParentsIfNeeded().forPath(zkPath);
+            if (stat == null) {
+              zkShardMapClient.create().creatingParentsIfNeeded().forPath(zkPath, emptyByteArray);
+            }
+            Codec<JSONObject, byte[]> baseCodec = new JSONObjectCodec();
+            Codec<JSONObject, byte[]>
+                compressedCodec =
+                Codecs.getCompressedCodec(baseCodec, CompressionAlgorithm.GZIP);
+            byte[] setData = compressedCodec.encode(newShardMap);
+            zkShardMapClient.setData().forPath(zkPath, setData);
+          } catch (Exception e) {
+            LOG.error("Error publishing shard_map / resource_map to zk", e);
+          }
+        }
+      });
+
       // add the resource config to the cluster config
       config.put(resource, resourceConfig);
     }
@@ -507,6 +551,16 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   public void close() throws IOException {
     // ensure the while we are closing the ConfigGenerator, we are not processing any callback
     // at the moment.
+    executorService.shutdown();
+
+    while (!executorService.isTerminated()) {
+      try {
+        executorService.awaitTermination(100, TimeUnit.MILLISECONDS);
+      } catch (InterruptedException e) {
+        e.printStackTrace();
+      }
+    }
+
     try (AutoCloseableLock lock = new AutoCloseableLock(this.synchronizedCallbackLock)) {
       // Cleanup any remaining items.
       externalViewLeaderEventLogger.close();

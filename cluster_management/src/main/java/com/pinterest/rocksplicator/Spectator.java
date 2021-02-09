@@ -20,17 +20,12 @@ package com.pinterest.rocksplicator;
 
 import static org.apache.curator.framework.state.ConnectionState.CONNECTED;
 
-import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLogger;
+import com.pinterest.rocksplicator.codecs.ClientZKShardMapDriver;
 import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerDriver;
-import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
-
-import java.io.IOException;
-import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -57,8 +52,13 @@ import org.apache.log4j.PatternLayout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.util.Optional;
+import java.util.concurrent.TimeUnit;
+
 
 public class Spectator {
+
   private static final Logger LOG = LoggerFactory.getLogger(Spectator.class);
   private static final String zkServer = "zkSvr";
   private static final String cluster = "cluster";
@@ -69,11 +69,14 @@ public class Spectator {
   private static final String handoffEventHistoryzkSvr = "handoffEventHistoryzkSvr";
   private static final String handoffEventHistoryConfigPath = "handoffEventHistoryConfigPath";
   private static final String handoffEventHistoryConfigType = "handoffEventHistoryConfigType";
-  private static final String  handoffClientEventHistoryJsonShardMapPath = "handoffClientEventHistoryJsonShardMapPath";
+  private static final String
+      handoffClientEventHistoryJsonShardMapPath =
+      "handoffClientEventHistoryJsonShardMapPath";
 
   private static LeaderEventsLogger staticClientLeaderEventsLogger = null;
   private static ClientShardMapLeaderEventLoggerDriver
       staticClientShardMapLeaderEventLoggerDriver = null;
+  private static ClientZKShardMapDriver staticClientZkDriver = null;
 
 
   private final HelixManager helixManager;
@@ -81,6 +84,28 @@ public class Spectator {
   private final LeaderEventsLogger spectatorLeaderEventsLogger;
 
   private ConfigGenerator configGenerator = null;
+
+  public Spectator(String zkConnectString, String clusterName, String instanceName,
+                   LeaderEventsLogger spectatorLeaderEventsLogger) throws Exception {
+    helixManager =
+        HelixManagerFactory
+            .getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
+
+    monitor = new RocksplicatorMonitor(clusterName, instanceName);
+    this.spectatorLeaderEventsLogger = spectatorLeaderEventsLogger;
+    helixManager.connect();
+
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      @Override
+      public void run() {
+        try {
+          stopListeners();
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
+      }
+    });
+  }
 
   private static Options constructCommandLineOptions() {
     Option zkServerOption =
@@ -122,27 +147,30 @@ public class Spectator {
     handoffEventHistoryzkSvrOption.setArgName(
         "Zk connect string for logging state transitions for leader handoff profiling (Optional)");
 
-    Option  handoffEventHistoryConfigPathOption =
+    Option handoffEventHistoryConfigPathOption =
         OptionBuilder.withLongOpt(handoffEventHistoryConfigPath)
             .withDescription(
-                "local disk path to config containing resources to enable for handoff events history tracking")
+                "local disk path to config containing resources to enable for handoff events "
+                    + "history tracking")
             .create();
     handoffEventHistoryConfigPathOption.setArgs(1);
     handoffEventHistoryConfigPathOption.setRequired(false);
     handoffEventHistoryConfigPathOption.setArgName(
         "config path containing resources to enabled for handoff events history (Optional)");
 
-    Option  handoffEventHistoryConfigTypeOption =
+    Option handoffEventHistoryConfigTypeOption =
         OptionBuilder.withLongOpt(handoffEventHistoryConfigType)
             .withDescription(
-                "format of config for resources to track handoff events [LINE_TERMINATED / JSON_ARRAY]")
+                "format of config for resources to track handoff events [LINE_TERMINATED / "
+                    + "JSON_ARRAY]")
             .create();
     handoffEventHistoryConfigTypeOption.setArgs(1);
     handoffEventHistoryConfigTypeOption.setRequired(false);
     handoffEventHistoryConfigTypeOption.setArgName(
-        "format of config for resources to track handoff events [LINE_TERMINATED / JSON_ARRAY] (Optional)");
+        "format of config for resources to track handoff events [LINE_TERMINATED / JSON_ARRAY] "
+            + "(Optional)");
 
-    Option  handoffClientEventHistoryJsonShardMapPathOption =
+    Option handoffClientEventHistoryJsonShardMapPathOption =
         OptionBuilder.withLongOpt(handoffClientEventHistoryJsonShardMapPath)
             .withDescription(
                 "path to shard_map in json format, generated by Spectator")
@@ -205,20 +233,27 @@ public class Spectator {
       staticClientShardMapLeaderEventLoggerDriver = new ClientShardMapLeaderEventLoggerDriver(
           clusterName, shardMapPath, staticClientLeaderEventsLogger, zkEventHistoryStr);
     }
+    if (handoffEventHistoryzkSvr != null && !handoffEventHistoryzkSvr.isEmpty()) {
+      staticClientLeaderEventsLogger = new LeaderEventsLoggerImpl(instanceName,
+          zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType, Optional.empty());
+      staticClientZkDriver = new ClientZKShardMapDriver(clusterName, zkConnectString, staticClientLeaderEventsLogger);
+    }
 
     LOG.error("Starting spectator with ZK:" + zkConnectString);
     final Spectator spectator = new Spectator(zkConnectString, clusterName, instanceName,
         spectatorLeaderEventsLogger);
 
-    CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
+    CuratorFramework
+        zkClient =
+        CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
 
     zkClient.getConnectionStateListenable().addListener(new ConnectionStateListener() {
       @Override
       public void stateChanged(CuratorFramework client, ConnectionState newState) {
-      // If the connection state changes to LOST/SUSPENDED, then it means it
-      // already lost the lock/would release the lock and the current leader
-      // role is not legal any more. Here we simply terminate it and rely
-      // on restarting to re-acquire the inter-process lock.
+        // If the connection state changes to LOST/SUSPENDED, then it means it
+        // already lost the lock/would release the lock and the current leader
+        // role is not legal any more. Here we simply terminate it and rely
+        // on restarting to re-acquire the inter-process lock.
         if (newState == ConnectionState.LOST || newState == ConnectionState.SUSPENDED) {
           LOG.error("ZK lock is lost and the process needs to be terminated");
           // Stop all the listeners before exiting
@@ -248,7 +283,7 @@ public class Spectator {
 
     try (Locker locker = new Locker(mutex)) {
       LOG.error("Obtained lock");
-      spectator.startListener(postUrl);
+      spectator.startListener(postUrl, zkClient);
       Thread.currentThread().join();
     } catch (RuntimeException e) {
       LOG.error("RuntimeException thrown by cluster " + clusterName, e);
@@ -258,39 +293,27 @@ public class Spectator {
     LOG.error("Returning from main");
   }
 
-  public Spectator(String zkConnectString, String clusterName, String instanceName,
-                   LeaderEventsLogger spectatorLeaderEventsLogger) throws Exception {
-    helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
-
-    monitor = new RocksplicatorMonitor(clusterName, instanceName);
-    this.spectatorLeaderEventsLogger = spectatorLeaderEventsLogger;
-    helixManager.connect();
-
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      @Override
-      public void run() {
-        try {
-          stopListeners();
-        } catch (Exception e) {
-          e.printStackTrace();
-        }
-      }
-    });
+  private static String getClusterLockPath(String cluster) {
+    return "/rocksplicator/" + cluster + "/spectator/lock";
   }
 
-  private void startListener(String postUrl) throws Exception {
+  private void startListener(String postUrl, CuratorFramework zkClient) throws Exception {
     if (this.configGenerator == null) {
       this.configGenerator = new ConfigGenerator(
           helixManager.getClusterName(),
           helixManager,
           postUrl,
-          monitor, new ExternalViewLeaderEventsLoggerImpl(spectatorLeaderEventsLogger));
+          monitor, new ExternalViewLeaderEventsLoggerImpl(spectatorLeaderEventsLogger), zkClient);
 
       /**
        * Add to the helixManager, message handlers.
        */
       helixManager.addExternalViewChangeListener(configGenerator);
       helixManager.addConfigChangeListener(configGenerator);
+    }
+
+    if (staticClientZkDriver != null) {
+      staticClientZkDriver.startNotification();
     }
   }
 
@@ -329,6 +352,14 @@ public class Spectator {
         e.printStackTrace();
       }
     }
+    if (staticClientZkDriver != null) {
+      try {
+        LOG.error("Stopping ClientZKDriver LeaderEventLogger Driver");
+        staticClientZkDriver.close();
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
+    }
 
     if (staticClientLeaderEventsLogger != null) {
       try {
@@ -339,9 +370,5 @@ public class Spectator {
         e.printStackTrace();
       }
     }
-  }
-
-  private static String getClusterLockPath(String cluster) {
-    return "/rocksplicator/" + cluster + "/spectator/lock";
   }
 }
