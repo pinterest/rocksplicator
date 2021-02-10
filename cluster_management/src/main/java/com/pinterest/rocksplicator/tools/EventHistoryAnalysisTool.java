@@ -24,11 +24,8 @@ import org.apache.curator.framework.state.ConnectionState;
 import org.apache.curator.framework.state.ConnectionStateListener;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 
-import java.io.Console;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Scanner;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -208,10 +205,10 @@ public class EventHistoryAnalysisTool {
     Arrays.sort(configDistributionDelays);
     Arrays.sort(e2ePropogationDelays);
     for (int i = 0; i < 20; ++i) {
-      int index = (e2ePropogationDelays.length * (i+1) ) / 20 - 1;
+      int index = (e2ePropogationDelays.length * (i + 1)) / 20 - 1;
       System.out.println(
           String.format("%2d percentile (ms)\t%d\t%d\t%d\t%d",
-              ((i+1)*5),
+              ((i + 1) * 5),
               externalViewDelays[index],
               shardMapGenerationDelays[index],
               configDistributionDelays[index],
@@ -220,24 +217,6 @@ public class EventHistoryAnalysisTool {
 
     // Print out all leaderEvents for max latency events.
     printLeaderEvents(maxE2EDelayEvents, currentTimeMillis);
-  }
-
-  private static boolean confirm() {
-    while (true) {
-      System.out.print("Do you want to skip the subsequent leader events? y/n: ");
-      try {
-        int readByte = System.in.read();
-        if (readByte < 0) {
-          return false;
-        } else if (readByte == 'y' || readByte == 'Y') {
-          return true;
-        } else if (readByte == 'n' || readByte == 'N') {
-          return false;
-        }
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
-    }
   }
 
   private static void printLeaderEvents(List<LeaderEvent> leaderEvents, long currentTimeMillis) {
@@ -256,32 +235,9 @@ public class EventHistoryAnalysisTool {
     }
   }
 
+  private static void processUnavailability() {
 
-
-  private static class Delays {
-    private long e2eLatency = -1;
-    private long externalViewDelay = -1;
-    private long shardGenDelay = -1;
-    private long clientAvailableDelay = -1;
-
-
-    public long getE2eLatency() {
-      return e2eLatency;
-    }
-
-    public long getExternalViewDelay() {
-      return externalViewDelay;
-    }
-
-    public long getShardGenDelay() {
-      return shardGenDelay;
-    }
-
-    public long getClientAvailableDelay() {
-      return clientAvailableDelay;
-    }
   }
-
 
   private static Delays processE2ELatencyMillis(
       final List<LeaderEvent> leaderEvents) {
@@ -378,13 +334,15 @@ public class EventHistoryAnalysisTool {
     }
 
     delays.e2eLatency = clientUp.getEvent_timestamp_ms() - participantUp.getEvent_timestamp_ms();
-    delays.externalViewDelay = shardObservedUp.getEvent_timestamp_ms() - participantUp.getEvent_timestamp_ms();
-    delays.shardGenDelay = shardPostUp.getEvent_timestamp_ms() - shardObservedUp.getEvent_timestamp_ms();
-    delays.clientAvailableDelay = clientUp.getEvent_timestamp_ms() - shardPostUp.getEvent_timestamp_ms();
+    delays.externalViewDelay =
+        shardObservedUp.getEvent_timestamp_ms() - participantUp.getEvent_timestamp_ms();
+    delays.shardGenDelay =
+        shardPostUp.getEvent_timestamp_ms() - shardObservedUp.getEvent_timestamp_ms();
+    delays.clientAvailableDelay =
+        clientUp.getEvent_timestamp_ms() - shardPostUp.getEvent_timestamp_ms();
 
     return delays;
   }
-
 
   private static LeaderEvent processLeaderEvent(LeaderEvent leaderEvent) {
     if (LeaderEventTypes.participantEventTypes.contains(leaderEvent.getEvent_type())) {
@@ -393,6 +351,56 @@ public class EventHistoryAnalysisTool {
       }
     }
     return leaderEvent;
+  }
+
+  private static class Delays {
+
+    /**
+     * This is the delay between when a participant comes up as a leader
+     * and when the client first time comes to know about the state of
+     * that particular participant as a leader.
+     *
+     * Hence this is difference of event times for events where
+     * PARTICIPANT_LEADER_UP_SUCCESS upto
+     * CLIENT_OBSERVED_LEADER_UP for the same participant host.
+     */
+    private long e2eLatency = -1;
+
+    /**
+     * The delay incurred by controller to generate the externalView and it's
+     * delivery to spectator.
+     */
+    private long externalViewDelay = -1;
+
+    /**
+     * Observed within same spectator of the events where a spectator generates
+     * a shard_map for every notification from helix controller on new external
+     * views generated.
+     */
+    private long shardGenDelay = -1;
+
+    /**
+     * Delay observed by client, after the shard_map has been posted by spectator
+     * and received by the client.
+     */
+    private long clientAvailableDelay = -1;
+
+
+    public long getE2eLatency() {
+      return e2eLatency;
+    }
+
+    public long getExternalViewDelay() {
+      return externalViewDelay;
+    }
+
+    public long getShardGenDelay() {
+      return shardGenDelay;
+    }
+
+    public long getClientAvailableDelay() {
+      return clientAvailableDelay;
+    }
   }
 }
 
