@@ -98,8 +98,12 @@ struct BackupDBToS3Request {
   # rate limit in MB/S, a non positive value means no limit
   4: optional i32 limit_mbs = 0,
   5: optional bool share_files_with_checksum = false,
+<<<<<<< HEAD
   # enable backup with metadata
   6: optional bool include_meta = false,
+=======
+  6: optional bool backup_with_meta = false,
+>>>>>>> make backupDBRequest and backupDBToS3request with same options
 }
 
 struct  BackupDBToS3Response {
