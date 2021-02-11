@@ -20,3 +20,4 @@ target_link_libraries(hbase_backup_integration_test gtest rocksdb_admin boost_fi
 
 add_executable(s3_backup_integration_test s3_backup_integration_test.cpp)
 target_link_libraries(s3_backup_integration_test common gtest rocksdb_admin boost_filesystem rocksdb_glogger kafka_consumer rdkafka++)
+#add_test(NAME s3_backup_integration_test COMMAND s3_backup_integration_test)

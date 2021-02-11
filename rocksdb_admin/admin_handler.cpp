@@ -644,6 +644,7 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
                                   const bool enable_backup_rate_limit,
                                   const uint32_t backup_rate_limit,
                                   const bool share_files_with_checksum,
+                                  bool backup_with_meta,
                                   AdminException* e) {
   CHECK(env_holder != nullptr);
   db_admin_lock_.Lock(db_name);
@@ -678,7 +679,18 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
   }
   std::unique_ptr<rocksdb::BackupEngine> backup_engine_holder(backup_engine);
 
-  return backup_engine->CreateNewBackup(db->rocksdb()).ok();
+  if (backup_with_meta) {
+    std::string db_meta;
+    const auto meta = getMetaData(db_name);
+    if (!EncodeThriftStruct(meta, &db_meta)) {
+      LOG(ERROR) << "Failed to encode DBMetaData";
+      return false;
+    } else {
+      return backup_engine->CreateNewBackupWithMetadata(db->rocksdb(), db_meta).ok();
+    }
+  } else {
+    return backup_engine->CreateNewBackup(db->rocksdb()).ok();
+  }  
 }
 
 bool AdminHandler::restoreDBHelper(const std::string& db_name,
@@ -719,8 +731,19 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
   }
   std::unique_ptr<rocksdb::BackupEngine> backup_engine_holder(backup_engine);
 
+  std::vector<rocksdb::BackupInfo> backup_infos;
+  backup_engine->GetBackupInfo(&backup_infos);
+  if (backup_infos.size() < 1) {
+    LOG(ERROR) << "Failed to getBackupInfo with backupEngine";
+    return false;
+  }
+  std::sort(backup_infos.begin(), backup_infos.end(), [](rocksdb::BackupInfo& a, rocksdb::BackupInfo& b) {
+    return a.backup_id < b.backup_id;
+  });
+  uint32_t latest_backup_id = backup_infos.back().backup_id;
+
   auto db_path = FLAGS_rocksdb_dir + db_name;
-  status = backup_engine->RestoreDBFromLatestBackup(db_path, db_path);
+  status = backup_engine->RestoreDBFromBackup(latest_backup_id, db_path, db_path);
   if (!status.ok()) {
     e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
     e->message = status.ToString();
@@ -733,6 +756,19 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
   if (!status.ok()) {
     e->errorCode = AdminErrorCode::DB_ERROR;
     e->message = status.ToString();
+    return false;
+  }
+
+  DBMetaData meta;
+  if (!DecodeThriftStruct(backup_infos.back().app_metadata, &meta)) {
+    LOG(ERROR) << "Failed to decode DBMetaData from backupInfo";
+    return false;
+  }
+
+  // const std::string& s3_bucket = meta.__isset.s3_bucket ? meta.s3_bucket : "";
+  // const std::string& s3_path = meta.__isset.s3_path ? meta.s3_path : "";
+  if (!writeMetaData(db_name, meta.s3_bucket, meta.s3_path)) {
+    LOG(ERROR) << "Failed to write DBMetaData from restore's app_metadata";
     return false;
   }
 
@@ -766,12 +802,14 @@ void AdminHandler::async_tm_backupDB(
   LOG(INFO) << "HDFS Backup " << request->db_name << " to " << full_path;
   AdminException e;
   const bool share_files_with_checksum = request->__isset.share_files_with_checksum && request->share_files_with_checksum;
+  const bool backup_with_meta = request->__isset.backup_with_meta && request->backup_with_meta;
   if (!backupDBHelper(request->db_name,
                       full_path,
                       std::unique_ptr<rocksdb::Env>(hdfs_env),
                       request->__isset.limit_mbs,
                       request->limit_mbs,
                       share_files_with_checksum,
+                      backup_with_meta,
                       &e)) {
     callback.release()->exceptionInThread(std::move(e));
     common::Stats::get()->Incr(kHDFSBackupFailure);
@@ -995,6 +1033,7 @@ void AdminHandler::async_tm_backupDBToS3(
                         request->__isset.limit_mbs,
                         request->limit_mbs,
                         false, // disable checksum support for s3 till checkpoint backup to s3 also support it
+                        false, // checkpoint backup does not support with meta yet
                         &e)) {
       callback.release()->exceptionInThread(std::move(e));
       common::Stats::get()->Incr(kS3BackupFailure);
