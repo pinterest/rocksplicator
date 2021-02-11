@@ -765,8 +765,6 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
     return false;
   }
 
-  // const std::string& s3_bucket = meta.__isset.s3_bucket ? meta.s3_bucket : "";
-  // const std::string& s3_path = meta.__isset.s3_path ? meta.s3_path : "";
   if (!writeMetaData(db_name, meta.s3_bucket, meta.s3_path)) {
     LOG(ERROR) << "Failed to write DBMetaData from restore's app_metadata";
     return false;

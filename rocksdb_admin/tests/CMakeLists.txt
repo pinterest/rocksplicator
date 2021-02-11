@@ -17,7 +17,10 @@ endforeach(testsourcefile ${TEST_SOURCES})
 
 add_executable(hbase_backup_integration_test hbase_backup_integration_test.cpp)
 target_link_libraries(hbase_backup_integration_test gtest rocksdb_admin boost_filesystem rocksdb_glogger kafka_consumer rdkafka++)
+# uncomment following line to include the integration test
+#add_test(NAME hbase_backup_integration_test COMMAND hbase_backup_integration_test)
 
 add_executable(s3_backup_integration_test s3_backup_integration_test.cpp)
 target_link_libraries(s3_backup_integration_test common gtest rocksdb_admin boost_filesystem rocksdb_glogger kafka_consumer rdkafka++)
+# uncomment following line to include the integration test
 #add_test(NAME s3_backup_integration_test COMMAND s3_backup_integration_test)
