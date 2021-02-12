@@ -65,7 +65,7 @@ struct BackupDBRequest {
   # enable appending checksum to sst file name during backup
   4: optional bool share_files_with_checksum = false,
   # enable backup with metadata
-  5: optional bool with_meta = true,
+  5: optional bool with_meta = false,
 }
 
 struct BackupDBResponse {
