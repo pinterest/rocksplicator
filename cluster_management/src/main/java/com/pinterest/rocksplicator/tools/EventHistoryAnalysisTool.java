@@ -18,6 +18,7 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.commons.math3.stat.StatUtils;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.state.ConnectionState;
@@ -29,6 +30,26 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+
+/**
+ * This tool is used to get profiling data from the zk, where it store all leader events.
+ * Current implementation prints, every 5% percentile of the latencies incurred between
+ * different sub-componenents of leader-events.
+ *
+ * To use, from the directoy  cluster_management do
+ *
+ * mvn clean install package
+ *
+ * java -cp target/cluster_management-0.0.1-SNAPSHOT-jar-with-dependencies.jar
+ *          com.pinterest.rocksplicator.tools.EventHistoryAnalysisTool
+ *          --zkSvr zookeeper-server-where-leader-events-are-stored:2181
+ *          --cluster ${cluster_name_for_which_data_is_stored_and_need_to_analyze}
+ *          --resource ${resource_for_which_data_is_store_in_above_cluster}
+ *          --min_partition 0    // This is minimum index of partition to analyze
+ *          --num_partitions 1000 // The number of partitions to analyze starting from min_partition
+ *          --num_seconds_ago 3600 // Filter out events older then this age relative to the last event in each partition, for analysis.
+ *
+ */
 public class EventHistoryAnalysisTool {
 
   private static final String zkSvr = "zkSvr";
@@ -73,11 +94,13 @@ public class EventHistoryAnalysisTool {
 
     Option numSecondsAgoOption =
         OptionBuilder.withLongOpt(num_seconds_ago)
-            .withDescription("maximum number of events to display per partition").create();
+            .withDescription("events to filter out that happened before above number of"
+                + " seconds, relative to last event for each partition").create();
     numSecondsAgoOption.setArgs(1);
     numSecondsAgoOption.setRequired(false);
     numSecondsAgoOption
-        .setArgName("max number of events to display per partition (Optional, default to 25)");
+        .setArgName("events to filter out that happened before above number of seconds,"
+            + " relative to last event for each partition (Optional, default to 3600)");
 
     Options options = new Options();
     options.addOption(zkServerOption)
@@ -145,15 +168,13 @@ public class EventHistoryAnalysisTool {
 
     long currentTimeMillis = System.currentTimeMillis();
 
-    long maxE2EDelay = -1;
+    double maxE2EDelay = -1;
     List<LeaderEvent> maxE2EDelayEvents = null;
 
-    long[] e2ePropogationDelays = new long[numPartitions];
-    long[] externalViewDelays = new long[numPartitions];
-    long[] shardMapGenerationDelays = new long[numPartitions];
-    long[] configDistributionDelays = new long[numPartitions];
-
-    boolean skipRest = false;
+    double[] e2ePropogationDelays = new double[numPartitions];
+    double[] externalViewDelays = new double[numPartitions];
+    double[] shardMapGenerationDelays = new double[numPartitions];
+    double[] configDistributionDelays = new double[numPartitions];
 
     final Codec<LeaderEventsHistory, byte[]> leaderEventsHistoryCodec = new WrappedDataThriftCodec(
         LeaderEventsHistory.class, SerializationProtocol.COMPACT, CompressionAlgorithm.GZIP);
@@ -180,15 +201,17 @@ public class EventHistoryAnalysisTool {
             .collect(Collectors.toList());
 
         Delays delay = processE2ELatencyMillis(filteredEvents);
-        long e2ePropogationDelay = delay.getE2eLatency();
-        long externalViewDelay = delay.getExternalViewDelay();
-        long shardMapGenerationDelay = delay.getShardGenDelay();
-        long configDistributionDelay = delay.getClientAvailableDelay();
+        double e2ePropogationDelay = delay.getE2eLatency();
+        double externalViewDelay = delay.getExternalViewDelay();
+        double shardMapGenerationDelay = delay.getShardGenDelay();
+        double configDistributionDelay = delay.getClientAvailableDelay();
 
-        e2ePropogationDelays[partitionId - minPartitionId] = e2ePropogationDelay;
-        externalViewDelays[partitionId - minPartitionId] = externalViewDelay;
-        shardMapGenerationDelays[partitionId - minPartitionId] = shardMapGenerationDelay;
-        configDistributionDelays[partitionId - minPartitionId] = configDistributionDelay;
+        int partitionIndex = partitionId - minPartitionId;
+
+        e2ePropogationDelays[partitionIndex] = e2ePropogationDelay;
+        externalViewDelays[partitionIndex] = externalViewDelay;
+        shardMapGenerationDelays[partitionIndex] = shardMapGenerationDelay;
+        configDistributionDelays[partitionIndex] = configDistributionDelay;
 
         if (maxE2EDelay < e2ePropogationDelay) {
           maxE2EDelayEvents = filteredEvents;
@@ -204,18 +227,45 @@ public class EventHistoryAnalysisTool {
     Arrays.sort(shardMapGenerationDelays);
     Arrays.sort(configDistributionDelays);
     Arrays.sort(e2ePropogationDelays);
+
+    System.out.println(String.format("percentile\t From Participant to ConfigGenerator"));
     for (int i = 0; i < 20; ++i) {
-      int index = (e2ePropogationDelays.length * (i + 1)) / 20 - 1;
+      double percentile = (5 * (i + 1));
       System.out.println(
-          String.format("%2d percentile (ms)\t%d\t%d\t%d\t%d",
-              ((i + 1) * 5),
-              externalViewDelays[index],
-              shardMapGenerationDelays[index],
-              configDistributionDelays[index],
-              e2ePropogationDelays[index]));
+          String.format("%2d percentile (ms)\t%d",
+              (long) percentile,
+              (long) StatUtils.percentile(externalViewDelays, percentile)));
     }
 
-    // Print out all leaderEvents for max latency events.
+    System.out.println(String.format("percentile\t Config Generation Delay"));
+    for (int i = 0; i < 20; ++i) {
+      double percentile = (5 * (i + 1));
+      System.out.println(
+          String.format("%2d percentile (ms)\t%d",
+              (long) percentile,
+              (long) StatUtils.percentile(shardMapGenerationDelays, percentile)));
+    }
+
+    System.out.println(String.format("percentile\t From Config Propagation to clients"));
+    for (int i = 0; i < 20; ++i) {
+      double percentile = (5 * (i + 1));
+      System.out.println(
+          String.format("%2d percentile (ms)\t%d",
+              (long) percentile,
+              (long) StatUtils.percentile(configDistributionDelays, percentile)));
+    }
+
+    System.out.println(String.format("percentile\t E2E Delay"));
+    for (int i = 0; i < 20; ++i) {
+      double percentile = (5 * (i + 1));
+      System.out.println(
+          String.format("%2d percentile (ms)\t%d",
+              (long) percentile,
+              (long) StatUtils.percentile(e2ePropogationDelays, percentile)));
+    }
+
+
+    System.out.println(String.format("\nBelow is the max e2e latency leader event profile"));
     printLeaderEvents(maxE2EDelayEvents, currentTimeMillis);
   }
 
@@ -233,10 +283,6 @@ public class EventHistoryAnalysisTool {
                                                     : "not_known",
           leaderEvent.getEvent_type()));
     }
-  }
-
-  private static void processUnavailability() {
-
   }
 
   private static Delays processE2ELatencyMillis(

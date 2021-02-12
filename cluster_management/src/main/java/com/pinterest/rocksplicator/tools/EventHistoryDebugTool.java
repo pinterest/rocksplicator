@@ -178,7 +178,9 @@ public class EventHistoryDebugTool {
 
         int numEvents = Math.min(history.getEventsSize(), maxEvents);
 
-        long lastEventTimeMillis = (history.getEventsSize() > 0)? history.getEvents().get(0).getEvent_timestamp_ms() : -1;
+        long
+            lastEventTimeMillis =
+            (history.getEventsSize() > 0) ? history.getEvents().get(0).getEvent_timestamp_ms() : -1;
         // Print them in reverse order, with latest first.
         for (int eventId = 0; eventId < Math.min(history.getEventsSize(), maxEvents); ++eventId) {
           LeaderEvent leaderEvent = history.getEvents().get(numEvents - eventId - 1);
@@ -186,10 +188,11 @@ public class EventHistoryDebugTool {
           System.out.println(String.format(
               "ts:%d msec, age: %8d sec, relative_age: %8d ms, from: %18s, leader: %18s, type: %s",
               leaderEvent.getEvent_timestamp_ms(),
-              (currentTimeMillis - leaderEvent.getEvent_timestamp_ms())/1000,
+              (currentTimeMillis - leaderEvent.getEvent_timestamp_ms()) / 1000,
               lastEventTimeMillis - leaderEvent.getEvent_timestamp_ms(),
               leaderEvent.getOriginating_node(),
-              (leaderEvent.isSetObserved_leader_node())? leaderEvent.getObserved_leader_node():"not_known",
+              (leaderEvent.isSetObserved_leader_node()) ? leaderEvent.getObserved_leader_node()
+                                                        : "not_known",
               leaderEvent.getEvent_type()));
         }
       } catch (Exception e) {
