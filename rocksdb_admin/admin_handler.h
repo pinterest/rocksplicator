@@ -185,7 +185,7 @@ class AdminHandler : virtual public AdminSvIf {
                       const bool enable_backup_rate_limit,
                       const uint32_t backup_rate_limit,
                       const bool share_files_with_checksum,
-                      const bool backup_with_meta,
+                      const bool include_meta,
                       AdminException* e);
 
   bool restoreDBHelper(const std::string& db_name,

@@ -644,7 +644,7 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
                                   const bool enable_backup_rate_limit,
                                   const uint32_t backup_rate_limit,
                                   const bool share_files_with_checksum,
-                                  bool backup_with_meta,
+                                  bool include_meta,
                                   AdminException* e) {
   CHECK(env_holder != nullptr);
   db_admin_lock_.Lock(db_name);
@@ -679,7 +679,7 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
   }
   std::unique_ptr<rocksdb::BackupEngine> backup_engine_holder(backup_engine);
 
-  if (backup_with_meta) {
+  if (include_meta) {
     std::string db_meta;
     const auto meta = getMetaData(db_name);
     if (!EncodeThriftStruct(meta, &db_meta)) {
@@ -800,14 +800,14 @@ void AdminHandler::async_tm_backupDB(
   LOG(INFO) << "HDFS Backup " << request->db_name << " to " << full_path;
   AdminException e;
   const bool share_files_with_checksum = request->__isset.share_files_with_checksum && request->share_files_with_checksum;
-  const bool backup_with_meta = request->__isset.backup_with_meta && request->backup_with_meta;
+  const bool include_meta = request->__isset.include_meta && request->include_meta;
   if (!backupDBHelper(request->db_name,
                       full_path,
                       std::unique_ptr<rocksdb::Env>(hdfs_env),
                       request->__isset.limit_mbs,
                       request->limit_mbs,
                       share_files_with_checksum,
-                      backup_with_meta,
+                      include_meta,
                       &e)) {
     callback.release()->exceptionInThread(std::move(e));
     common::Stats::get()->Incr(kHDFSBackupFailure);

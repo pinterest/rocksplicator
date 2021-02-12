@@ -50,7 +50,7 @@ using std::string;
 using std::to_string;
 using std::unique_ptr;
 
-DEFINE_bool(backup_with_meta, true, "Whether backup with meta");
+DEFINE_bool(include_meta, true, "Whether backup with meta");
 DEFINE_string(s3_backup_prefix, "tmp/backup_test", "The s3 key prefix for backup");
 DEFINE_string(s3_bucket, "pinterest-jackson", "The s3 bucket");
 DEFINE_string(local_backup_dir, "/tmp/backup_test/backup/", "");
@@ -134,7 +134,7 @@ TEST(S3BackupRestoreTest, Basics) {
   EXPECT_TRUE(status.ok());
   unique_ptr<BackupEngine> backup_engine_holder(backup_engine);
 
-  if (FLAGS_backup_with_meta) {
+  if (FLAGS_include_meta) {
     std::string db_meta;
     DBMetaData meta;
     meta.db_name = test_db_name;
@@ -155,7 +155,7 @@ TEST(S3BackupRestoreTest, Basics) {
   status = BackupEngine::Open(Env::Default(), backup_options, &restore_engine);
   EXPECT_TRUE(status.ok());
   unique_ptr<BackupEngine> restore_engine_holder(restore_engine);
-  if (FLAGS_backup_with_meta) {
+  if (FLAGS_include_meta) {
     std::vector<BackupInfo> backup_infos;
     backup_engine->GetBackupInfo(&backup_infos);
     if (backup_infos.size() < 1) {
