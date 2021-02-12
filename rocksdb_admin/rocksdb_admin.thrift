@@ -64,7 +64,8 @@ struct BackupDBRequest {
   3: optional i32 limit_mbs = 0,
   # enable appending checksum to sst file name during backup
   4: optional bool share_files_with_checksum = false,
-  5: optional bool backup_with_meta = true,
+  # enable backup with metadata
+  5: optional bool with_meta = true,
 }
 
 struct BackupDBResponse {
@@ -97,7 +98,8 @@ struct BackupDBToS3Request {
   # rate limit in MB/S, a non positive value means no limit
   4: optional i32 limit_mbs = 0,
   5: optional bool share_files_with_checksum = false,
-  6: optional bool backup_with_meta = false,
+  # enable backup with metadata
+  6: optional bool with_meta = false,
 }
 
 struct  BackupDBToS3Response {
