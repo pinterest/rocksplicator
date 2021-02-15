@@ -78,7 +78,7 @@ public class Spectator {
 
   private final HelixManager helixManager;
   private final RocksplicatorMonitor monitor;
-  private final LeaderEventsLogger spectatorLeaderEventsLogger;
+  private LeaderEventsLogger spectatorLeaderEventsLogger;
 
   private ConfigGenerator configGenerator = null;
 
@@ -301,13 +301,14 @@ public class Spectator {
       thread.join();
     }
 
-    if (configGenerator == null) {
+    if (configGenerator != null) {
       try {
         LOG.error("Stopping ConfigGenerator");
         configGenerator.close();
-        configGenerator = null;
-      } catch (IOException e) {
-        e.printStackTrace();
+      } catch (IOException ioe) {
+        LOG.error("Exception while closing ConfigGenertor", ioe);
+      } finally {
+      configGenerator = null;
       }
     }
 
@@ -315,29 +316,30 @@ public class Spectator {
       try {
         LOG.error("Stopping Spectator LeaderEventsLogger");
         spectatorLeaderEventsLogger.close();
-      } catch (IOException io) {
-        io.printStackTrace();
+      } catch (IOException ioe) {
+        LOG.error("Exception while closing Spectator's LeaderEventsLogger", ioe);
       }
+      spectatorLeaderEventsLogger = null;
     }
 
     if (staticClientShardMapLeaderEventLoggerDriver != null) {
       try {
         LOG.error("Stopping ClientShardMap LeaderEventLogger Driver");
         staticClientShardMapLeaderEventLoggerDriver.close();
-        staticClientShardMapLeaderEventLoggerDriver = null;
-      } catch (Exception e) {
-        e.printStackTrace();
+      } catch (IOException ioe) {
+        LOG.error("Exception while closing Spectator's ClientShardMapLeaderEventLoggerDriver", ioe);
       }
+      staticClientShardMapLeaderEventLoggerDriver = null;
     }
 
     if (staticClientLeaderEventsLogger != null) {
       try {
         LOG.error("Stopping client LeaderEventsLogger");
         staticClientLeaderEventsLogger.close();
-        staticClientLeaderEventsLogger = null;
-      } catch (Exception e) {
-        e.printStackTrace();
+      } catch (IOException ioe) {
+        LOG.error("Exception while closing Spectator's Client LeaderEventLogger", ioe);
       }
+      staticClientLeaderEventsLogger = null;
     }
   }
 
