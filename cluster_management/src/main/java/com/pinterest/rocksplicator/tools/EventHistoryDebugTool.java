@@ -16,10 +16,12 @@
 // @author Gopal Rajpurohit (grajpurohit@pinterest.com)
 //
 
-package com.pinterest.rocksplicator.eventstore;
+package com.pinterest.rocksplicator.tools;
 
 import com.pinterest.rocksplicator.codecs.Codec;
 import com.pinterest.rocksplicator.codecs.WrappedDataThriftCodec;
+import com.pinterest.rocksplicator.eventstore.LeaderEventTypes;
+import com.pinterest.rocksplicator.eventstore.ZkMergeableEventStore;
 import com.pinterest.rocksplicator.thrift.commons.io.CompressionAlgorithm;
 import com.pinterest.rocksplicator.thrift.commons.io.SerializationProtocol;
 import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEvent;
@@ -155,6 +157,8 @@ public class EventHistoryDebugTool {
       throw new RuntimeException(e);
     }
 
+    long currentTimeMillis = System.currentTimeMillis();
+
     final Codec<LeaderEventsHistory, byte[]> leaderEventsHistoryCodec = new WrappedDataThriftCodec(
         LeaderEventsHistory.class, SerializationProtocol.COMPACT, CompressionAlgorithm.GZIP);
 
@@ -174,17 +178,21 @@ public class EventHistoryDebugTool {
 
         int numEvents = Math.min(history.getEventsSize(), maxEvents);
 
-        long lastEventTimeMillis = (history.getEventsSize() > 0)? history.getEvents().get(0).getEvent_timestamp_ms() : -1;
+        long
+            lastEventTimeMillis =
+            (history.getEventsSize() > 0) ? history.getEvents().get(0).getEvent_timestamp_ms() : -1;
         // Print them in reverse order, with latest first.
         for (int eventId = 0; eventId < Math.min(history.getEventsSize(), maxEvents); ++eventId) {
           LeaderEvent leaderEvent = history.getEvents().get(numEvents - eventId - 1);
           processLeaderEvent(leaderEvent);
           System.out.println(String.format(
-              "event: ts:%d, before: %8d ms, origin: %-18s, leader: %-18s, event: %s",
+              "ts:%d msec, age: %8d sec, relative_age: %8d ms, from: %18s, leader: %18s, type: %s",
               leaderEvent.getEvent_timestamp_ms(),
+              (currentTimeMillis - leaderEvent.getEvent_timestamp_ms()) / 1000,
               lastEventTimeMillis - leaderEvent.getEvent_timestamp_ms(),
               leaderEvent.getOriginating_node(),
-              (leaderEvent.isSetObserved_leader_node())? leaderEvent.getObserved_leader_node():"not_known",
+              (leaderEvent.isSetObserved_leader_node()) ? leaderEvent.getObserved_leader_node()
+                                                        : "not_known",
               leaderEvent.getEvent_type()));
         }
       } catch (Exception e) {
