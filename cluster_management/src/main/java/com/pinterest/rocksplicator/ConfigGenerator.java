@@ -26,6 +26,7 @@ import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
 import com.pinterest.rocksplicator.thrift.commons.io.CompressionAlgorithm;
 import com.pinterest.rocksplicator.utils.AutoCloseableLock;
 import com.pinterest.rocksplicator.utils.ExternalViewUtils;
+import com.pinterest.rocksplicator.utils.ZkPathUtils;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
@@ -65,6 +66,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 /**
 
@@ -197,6 +199,11 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   private Set<String> disabledHosts;
   private ExternalViewLeaderEventLogger externalViewLeaderEventLogger;
 
+  private final Codec<JSONObject, byte[]> baseJsonObjectCodec = new JSONObjectCodec();
+  private final Codec<JSONObject, byte[]> gzipCompressedJsonObjectCodec =
+      Codecs.getCompressedCodec(baseJsonObjectCodec, CompressionAlgorithm.GZIP);
+
+
   @VisibleForTesting
   ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
     this(clusterName, helixManager, configPostUrl,
@@ -307,6 +314,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     Stopwatch stopwatch = Stopwatch.createStarted();
 
     List<String> resources = this.helixAdmin.getResourcesInCluster(clusterName);
+
     filterOutTaskResources(resources);
 
     Set<String> existingHosts = new HashSet<String>();
@@ -402,31 +410,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
         resourceConfig.put(entry.getKey(), jsonArray);
       }
 
-      final JSONObject newShardMap = new JSONObject();
-      newShardMap.put(resource, resourceConfig);
-
-      executorService.submit(new Runnable() {
-        @Override
-        public void run() {
-          // publish to zk.
-          try {
-            String zkPath = String.format("/shard_map/%s/%s", clusterName, resource);
-            byte[] emptyByteArray = new byte[0];
-            Stat stat = zkShardMapClient.checkExists().creatingParentsIfNeeded().forPath(zkPath);
-            if (stat == null) {
-              zkShardMapClient.create().creatingParentsIfNeeded().forPath(zkPath, emptyByteArray);
-            }
-            Codec<JSONObject, byte[]> baseCodec = new JSONObjectCodec();
-            Codec<JSONObject, byte[]>
-                compressedCodec =
-                Codecs.getCompressedCodec(baseCodec, CompressionAlgorithm.GZIP);
-            byte[] setData = compressedCodec.encode(newShardMap);
-            zkShardMapClient.setData().forPath(zkPath, setData);
-          } catch (Exception e) {
-            LOG.error("Error publishing shard_map / resource_map to zk", e);
-          }
-        }
-      });
+      asyncWriteToZkGZIPCompressedPerResourceShardMap(resourceConfig, clusterName, resource);
 
       // add the resource config to the cluster config
       config.put(resource, resourceConfig);
@@ -434,6 +418,10 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
 
     // remove host that doesn't exist in the ExternalView from hostToHostWithDomain
     hostToHostWithDomain.keySet().retainAll(existingHosts);
+
+    removeResourceFromZkGZIPCompressedPerResourceShardMap(
+        clusterName,
+        resources.stream().collect(Collectors.toSet()));
 
     String newContent = config.toString();
     if (lastPostedContent != null && lastPostedContent.equals(newContent)) {
@@ -494,6 +482,96 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     }
   }
 
+  /**
+   * Remove the resources which are no longer available in the externalView, but available in the zk.
+   */
+  private void removeResourceFromZkGZIPCompressedPerResourceShardMap(
+      final String clusterName,
+      final Set<String> keepTheseResources) {
+    if (executorService != null) {
+      executorService.submit(new Runnable() {
+        @Override
+        public void run() {
+          try {
+            String zkPath = ZkPathUtils.getClusterShardMapParentPath(clusterName);
+            byte[] emptyByteArray = new byte[0];
+            Stat stat = zkShardMapClient.checkExists().creatingParentsIfNeeded().forPath(zkPath);
+            if (stat == null) {
+              zkShardMapClient.create().creatingParentsIfNeeded().forPath(zkPath, emptyByteArray);
+            }
+            List<String> childrenPaths = zkShardMapClient.getChildren().forPath(zkPath);
+
+            for (String childResourcePath : childrenPaths) {
+              String[] splits = childResourcePath.split("/");
+              if (splits == null || splits.length <= 0) {
+                continue;
+              }
+              String resourceName = splits[splits.length - 1];
+
+              /**
+               * This is important step. Do not remove resources that are known to be still alive
+               * (active or dormant, online or offline, enabled or disabled) in helix.
+               */
+              if (keepTheseResources.contains(resourceName)) {
+                continue;
+              }
+
+              try {
+                String zkChildPath = ZkPathUtils.getClusterResourceShardMapPath(clusterName, resourceName);
+                zkShardMapClient.delete().forPath(zkChildPath);
+              } catch (Exception exp) {
+                LOG.error(String.format(
+                    "Couldn't remove extraneous resources from cluster=%s, resource=%s", clusterName));
+              }
+            }
+
+          } catch (Exception exp) {
+            LOG.error(String.format(
+                "Couldn't remove extraneous resources from cluster=%s", clusterName));
+          }
+        }
+      });
+    }
+  }
+
+  /**
+   * Asynchronously publish a compressed, per resource shardMap
+   * to provided zk for storing shardMap. If we see that per resource
+   * shardMap publishing to zk takes longer time, we have an opportunity
+   * to parallelize publishing by making sure that each per resource
+   * shardMap is published into specific queues and hence specific
+   * executorService.
+   */
+  private void asyncWriteToZkGZIPCompressedPerResourceShardMap(
+      JSONObject perResourceShardMap,
+      String clusterName,
+      String resourceName) {
+    if (executorService != null) {
+      final JSONObject perResourceShardMapObj = new JSONObject();
+      perResourceShardMapObj.put(resourceName, perResourceShardMap);
+
+      executorService.submit(new Runnable() {
+        @Override
+        public void run() {
+          // publish to zk.
+          try {
+            String zkPath = ZkPathUtils.getClusterResourceShardMapPath(clusterName, resourceName);
+            byte[] emptyByteArray = new byte[0];
+            Stat stat = zkShardMapClient.checkExists().creatingParentsIfNeeded().forPath(zkPath);
+            if (stat == null) {
+              zkShardMapClient.create().creatingParentsIfNeeded().forPath(zkPath, emptyByteArray);
+            }
+            byte[] setData = gzipCompressedJsonObjectCodec.encode(perResourceShardMapObj);
+            zkShardMapClient.setData().forPath(zkPath, setData);
+          } catch (Exception e) {
+            LOG.error("Error publishing shard_map / resource_map to zk", e);
+          }
+        }
+      });
+    }
+  }
+
+
   private String getHostWithDomain(String host) {
     String hostWithDomain = hostToHostWithDomain.get(host);
     if (hostWithDomain != null) {
@@ -526,6 +604,13 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   }
 
   /**
+   * TODO: grajpurohit : Opportunity for improving the latency of shardGeneration
+   *
+   * Normally the resource's stateModel doesn't change. Instead of getting this information
+   * from zk (helix) during the processing of each time, cache the stateModelDefRef.
+   * This will ensure that we do not block on geting data from zk for all the resources,
+   * for every change notification.
+   *
    * filter out resources with "Task" state model (ie. workflows and jobs);
    * only keep db resources from ideal states
    */
@@ -551,15 +636,19 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
   public void close() throws IOException {
     // ensure the while we are closing the ConfigGenerator, we are not processing any callback
     // at the moment.
-    executorService.shutdown();
+    if (executorService != null) {
+      executorService.shutdown();
 
-    while (!executorService.isTerminated()) {
-      try {
-        executorService.awaitTermination(100, TimeUnit.MILLISECONDS);
-      } catch (InterruptedException e) {
-        e.printStackTrace();
+      while (!executorService.isTerminated()) {
+        try {
+          executorService.awaitTermination(100, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
       }
+      zkShardMapClient.close();
     }
+
 
     try (AutoCloseableLock lock = new AutoCloseableLock(this.synchronizedCallbackLock)) {
       // Cleanup any remaining items.

@@ -6,6 +6,7 @@ import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.shardmap.ShardMap;
 import com.pinterest.rocksplicator.shardmap.ShardMaps;
 import com.pinterest.rocksplicator.thrift.commons.io.CompressionAlgorithm;
+import com.pinterest.rocksplicator.utils.ZkPathUtils;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
@@ -47,7 +48,7 @@ public class ClientZKShardMapDriver implements Closeable {
     try {
       this.zkClient.blockUntilConnected(60, TimeUnit.SECONDS);
       this.pathChildrenCache =
-          new PathChildrenCache(this.zkClient, "/shard_map/" + this.clusterName, true, false,
+          new PathChildrenCache(this.zkClient, ZkPathUtils.getClusterShardMapParentPath(this.clusterName), true, false,
               new CloseableExecutorService(Executors.newSingleThreadExecutor(), true));
     } catch (InterruptedException e) {
       this.pathChildrenCache = null;
