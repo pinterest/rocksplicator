@@ -13,6 +13,7 @@ import org.apache.helix.integration.manager.MockParticipantManager;
 import org.apache.helix.integration.task.MockTask;
 import org.apache.helix.integration.task.TaskTestBase;
 import org.apache.helix.integration.task.WorkflowGenerator;
+import org.apache.helix.model.ExternalView;
 import org.apache.helix.model.IdealState;
 import org.apache.helix.participant.StateMachineEngine;
 import org.apache.helix.task.Task;
@@ -40,6 +41,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 public class TestConfigGenerator extends TaskTestBase {
@@ -197,7 +199,10 @@ public class TestConfigGenerator extends TaskTestBase {
     public DummyGenerator(String clusterName, HelixManager helixManager) {
       super(clusterName, helixManager, new ShardMapPublisher<JSONObject>() {
         @Override
-        public void publish(JSONObject shardMap) {
+        public void publish(
+            final Set<String> validResources,
+            final List<ExternalView> externalViews,
+            final JSONObject shardMap) {
           // doNothing
         }
       });

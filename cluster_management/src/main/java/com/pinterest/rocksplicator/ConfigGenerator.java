@@ -53,6 +53,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 /**
 
@@ -283,6 +284,9 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     List<String> resources = this.helixAdmin.getResourcesInCluster(clusterName);
     filterOutTaskResources(resources);
 
+    // Resources starting with PARTICIPANT_LEADER is for HelixCustomCodeRunner
+    resources = resources.stream().filter(r -> ! r.startsWith("PARTICIPANT_LEADER")).collect(Collectors.toList());
+
     Set<String> existingHosts = new HashSet<String>();
 
     List<ExternalView> externalViewsToProcess = null;
@@ -291,13 +295,8 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     }
 
     // compose cluster config
-    JSONObject config = new JSONObject();
+    JSONObject jsonClusterShardMap = new JSONObject();
     for (String resource : resources) {
-      // Resources starting with PARTICIPANT_LEADER is for HelixCustomCodeRunner
-      if (resource.startsWith("PARTICIPANT_LEADER")) {
-        continue;
-      }
-
       ExternalView externalView = this.helixAdmin.getResourceExternalView(clusterName, resource);
       if (externalView == null) {
         this.monitor.incrementConfigGeneratorNullExternalView();
@@ -377,16 +376,17 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
       }
 
       // add the resource config to the cluster config
-      config.put(resource, resourceConfig);
+      jsonClusterShardMap.put(resource, resourceConfig);
     }
 
     // remove host that doesn't exist in the ExternalView from hostToHostWithDomain
     hostToHostWithDomain.keySet().retainAll(existingHosts);
 
     /**
-     * Finally publish the shard_map in json_format
+     * Finally publish the shard_map in json_format to multiple configured publishers.
      */
-    shardMapPublisher.publish(config);
+    shardMapPublisher.publish(
+        resources.stream().collect(Collectors.toSet()), externalViewsToProcess, jsonClusterShardMap);
 
     long shardPostingTimeMillis = System.currentTimeMillis();
 
