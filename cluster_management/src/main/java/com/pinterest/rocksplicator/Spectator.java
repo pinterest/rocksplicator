@@ -85,28 +85,6 @@ public class Spectator {
 
   private ConfigGenerator configGenerator = null;
 
-  public Spectator(String zkConnectString, String clusterName, String instanceName,
-                   LeaderEventsLogger spectatorLeaderEventsLogger) throws Exception {
-    helixManager =
-        HelixManagerFactory
-            .getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
-
-    monitor = new RocksplicatorMonitor(clusterName, instanceName);
-    this.spectatorLeaderEventsLogger = spectatorLeaderEventsLogger;
-    helixManager.connect();
-
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      @Override
-      public void run() {
-        try {
-          stopListeners();
-        } catch (Exception e) {
-          e.printStackTrace();
-        }
-      }
-    });
-  }
-
   private static Options constructCommandLineOptions() {
     Option zkServerOption =
         OptionBuilder.withLongOpt(zkServer).withDescription("Provide zookeeper addresses").create();
@@ -293,8 +271,26 @@ public class Spectator {
     LOG.error("Returning from main");
   }
 
-  private static String getClusterLockPath(String cluster) {
-    return "/rocksplicator/" + cluster + "/spectator/lock";
+  public Spectator(String zkConnectString, String clusterName, String instanceName,
+                   LeaderEventsLogger spectatorLeaderEventsLogger) throws Exception {
+    helixManager =
+        HelixManagerFactory
+            .getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
+
+    monitor = new RocksplicatorMonitor(clusterName, instanceName);
+    this.spectatorLeaderEventsLogger = spectatorLeaderEventsLogger;
+    helixManager.connect();
+
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      @Override
+      public void run() {
+        try {
+          stopListeners();
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
+      }
+    });
   }
 
   private void startListener(String postUrl, CuratorFramework zkClient) throws Exception {
@@ -361,6 +357,7 @@ public class Spectator {
       } catch (Exception e) {
         e.printStackTrace();
       }
+      staticClientShardMapLeaderEventLoggerDriver = null;
     }
 
     if (staticClientLeaderEventsLogger != null) {
@@ -372,5 +369,9 @@ public class Spectator {
       }
       staticClientLeaderEventsLogger = null;
     }
+  }
+
+  private static String getClusterLockPath(String cluster) {
+    return "/rocksplicator/" + cluster + "/spectator/lock";
   }
 }
