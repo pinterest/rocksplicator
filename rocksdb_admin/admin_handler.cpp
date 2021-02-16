@@ -686,6 +686,7 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
       LOG(ERROR) << "Failed to encode DBMetaData";
       return false;
     } else {
+      LOG(INFO) << "Create new backup with encoded meta: " << db_meta;
       return backup_engine->CreateNewBackupWithMetadata(db->rocksdb(), db_meta).ok();
     }
   } else {
@@ -761,7 +762,7 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
 
   DBMetaData meta;
   if (!DecodeThriftStruct(backup_infos.back().app_metadata, &meta)) {
-    LOG(ERROR) << "Failed to decode DBMetaData from backupInfo";
+    LOG(ERROR) << "Failed to decode DBMetaData from backupInfo.app_metadata: " << backup_infos.back().app_metadata;
     return false;
   }
 

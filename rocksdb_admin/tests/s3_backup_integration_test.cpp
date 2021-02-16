@@ -138,7 +138,12 @@ TEST(S3BackupRestoreTest, Basics) {
     std::string db_meta;
     DBMetaData meta;
     meta.db_name = test_db_name;
-    EncodeThriftStruct(meta, &db_meta);
+    if (!EncodeThriftStruct(meta, &db_meta)) {
+      LOG(ERROR) << "Failed to encode DBMetadata from meta: " << db_meta;
+      ASSERT(false);
+    } else {
+      LOG(INFO) << "Succesfully encode DBMetadata to: " << db_meta;
+    }
     status = backup_engine->CreateNewBackupWithMetadata(original_db.get(), db_meta);
   } else {
     status = backup_engine->CreateNewBackup(original_db.get());
@@ -166,7 +171,12 @@ TEST(S3BackupRestoreTest, Basics) {
     });
     std::string db_meta = backup_infos.back().app_metadata;
     DBMetaData meta;
-    DecodeThriftStruct(db_meta, &meta);
+    if (!DecodeThriftStruct(db_meta, &meta)) {
+      LOG(ERROR) << "Failed to decode DBMetaData from backup_info.app_metadata: " << db_meta;
+      ASSERT(false);
+    } else {
+      LOG(INFO) << "Successfully decode DBMetaData from: " << db_meta;
+    }
     EXPECT_EQ(meta.db_name, test_db_name);
     EXPECT_FALSE(meta.__isset.s3_bucket);
     EXPECT_FALSE(meta.__isset.s3_path);

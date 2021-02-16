@@ -42,7 +42,7 @@ bool DecodeThriftStruct(const std::string& data, T* obj) {
     apache::thrift::CompactSerializer::deserialize(folly::StringPiece(data.data(), data.size()),
                                                    *obj);
   });
-
+  ex.with_exception([](std::exception& e) { LOG(ERROR) << e.what(); });
   return !ex;
 }
 
@@ -51,7 +51,7 @@ bool EncodeThriftStruct(const T& obj, std::string* data) {
   data->clear();
   auto ex = folly::try_and_catch<std::exception>(
       [obj, data]() { apache::thrift::CompactSerializer::serialize(obj, data); });
-
+  ex.with_exception([](std::exception& e) { LOG(ERROR) << e.what(); });
   return !ex;
 }
 
