@@ -20,7 +20,7 @@ package com.pinterest.rocksplicator;
 
 import static org.apache.curator.framework.state.ConnectionState.CONNECTED;
 
-import com.pinterest.rocksplicator.codecs.ClientZKShardMapDriver;
+import com.pinterest.rocksplicator.eventstore.ClientZKShardMapDriver;
 import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerDriver;
 import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;

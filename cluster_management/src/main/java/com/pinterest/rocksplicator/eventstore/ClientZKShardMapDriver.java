@@ -1,8 +1,8 @@
-package com.pinterest.rocksplicator.codecs;
+package com.pinterest.rocksplicator.eventstore;
 
-import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLogger;
-import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerImpl;
-import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
+import com.pinterest.rocksplicator.codecs.Codec;
+import com.pinterest.rocksplicator.codecs.Codecs;
+import com.pinterest.rocksplicator.codecs.JSONObjectCodec;
 import com.pinterest.rocksplicator.shardmap.ShardMap;
 import com.pinterest.rocksplicator.shardmap.ShardMaps;
 import com.pinterest.rocksplicator.thrift.commons.io.CompressionAlgorithm;
@@ -25,6 +25,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class ClientZKShardMapDriver implements Closeable {
+
   private final String clusterName;
   private final CuratorFramework zkClient;
   private final LeaderEventsLogger leaderEventsLogger;
@@ -48,7 +49,8 @@ public class ClientZKShardMapDriver implements Closeable {
     try {
       this.zkClient.blockUntilConnected(60, TimeUnit.SECONDS);
       this.pathChildrenCache =
-          new PathChildrenCache(this.zkClient, ZkPathUtils.getClusterShardMapParentPath(this.clusterName), true, false,
+          new PathChildrenCache(this.zkClient,
+              ZkPathUtils.getClusterShardMapParentPath(this.clusterName), true, false,
               new CloseableExecutorService(Executors.newSingleThreadExecutor(), true));
     } catch (InterruptedException e) {
       this.pathChildrenCache = null;
