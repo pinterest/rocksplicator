@@ -18,45 +18,23 @@
 
 package com.pinterest.rocksplicator.spectator;
 
-import com.pinterest.rocksplicator.ConfigGenerator;
-import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventLogger;
-import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
-import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
-import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
-import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
-
 import org.apache.helix.HelixManager;
 import org.apache.helix.HelixManagerFactory;
 import org.apache.helix.InstanceType;
 
-import java.util.Optional;
-
 public class ConfigGeneratorClusterSpectatorImpl implements ClusterSpectator {
 
+  private HelixManager helixManager;
   private String zkConnectString;
   private String clusterName;
   private String instanceName;
   private String configPostUri;
 
-  private HelixManager helixManager;
-  private ConfigGenerator configGenerator;
-
-  private Optional<String> zkLeaderHandOffConnectString;
-  private Optional<String> resourceHandOffEnabledPath;
-  private Optional<String> resourceConfigType;
-  private Optional<String> shardMapPath;
-
-  private LeaderEventsLogger leaderEventsLoger;
-  private ExternalViewLeaderEventLogger externalViewLeaderEventLogger;
-
   public ConfigGeneratorClusterSpectatorImpl(
-      final String zkConnectString,
-      final String clusterName,
-      final String instanceName,
-      final String configPostUri,
-      final Optional<String> zkLeaderHandOff,
-      final Optional<String> handOffResourcedPath,
-      final Optional<String> shardMapPath) {
+      String zkConnectString,
+      String clusterName,
+      String instanceName,
+      String configPostUri) {
     this.zkConnectString = zkConnectString;
     this.clusterName = clusterName;
     this.instanceName = instanceName;
@@ -93,26 +71,7 @@ public class ConfigGeneratorClusterSpectatorImpl implements ClusterSpectator {
      *
      * ConfigGenerator should also start listening to the ExternalView
      * notifications and publishing ShardMap config here.
-     */
-    LeaderEventsLogger leaderEventsLogger = new LeaderEventsLoggerImpl(
-        instanceName,
-        zkLeaderHandOffConnectString.get(),
-        clusterName,
-        resourceHandOffEnabledPath.get(),
-        resourceConfigType.get(),
-        Optional.of(128));
-
-    ExternalViewLeaderEventLogger externalViewLeaderEventLogger = new ExternalViewLeaderEventsLoggerImpl(leaderEventsLogger);
-
-    RocksplicatorMonitor rocksplicatorMonitor = new RocksplicatorMonitor(clusterName, instanceName);
-    ConfigGenerator configGenerator = new ConfigGenerator(clusterName, this.helixManager, configPostUri, rocksplicatorMonitor, externalViewLeaderEventLogger);
-
-    this.helixManager.addExternalViewChangeListener(configGenerator);
-    this.helixManager.addConfigChangeListener(configGenerator);
-
-
-    /**
-     * Make client to monitor the shard_map configuration.
+     *
      */
   }
 
