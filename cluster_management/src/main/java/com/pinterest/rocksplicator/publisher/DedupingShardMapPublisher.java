@@ -18,9 +18,13 @@
 
 package com.pinterest.rocksplicator.publisher;
 
+import org.apache.helix.model.ExternalView;
 import org.json.simple.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.Set;
 
 /**
  * Implementation of ShardMapPublisher that takes in shard_map in JSONObject format
@@ -40,12 +44,15 @@ public class DedupingShardMapPublisher implements ShardMapPublisher<JSONObject> 
   }
 
   @Override
-  public void publish(JSONObject jsonShardMap) {
+  public void publish(
+      final Set<String> validResources,
+      final List<ExternalView> externalViews,
+      final JSONObject jsonShardMap) {
     String newContent = jsonShardMap.toString();
     if (lastPostedContent != null && lastPostedContent.equals(newContent)) {
       LOG.error("Identical external view observed, skip updating config.");
       return;
     }
-    delegateShardMapPublisher.publish(newContent);
+    delegateShardMapPublisher.publish(validResources, externalViews, newContent);
   }
 }

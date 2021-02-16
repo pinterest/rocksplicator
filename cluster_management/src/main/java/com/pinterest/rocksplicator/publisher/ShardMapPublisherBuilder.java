@@ -59,7 +59,7 @@ public class ShardMapPublisherBuilder {
       publishers.add(new HttpPostShardMapPublisher(this.postUrl));
     }
     if (enableLocalDump) {
-      publishers.add(new LocalFileShardMapPublisher());
+      publishers.add(new LocalFileShardMapPublisher(enableLocalDump));
     }
     return new DedupingShardMapPublisher(
         new ParallelShardMapPublisher<String>(ImmutableList.copyOf(publishers)));

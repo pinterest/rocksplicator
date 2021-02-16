@@ -18,12 +18,15 @@
 
 package com.pinterest.rocksplicator.publisher;
 
+import org.apache.helix.model.ExternalView;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.List;
+import java.util.Set;
 
 public class LocalFileShardMapPublisher implements ShardMapPublisher<String> {
 
@@ -31,12 +34,15 @@ public class LocalFileShardMapPublisher implements ShardMapPublisher<String> {
 
   private final boolean enableDumpToLocal;
 
-  public LocalFileShardMapPublisher() {
-    this.enableDumpToLocal = new File("/var/log/helixspectator").canWrite();
+  public LocalFileShardMapPublisher(boolean enableDumpToLocal) {
+    this.enableDumpToLocal = enableDumpToLocal && new File("/var/log/helixspectator").canWrite();
   }
 
   @Override
-  public void publish(String jsonStringShardMapNewContent) {
+  public void publish(
+      final Set<String> validResources,
+      final List<ExternalView> externalViews,
+      final String jsonStringShardMapNewContent) {
     if (! enableDumpToLocal) {
       // doNothing()
       return;

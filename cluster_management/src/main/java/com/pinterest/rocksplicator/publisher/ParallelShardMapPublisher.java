@@ -19,8 +19,10 @@
 package com.pinterest.rocksplicator.publisher;
 
 import com.google.common.base.Preconditions;
+import org.apache.helix.model.ExternalView;
 
 import java.util.List;
+import java.util.Set;
 
 public class ParallelShardMapPublisher<T> implements ShardMapPublisher<T> {
 
@@ -32,10 +34,12 @@ public class ParallelShardMapPublisher<T> implements ShardMapPublisher<T> {
   }
 
   @Override
-  public void publish(T shardMap) {
+  public void publish(final Set<String> validResources,
+                      final List<ExternalView> externalViews,
+                      final T shardMap) {
     for (ShardMapPublisher<T> shardMapPublisher : shardMapPublishers) {
       try {
-        shardMapPublisher.publish(shardMap);
+        shardMapPublisher.publish(validResources, externalViews, shardMap);
       } catch (Throwable throwable) {
         // Ensure that failure of one publisher doesn't effect the other
       }

@@ -18,6 +18,7 @@
 
 package com.pinterest.rocksplicator.publisher;
 
+import org.apache.helix.model.ExternalView;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
@@ -25,6 +26,9 @@ import org.apache.http.impl.client.DefaultHttpClient;
 import org.json.simple.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.Set;
 
 /**
  * Given a shard_map in json string, post the contents to http service on provided url.
@@ -45,7 +49,11 @@ public class HttpPostShardMapPublisher implements ShardMapPublisher<String> {
     this.dataParameters.put("content", "{}");
   }
 
-  public void publish(String jsonStringShardMapNewContent) {
+  @Override
+  public synchronized void publish(
+      final Set<String> validResources,
+      final List<ExternalView> externalViews,
+      final String jsonStringShardMapNewContent) {
     // Write the config to ZK
     LOG.error("Generating a new shard config...");
 

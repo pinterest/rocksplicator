@@ -18,10 +18,15 @@
 
 package com.pinterest.rocksplicator.publisher;
 
+import org.apache.helix.model.ExternalView;
+
+import java.util.List;
+import java.util.Set;
+
 public interface ShardMapPublisher<T> {
 
   /**
    * Publish a shardMap of type T.
    */
-  void publish(T shardMap);
+  void publish(Set<String> validResources, List<ExternalView> externalViews, T shardMap);
 }
