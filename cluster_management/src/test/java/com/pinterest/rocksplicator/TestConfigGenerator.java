@@ -1,5 +1,7 @@
 package com.pinterest.rocksplicator;
 
+import com.pinterest.rocksplicator.publisher.ShardMapPublisher;
+
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixManager;
 import org.apache.helix.HelixManagerFactory;
@@ -26,6 +28,7 @@ import org.apache.helix.task.TaskDriver;
 import org.apache.helix.task.TaskState;
 import org.apache.helix.task.WorkflowConfig;
 
+import org.json.simple.JSONObject;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
@@ -192,7 +195,12 @@ public class TestConfigGenerator extends TaskTestBase {
   private class DummyGenerator extends ConfigGenerator {
 
     public DummyGenerator(String clusterName, HelixManager helixManager) {
-      super(clusterName, helixManager, "");
+      super(clusterName, helixManager, new ShardMapPublisher<JSONObject>() {
+        @Override
+        public void publish(JSONObject shardMap) {
+          // doNothing
+        }
+      });
     }
 
     @Override

@@ -27,6 +27,7 @@ import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
+import com.pinterest.rocksplicator.publisher.ShardMapPublisherBuilder;
 
 import java.io.IOException;
 import java.util.Optional;
@@ -283,7 +284,7 @@ public class Spectator {
       this.configGenerator = new ConfigGenerator(
           helixManager.getClusterName(),
           helixManager,
-          postUrl,
+          ShardMapPublisherBuilder.create().withPostUrl(postUrl).withLocalDump().build(),
           monitor, new ExternalViewLeaderEventsLoggerImpl(spectatorLeaderEventsLogger));
 
       /**
