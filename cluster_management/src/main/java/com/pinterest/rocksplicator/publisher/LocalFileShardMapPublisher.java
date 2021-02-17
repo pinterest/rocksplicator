@@ -43,7 +43,7 @@ public class LocalFileShardMapPublisher implements ShardMapPublisher<String> {
       final Set<String> validResources,
       final List<ExternalView> externalViews,
       final String jsonStringShardMapNewContent) {
-    if (! enableDumpToLocal) {
+    if (!enableDumpToLocal) {
       // doNothing()
       return;
     }

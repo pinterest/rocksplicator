@@ -18,8 +18,6 @@
 
 package com.pinterest.rocksplicator.publisher;
 
-import com.pinterest.rocksplicator.codecs.JSONObjectCodec;
-
 import com.google.common.collect.ImmutableList;
 import org.json.simple.JSONObject;
 
@@ -57,7 +55,8 @@ public class ShardMapPublisherBuilder {
     return this;
   }
 
-  public ShardMapPublisherBuilder withZkShardMap(String clusterName, String zkShardMapConnectString) {
+  public ShardMapPublisherBuilder withZkShardMap(String clusterName,
+                                                 String zkShardMapConnectString) {
     this.zkShardMapConnectString = zkShardMapConnectString;
     this.clusterName = clusterName;
     return this;
@@ -79,8 +78,11 @@ public class ShardMapPublisherBuilder {
       return defaultPublisher;
     }
 
-    ShardMapPublisher<JSONObject> zkShardMapPublisher = new ZkBasedPerResourceShardMapPublisher(clusterName, zkShardMapConnectString);
+    ShardMapPublisher<JSONObject>
+        zkShardMapPublisher =
+        new ZkBasedPerResourceShardMapPublisher(clusterName, zkShardMapConnectString);
 
-    return new ParallelShardMapPublisher<JSONObject>(ImmutableList.of(defaultPublisher, zkShardMapPublisher));
+    return new ParallelShardMapPublisher<JSONObject>(
+        ImmutableList.of(defaultPublisher, zkShardMapPublisher));
   }
 }
