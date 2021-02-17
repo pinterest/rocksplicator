@@ -21,6 +21,7 @@ package com.pinterest.rocksplicator.publisher;
 import com.pinterest.rocksplicator.codecs.ZkGZIPCompressedShardMapCodec;
 import com.pinterest.rocksplicator.utils.ZkPathUtils;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.math.IntMath;
@@ -41,6 +42,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -62,12 +64,23 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
   private final CuratorFramework zkShardMapClient;
   private final List<ExecutorService> executorServices;
   private final ConcurrentHashMap<String, String> latestResourceToConfigMap;
+  private final boolean syncPublish;
 
   public ZkBasedPerResourceShardMapPublisher(
       final String clusterName,
       final String zkShardMapConnectString) {
+    this(clusterName, zkShardMapConnectString, false);
+  }
+
+
+  @VisibleForTesting
+  ZkBasedPerResourceShardMapPublisher(
+      final String clusterName,
+      final String zkShardMapConnectString,
+      final boolean syncPublish) {
     this.clusterName = Preconditions.checkNotNull(clusterName);
     this.zkShardMapConnectString = Preconditions.checkNotNull(zkShardMapConnectString);
+    this.syncPublish = syncPublish;
 
     /**
      * This is fixed at the moment.
@@ -164,7 +177,7 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
      * perform sequential blocking calls to zk which can increase the overall latency
      * of publishing pipeline.
      */
-    getExecutorService(resourceName).submit(() -> {
+    Future<?> result = getExecutorService(resourceName).submit(() -> {
       final String latestResourceMapStr = latestResourceToConfigMap.get(resourceName);
       final String currentResourceMapStr = resourceShardMap.toString();
 
@@ -177,7 +190,7 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
       if (latestResourceMapStr != null && latestResourceMapStr.equals(currentResourceMapStr)) {
         return;
       }
-      latestResourceToConfigMap.put(resourceName, latestResourceMapStr);
+      latestResourceToConfigMap.put(resourceName, currentResourceMapStr);
 
       final JSONObject topLevelJSONObject = new JSONObject();
       final JSONObject metaBlock = new JSONObject();
@@ -211,6 +224,19 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
             clusterName, resourceName), e);
       }
     });
+
+    /**
+     * This is only used for testing purpose
+     */
+    if (syncPublish) {
+      while (! result.isDone()) {
+        try {
+          Thread.sleep(10);
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
+      }
+    }
   }
 
   /**
@@ -220,7 +246,7 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
   private void removeResourceFromZkGZIPCompressedPerResourceShardMap(
       final String clusterName,
       final Set<String> keepTheseResources) {
-    getExecutorService(clusterName).submit(() -> {
+    Future<?> result = getExecutorService(clusterName).submit(() -> {
       try {
         String zkPath = ZkPathUtils.getClusterShardMapParentPath(clusterName);
         Stat stat = zkShardMapClient.checkExists().creatingParentsIfNeeded().forPath(zkPath);
@@ -244,7 +270,7 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
             continue;
           }
 
-          getExecutorService(resourceName).submit(() -> {
+          Future<?> perResourceResult = getExecutorService(resourceName).submit(() -> {
             try {
               String zkChildPath = ZkPathUtils.getClusterResourceShardMapPath(
                   clusterName, resourceName);
@@ -255,12 +281,39 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
                   clusterName, resourceName));
             }
           });
+
+          /**
+           * This is only used for testing purpose
+           */
+          if (syncPublish) {
+            while (! perResourceResult.isDone()) {
+              try {
+                Thread.sleep(10);
+              } catch (InterruptedException e) {
+                e.printStackTrace();
+              }
+            }
+          }
+
         }
       } catch (Exception exp) {
         LOG.error(String.format(
             "Couldn't remove extraneous resources from cluster=%s", clusterName));
       }
     });
+
+    /**
+     * This is only used for testing purpose
+     */
+    if (syncPublish) {
+      while (! result.isDone()) {
+        try {
+          Thread.sleep(10);
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
+      }
+    }
   }
 
   @Override

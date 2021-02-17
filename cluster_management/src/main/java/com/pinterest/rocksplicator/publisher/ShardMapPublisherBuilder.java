@@ -18,6 +18,7 @@
 
 package com.pinterest.rocksplicator.publisher;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import org.json.simple.JSONObject;
 
@@ -32,12 +33,12 @@ public class ShardMapPublisherBuilder {
   private String clusterName = null;
   private String zkShardMapConnectString = null;
 
-  private ShardMapPublisherBuilder() {
-
+  private ShardMapPublisherBuilder(String clusterName) {
+    this.clusterName = Preconditions.checkNotNull(clusterName);
   }
 
-  public static ShardMapPublisherBuilder create() {
-    return new ShardMapPublisherBuilder();
+  public static ShardMapPublisherBuilder create(String clusterName) {
+    return new ShardMapPublisherBuilder(clusterName);
   }
 
   public ShardMapPublisherBuilder withPostUrl(String postUrl) {
@@ -55,10 +56,8 @@ public class ShardMapPublisherBuilder {
     return this;
   }
 
-  public ShardMapPublisherBuilder withZkShardMap(String clusterName,
-                                                 String zkShardMapConnectString) {
+  public ShardMapPublisherBuilder withZkShardMap(String zkShardMapConnectString) {
     this.zkShardMapConnectString = zkShardMapConnectString;
-    this.clusterName = clusterName;
     return this;
   }
 
@@ -69,12 +68,12 @@ public class ShardMapPublisherBuilder {
       publishers.add(new HttpPostShardMapPublisher(this.postUrl));
     }
     if (enableLocalDump) {
-      publishers.add(new LocalFileShardMapPublisher(enableLocalDump));
+      publishers.add(new LocalFileShardMapPublisher(enableLocalDump, clusterName));
     }
     ShardMapPublisher<JSONObject> defaultPublisher = new DedupingShardMapPublisher(
         new ParallelShardMapPublisher<String>(ImmutableList.copyOf(publishers)));
 
-    if (zkShardMapConnectString == null || clusterName == null) {
+    if (zkShardMapConnectString == null) {
       return defaultPublisher;
     }
 

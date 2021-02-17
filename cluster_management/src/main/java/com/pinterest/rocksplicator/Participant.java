@@ -437,7 +437,7 @@ public class Participant {
       ConfigGenerator configGenerator = new ConfigGenerator(
           clusterName,
           helixManager,
-          ShardMapPublisherBuilder.create().withPostUrl(postUrl).withLocalDump().build(),
+          ShardMapPublisherBuilder.create(helixManager.getClusterName()).withPostUrl(postUrl).withLocalDump().build(),
           monitor,
           new ExternalViewLeaderEventsLoggerImpl(staticSpectatorLeaderEventsLogger));
 
