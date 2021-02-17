@@ -18,15 +18,19 @@
 
 package com.pinterest.rocksplicator;
 
+import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLogger;
+import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerDriver;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
+import com.pinterest.rocksplicator.publisher.ShardMapPublisherBuilder;
 import com.pinterest.rocksplicator.task.BackupTaskFactory;
 import com.pinterest.rocksplicator.task.DedupTaskFactory;
 import com.pinterest.rocksplicator.task.RestoreTaskFactory;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -430,8 +434,12 @@ public class Participant {
 
     if (runSpectator) {
       // Add callback to create rocksplicator shard config
-      ConfigGenerator configGenerator = new ConfigGenerator(clusterName, helixManager, postUrl, monitor,
-          new ExternalViewLeaderEventsLoggerImpl(staticSpectatorLeaderEventsLogger), null);
+      ConfigGenerator configGenerator = new ConfigGenerator(
+          clusterName,
+          helixManager,
+          ShardMapPublisherBuilder.create().withPostUrl(postUrl).withLocalDump().build(),
+          monitor,
+          new ExternalViewLeaderEventsLoggerImpl(staticSpectatorLeaderEventsLogger));
 
       HelixCustomCodeRunner codeRunner = new HelixCustomCodeRunner(helixManager, zkConnectString)
           .invoke(configGenerator)
