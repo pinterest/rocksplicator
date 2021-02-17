@@ -761,12 +761,14 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
   }
 
   DBMetaData meta;
-  if (!DecodeThriftStruct(backup_infos.back().app_metadata, &meta)) {
-    LOG(ERROR) << "Failed to decode DBMetaData from backupInfo.app_metadata: " << backup_infos.back().app_metadata;
-    return false;
-  }
-
-  if (!writeMetaData(db_name, meta.s3_bucket, meta.s3_path)) {
+  const std::string& meta_from_backup = backup_infos.back().app_metadata;
+  LOG(INFO) << "Get backupInfo.app_metadata:" << meta_from_backup << " from backupId: " << std::to_string(latest_backup_id);
+  if (!meta_from_backup.empty() && !DecodeThriftStruct(meta_from_backup, &meta)) {
+      LOG(ERROR) << "Failed to decode DBMetaData";
+      return false;
+  } 
+  meta.set_db_name(db_name);
+  if (!writeMetaData(meta.db_name, meta.s3_bucket, meta.s3_path)) {
     LOG(ERROR) << "Failed to write DBMetaData from restore's app_metadata";
     return false;
   }
@@ -1026,13 +1028,15 @@ void AdminHandler::async_tm_backupDBToS3(
     auto local_s3_util = createLocalS3Util(request->limit_mbs, request->s3_bucket);
     std::string formatted_s3_dir_path = rtrim(request->s3_backup_dir, '/');
     rocksdb::Env* s3_env = new rocksdb::S3Env(formatted_s3_dir_path, local_path, std::move(local_s3_util));
+    const bool share_files_with_checksum = request->__isset.share_files_with_checksum && request->share_files_with_checksum;
+    const bool include_meta = request->__isset.include_meta && request->include_meta;
     if (!backupDBHelper(request->db_name,
                         formatted_s3_dir_path,
                         std::unique_ptr<rocksdb::Env>(s3_env),
                         request->__isset.limit_mbs,
                         request->limit_mbs,
-                        false, // disable checksum support for s3 till checkpoint backup to s3 also support it
-                        false, // checkpoint backup does not support with meta yet
+                        share_files_with_checksum,
+                        include_meta,
                         &e)) {
       callback.release()->exceptionInThread(std::move(e));
       common::Stats::get()->Incr(kS3BackupFailure);
