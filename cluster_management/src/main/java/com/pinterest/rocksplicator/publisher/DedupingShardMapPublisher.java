@@ -53,6 +53,7 @@ public class DedupingShardMapPublisher implements ShardMapPublisher<JSONObject> 
       LOG.error("Identical external view observed, skip updating config.");
       return;
     }
+    lastPostedContent = newContent;
     delegateShardMapPublisher.publish(validResources, externalViews, newContent);
   }
 }

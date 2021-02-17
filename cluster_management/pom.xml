@@ -202,6 +202,11 @@
       <artifactId>snappy-java</artifactId>
       <version>1.1.8.2</version>
     </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>3.7.0</version>
+    </dependency>
   </dependencies>
 
   <repositories>

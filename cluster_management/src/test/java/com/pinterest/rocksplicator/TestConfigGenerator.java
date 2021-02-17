@@ -14,7 +14,6 @@ import org.apache.helix.integration.task.MockTask;
 import org.apache.helix.integration.task.TaskTestBase;
 import org.apache.helix.integration.task.WorkflowGenerator;
 import org.apache.helix.model.ExternalView;
-import org.apache.helix.model.IdealState;
 import org.apache.helix.participant.StateMachineEngine;
 import org.apache.helix.task.Task;
 import org.apache.helix.task.TaskCallbackContext;
