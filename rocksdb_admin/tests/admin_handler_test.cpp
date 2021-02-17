@@ -108,40 +108,39 @@ TEST(AdminHandlerTest, MetaData) {
   EXPECT_FALSE(meta.__isset.s3_path);
   EXPECT_FALSE(meta.__isset.last_kafka_msg_timestamp_ms);
 
-  // EXPECT_TRUE(handler.writeMetaData(db_name, s3_bucket, s3_path, timestamp_ms));
+  EXPECT_TRUE(handler.writeMetaData(db_name, s3_bucket, s3_path, timestamp_ms));
 
-  // meta = handler.getMetaData(db_name);
-  // EXPECT_EQ(meta.db_name, db_name);
-  // EXPECT_TRUE(meta.__isset.s3_bucket);
-  // EXPECT_EQ(meta.s3_bucket, s3_bucket);
-  // EXPECT_TRUE(meta.__isset.s3_path);
-  // EXPECT_EQ(meta.s3_path, s3_path);
-  // EXPECT_TRUE(meta.__isset.last_kafka_msg_timestamp_ms);
-  // EXPECT_EQ(meta.last_kafka_msg_timestamp_ms, timestamp_ms);
+  meta = handler.getMetaData(db_name);
+  EXPECT_EQ(meta.db_name, db_name);
+  EXPECT_TRUE(meta.__isset.s3_bucket);
+  EXPECT_EQ(meta.s3_bucket, s3_bucket);
+  EXPECT_TRUE(meta.__isset.s3_path);
+  EXPECT_EQ(meta.s3_path, s3_path);
+  EXPECT_TRUE(meta.__isset.last_kafka_msg_timestamp_ms);
+  EXPECT_EQ(meta.last_kafka_msg_timestamp_ms, timestamp_ms);
 
-  // EXPECT_TRUE(handler.clearMetaData(db_name));
+  EXPECT_TRUE(handler.clearMetaData(db_name));
 
-  // // Test last_kafka_msg_timestamp_ms's default value
-  // EXPECT_TRUE(handler.writeMetaData(db_name, s3_bucket, s3_path));
-  // meta = handler.getMetaData(db_name);
-  // EXPECT_EQ(meta.db_name, db_name);
-  // EXPECT_TRUE(meta.__isset.s3_bucket);
-  // EXPECT_EQ(meta.s3_bucket, s3_bucket);
-  // EXPECT_TRUE(meta.__isset.s3_path);
-  // EXPECT_EQ(meta.s3_path, s3_path);
-  // EXPECT_TRUE(meta.__isset.last_kafka_msg_timestamp_ms);
-  // EXPECT_EQ(meta.last_kafka_msg_timestamp_ms, -1);
+  // Test last_kafka_msg_timestamp_ms's default value
+  EXPECT_TRUE(handler.writeMetaData(db_name, s3_bucket, s3_path));
+  meta = handler.getMetaData(db_name);
+  EXPECT_EQ(meta.db_name, db_name);
+  EXPECT_TRUE(meta.__isset.s3_bucket);
+  EXPECT_EQ(meta.s3_bucket, s3_bucket);
+  EXPECT_TRUE(meta.__isset.s3_path);
+  EXPECT_EQ(meta.s3_path, s3_path);
+  EXPECT_TRUE(meta.__isset.last_kafka_msg_timestamp_ms);
+  EXPECT_EQ(meta.last_kafka_msg_timestamp_ms, -1);
 
-  // EXPECT_TRUE(handler.clearMetaData(db_name));
+  EXPECT_TRUE(handler.clearMetaData(db_name));
 
-  // meta = handler.getMetaData(db_name);
-  // EXPECT_EQ(meta.db_name, db_name);
-  // EXPECT_FALSE(meta.__isset.s3_bucket);
-  // EXPECT_FALSE(meta.__isset.s3_path);
-  // EXPECT_FALSE(meta.__isset.last_kafka_msg_timestamp_ms);
+  meta = handler.getMetaData(db_name);
+  EXPECT_EQ(meta.db_name, db_name);
+  EXPECT_FALSE(meta.__isset.s3_bucket);
+  EXPECT_FALSE(meta.__isset.s3_path);
+  EXPECT_FALSE(meta.__isset.last_kafka_msg_timestamp_ms);
 
   // Test DBMetaData inheritance from Leader to Follower
-
   // Verify write empty meta is ok && get db_name("") is also ok 
   DBMetaData db_meta;
   meta = handler.getMetaData(db_meta.db_name);
