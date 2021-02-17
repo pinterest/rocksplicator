@@ -18,10 +18,7 @@
 
 package com.pinterest.rocksplicator.publisher;
 
-import com.pinterest.rocksplicator.codecs.Codec;
-import com.pinterest.rocksplicator.codecs.Codecs;
-import com.pinterest.rocksplicator.codecs.JSONObjectCodec;
-import com.pinterest.rocksplicator.thrift.commons.io.CompressionAlgorithm;
+import com.pinterest.rocksplicator.codecs.ZkGZIPCompressedShardMapCodec;
 import com.pinterest.rocksplicator.utils.ZkPathUtils;
 
 import com.google.common.base.Preconditions;
@@ -41,26 +38,30 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+/**
+ * This class publishes shard_map in gzip compressed format per resource.
+ * The big cluster shard_map is split per resource and is published to
+ * individual znodes corresponding to a path identified by clusterName and
+ * resourceName.
+ */
 public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JSONObject> {
 
   private static final int MAX_THREADS = 16;
-  private static final Logger
-      LOG =
+  private static final Logger LOG =
       LoggerFactory.getLogger(ZkBasedPerResourceShardMapPublisher.class);
 
-  private static final Codec<JSONObject, byte[]> baseJsonObjectCodec = new JSONObjectCodec();
-  private static final Codec<JSONObject, byte[]> gzipCompressedJsonObjectCodec =
-      Codecs.getCompressedCodec(baseJsonObjectCodec, CompressionAlgorithm.GZIP);
-
+  private final ZkGZIPCompressedShardMapCodec gzipCodec;
   private final String clusterName;
   private final String zkShardMapConnectString;
   private final CuratorFramework zkShardMapClient;
   private final List<ExecutorService> executorServices;
+  private final ConcurrentHashMap<String, String> latestResourceToConfigMap;
 
   public ZkBasedPerResourceShardMapPublisher(
       final String clusterName,
@@ -68,8 +69,13 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
     this.clusterName = Preconditions.checkNotNull(clusterName);
     this.zkShardMapConnectString = Preconditions.checkNotNull(zkShardMapConnectString);
 
+    /**
+     * This is fixed at the moment.
+     */
+    this.gzipCodec = new ZkGZIPCompressedShardMapCodec();
+
     this.zkShardMapClient = CuratorFrameworkFactory.newClient(this.zkShardMapConnectString,
-        new BoundedExponentialBackoffRetry(100, 1000, 10));
+        new BoundedExponentialBackoffRetry(100, 5000, 10));
 
     try {
       this.zkShardMapClient.blockUntilConnected(60, TimeUnit.SECONDS);
@@ -79,20 +85,17 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
 
     this.executorServices = Lists.newArrayListWithCapacity(MAX_THREADS);
     for (int i = 0; i < MAX_THREADS; ++i) {
+      /**
+       * Each of the executor service must be single threaded.
+       */
       this.executorServices.add(Executors.newSingleThreadExecutor());
     }
-  }
 
-  private static String getId(String cluster, String resource) {
-    StringBuilder builder = new StringBuilder()
-        .append(cluster)
-        .append('/')
-        .append(resource);
-    return builder.toString();
+    this.latestResourceToConfigMap = new ConcurrentHashMap<>();
   }
 
   @Override
-  public void publish(
+  public synchronized void publish(
       final Set<String> validResources,
       final List<ExternalView> externalViews,
       final JSONObject shardMap) {
@@ -120,8 +123,15 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
           clusterName, resource, externalViewMap.get(resource), resourceConfig);
     }
     removeResourceFromZkGZIPCompressedPerResourceShardMap(
-        clusterName,
-        validResources.stream().collect(Collectors.toSet()));
+        clusterName, validResources.stream().collect(Collectors.toSet()));
+  }
+
+  private String getId(String clusterName, String resourceName) {
+    StringBuilder builder = new StringBuilder()
+        .append(clusterName)
+        .append('/')
+        .append(resourceName);
+    return builder.toString();
   }
 
   private ExecutorService getExecutorService(String resourceName) {
@@ -136,46 +146,67 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
    * to parallelize publishing by making sure that each per resource
    * shardMap is published into specific queues and hence specific
    * executorService.
+   *
+   * Note: Any operation on a particular resource will be sequential
+   * even in async way, since any operation on a particular resource is routed
+   * to specific executorservice, and each executor service is a single threaded.
    */
   private void asyncWriteToZkGZIPCompressedPerResourceShardMap(
       final String clusterName,
       final String resourceName,
       final ExternalView externalView,
-      final JSONObject perResourceShardMap) {
+      final JSONObject resourceShardMap) {
 
-    final JSONObject topLevelJSONObject = new JSONObject();
-    final JSONObject metaBlock = new JSONObject();
+    /**
+     * Make sure we push the data to zk in async fashion. This is to ensure that it doesn't
+     * perform sequential blocking calls to zk which can increase the overall latency
+     * of publishing pipeline.
+     */
+    getExecutorService(resourceName).submit(() -> {
+      final String latestResourceMapStr = latestResourceToConfigMap.get(resourceName);
+      final String currentResourceMapStr = resourceShardMap.toString();
 
-    final JSONObject sharedMapObj = new JSONObject();
-    sharedMapObj.put(resourceName, perResourceShardMap);
+      /**
+       * No need to publish, if the latest known resourceMap is same as the current one
+       * Note that we perform this check inside the thread run on executor service
+       * for a given resource. This is in order to parallelize serialization of json object
+       * which can be expensive
+       **/
+      if (latestResourceMapStr != null && latestResourceMapStr.equals(currentResourceMapStr)) {
+        return;
+      }
+      latestResourceToConfigMap.put(resourceName, latestResourceMapStr);
 
-    if (externalView.getStat() != null) {
-      metaBlock.put("external_view_modified_time_ms", externalView.getStat().getModifiedTime());
-      metaBlock.put("external_view_version", externalView.getStat().getVersion());
-    }
-    metaBlock.put("publish_time_ms", System.currentTimeMillis());
+      final JSONObject topLevelJSONObject = new JSONObject();
+      final JSONObject metaBlock = new JSONObject();
 
-    topLevelJSONObject.put("meta", metaBlock);
-    topLevelJSONObject.put("shard_map", sharedMapObj);
+      final JSONObject clusterShardMapObj = new JSONObject();
+      clusterShardMapObj.put(resourceName, resourceShardMap);
 
-    getExecutorService(resourceName).submit(new Runnable() {
-      @Override
-      public void run() {
-        // publish to zk.
-        try {
-          byte[] setData = gzipCompressedJsonObjectCodec.encode(topLevelJSONObject);
-          String zkPath = ZkPathUtils.getClusterResourceShardMapPath(clusterName, resourceName);
-          Stat stat = zkShardMapClient.checkExists().creatingParentsIfNeeded().forPath(zkPath);
-          if (stat == null) {
-            zkShardMapClient.create().creatingParentsIfNeeded().forPath(zkPath, setData);
-          } else {
-            zkShardMapClient.setData().forPath(zkPath, setData);
-          }
-        } catch (Exception e) {
-          LOG.error(String.format(
-              "Error publishing shard_map / resource_map to zk cluster: %s, resource: %s",
-              clusterName, resourceName), e);
+      if (externalView.getStat() != null) {
+        metaBlock.put("external_view_modified_time_ms", externalView.getStat().getModifiedTime());
+        metaBlock.put("external_view_version", externalView.getStat().getVersion());
+        metaBlock.put("shard_map_format", "json");
+      }
+      metaBlock.put("publish_time_ms", System.currentTimeMillis());
+
+      topLevelJSONObject.put("meta", metaBlock);
+      topLevelJSONObject.put("shard_map", clusterShardMapObj);
+
+      try {
+        byte[] serializedCompressedJson = gzipCodec.encode(topLevelJSONObject);
+        String zkPath = ZkPathUtils.getClusterResourceShardMapPath(clusterName, resourceName);
+        Stat stat = zkShardMapClient.checkExists().creatingParentsIfNeeded().forPath(zkPath);
+        if (stat == null) {
+          zkShardMapClient.create().creatingParentsIfNeeded()
+              .forPath(zkPath, serializedCompressedJson);
+        } else {
+          zkShardMapClient.setData().forPath(zkPath, serializedCompressedJson);
         }
+      } catch (Exception e) {
+        LOG.error(String.format(
+            "Error publishing shard_map / resource_map to zk cluster: %s, resource: %s",
+            clusterName, resourceName), e);
       }
     });
   }
@@ -187,59 +218,51 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
   private void removeResourceFromZkGZIPCompressedPerResourceShardMap(
       final String clusterName,
       final Set<String> keepTheseResources) {
-    getExecutorService(clusterName).submit(new Runnable() {
-      @Override
-      public void run() {
-        try {
-          String zkPath = ZkPathUtils.getClusterShardMapParentPath(clusterName);
-          Stat stat = zkShardMapClient.checkExists().creatingParentsIfNeeded().forPath(zkPath);
-          if (stat == null) {
-            return;
-          }
-          List<String> childrenPaths = zkShardMapClient.getChildren().forPath(zkPath);
-
-          for (String childResourcePath : childrenPaths) {
-            String[] splits = childResourcePath.split("/");
-            if (splits == null || splits.length <= 0) {
-              continue;
-            }
-            String resourceName = splits[splits.length - 1];
-
-            /**
-             * This is important step. Do not remove resources that are known to be still alive
-             * (active or dormant, online or offline, enabled or disabled) in helix.
-             */
-            if (keepTheseResources.contains(resourceName)) {
-              continue;
-            }
-
-            getExecutorService(resourceName).submit(new Runnable() {
-              @Override
-              public void run() {
-                try {
-                  String zkChildPath = ZkPathUtils.getClusterResourceShardMapPath(
-                      clusterName, resourceName);
-                  zkShardMapClient.delete().forPath(zkChildPath);
-                } catch (Exception exp) {
-                  LOG.error(String.format(
-                      "Couldn't remove extraneous resources from cluster=%s, resource=%s",
-                      clusterName, resourceName));
-                }
-              }
-            });
-          }
-        } catch (Exception exp) {
-          LOG.error(String.format(
-              "Couldn't remove extraneous resources from cluster=%s", clusterName));
+    getExecutorService(clusterName).submit(() -> {
+      try {
+        String zkPath = ZkPathUtils.getClusterShardMapParentPath(clusterName);
+        Stat stat = zkShardMapClient.checkExists().creatingParentsIfNeeded().forPath(zkPath);
+        if (stat == null) {
+          return;
         }
+        List<String> childrenPaths = zkShardMapClient.getChildren().forPath(zkPath);
+
+        for (String childResourcePath : childrenPaths) {
+          String[] splits = childResourcePath.split("/");
+          if (splits == null || splits.length <= 0) {
+            continue;
+          }
+          String resourceName = splits[splits.length - 1];
+
+          /**
+           * This is important step. Do not remove resources that are known to be still alive
+           * (active or dormant, online or offline, enabled or disabled) in helix.
+           */
+          if (keepTheseResources.contains(resourceName)) {
+            continue;
+          }
+
+          getExecutorService(resourceName).submit(() -> {
+            try {
+              String zkChildPath = ZkPathUtils.getClusterResourceShardMapPath(
+                  clusterName, resourceName);
+              zkShardMapClient.delete().forPath(zkChildPath);
+            } catch (Exception exp) {
+              LOG.error(String.format(
+                  "Couldn't remove extraneous resources from cluster=%s, resource=%s",
+                  clusterName, resourceName));
+            }
+          });
+        }
+      } catch (Exception exp) {
+        LOG.error(String.format(
+            "Couldn't remove extraneous resources from cluster=%s", clusterName));
       }
     });
   }
 
   @Override
   public void close() throws IOException {
-    // ensure the while we are closing the ConfigGenerator, we are not processing any callback
-    // at the moment.
     for (ExecutorService executorService : executorServices) {
       executorService.shutdown();
     }
