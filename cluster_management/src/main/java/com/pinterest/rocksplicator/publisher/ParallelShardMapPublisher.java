@@ -19,29 +19,75 @@
 package com.pinterest.rocksplicator.publisher;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 import org.apache.helix.model.ExternalView;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
+/**
+ * Parallelizes execution of individual shardMapPublishers by executing the calls
+ * into dedicated thread. It is guaranteed that the publishing for individual publisher
+ * provided in the list will always be executed by same thread, and hence will be in
+ * FIFO order.
+ */
 public class ParallelShardMapPublisher<T> implements ShardMapPublisher<T> {
 
   private final List<ShardMapPublisher<T>> shardMapPublishers;
+  private final List<ExecutorService> executorServices;
 
   public ParallelShardMapPublisher(final List<ShardMapPublisher<T>> shardMapPublishers) {
     Preconditions.checkNotNull(shardMapPublishers);
     this.shardMapPublishers = shardMapPublishers;
+    this.executorServices = Lists.newArrayListWithCapacity(shardMapPublishers.size());
+    for (int i = 0; i < shardMapPublishers.size(); ++i) {
+      this.executorServices.add(Executors.newSingleThreadExecutor());
+    }
   }
 
   @Override
   public void publish(final Set<String> validResources,
                       final List<ExternalView> externalViews,
                       final T shardMap) {
-    for (ShardMapPublisher<T> shardMapPublisher : shardMapPublishers) {
-      try {
-        shardMapPublisher.publish(validResources, externalViews, shardMap);
-      } catch (Throwable throwable) {
-        // Ensure that failure of one publisher doesn't effect the other
+    final CountDownLatch latch = new CountDownLatch(shardMapPublishers.size());
+    for (int index = 0; index < shardMapPublishers.size(); ++index) {
+      ShardMapPublisher<T> shardMapPublisher = shardMapPublishers.get(index);
+      ExecutorService executorService = executorServices.get(index);
+      executorService.submit(() -> {
+        try {
+          shardMapPublisher.publish(validResources, externalViews, shardMap);
+        } finally {
+          latch.countDown();
+        }
+      });
+    }
+
+    // Wait for all tasks to be completed, before returning.
+    try {
+      latch.await();
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
+  }
+
+  @Override
+  public void close() throws IOException {
+    for (ExecutorService executorService : executorServices) {
+      executorService.shutdown();
+    }
+    for (ExecutorService executorService : executorServices) {
+      while (!executorService.isTerminated()) {
+        try {
+          executorService.awaitTermination(100, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
       }
     }
   }
