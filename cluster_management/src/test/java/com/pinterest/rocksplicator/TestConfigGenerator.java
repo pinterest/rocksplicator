@@ -1,5 +1,7 @@
 package com.pinterest.rocksplicator;
 
+import com.pinterest.rocksplicator.publisher.ShardMapPublisher;
+
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixManager;
 import org.apache.helix.HelixManagerFactory;
@@ -11,7 +13,7 @@ import org.apache.helix.integration.manager.MockParticipantManager;
 import org.apache.helix.integration.task.MockTask;
 import org.apache.helix.integration.task.TaskTestBase;
 import org.apache.helix.integration.task.WorkflowGenerator;
-import org.apache.helix.model.IdealState;
+import org.apache.helix.model.ExternalView;
 import org.apache.helix.participant.StateMachineEngine;
 import org.apache.helix.task.Task;
 import org.apache.helix.task.TaskCallbackContext;
@@ -26,6 +28,7 @@ import org.apache.helix.task.TaskDriver;
 import org.apache.helix.task.TaskState;
 import org.apache.helix.task.WorkflowConfig;
 
+import org.json.simple.JSONObject;
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
@@ -37,6 +40,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 
 public class TestConfigGenerator extends TaskTestBase {
@@ -192,7 +196,15 @@ public class TestConfigGenerator extends TaskTestBase {
   private class DummyGenerator extends ConfigGenerator {
 
     public DummyGenerator(String clusterName, HelixManager helixManager) {
-      super(clusterName, helixManager, "");
+      super(clusterName, helixManager, new ShardMapPublisher<JSONObject>() {
+        @Override
+        public void publish(
+            final Set<String> validResources,
+            final List<ExternalView> externalViews,
+            final JSONObject shardMap) {
+          // doNothing
+        }
+      });
     }
 
     @Override
