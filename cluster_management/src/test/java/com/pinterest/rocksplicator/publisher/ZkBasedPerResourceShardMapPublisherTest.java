@@ -115,6 +115,8 @@ public class ZkBasedPerResourceShardMapPublisherTest {
     } catch (Exception e) {
       // Good.. RESOURCE_2 has been successsfully removed from zk.
     }
+
+    publisher.close();
   }
 
   private JSONObject getData(String resource) throws Exception {
