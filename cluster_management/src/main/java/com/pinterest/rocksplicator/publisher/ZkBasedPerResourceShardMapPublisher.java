@@ -153,7 +153,7 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
       metaBlock.put("external_view_modified_time_ms", externalView.getStat().getModifiedTime());
       metaBlock.put("external_view_version", externalView.getStat().getVersion());
     }
-    metaBlock.put("publish_to_zk_time_ms", System.currentTimeMillis());
+    metaBlock.put("publish_time_ms", System.currentTimeMillis());
 
     topLevelJSONObject.put("meta", metaBlock);
     topLevelJSONObject.put("shard_map", sharedMapObj);
