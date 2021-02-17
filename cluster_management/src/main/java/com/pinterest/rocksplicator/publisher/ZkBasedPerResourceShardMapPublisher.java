@@ -77,6 +77,8 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
     this.zkShardMapClient = CuratorFrameworkFactory.newClient(this.zkShardMapConnectString,
         new BoundedExponentialBackoffRetry(100, 5000, 10));
 
+    this.zkShardMapClient.start();
+
     try {
       this.zkShardMapClient.blockUntilConnected(60, TimeUnit.SECONDS);
     } catch (InterruptedException e) {
