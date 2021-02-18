@@ -209,8 +209,9 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
       topLevelJSONObject.put("shard_map", clusterShardMapObj);
 
       try {
-        LOG.error(String.format("Publishing shard_map / resource_map to zk=%s cluster: %s, resource: %s, config:%s",
-            zkShardMapConnectString, clusterName, resourceName, topLevelJSONObject.toJSONString()));
+        LOG.error(String.format(
+            "Publishing shard_map / resource_map to zk=%s cluster: %s, resource: %s",
+            zkShardMapConnectString, clusterName, resourceName));
         byte[] serializedCompressedJson = gzipCodec.encode(topLevelJSONObject);
         String zkPath = ZkPathUtils.getClusterResourceShardMapPath(clusterName, resourceName);
         Stat stat = zkShardMapClient.checkExists().creatingParentsIfNeeded().forPath(zkPath);
