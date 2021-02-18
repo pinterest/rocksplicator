@@ -461,6 +461,8 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     // at the moment.
     try (AutoCloseableLock lock = new AutoCloseableLock(this.synchronizedCallbackLock)) {
       // Cleanup any remaining items.
+      shardMapPublisher.close();
+
       externalViewLeaderEventLogger.close();
     } catch (IOException e) {
       e.printStackTrace();
