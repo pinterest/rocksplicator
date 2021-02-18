@@ -18,6 +18,7 @@
 
 package com.pinterest.rocksplicator.publisher;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import org.json.simple.JSONObject;
 
@@ -29,12 +30,15 @@ public class ShardMapPublisherBuilder {
   private String postUrl = null;
   private boolean enableLocalDump = false;
 
-  private ShardMapPublisherBuilder() {
+  private String clusterName = null;
+  private String zkShardMapConnectString = null;
 
+  private ShardMapPublisherBuilder(String clusterName) {
+    this.clusterName = Preconditions.checkNotNull(clusterName);
   }
 
-  public static ShardMapPublisherBuilder create() {
-    return new ShardMapPublisherBuilder();
+  public static ShardMapPublisherBuilder create(String clusterName) {
+    return new ShardMapPublisherBuilder(clusterName);
   }
 
   public ShardMapPublisherBuilder withPostUrl(String postUrl) {
@@ -52,6 +56,11 @@ public class ShardMapPublisherBuilder {
     return this;
   }
 
+  public ShardMapPublisherBuilder withZkShardMap(String zkShardMapConnectString) {
+    this.zkShardMapConnectString = zkShardMapConnectString;
+    return this;
+  }
+
   public ShardMapPublisher<JSONObject> build() {
     List<ShardMapPublisher<String>> publishers = new ArrayList<>();
 
@@ -59,9 +68,20 @@ public class ShardMapPublisherBuilder {
       publishers.add(new HttpPostShardMapPublisher(this.postUrl));
     }
     if (enableLocalDump) {
-      publishers.add(new LocalFileShardMapPublisher(enableLocalDump));
+      publishers.add(new LocalFileShardMapPublisher(enableLocalDump, clusterName));
     }
-    return new DedupingShardMapPublisher(
+    ShardMapPublisher<JSONObject> defaultPublisher = new DedupingShardMapPublisher(
         new ParallelShardMapPublisher<String>(ImmutableList.copyOf(publishers)));
+
+    if (zkShardMapConnectString == null) {
+      return defaultPublisher;
+    }
+
+    ShardMapPublisher<JSONObject>
+        zkShardMapPublisher =
+        new ZkBasedPerResourceShardMapPublisher(clusterName, zkShardMapConnectString);
+
+    return new ParallelShardMapPublisher<JSONObject>(
+        ImmutableList.of(defaultPublisher, zkShardMapPublisher));
   }
 }
