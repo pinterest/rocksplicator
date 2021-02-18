@@ -21,16 +21,19 @@ package com.pinterest.rocksplicator.publisher;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import org.json.simple.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class ShardMapPublisherBuilder {
+  private static final Logger LOG =
+      LoggerFactory.getLogger(ZkBasedPerResourceShardMapPublisher.class);
 
+  private final String clusterName;
   private String postUrl = null;
   private boolean enableLocalDump = false;
-
-  private String clusterName = null;
   private String zkShardMapConnectString = null;
 
   private ShardMapPublisherBuilder(String clusterName) {
@@ -65,18 +68,21 @@ public class ShardMapPublisherBuilder {
     List<ShardMapPublisher<String>> publishers = new ArrayList<>();
 
     if (postUrl != null && !postUrl.isEmpty()) {
+      LOG.error(String.format("Publish to Http Url enabled postUrl: %s", postUrl));
       publishers.add(new HttpPostShardMapPublisher(this.postUrl));
     }
     if (enableLocalDump) {
+      LOG.error(String.format("Publish to local directory is enabled"));
       publishers.add(new LocalFileShardMapPublisher(enableLocalDump, clusterName));
     }
     ShardMapPublisher<JSONObject> defaultPublisher = new DedupingShardMapPublisher(
         new ParallelShardMapPublisher<String>(ImmutableList.copyOf(publishers)));
 
-    if (zkShardMapConnectString == null) {
+    if (zkShardMapConnectString == null || zkShardMapConnectString.isEmpty()) {
       return defaultPublisher;
     }
 
+    LOG.error(String.format("Publish to zk server is enabled zkSvr: %s", zkShardMapConnectString));
     ShardMapPublisher<JSONObject>
         zkShardMapPublisher =
         new ZkBasedPerResourceShardMapPublisher(clusterName, zkShardMapConnectString);
