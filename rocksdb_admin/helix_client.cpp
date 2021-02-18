@@ -49,6 +49,10 @@ DEFINE_string(handoff_client_event_history_json_shard_map_path,
   "",
   "[Optional]: path of shard_map generated from spectator in json format");
 
+DEFINE_string(shard_map_zk_connect_string,
+  "",
+  "[Optional]: zk server storing shard_map for individual clusters");
+
 namespace {
 
 JNIEnv* createVM(const std::string& class_path) {
@@ -122,6 +126,10 @@ void invokeClass(JNIEnv* env,
   arguments.push_back(std::string(domain));
   arguments.push_back(std::string("--configPostUrl"));
   arguments.push_back(std::string(config_post_url));
+  if (!FLAGS_shard_map_zk_connect_string.empty()) {
+    arguments.push_back(std::string("--shardMapZkSvr"));
+    arguments.push_back(std::string(FLAGS_shard_map_zk_connect_string));
+  }
   if (FLAGS_use_s3_backup) {
     arguments.push_back(std::string("--s3Bucket"));
     arguments.push_back(std::string(FLAGS_s3_bucket_backup));
