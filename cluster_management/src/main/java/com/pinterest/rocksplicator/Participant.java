@@ -25,6 +25,7 @@ import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
+import com.pinterest.rocksplicator.publisher.ShardMapPublisherBuilder;
 import com.pinterest.rocksplicator.task.BackupTaskFactory;
 import com.pinterest.rocksplicator.task.DedupTaskFactory;
 import com.pinterest.rocksplicator.task.RestoreTaskFactory;
@@ -433,7 +434,11 @@ public class Participant {
 
     if (runSpectator) {
       // Add callback to create rocksplicator shard config
-      ConfigGenerator configGenerator = new ConfigGenerator(clusterName, helixManager, postUrl, monitor,
+      ConfigGenerator configGenerator = new ConfigGenerator(
+          clusterName,
+          helixManager,
+          ShardMapPublisherBuilder.create().withPostUrl(postUrl).withLocalDump().build(),
+          monitor,
           new ExternalViewLeaderEventsLoggerImpl(staticSpectatorLeaderEventsLogger));
 
       HelixCustomCodeRunner codeRunner = new HelixCustomCodeRunner(helixManager, zkConnectString)
