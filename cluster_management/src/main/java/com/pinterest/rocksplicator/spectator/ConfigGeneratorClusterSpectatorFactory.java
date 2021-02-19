@@ -26,7 +26,7 @@ public class ConfigGeneratorClusterSpectatorFactory implements ClusterSpectatorF
     this.uriPattern = uriPattern;
   }
 
-  private String getConfigPostUri(String uriPattern, String clusterName) {
+  private String getConfigPostUri(String clusterName) {
     return uriPattern.replace("[PARTICIPANT_CLUSTER]", clusterName);
   }
 
@@ -35,6 +35,6 @@ public class ConfigGeneratorClusterSpectatorFactory implements ClusterSpectatorF
       String zkString, String clusterName,
       String instanceName) {
     return new ConfigGeneratorClusterSpectatorImpl(zkString, clusterName, instanceName,
-        getConfigPostUri(uriPattern, clusterName));
+        getConfigPostUri(clusterName));
   }
 }

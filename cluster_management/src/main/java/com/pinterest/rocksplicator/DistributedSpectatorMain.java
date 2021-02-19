@@ -49,7 +49,7 @@ import java.util.Arrays;
  *
  * The participant clusters are added as a resource into the special spectator controller cluster.
  * The leader of the spectator controller cluster assign each resource (aka the helix participant
- * clusters to be managed) one leader and multiple followers. The leader instance of this special
+ * clusters to be managed) one leader and multiple standbys. The leader instance of this special
  * cluster performs the task of spectator for the participant cluster.
  */
 
