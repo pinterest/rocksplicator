@@ -25,16 +25,13 @@
 #include "boost/filesystem.hpp"
 #include "gtest/gtest.h"
 #include "rocksdb/db.h"
-#include "rocksdb/merge_operator.h"
 #include "rocksdb/sst_file_writer.h"
-#include "rocksdb/status.h"
 #include "rocksdb_admin/application_db.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
 
 namespace admin {
 
 using boost::filesystem::remove_all;
-using rocksdb::AssociativeMergeOperator;
 using rocksdb::DB;
 using rocksdb::DestroyDB;
 using rocksdb::EnvOptions;
@@ -42,7 +39,6 @@ using rocksdb::Logger;
 using rocksdb::Options;
 using rocksdb::Slice;
 using rocksdb::SstFileWriter;
-using rocksdb::Status;
 using std::list;
 using std::make_unique;
 using std::pair;
@@ -50,23 +46,6 @@ using std::string;
 using std::to_string;
 using std::unique_ptr;
 using std::vector;
-
-class SimpleMergeOperator : public AssociativeMergeOperator {
-public:
-  bool Merge(const Slice& key,
-             const Slice* existing_value,
-             const Slice& value,
-             std::string* new_value,
-             Logger* logger) const override {
-    if (existing_value) {
-      *new_value = existing_value->ToString();
-    }
-    *new_value += value.ToString();
-    return true;
-  }
-
-  const char* Name() const override { return "SimpleMergeOperator"; }
-};
 
 class ApplicationDBTestBase : public testing::Test {
 public:
@@ -120,7 +99,6 @@ private:
     options.create_if_missing = true;
     options.error_if_exists = true;
     options.WAL_size_limit_MB = 100;
-    options.merge_operator = std::make_shared<SimpleMergeOperator>();
     options.allow_ingest_behind = allow_ingest_behind;
     return options;
   }
