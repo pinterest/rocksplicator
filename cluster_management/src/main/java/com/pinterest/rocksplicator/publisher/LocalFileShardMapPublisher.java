@@ -31,11 +31,24 @@ import java.util.Set;
 public class LocalFileShardMapPublisher implements ShardMapPublisher<String> {
 
   private static final Logger LOG = LoggerFactory.getLogger(DedupingShardMapPublisher.class);
+  private static final String PARENT_OF_DUMP_DIR = "/var/log";
+  private static final String DUMP_DIR = PARENT_OF_DUMP_DIR + "/helixspectator";
 
   private final boolean enableDumpToLocal;
+  private final String localDumpFilePath;
 
-  public LocalFileShardMapPublisher(boolean enableDumpToLocal) {
-    this.enableDumpToLocal = enableDumpToLocal && new File("/var/log/helixspectator").canWrite();
+  public LocalFileShardMapPublisher(boolean enableDumpToLocal, String clusterName) {
+    boolean localDumpEnabled = false;
+    if (enableDumpToLocal) {
+      if (new File(PARENT_OF_DUMP_DIR).canWrite()) {
+        new File(DUMP_DIR).mkdir();
+      }
+      if (new File(DUMP_DIR).canWrite()) {
+        localDumpEnabled = true;
+      }
+    }
+    this.enableDumpToLocal = localDumpEnabled;
+    this.localDumpFilePath = String.format("%s/%s-shard-config.json", DUMP_DIR, clusterName);
   }
 
   @Override
@@ -50,7 +63,7 @@ public class LocalFileShardMapPublisher implements ShardMapPublisher<String> {
 
     // Write the shard config to local
     try {
-      FileWriter shard_config_writer = new FileWriter("/var/log/helixspectator/shard_config");
+      FileWriter shard_config_writer = new FileWriter(localDumpFilePath);
       shard_config_writer.write(jsonStringShardMapNewContent);
       shard_config_writer.close();
       LOG.error("Successfully wrote the shard config to the local.");
