@@ -18,8 +18,6 @@
 
 package com.pinterest.rocksplicator;
 
-import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLogger;
-import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerDriver;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
@@ -30,7 +28,6 @@ import com.pinterest.rocksplicator.task.BackupTaskFactory;
 import com.pinterest.rocksplicator.task.DedupTaskFactory;
 import com.pinterest.rocksplicator.task.RestoreTaskFactory;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -437,7 +434,10 @@ public class Participant {
       ConfigGenerator configGenerator = new ConfigGenerator(
           clusterName,
           helixManager,
-          ShardMapPublisherBuilder.create(helixManager.getClusterName()).withPostUrl(postUrl).withLocalDump().build(),
+          ShardMapPublisherBuilder.create(helixManager.getClusterName())
+              .withPostUrl(postUrl)
+              .withLocalDump()
+              .build(),
           monitor,
           new ExternalViewLeaderEventsLoggerImpl(staticSpectatorLeaderEventsLogger));
 

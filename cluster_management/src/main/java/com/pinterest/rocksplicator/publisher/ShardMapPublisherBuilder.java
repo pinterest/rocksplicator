@@ -30,7 +30,7 @@ public class ShardMapPublisherBuilder {
   private String postUrl = null;
   private boolean enableLocalDump = false;
 
-  private String clusterName = null;
+  private final String clusterName;
   private String zkShardMapConnectString = null;
 
   private ShardMapPublisherBuilder(String clusterName) {

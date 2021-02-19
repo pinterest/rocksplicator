@@ -284,7 +284,10 @@ public class Spectator {
       this.configGenerator = new ConfigGenerator(
           helixManager.getClusterName(),
           helixManager,
-          ShardMapPublisherBuilder.create(helixManager.getClusterName()).withPostUrl(postUrl).withLocalDump().build(),
+          ShardMapPublisherBuilder.create(helixManager.getClusterName())
+              .withPostUrl(postUrl)
+              .withLocalDump()
+              .build(),
           monitor, new ExternalViewLeaderEventsLoggerImpl(spectatorLeaderEventsLogger));
 
       /**
