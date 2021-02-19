@@ -135,4 +135,17 @@ rocksdb::Status ApplicationDB::CompactRange(
   return db_->CompactRange(options, begin, end);
 }
 
+uint32_t ApplicationDB::getHighestEmptyLevel() {
+  rocksdb::ColumnFamilyMetaData cf_metadata;
+  db_->GetColumnFamilyMetaData(&cf_metadata);
+  std::vector<rocksdb::LevelMetaData>& level_metas = cf_metadata.levels;
+  std::set<uint32_t> empty_levels;
+  for (const auto& level_meta : level_metas) {
+    if (level_meta.size == 0) {
+      empty_levels.insert(level_meta.level);
+    }
+  }
+  return *empty_levels.rbegin();
+}
+
 }  // namespace admin
