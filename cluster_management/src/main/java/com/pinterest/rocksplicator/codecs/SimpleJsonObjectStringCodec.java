@@ -15,26 +15,27 @@
 //
 // @author Gopal Rajpurohit (grajpurohit@pinterest.com)
 //
+
 package com.pinterest.rocksplicator.codecs;
 
-import com.pinterest.rocksplicator.thrift.commons.io.CompressionAlgorithm;
-
 import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 
-public class ZkGZIPCompressedShardMapCodec implements Codec<JSONObject, byte[]> {
-
-  private static final Codec<JSONObject, byte[]> baseCodec = new SimpleJsonObjectByteArrayCodec();
-  private static final Codec<JSONObject, byte[]> gzipCompressedCoded =
-      Codecs.getCompressedCodec(baseCodec, CompressionAlgorithm.GZIP);
-
+public class SimpleJsonObjectStringCodec implements Codec<JSONObject, String> {
 
   @Override
-  public JSONObject decode(byte[] data) throws CodecException {
-    return gzipCompressedCoded.decode(data);
+  public JSONObject decode(String data) throws CodecException {
+    JSONParser parser = new JSONParser();
+    try {
+      return (JSONObject) parser.parse(data);
+    } catch (ParseException e) {
+      throw new CodecException(e);
+    }
   }
 
   @Override
-  public byte[] encode(JSONObject obj) throws CodecException {
-    return gzipCompressedCoded.encode(obj);
+  public String encode(JSONObject obj) throws CodecException {
+    return obj.toJSONString();
   }
 }

@@ -15,26 +15,30 @@
 //
 // @author Gopal Rajpurohit (grajpurohit@pinterest.com)
 //
-package com.pinterest.rocksplicator.codecs;
 
-import com.pinterest.rocksplicator.thrift.commons.io.CompressionAlgorithm;
+package com.pinterest.rocksplicator.codecs;
 
 import org.json.simple.JSONObject;
 
-public class ZkGZIPCompressedShardMapCodec implements Codec<JSONObject, byte[]> {
+/**
+ * Codec for serializing a simple JSONObject into byte array
+ * and deserializing a byte array into simple JSONObject
+ */
+public class SimpleJsonObjectByteArrayCodec implements Codec<JSONObject, byte[]> {
 
-  private static final Codec<JSONObject, byte[]> baseCodec = new SimpleJsonObjectByteArrayCodec();
-  private static final Codec<JSONObject, byte[]> gzipCompressedCoded =
-      Codecs.getCompressedCodec(baseCodec, CompressionAlgorithm.GZIP);
-
+  private static final StringUTF8ByteArrayCodec
+      STRING_UTF_8_BYTE_ARRAY_CODEC = new StringUTF8ByteArrayCodec();
+  private static final SimpleJsonObjectStringCodec
+      SIMPLE_JSON_OBJECT_STRING_CODEC = new SimpleJsonObjectStringCodec();
 
   @Override
   public JSONObject decode(byte[] data) throws CodecException {
-    return gzipCompressedCoded.decode(data);
+    return SIMPLE_JSON_OBJECT_STRING_CODEC.decode(STRING_UTF_8_BYTE_ARRAY_CODEC.decode(data));
   }
+
 
   @Override
   public byte[] encode(JSONObject obj) throws CodecException {
-    return gzipCompressedCoded.encode(obj);
+    return STRING_UTF_8_BYTE_ARRAY_CODEC.encode(SIMPLE_JSON_OBJECT_STRING_CODEC.encode(obj));
   }
 }
