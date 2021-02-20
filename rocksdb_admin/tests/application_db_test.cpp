@@ -39,9 +39,12 @@ using rocksdb::Logger;
 using rocksdb::Options;
 using rocksdb::Slice;
 using rocksdb::SstFileWriter;
+using std::cout;
+using std::endl;
 using std::list;
 using std::make_unique;
 using std::pair;
+using std::shared_ptr;
 using std::string;
 using std::to_string;
 using std::unique_ptr;
@@ -51,9 +54,11 @@ class ApplicationDBTestBase : public testing::Test {
 public:
   ApplicationDBTestBase() {
     static thread_local unsigned int seed = time(nullptr);
-    static string db_name = "test_db_" + to_string(rand_r(&seed));
+    db_name_ = "test_db_" + to_string(rand_r(&seed));
+    db_path_ = testDir() + "/" + db_name_;
     // default ApplicationDB with DB.allow_ingest_behind=false
-    db_ = CleanAndOpenApplicationDB(testDir() + "/" + db_name, db_name, false);
+    last_options_ = getDefaultOptions();
+    Reopen(last_options_);
   }
 
   ~ApplicationDBTestBase(){};
@@ -76,52 +81,48 @@ public:
     EXPECT_TRUE(s.ok());
   }
 
-  void recreateDBWithAllowIngestBehind() {
-    string name = db_name();
-    string path = db_path();
-    db_.reset(nullptr);
+  void Reopen(const Options& options) {
+    close();
+    last_options_ = options;
+    DB* db;
+    auto status = DB::Open(options, db_path_, &db);
+    ASSERT_TRUE(status.ok());
+    ASSERT_TRUE(db != nullptr);
+    db_ = make_unique<ApplicationDB>(
+        db_name_, shared_ptr<DB>(db), replicator::DBRole::SLAVE, nullptr);
+  }
 
-    Options options = buildDBOptions(false);
-    auto status = DestroyDB(path, options);
-    EXPECT_TRUE(status.ok());
+  void DestroyAndReopen(const Options& options) {
+    Destroy(last_options_);
+    Reopen(options);
+  }
 
-    db_ = CleanAndOpenApplicationDB(path, name, true);
-    EXPECT_NE(db_, nullptr);
+  void Destroy(const Options& options) {
+    close();
+    ASSERT_TRUE(DestroyDB(db_path_, options).ok());
+  }
+
+  void close() {
+    if (db_ != nullptr) {
+      db_.reset(nullptr);
+    }
   }
 
   const string testDir() { return "/tmp"; }
-  const string db_name() { return db_->db_name(); }
-  const string db_path() { return testDir() + "/" + db_->db_name(); }
 
-private:
-  Options buildDBOptions(bool allow_ingest_behind) {
-    static Options options;
+  Options getDefaultOptions() {
+    Options options;
     options.create_if_missing = true;
     options.error_if_exists = true;
     options.WAL_size_limit_MB = 100;
-    options.allow_ingest_behind = allow_ingest_behind;
     return options;
-  }
-
-  unique_ptr<DB> OpenDB(const string& path, bool allow_ingest_behind) {
-    Options options = buildDBOptions(allow_ingest_behind);
-    DB* db;
-    auto status = DB::Open(options, path, &db);
-    EXPECT_TRUE(status.ok());
-    return unique_ptr<DB>(db);
-  }
-
-  unique_ptr<ApplicationDB> CleanAndOpenApplicationDB(const string& path,
-                                                      const string& db_name,
-                                                      bool allow_ingest_behind) {
-    EXPECT_NO_THROW(remove_all(path));
-    auto db = OpenDB(path, allow_ingest_behind);
-    EXPECT_TRUE(db != nullptr);
-    return make_unique<ApplicationDB>(db_name, std::move(db), replicator::DBRole::SLAVE, nullptr);
   }
 
 public:
   unique_ptr<ApplicationDB> db_;
+  string db_name_;
+  string db_path_;
+  Options last_options_;
 };
 
 TEST_F(ApplicationDBTestBase, GetLSMLevelInfo) {
@@ -139,13 +140,14 @@ TEST_F(ApplicationDBTestBase, GetLSMLevelInfo) {
   ifo.move_files = true;
   ifo.allow_global_seqno = true;
   ifo.ingest_behind = true;
-  // EXPECT_EQ(db_->rocksdb()->GetLatestSequenceNumber(), (uint64_t)0);
   EXPECT_FALSE(db_->rocksdb()->GetOptions().allow_ingest_behind);
   auto s = db_->rocksdb()->IngestExternalFile({sst_file1}, ifo);
   EXPECT_FALSE(s.ok());
   EXPECT_EQ(db_->getHighestEmptyLevel(), 6);
 
-  recreateDBWithAllowIngestBehind();
+  auto options = getDefaultOptions();
+  options.allow_ingest_behind = true;
+  DestroyAndReopen(options);
 
   ifo.ingest_behind = true;
   EXPECT_TRUE(db_->rocksdb()->GetOptions().allow_ingest_behind);
