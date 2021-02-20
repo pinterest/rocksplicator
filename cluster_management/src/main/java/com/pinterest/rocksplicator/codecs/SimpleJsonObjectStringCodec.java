@@ -22,17 +22,20 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
-public class SimpleJsonObjectDecoder implements Decoder<byte[], JSONObject> {
-
-  private static final StringUTF8ByteArrayCodec strByteArrayCodec = new StringUTF8ByteArrayCodec();
+public class SimpleJsonObjectStringCodec implements Codec<JSONObject, String> {
 
   @Override
-  public JSONObject decode(byte[] data) throws CodecException {
+  public JSONObject decode(String data) throws CodecException {
     JSONParser parser = new JSONParser();
     try {
-      return (JSONObject) parser.parse(strByteArrayCodec.decode(data));
+      return (JSONObject) parser.parse(data);
     } catch (ParseException e) {
       throw new CodecException(e);
     }
+  }
+
+  @Override
+  public String encode(JSONObject obj) throws CodecException {
+    return obj.toJSONString();
   }
 }
