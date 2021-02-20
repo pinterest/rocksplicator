@@ -105,6 +105,9 @@ public class ClusterShardMapAgent implements Closeable {
     this.numPendingNotifications = new AtomicInteger(0);
   }
 
+  /**
+   * Should only be called once.
+   */
   public synchronized void startNotification() throws Exception {
     final CountDownLatch countDownLatch = new CountDownLatch(1);
     LOG.info(String.format("Initializing shardMap for cluster=%s", clusterName));
@@ -156,6 +159,7 @@ public class ClusterShardMapAgent implements Closeable {
     countDownLatch.await();
     LOG.info(String.format("Initialized shardMap for cluster=%s", clusterName));
 
+    final CountDownLatch firstDumpComplete = new CountDownLatch(1);
     this.dumperExecutorService.scheduleAtFixedRate(new Runnable() {
       @Override
       public void run() {
@@ -166,6 +170,7 @@ public class ClusterShardMapAgent implements Closeable {
               clusterName, pendingNotifications));
           try {
             writeShardMapFile();
+            firstDumpComplete.countDown();
           } catch (Throwable throwable) {
             // Never allow any error to propagate to kill scheduler thread, else subsequent
             // tasks will not be scheduled.
@@ -174,6 +179,7 @@ public class ClusterShardMapAgent implements Closeable {
         }
       }
     }, 0, 100, TimeUnit.MILLISECONDS);
+    firstDumpComplete.await();
   }
 
   private void addOrUpdateResourceShardMap(String resourcePath, byte[] data) {
