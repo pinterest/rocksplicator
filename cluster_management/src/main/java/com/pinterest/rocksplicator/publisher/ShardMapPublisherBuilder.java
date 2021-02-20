@@ -18,6 +18,7 @@
 
 package com.pinterest.rocksplicator.publisher;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import org.json.simple.JSONObject;
 
@@ -29,12 +30,14 @@ public class ShardMapPublisherBuilder {
   private String postUrl = null;
   private boolean enableLocalDump = false;
 
-  private ShardMapPublisherBuilder() {
+  private final String clusterName;
 
+  private ShardMapPublisherBuilder(String clusterName) {
+    this.clusterName = Preconditions.checkNotNull(clusterName);
   }
 
-  public static ShardMapPublisherBuilder create() {
-    return new ShardMapPublisherBuilder();
+  public static ShardMapPublisherBuilder create(String clusterName) {
+    return new ShardMapPublisherBuilder(clusterName);
   }
 
   public ShardMapPublisherBuilder withPostUrl(String postUrl) {
@@ -59,7 +62,7 @@ public class ShardMapPublisherBuilder {
       publishers.add(new HttpPostShardMapPublisher(this.postUrl));
     }
     if (enableLocalDump) {
-      publishers.add(new LocalFileShardMapPublisher(enableLocalDump));
+      publishers.add(new LocalFileShardMapPublisher(enableLocalDump, clusterName));
     }
     return new DedupingShardMapPublisher(
         new ParallelShardMapPublisher<String>(ImmutableList.copyOf(publishers)));
