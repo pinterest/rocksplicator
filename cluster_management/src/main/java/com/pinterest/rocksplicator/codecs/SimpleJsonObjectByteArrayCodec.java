@@ -19,20 +19,26 @@
 package com.pinterest.rocksplicator.codecs;
 
 import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
 
-public class SimpleJsonObjectDecoder implements Decoder<byte[], JSONObject> {
+/**
+ * Codec for serializing a simple JSONObject into byte array
+ * and deserializing a byte array into simple JSONObject
+ */
+public class SimpleJsonObjectByteArrayCodec implements Codec<JSONObject, byte[]> {
 
-  private static final StringUTF8ByteArrayCodec strByteArrayCodec = new StringUTF8ByteArrayCodec();
+  private static final StringUTF8ByteArrayCodec
+      STRING_UTF_8_BYTE_ARRAY_CODEC = new StringUTF8ByteArrayCodec();
+  private static final SimpleJsonObjectStringCodec
+      SIMPLE_JSON_OBJECT_STRING_CODEC = new SimpleJsonObjectStringCodec();
 
   @Override
   public JSONObject decode(byte[] data) throws CodecException {
-    JSONParser parser = new JSONParser();
-    try {
-      return (JSONObject) parser.parse(strByteArrayCodec.decode(data));
-    } catch (ParseException e) {
-      throw new CodecException(e);
-    }
+    return SIMPLE_JSON_OBJECT_STRING_CODEC.decode(STRING_UTF_8_BYTE_ARRAY_CODEC.decode(data));
+  }
+
+
+  @Override
+  public byte[] encode(JSONObject obj) throws CodecException {
+    return STRING_UTF_8_BYTE_ARRAY_CODEC.encode(SIMPLE_JSON_OBJECT_STRING_CODEC.encode(obj));
   }
 }
