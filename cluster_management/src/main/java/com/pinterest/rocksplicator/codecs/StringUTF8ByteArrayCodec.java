@@ -18,20 +18,29 @@
 
 package com.pinterest.rocksplicator.codecs;
 
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
+import java.io.UnsupportedEncodingException;
 
-public class SimpleJsonObjectDecoder implements Decoder<byte[], JSONObject> {
-
-  private static final StringUTF8ByteArrayCodec strByteArrayCodec = new StringUTF8ByteArrayCodec();
+/**
+ * Codec to encode String into byte array with utf-8 encoding and
+ * decoding a given byte array
+ * with utf-8 encoding into java string object.
+ */
+public class StringUTF8ByteArrayCodec implements Codec<String, byte[]> {
 
   @Override
-  public JSONObject decode(byte[] data) throws CodecException {
-    JSONParser parser = new JSONParser();
+  public String decode(byte[] data) throws CodecException {
     try {
-      return (JSONObject) parser.parse(strByteArrayCodec.decode(data));
-    } catch (ParseException e) {
+      return new String(data, "UTF-8");
+    } catch (UnsupportedEncodingException e) {
+      throw new CodecException(e);
+    }
+  }
+
+  @Override
+  public byte[] encode(String obj) throws CodecException {
+    try {
+      return obj.getBytes("UTF-8");
+    } catch (UnsupportedEncodingException e) {
       throw new CodecException(e);
     }
   }
