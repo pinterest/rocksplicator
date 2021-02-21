@@ -60,6 +60,7 @@ enum ErrorCode {
   OTHER = 0,
   SOURCE_NOT_FOUND = 1, # could not find the upstream db
   SOURCE_READ_ERROR = 2,
+  SOURCE_REMOVED = 3, # leader db has moved to a different instance
 }
 
 exception ReplicateException {
