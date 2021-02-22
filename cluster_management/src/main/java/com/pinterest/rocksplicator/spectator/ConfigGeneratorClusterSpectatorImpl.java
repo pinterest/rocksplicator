@@ -37,10 +37,11 @@ import java.io.IOException;
  */
 public class ConfigGeneratorClusterSpectatorImpl implements ClusterSpectator {
 
-  private final String zkConnectString;
+  private final String zkHelixConnectString;
   private final String clusterName;
   private final String instanceName;
   private final String configPostUri;
+  private final String shardMapZkSvr;
 
   /**
    * Live State.
@@ -51,14 +52,16 @@ public class ConfigGeneratorClusterSpectatorImpl implements ClusterSpectator {
   private RocksplicatorMonitor monitor = null;
 
   public ConfigGeneratorClusterSpectatorImpl(
-      final String zkConnectString,
+      final String zkHelixConnectString,
       final String clusterName,
       final String instanceName,
-      final String configPostUri) {
-    this.zkConnectString = zkConnectString;
+      final String configPostUri,
+      final String zkShardMapConnectString) {
+    this.zkHelixConnectString = zkHelixConnectString;
     this.clusterName = clusterName;
     this.instanceName = instanceName;
     this.configPostUri = configPostUri;
+    this.shardMapZkSvr = zkShardMapConnectString;
   }
 
   /**
@@ -71,17 +74,27 @@ public class ConfigGeneratorClusterSpectatorImpl implements ClusterSpectator {
           clusterName,
           instanceName,
           InstanceType.SPECTATOR,
-          zkConnectString);
+          zkHelixConnectString);
     }
 
     if (shardMapPublisher == null) {
       ShardMapPublisherBuilder publisherBuilder
           = ShardMapPublisherBuilder.create(this.clusterName).withLocalDump();
 
+      /**
+       * Enable publishing entire shardMap to given http post uri.
+       */
       if (configPostUri != null &&
           !configPostUri.isEmpty() &&
           (configPostUri.startsWith("http://") || configPostUri.startsWith("https://"))) {
         publisherBuilder.withPostUrl(configPostUri);
+      }
+
+      /**
+       * Enable publishing per resource shardMap to zk.
+       */
+      if (shardMapZkSvr != null && !shardMapZkSvr.isEmpty()) {
+        publisherBuilder = publisherBuilder.withZkShardMap(shardMapZkSvr);
       }
       this.shardMapPublisher = publisherBuilder.build();
     }

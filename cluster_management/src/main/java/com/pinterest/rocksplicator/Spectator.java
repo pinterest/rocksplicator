@@ -48,6 +48,7 @@ import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.helix.HelixManager;
 import org.apache.helix.HelixManagerFactory;
 import org.apache.helix.InstanceType;
+import org.apache.helix.PropertyKey;
 import org.apache.helix.manager.zk.HelixManagerShutdownHook;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.ConsoleAppender;

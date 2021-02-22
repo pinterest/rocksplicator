@@ -20,29 +20,34 @@ package com.pinterest.rocksplicator.spectator;
 
 public class ConfigGeneratorClusterSpectatorFactory implements ClusterSpectatorFactory {
 
-  private final String uriPattern;
+  private final String configPostUriPattern;
+  private final String zkShardMapConnectString;
 
-  public ConfigGeneratorClusterSpectatorFactory(String uriPattern) {
-    this.uriPattern = uriPattern;
+  public ConfigGeneratorClusterSpectatorFactory(
+      final String configPostUriPattern,
+      final String zkShardMapConnectString) {
+    this.configPostUriPattern = configPostUriPattern;
+    this.zkShardMapConnectString = zkShardMapConnectString;
   }
 
   private String getConfigPostUri(String participantClusterName) {
-    if (uriPattern == null || uriPattern.isEmpty()) {
+    if (configPostUriPattern == null || configPostUriPattern.isEmpty()) {
       return null;
     } else {
-      return uriPattern.replace("[PARTICIPANT_CLUSTER]", participantClusterName);
+      return configPostUriPattern.replace("[PARTICIPANT_CLUSTER]", participantClusterName);
     }
   }
 
   @Override
   public ClusterSpectator createClusterSpectator(
-      String zkServerConnectString,
+      String zkHelixConnectString,
       String participantClusterName,
       String myInstanceName) {
     return new ConfigGeneratorClusterSpectatorImpl(
-        zkServerConnectString,
+        zkHelixConnectString,
         participantClusterName,
         myInstanceName,
-        getConfigPostUri(participantClusterName));
+        getConfigPostUri(participantClusterName),
+        zkShardMapConnectString);
   }
 }
