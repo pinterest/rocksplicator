@@ -18,23 +18,43 @@
 
 package com.pinterest.rocksplicator.spectator;
 
+import com.pinterest.rocksplicator.ConfigGenerator;
+import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
+import com.pinterest.rocksplicator.publisher.ShardMapPublisher;
+import com.pinterest.rocksplicator.publisher.ShardMapPublisherBuilder;
+
 import org.apache.helix.HelixManager;
 import org.apache.helix.HelixManagerFactory;
 import org.apache.helix.InstanceType;
+import org.json.simple.JSONObject;
 
+import java.io.IOException;
+
+/**
+ * Implementation of Spectator running ConfigGenerator.
+ *
+ * In the current version, it doesn't support LeaderEvents handoff reporting.
+ */
 public class ConfigGeneratorClusterSpectatorImpl implements ClusterSpectator {
 
-  private HelixManager helixManager;
-  private String zkConnectString;
-  private String clusterName;
-  private String instanceName;
-  private String configPostUri;
+  private final String zkConnectString;
+  private final String clusterName;
+  private final String instanceName;
+  private final String configPostUri;
+
+  /**
+   * Live State.
+   */
+  private HelixManager helixManager = null;
+  private ShardMapPublisher<JSONObject> shardMapPublisher = null;
+  private ConfigGenerator configGenerator = null;
+  private RocksplicatorMonitor monitor = null;
 
   public ConfigGeneratorClusterSpectatorImpl(
-      String zkConnectString,
-      String clusterName,
-      String instanceName,
-      String configPostUri) {
+      final String zkConnectString,
+      final String clusterName,
+      final String instanceName,
+      final String configPostUri) {
     this.zkConnectString = zkConnectString;
     this.clusterName = clusterName;
     this.instanceName = instanceName;
@@ -46,12 +66,25 @@ public class ConfigGeneratorClusterSpectatorImpl implements ClusterSpectator {
    */
   @Override
   public synchronized void prepare() {
-    if (this.helixManager == null || !this.helixManager.isConnected()) {
+    if (this.helixManager == null) {
       this.helixManager = HelixManagerFactory.getZKHelixManager(
           clusterName,
           instanceName,
           InstanceType.SPECTATOR,
           zkConnectString);
+    }
+
+    if (shardMapPublisher == null) {
+      ShardMapPublisherBuilder publisherBuilder
+          = ShardMapPublisherBuilder.create(this.clusterName).withLocalDump();
+
+      if (configPostUri != null && !configPostUri.isEmpty()) {
+        publisherBuilder.withPostUrl(configPostUri);
+      }
+      this.shardMapPublisher = publisherBuilder.build();
+    }
+    if (monitor == null) {
+      this.monitor = new RocksplicatorMonitor(this.clusterName, this.instanceName);
     }
   }
 
@@ -71,8 +104,16 @@ public class ConfigGeneratorClusterSpectatorImpl implements ClusterSpectator {
      *
      * ConfigGenerator should also start listening to the ExternalView
      * notifications and publishing ShardMap config here.
-     *
      */
+    this.configGenerator = new ConfigGenerator(
+        this.clusterName,
+        this.helixManager,
+        this.shardMapPublisher,
+        this.monitor, null);
+
+    this.helixManager.addExternalViewChangeListener(configGenerator);
+    this.helixManager.addConfigChangeListener(configGenerator);
+    this.helixManager.addLiveInstanceChangeListener(configGenerator);
   }
 
   /**
@@ -94,9 +135,39 @@ public class ConfigGeneratorClusterSpectatorImpl implements ClusterSpectator {
    */
   @Override
   public synchronized void release() {
+    // No more notifications to config generator
     if (this.helixManager != null && helixManager.isConnected()) {
       this.helixManager.disconnect();
       this.helixManager = null;
+    }
+
+    /**
+     * Close down any internally running threads.
+     */
+    if (this.configGenerator != null) {
+      try {
+        this.configGenerator.close();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+      this.configGenerator = null;
+    }
+
+    /**
+     * Shutdown the shardMapPublisher
+     */
+    if (shardMapPublisher != null) {
+      try {
+        this.shardMapPublisher.close();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+      this.shardMapPublisher = null;
+    }
+
+    if (monitor != null) {
+      this.monitor.close();
+      this.monitor = null;
     }
   }
 }
