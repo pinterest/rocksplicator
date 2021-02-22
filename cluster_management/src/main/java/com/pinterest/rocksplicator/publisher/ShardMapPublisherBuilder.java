@@ -50,6 +50,10 @@ public class ShardMapPublisherBuilder {
     return this;
   }
 
+  public ShardMapPublisherBuilder withZkShardMap(String zkShardMapConnectString) {
+    this.zkShardMapConnectString = zkShardMapConnectString;
+  }
+
   public ShardMapPublisherBuilder withLocalDump() {
     this.enableLocalDump = true;
     return this;
