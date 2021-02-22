@@ -26,15 +26,23 @@ public class ConfigGeneratorClusterSpectatorFactory implements ClusterSpectatorF
     this.uriPattern = uriPattern;
   }
 
-  private String getConfigPostUri(String clusterName) {
-    return uriPattern.replace("[PARTICIPANT_CLUSTER]", clusterName);
+  private String getConfigPostUri(String participantClusterName) {
+    if (uriPattern == null || uriPattern.isEmpty()) {
+      return null;
+    } else {
+      return uriPattern.replace("[PARTICIPANT_CLUSTER]", participantClusterName);
+    }
   }
 
   @Override
   public ClusterSpectator createClusterSpectator(
-      String zkString, String clusterName,
-      String instanceName) {
-    return new ConfigGeneratorClusterSpectatorImpl(zkString, clusterName, instanceName,
-        getConfigPostUri(clusterName));
+      String zkServerConnectString,
+      String participantClusterName,
+      String myInstanceName) {
+    return new ConfigGeneratorClusterSpectatorImpl(
+        zkServerConnectString,
+        participantClusterName,
+        myInstanceName,
+        getConfigPostUri(participantClusterName));
   }
 }

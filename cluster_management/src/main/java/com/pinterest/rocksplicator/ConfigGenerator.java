@@ -463,7 +463,9 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
       // Cleanup any remaining items.
       shardMapPublisher.close();
 
-      externalViewLeaderEventLogger.close();
+      if (externalViewLeaderEventLogger != null) {
+        externalViewLeaderEventLogger.close();
+      }
     } catch (IOException e) {
       e.printStackTrace();
     }
