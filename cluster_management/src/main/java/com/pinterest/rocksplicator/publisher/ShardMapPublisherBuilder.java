@@ -31,7 +31,6 @@ public class ShardMapPublisherBuilder {
   private boolean enableLocalDump = false;
 
   private final String clusterName;
-  private String zkShardMapConnectString = null;
 
   private ShardMapPublisherBuilder(String clusterName) {
     this.clusterName = Preconditions.checkNotNull(clusterName);
@@ -56,11 +55,6 @@ public class ShardMapPublisherBuilder {
     return this;
   }
 
-  public ShardMapPublisherBuilder withZkShardMap(String zkShardMapConnectString) {
-    this.zkShardMapConnectString = zkShardMapConnectString;
-    return this;
-  }
-
   public ShardMapPublisher<JSONObject> build() {
     List<ShardMapPublisher<String>> publishers = new ArrayList<>();
 
@@ -70,18 +64,7 @@ public class ShardMapPublisherBuilder {
     if (enableLocalDump) {
       publishers.add(new LocalFileShardMapPublisher(enableLocalDump, clusterName));
     }
-    ShardMapPublisher<JSONObject> defaultPublisher = new DedupingShardMapPublisher(
+    return new DedupingShardMapPublisher(
         new ParallelShardMapPublisher<String>(ImmutableList.copyOf(publishers)));
-
-    if (zkShardMapConnectString == null) {
-      return defaultPublisher;
-    }
-
-    ShardMapPublisher<JSONObject>
-        zkShardMapPublisher =
-        new ZkBasedPerResourceShardMapPublisher(clusterName, zkShardMapConnectString);
-
-    return new ParallelShardMapPublisher<JSONObject>(
-        ImmutableList.of(defaultPublisher, zkShardMapPublisher));
   }
 }
