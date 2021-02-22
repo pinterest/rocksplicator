@@ -78,7 +78,9 @@ public class ConfigGeneratorClusterSpectatorImpl implements ClusterSpectator {
       ShardMapPublisherBuilder publisherBuilder
           = ShardMapPublisherBuilder.create(this.clusterName).withLocalDump();
 
-      if (configPostUri != null && !configPostUri.isEmpty()) {
+      if (configPostUri != null &&
+          !configPostUri.isEmpty() &&
+          (configPostUri.startsWith("http://") || configPostUri.startsWith("https://"))) {
         publisherBuilder.withPostUrl(configPostUri);
       }
       this.shardMapPublisher = publisherBuilder.build();

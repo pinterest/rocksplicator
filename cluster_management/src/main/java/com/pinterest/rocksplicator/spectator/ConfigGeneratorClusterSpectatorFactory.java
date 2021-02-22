@@ -27,7 +27,11 @@ public class ConfigGeneratorClusterSpectatorFactory implements ClusterSpectatorF
   }
 
   private String getConfigPostUri(String participantClusterName) {
-    return uriPattern.replace("[PARTICIPANT_CLUSTER]", participantClusterName);
+    if (uriPattern == null || uriPattern.isEmpty()) {
+      return null;
+    } else {
+      return uriPattern.replace("[PARTICIPANT_CLUSTER]", participantClusterName);
+    }
   }
 
   @Override
