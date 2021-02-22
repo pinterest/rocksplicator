@@ -85,6 +85,36 @@ JNIEnv* createVM(const std::string& class_path) {
   return env;
 }
 
+JNIEnv* getRunningVM(){
+    JNIEnv* env = nullptr;
+    JavaVM* jvm;
+    jsize nVMs;
+
+    // Get the a reference to the created javaVM
+    JNI_GetCreatedJavaVMs(NULL, 0, &nVMs);
+    JavaVM** buffer = new JavaVM*[nVMs];
+    JNI_GetCreatedJavaVMs(buffer, nVMs, &nVMs);
+
+    if (nVMs != 1) {
+        LOG(ERROR) << "There are " << nVMs << " created, expected 1";
+        return env;
+    }
+    jvm = buffer[0];
+
+    jint result = jvm->GetEnv((void **) &env, JNI_VERSION_1_6);
+    if (result == JNI_EDETACHED) {
+        LOG(ERROR) << "EDATCHED, trying to attach thread";
+        result = jvm->AttachCurrentThread((void**)&env, NULL);
+    }
+
+    if (result != JNI_OK) {
+        LOG(ERROR) << "Failed to get env";
+        return env;
+    }
+
+    return env;
+}
+
 void invokeClass(JNIEnv* env,
                  const std::string& zk_connect_str,
                  const std::string& cluster,
@@ -165,6 +195,13 @@ void invokeClass(JNIEnv* env,
   CHECK(false) << "Participant main() exited";
 }
 
+std::string JStringToString(JNIEnv* env, jstring jstr) {
+  char* str = const_cast<char*>(env->GetStringUTFChars(jstr, 0));
+  std::string keyStr(str);
+  env->ReleaseStringUTFChars(jstr, str);
+  return keyStr;
+}
+
 } // namespace
 
 namespace admin {
@@ -194,33 +231,15 @@ void JoinCluster(const std::string& zk_connect_str,
 
 // Destroy the JVM, which will call the shutdown handler registers
 void DisconnectHelixManager() {
-    JNIEnv* env;
-    JavaVM* jvm;
-    jclass ParticipantClass;
-    jmethodID shutDownParticipantMethod;
-    jsize nVMs;
+    auto env = getRunningVM();
 
-    // Get the a reference to the created javaVM
-    JNI_GetCreatedJavaVMs(NULL, 0, &nVMs);
-    JavaVM** buffer = new JavaVM*[nVMs];
-    JNI_GetCreatedJavaVMs(buffer, nVMs, &nVMs);
-
-    if (nVMs != 1) {
-        LOG(ERROR) << "There are " << nVMs << " created, expected 1";
-        return;
-    }
-    jvm = buffer[0];
-
-    jint result = jvm->GetEnv((void **) &env, JNI_VERSION_1_6);
-    if (result == JNI_EDETACHED) {
-        LOG(ERROR) << "EDATCHED, trying to attach thread";
-        result = jvm->AttachCurrentThread((void**)&env, NULL);
-    }
-
-    if (result != JNI_OK) {
+    if (env == nullptr) {
         LOG(ERROR) << "Failed to get env";
         return;
     }
+
+    jclass ParticipantClass;
+    jmethodID shutDownParticipantMethod;
 
     ParticipantClass = env->FindClass("com/pinterest/rocksplicator/Participant");
     if (!ParticipantClass) {
@@ -240,6 +259,51 @@ void DisconnectHelixManager() {
 
     LOG(INFO) << "Disconnecting helix manager";
     env->CallStaticVoidMethod(ParticipantClass, shutDownParticipantMethod);
+}
+
+// Get the helix instance ID of the leader of the given partition
+std::string GetLeaderInstanceId(
+  const std::string& zk_connect_str,
+  const std::string& cluster,
+  const std::string& resource,
+  const std::string& partition) {
+    auto env = getRunningVM();
+    std::string leaderInstanceId;
+
+    if (env == nullptr) {
+        LOG(ERROR) << "Failed to get env";
+        return leaderInstanceId;
+    }
+
+    jclass HelixClientClass = env->FindClass("com/pinterest/rocksplicator/helix_client/HelixClient");
+    if (!HelixClientClass) {
+        env->ExceptionDescribe();
+        LOG(ERROR) << "Failed to find HelixClientClass class";
+        return leaderInstanceId;
+    }
+
+    jmethodID getLeaderInstanceIdMethod = env->GetStaticMethodID(
+      HelixClientClass,
+      "getleaderInstanceId",
+      // function takes in four strings as arguments and returns a string
+      "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+
+    if (!getLeaderInstanceIdMethod) {
+        LOG(ERROR) << "Failed to GetStaticMethodID";
+        env->ExceptionDescribe();
+        return leaderInstanceId;
+    }
+
+    // convert the input strings to jstrings
+    jstring j_zk_str = env->NewStringUTF(zk_connect_str.c_str());
+    jstring j_cluster = env->NewStringUTF(cluster.c_str());
+    jstring j_resource = env->NewStringUTF(resource.c_str());
+    jstring j_partition = env->NewStringUTF(partition.c_str());
+
+    jstring jstr = (jstring)env->CallStaticObjectMethod(HelixClientClass,
+      getLeaderInstanceIdMethod, j_zk_str, j_cluster, j_resource, j_partition);
+
+    return JStringToString(env, jstr);
 }
 
 }  // namespace admin
