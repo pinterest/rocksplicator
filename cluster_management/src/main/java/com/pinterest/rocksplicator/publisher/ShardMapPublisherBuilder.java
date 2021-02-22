@@ -52,6 +52,7 @@ public class ShardMapPublisherBuilder {
 
   public ShardMapPublisherBuilder withZkShardMap(String zkShardMapConnectString) {
     this.zkShardMapConnectString = zkShardMapConnectString;
+    return this;
   }
 
   public ShardMapPublisherBuilder withLocalDump() {
