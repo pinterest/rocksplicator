@@ -136,8 +136,10 @@ public class ConfigGeneratorClusterSpectatorImpl implements ClusterSpectator {
   @Override
   public synchronized void release() {
     // No more notifications to config generator
-    if (this.helixManager != null && helixManager.isConnected()) {
-      this.helixManager.disconnect();
+    if (this.helixManager != null) {
+      if (helixManager.isConnected()) {
+        this.helixManager.disconnect();
+      }
       this.helixManager = null;
     }
 
