@@ -186,7 +186,7 @@ struct AddS3SstFilesToDBRequest {
   2: required string s3_bucket,
   3: required string s3_path,
   4: optional i32 s3_download_limit_mb = 64,
-  # if true, the sst 
+  # if true, ingest files at the bottom of RocksDB
   5: optional bool ingest_behind,
 }
 
