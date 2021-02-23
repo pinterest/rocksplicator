@@ -1202,8 +1202,9 @@ void AdminHandler::async_tm_restoreDBFromS3(
     }
 
     // FIXME: restoreDBFromS3-checkpoint
-    if (!writeMetaData(request->db_name, request->s3_bucket, request->s3_backup_dir)) {
-      std::string errMsg = "RestoreDBFromS3 failed to write DBMetaData from request for " + request->db_name;
+    if (!writeMetaData(request->db_name, "", "")) {
+      // TODO: enable backup with meta for checkpoint, then, restore will writ the meta from the backup
+      std::string errMsg = "RestoreDBFromS3 failed to write DBMetaData for " + request->db_name;
       SetException(errMsg, AdminErrorCode::DB_ADMIN_ERROR, &callback);
       common::Stats::get()->Incr(kS3RestoreFailure);
       return;
@@ -1660,7 +1661,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   }
 
   // FIXME: addS3SstFilestoDB
-  if (writeMetaData(request->db_name, request->s3_bucket, request->s3_path)) {
+  if (!writeMetaData(request->db_name, request->s3_bucket, request->s3_path)) {
     std::string errMsg = "AddS3SstFilesToDB failed to write DBMetaData from request for " + request->db_name;
     SetException(errMsg, AdminErrorCode::DB_ADMIN_ERROR, &callback);
     LOG(ERROR) << errMsg;
