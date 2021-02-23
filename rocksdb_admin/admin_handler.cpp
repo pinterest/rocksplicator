@@ -683,7 +683,8 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
     std::string db_meta;
     const auto meta = getMetaData(db_name);
     if (!EncodeThriftStruct(meta, &db_meta)) {
-      LOG(ERROR) << "Failed to encode DBMetaData";
+      e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+      e->message = "Failed to encode DBMetaData";
       return false;
     } else {
       LOG(INFO) << "Create new backup with encoded meta: " << db_meta;
@@ -735,7 +736,8 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
   std::vector<rocksdb::BackupInfo> backup_infos;
   backup_engine->GetBackupInfo(&backup_infos);
   if (backup_infos.size() < 1) {
-    LOG(ERROR) << "Failed to getBackupInfo with backupEngine";
+    e->errorCode = AdminErrorCode::DB_NOT_FOUND;
+    e->message = "Failed to getBackupInfo with backupEngine";
     return false;
   }
   std::sort(backup_infos.begin(), backup_infos.end(), [](rocksdb::BackupInfo& a, rocksdb::BackupInfo& b) {
@@ -764,12 +766,14 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
   const std::string& meta_from_backup = backup_infos.back().app_metadata;
   LOG(INFO) << "Get backupInfo.app_metadata:" << meta_from_backup << " from backupId: " << std::to_string(latest_backup_id);
   if (!meta_from_backup.empty() && !DecodeThriftStruct(meta_from_backup, &meta)) {
-      LOG(ERROR) << "Failed to decode DBMetaData";
+      e->errorCode = AdminErrorCode::DB_ERROR;
+      e->message = "Failed to decode DBMetaData";
       return false;
   } 
   meta.set_db_name(db_name);
   if (!writeMetaData(meta.db_name, meta.s3_bucket, meta.s3_path)) {
-    LOG(ERROR) << "Failed to write DBMetaData from restore's app_metadata";
+    e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+    e->message = "RestoreDBHelper failed to write DBMetaData from restore's app_metadata for " + meta.db_name;
     return false;
   }
 
