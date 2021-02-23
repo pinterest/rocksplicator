@@ -1482,6 +1482,9 @@ std::shared_ptr<common::S3Util> AdminHandler::createLocalS3Util(
   return local_s3_util;
 }
 
+// This API is used to ingest sst files to DB with two models: ingest ahead or ingest behind.
+// It will check local metaData to avoid duplicate ingestion. If ingest_behind, DB's Lmax
+// must also be emtpy and DB must created with allow_ingest_behind. 
 void AdminHandler::async_tm_addS3SstFilesToDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       AddS3SstFilesToDBResponse>>> callback,
@@ -1507,6 +1510,24 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     LOG(INFO) << "Already hosting " << meta.s3_bucket << "/" << meta.s3_path;
     callback->result(AddS3SstFilesToDBResponse());
     return;
+  }
+
+  bool ingest_behind = request->__isset.ingest_behind && request->ingest_behind;
+  if (ingest_behind) {
+    if (!db->rocksdb()->GetDBOptions().allow_ingest_behind) {
+      e.message = request->db_name + " DBOptions.allow_ingest_behind false";
+      LOG(ERROR) << "DBOptions.allow_ingest_behind false, can't ingest behind " << request->db_name;
+      callback.release()->exceptionInThread(std::move(e));
+      return;
+    }
+    if (db->getHighestEmptyLevel() != db->rocksdb()->NumberLevels() - 1) {
+      // note: default num levels for DB is 7 (0, 1, ..., 6)
+      std::string errMsg = "The Lmax of DB is not empty, skipp add files " + request->db_name;
+      e.message = errMsg;
+      callback.release()->exceptionInThread(std::move(e));
+      LOG(ERROR) << errMsg;
+      return;
+    }
   }
 
   // The local data is not the latest, so we need to download the latest data
@@ -1590,6 +1611,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
       allow_overlapping_keys_segments_.find(segment) !=
       allow_overlapping_keys_segments_.end();
   // OR with the flag to make backwards compatibility
+  // If ingest to existing DB, allow overlapping keys for backfill to prevent failure
   allow_overlapping_keys =
       allow_overlapping_keys || FLAGS_rocksdb_allow_overlapping_keys;
   if (!allow_overlapping_keys) {
@@ -1619,6 +1641,10 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     LOG(INFO) << "Open DB: " << request->db_name;
     admin::AdminException e;
     e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+    if (ingest_behind) {
+      // recreate DB with allow_ingest_behind to support ingest behind; default false
+      options.allow_ingest_behind = true;
+    }
     auto rocksdb_db = GetRocksdb(db_path, options);
     if (rocksdb_db == nullptr) {
       e.message = "Failed to open DB: " + request->db_name;
@@ -1642,6 +1668,9 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   /* if true, rocksdb will allow for overlapping keys */
   ifo.allow_global_seqno = allow_overlapping_keys;
   ifo.allow_blocking_flush = allow_overlapping_keys;
+  if (ingest_behind) {
+    ifo.ingest_behind = true;
+  }
   auto status = db->rocksdb()->IngestExternalFile(sst_file_paths, ifo);
   if (!OKOrSetException(status,
                         AdminErrorCode::DB_ADMIN_ERROR,
@@ -1659,6 +1688,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   }
   
 
+  // attention: no compaction during backfill to prevent removing deletion tombstone
   if (FLAGS_compact_db_after_load_sst) {
     auto status = db->rocksdb()->CompactRange(nullptr, nullptr);
     if (!status.ok()) {
