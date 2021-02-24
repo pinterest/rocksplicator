@@ -22,6 +22,7 @@
 #include "rocksdb_admin/admin_handler.h"
 #undef private
 #include "rocksdb_admin/gen-cpp2/Admin.h"
+#include "rocksdb_admin/utils.h"
 
 using admin::AdminAsyncClient;
 using admin::AdminException;
@@ -29,6 +30,7 @@ using admin::AdminHandler;
 using admin::ApplicationDBManager;
 using admin::CheckDBRequest;
 using admin::CheckDBResponse;
+using admin::DBMetaData;
 using apache::thrift::async::TAsyncSocket;
 using apache::thrift::HeaderClientChannel;
 using apache::thrift::ThriftServer;
@@ -137,6 +139,34 @@ TEST(AdminHandlerTest, MetaData) {
   EXPECT_FALSE(meta.__isset.s3_bucket);
   EXPECT_FALSE(meta.__isset.s3_path);
   EXPECT_FALSE(meta.__isset.last_kafka_msg_timestamp_ms);
+
+  // Test DBMetaData inheritance from Leader to Follower
+  // Verify write empty meta is ok && get db_name("") is also ok 
+  DBMetaData db_meta;
+  meta = handler.getMetaData(db_meta.db_name);
+  EXPECT_TRUE(meta.db_name.empty());
+  EXPECT_FALSE(meta.__isset.s3_bucket);
+  EXPECT_FALSE(meta.__isset.s3_path);
+
+  // verify meta is written, meta from get always has s3_path/s3_bucket isset
+  EXPECT_TRUE(handler.writeMetaData(db_meta.db_name, db_meta.s3_bucket, db_meta.s3_path));
+  meta = handler.getMetaData(db_meta.db_name);
+  EXPECT_TRUE(meta.db_name.empty());
+  EXPECT_TRUE(meta.__isset.s3_bucket);
+  EXPECT_TRUE(meta.s3_bucket.empty());
+  EXPECT_TRUE(meta.__isset.s3_path);
+  EXPECT_TRUE(meta.s3_path.empty());
+  
+  EXPECT_TRUE(handler.clearMetaData(db_meta.db_name));
+
+  std::string meta_from_backup = "";
+  EXPECT_FALSE(DecodeThriftStruct(meta_from_backup, &meta));
+  EXPECT_TRUE(meta.db_name.empty());
+  
+  // failed decode did not impact meta's old values
+  meta.set_db_name(db_name);
+  EXPECT_FALSE(DecodeThriftStruct(meta_from_backup, &meta));
+  EXPECT_EQ(meta.db_name, db_name);
 }
 
 TEST(AdminHandlerTest, CheckDB) {
