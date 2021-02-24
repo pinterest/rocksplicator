@@ -52,7 +52,7 @@ public class ParallelShardMapPublisher<T> implements ShardMapPublisher<T> {
   }
 
   @Override
-  public void publish(final Set<String> validResources,
+  public synchronized void publish(final Set<String> validResources,
                       final List<ExternalView> externalViews,
                       final T shardMap) {
     final CountDownLatch latch = new CountDownLatch(shardMapPublishers.size());

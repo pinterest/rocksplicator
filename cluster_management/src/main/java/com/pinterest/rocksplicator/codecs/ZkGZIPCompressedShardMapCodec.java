@@ -21,7 +21,7 @@ import com.pinterest.rocksplicator.thrift.commons.io.CompressionAlgorithm;
 
 import org.json.simple.JSONObject;
 
-public class ZkGZIPCompressedShardMapCodec implements Codec<JSONObject, byte[]> {
+public class ZkGZIPCompressedShardMapCodec extends ZkShardMapCodec {
 
   private static final Codec<JSONObject, byte[]> baseCodec = new SimpleJsonObjectByteArrayCodec();
   private static final Codec<JSONObject, byte[]> gzipCompressedCoded =

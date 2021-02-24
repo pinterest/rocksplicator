@@ -52,7 +52,7 @@ public class LocalFileShardMapPublisher implements ShardMapPublisher<String> {
   }
 
   @Override
-  public void publish(
+  public synchronized void publish(
       final Set<String> validResources,
       final List<ExternalView> externalViews,
       final String jsonStringShardMapNewContent) {
