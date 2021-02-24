@@ -644,6 +644,7 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
                                   const bool enable_backup_rate_limit,
                                   const uint32_t backup_rate_limit,
                                   const bool share_files_with_checksum,
+                                  bool include_meta,
                                   AdminException* e) {
   CHECK(env_holder != nullptr);
   db_admin_lock_.Lock(db_name);
@@ -678,7 +679,20 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
   }
   std::unique_ptr<rocksdb::BackupEngine> backup_engine_holder(backup_engine);
 
-  return backup_engine->CreateNewBackup(db->rocksdb()).ok();
+  if (include_meta) {
+    std::string db_meta;
+    const auto meta = getMetaData(db_name);
+    if (!EncodeThriftStruct(meta, &db_meta)) {
+      e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+      e->message = "Failed to encode DBMetaData";
+      return false;
+    } else {
+      LOG(INFO) << "Create new backup with encoded meta: " << db_meta;
+      return backup_engine->CreateNewBackupWithMetadata(db->rocksdb(), db_meta).ok();
+    }
+  } else {
+    return backup_engine->CreateNewBackup(db->rocksdb()).ok();
+  }  
 }
 
 bool AdminHandler::restoreDBHelper(const std::string& db_name,
@@ -719,8 +733,20 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
   }
   std::unique_ptr<rocksdb::BackupEngine> backup_engine_holder(backup_engine);
 
+  std::vector<rocksdb::BackupInfo> backup_infos;
+  backup_engine->GetBackupInfo(&backup_infos);
+  if (backup_infos.size() < 1) {
+    e->errorCode = AdminErrorCode::DB_NOT_FOUND;
+    e->message = "Failed to getBackupInfo with backupEngine";
+    return false;
+  }
+  std::sort(backup_infos.begin(), backup_infos.end(), [](rocksdb::BackupInfo& a, rocksdb::BackupInfo& b) {
+    return a.backup_id < b.backup_id;
+  });
+  uint32_t latest_backup_id = backup_infos.back().backup_id;
+
   auto db_path = FLAGS_rocksdb_dir + db_name;
-  status = backup_engine->RestoreDBFromLatestBackup(db_path, db_path);
+  status = backup_engine->RestoreDBFromBackup(latest_backup_id, db_path, db_path);
   if (!status.ok()) {
     e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
     e->message = status.ToString();
@@ -733,6 +759,21 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
   if (!status.ok()) {
     e->errorCode = AdminErrorCode::DB_ERROR;
     e->message = status.ToString();
+    return false;
+  }
+
+  DBMetaData meta;
+  const std::string& meta_from_backup = backup_infos.back().app_metadata;
+  LOG(INFO) << "Get backupInfo.app_metadata:" << meta_from_backup << " from backupId: " << std::to_string(latest_backup_id);
+  if (!meta_from_backup.empty() && !DecodeThriftStruct(meta_from_backup, &meta)) {
+      e->errorCode = AdminErrorCode::DB_ERROR;
+      e->message = "Failed to decode DBMetaData";
+      return false;
+  } 
+  meta.set_db_name(db_name);
+  if (!writeMetaData(meta.db_name, meta.s3_bucket, meta.s3_path)) {
+    e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+    e->message = "RestoreDBHelper failed to write DBMetaData from restore's app_metadata for " + meta.db_name;
     return false;
   }
 
@@ -766,12 +807,14 @@ void AdminHandler::async_tm_backupDB(
   LOG(INFO) << "HDFS Backup " << request->db_name << " to " << full_path;
   AdminException e;
   const bool share_files_with_checksum = request->__isset.share_files_with_checksum && request->share_files_with_checksum;
+  const bool include_meta = request->__isset.include_meta && request->include_meta;
   if (!backupDBHelper(request->db_name,
                       full_path,
                       std::unique_ptr<rocksdb::Env>(hdfs_env),
                       request->__isset.limit_mbs,
                       request->limit_mbs,
                       share_files_with_checksum,
+                      include_meta,
                       &e)) {
     callback.release()->exceptionInThread(std::move(e));
     common::Stats::get()->Incr(kHDFSBackupFailure);
@@ -989,12 +1032,15 @@ void AdminHandler::async_tm_backupDBToS3(
     auto local_s3_util = createLocalS3Util(request->limit_mbs, request->s3_bucket);
     std::string formatted_s3_dir_path = rtrim(request->s3_backup_dir, '/');
     rocksdb::Env* s3_env = new rocksdb::S3Env(formatted_s3_dir_path, local_path, std::move(local_s3_util));
+    const bool share_files_with_checksum = request->__isset.share_files_with_checksum && request->share_files_with_checksum;
+    const bool include_meta = request->__isset.include_meta && request->include_meta;
     if (!backupDBHelper(request->db_name,
                         formatted_s3_dir_path,
                         std::unique_ptr<rocksdb::Env>(s3_env),
                         request->__isset.limit_mbs,
                         request->limit_mbs,
-                        false, // disable checksum support for s3 till checkpoint backup to s3 also support it
+                        share_files_with_checksum,
+                        include_meta,
                         &e)) {
       callback.release()->exceptionInThread(std::move(e));
       common::Stats::get()->Incr(kS3BackupFailure);

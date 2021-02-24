@@ -307,6 +307,7 @@ public class Utils {
       Admin.Client client = getAdminClient(host, adminPort);
 
       BackupDBRequest req = new BackupDBRequest(dbName, hdfsPath);
+      req.setInclude_meta(true);
       client.backupDB(req);
     } catch (TException e) {
       LOG.error("Failed to backup DB: ", e.toString());
@@ -377,6 +378,7 @@ public class Utils {
       Admin.Client client = getAdminClient(host, adminPort);
 
       BackupDBToS3Request req = new BackupDBToS3Request(dbName, s3Bucket, s3Path);
+      req.setInclude_meta(true);
       client.backupDBToS3(req);
     } catch (TException e) {
       LOG.error("Failed to backup DB: ", e.toString());
