@@ -584,7 +584,6 @@ void AdminHandler::async_tm_addDB(
   rocksdb::Status status;
   if (request->overwrite) {
     LOG(INFO) << "Clearing DB: " << request->db_name;
-    // FIXME: addDB
     clearMetaData(request->db_name);
     status = rocksdb::DestroyDB(db_path, rocksdb_options_(segment));
     if (!OKOrSetException(status,
@@ -622,7 +621,6 @@ void AdminHandler::async_tm_addDB(
     }
   }
 
-  // FIXME: admin::AddDB
   if (!writeMetaData(request->db_name, "", "")) {
     std::string errMsg = "AddDB failed to write initial DBMetaData for " + request->db_name;
     SetException(errMsg, admin::AdminErrorCode::DB_ADMIN_ERROR, &callback);
@@ -690,7 +688,6 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
 
   if (include_meta) {
     std::string db_meta;
-    // FIXME: backupDBHelper
     const auto meta = getMetaData(db_name);
     if (!EncodeThriftStruct(meta, &db_meta)) {
       e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
@@ -781,7 +778,6 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
       return false;
   } 
   meta.set_db_name(db_name);
-  // FIXME: restoreDB helper
   if (!writeMetaData(meta.db_name, meta.s3_bucket, meta.s3_path)) {
     e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
     e->message = "RestoreDBHelper failed to write DBMetaData from restore's app_metadata for " + meta.db_name;
@@ -1201,7 +1197,6 @@ void AdminHandler::async_tm_restoreDBFromS3(
       return;
     }
 
-    // FIXME: restoreDBFromS3-checkpoint
     if (!writeMetaData(request->db_name, "", "")) {
       // TODO: enable backup with meta for checkpoint, then, restore will writ the meta from the backup
       std::string errMsg = "RestoreDBFromS3 failed to write DBMetaData for " + request->db_name;
@@ -1388,7 +1383,6 @@ void AdminHandler::async_tm_clearDB(
   auto options = rocksdb_options_(admin::DbNameToSegment(request->db_name));
   auto db_path = FLAGS_rocksdb_dir + request->db_name;
   LOG(INFO) << "Clearing DB: " << request->db_name;
-  // FIXME: clearDB
   clearMetaData(request->db_name);
 
   if (FLAGS_enable_async_delete_dbs) {
@@ -1433,7 +1427,6 @@ void AdminHandler::async_tm_clearDB(
       return;
     }
 
-    // FIXME: clearDB with reopen db
     if (!writeMetaData(request->db_name, "", "")) {
       e.message = "ClearDB with reopen failed to write initial DBMetaData for " + request->db_name;
       callback.release()->exceptionInThread(std::move(e));
@@ -1508,7 +1501,6 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     return;
   }
 
-  // FIXME: addS3SstFilestoDB
   auto meta = getMetaData(request->db_name);
   if (meta.__isset.s3_bucket && meta.s3_bucket == request->s3_bucket &&
       meta.__isset.s3_path && meta.s3_path == request->s3_path) {
@@ -1591,7 +1583,6 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     sst_file_paths.push_back(local_path + file_name);
   }
 
-  // FIXME: addS3SstFilesToDB
   clearMetaData(request->db_name);
 
   auto segment = admin::DbNameToSegment(request->db_name);
@@ -1660,7 +1651,6 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     return;
   }
 
-  // FIXME: addS3SstFilestoDB
   if (!writeMetaData(request->db_name, request->s3_bucket, request->s3_path)) {
     std::string errMsg = "AddS3SstFilesToDB failed to write DBMetaData from request for " + request->db_name;
     SetException(errMsg, AdminErrorCode::DB_ADMIN_ERROR, &callback);
@@ -1709,7 +1699,6 @@ void AdminHandler::async_tm_startMessageIngestion(
 
   // Compare the value in local_meta_db with replay_timestamp_ms and choose
   // the latest.
-  // FIXME: startMessageIngestion
   const auto meta = getMetaData(db_name);
   replay_timestamp_ms = std::max(meta.last_kafka_msg_timestamp_ms,
                                  replay_timestamp_ms);
@@ -1885,9 +1874,7 @@ void AdminHandler::async_tm_startMessageIngestion(
     // Update meta_db with kafka message timestamp periodically.
     if (message_count % FLAGS_kafka_ts_update_interval == 0) {
       const auto timestamp_ms = message->timestamp().timestamp;
-      // FIXME: startMessgaeIngestion.kafka_watcher
       const auto meta = getMetaData(db_name);
-      // FIXME: startMessageIngestion
       if (!writeMetaData(db_name, meta.s3_bucket, meta.s3_path, timestamp_ms)) {
         LOG(ERROR) << "StartMessageIngestion failed to write DBMetaData for " << db_name;
         return;
