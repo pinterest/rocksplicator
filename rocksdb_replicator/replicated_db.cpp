@@ -22,7 +22,10 @@
 #include <string>
 #include <vector>
 
+#include "common/helix_client.h"
+#include "common/segment_utils.h"
 #include "folly/MoveWrapper.h"
+#include "folly/Random.h"
 #include "rocksdb_replicator/replicator_stats.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
 
@@ -53,6 +56,11 @@ DECLARE_int32(replicator_idle_iter_timeout_ms);
 DEFINE_bool(emit_stat_for_leader_behind,
             false,
             "Flag to control whether to emit a stat when the leader is behind the follower during a sync request.");
+DEFINE_string(replicator_zk_cluster, "", "Zookeeper cluster");
+DEFINE_string(replicator_helix_cluster, "", "Helix cluster");
+DEFINE_int32(replication_error_reset_upstream_percentage, 10,
+             "what percentage of replication errors should query helix for the latest leader");
+DECLARE_int32(rocksdb_replicator_port);
 
 
 namespace {
@@ -141,6 +149,44 @@ RocksDBReplicator::ReplicatedDB::ReplicatedDB(
           + FLAGS_replicator_client_server_timeout_difference_ms));
 }
 
+/*
+ * Helper function to reset the upstream IP after querying for latest leader from helix.
+ */
+void RocksDBReplicator::ReplicatedDB::resetUpstream() {
+  if (FLAGS_replicator_zk_cluster.empty() || FLAGS_replicator_helix_cluster.empty()) {
+    LOG(ERROR) << "[resetUpstream] ZK cluster or helix cluster name not provided.";
+    return;
+  }
+
+  // Query helix only FLAGS_replication_error_reset_upstream_percentage %ge of the requests.
+  // This is to avoid excessive load to Helix (zk)
+  if (folly::Random::rand32(0, 99) >= FLAGS_replication_error_reset_upstream_percentage) {
+    LOG(ERROR) << "[resetUpstream] Skip checking latest upstream for " << db_name_;
+    return;
+  }
+
+  auto segment_name = common::DbNameToSegment(db_name_);
+  auto helix_partition_name = common::DbNameToHelixPartitionName(db_name_);
+  LOG(ERROR) << "[resetUpstream] Zookeeper: " << FLAGS_replicator_zk_cluster << " cluster: " <<
+    FLAGS_replicator_helix_cluster << " segment: " << segment_name
+     << " helix_partition_name: " << helix_partition_name;
+  auto leader_id = common::GetLeaderInstanceId(
+    FLAGS_replicator_zk_cluster, FLAGS_replicator_helix_cluster, segment_name, helix_partition_name);
+  LOG(ERROR) << "[resetUpstream] Leader for " << helix_partition_name << " is " << leader_id;
+
+  if (!leader_id.empty()) {
+    std::vector<std::string> tokens;
+    folly::split("_", leader_id, tokens);
+    if (tokens.size() == 2 && tokens[0] != upstream_addr_.getAddressStr()) {
+      incCounter(kReplicatorLeaderReset, 1, db_name_);
+      LOG(ERROR) << "[resetUpstream] Resetting upstream for " << db_name_ << " to " << tokens[0];
+      upstream_addr_.setFromIpPort(tokens[0], FLAGS_rocksdb_replicator_port);
+      // Update client with new upstream address.
+      client_ = client_pool_->getClient(upstream_addr_);
+    }
+  }
+}
+
 void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
   CHECK(role_ == DBRole::SLAVE);
   ReplicateRequest req;
@@ -168,9 +214,16 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
             t.exception().throwException();
 #endif
           } catch (const ReplicateException& ex) {
-            LOG(ERROR) << "ReplicateException: " << static_cast<int>(ex.code)
+            LOG(ERROR) << "ReplicateException: (upstream): " << db->upstream_addr_.getAddressStr() << " " << static_cast<int>(ex.code)
                        << " " << ex.msg;
             incCounter(kReplicatorRemoteApplicationExceptions, 1, db->db_name_);
+            
+            if (ex.code == ErrorCode::SOURCE_NOT_FOUND) {
+              // This could happen if this db missed a request about the latest upstream.
+              // So try to reset it.
+              incCounter(kReplicatorRemoteApplicationExceptionsNotFound, 1, db->db_name_);
+              db->resetUpstream();
+            }
           } catch (const std::exception& ex) {
             LOG(ERROR) << "std::exception: " << ex.what();
             incCounter(kReplicatorConnectionErrors, 1, db->db_name_);
@@ -216,6 +269,9 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
           // It is very bad if we fail to rescheudle a pull request, we'd prefer
           // crashing.
           eb->runInEventBaseThread([eb, weak_db = std::move(weak_db)] {
+              auto delay = FLAGS_replicator_pull_delay_on_error_ms;
+              // Randomize the delay so that helix (zk) is not overloaded from ext view requests.
+              auto randomized_delay = folly::Random::rand32(delay, delay * 2);
               eb->runAfterDelay([weak_db = std::move(weak_db)] {
                   auto db = weak_db.lock();
                   if (db == nullptr) {
@@ -223,7 +279,7 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
                   }
                   db->pullFromUpstream();
                 },
-                FLAGS_replicator_pull_delay_on_error_ms);
+                randomized_delay);
             });
         } else {
           db->pullFromUpstream();
