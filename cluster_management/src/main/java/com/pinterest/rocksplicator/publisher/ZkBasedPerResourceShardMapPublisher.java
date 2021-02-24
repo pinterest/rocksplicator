@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -64,7 +65,7 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
   private final String zkShardMapConnectString;
   private final CuratorFramework zkShardMapClient;
   private final List<ExecutorService> executorServices;
-  private final ConcurrentHashMap<String, String> latestResourceToConfigMap;
+  private final ConcurrentMap<String, String> latestResourceToConfigMap;
   private final boolean syncPublish;
 
   public ZkBasedPerResourceShardMapPublisher(
