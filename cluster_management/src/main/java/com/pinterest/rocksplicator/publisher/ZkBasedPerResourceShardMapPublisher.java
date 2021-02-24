@@ -19,6 +19,7 @@
 package com.pinterest.rocksplicator.publisher;
 
 import com.pinterest.rocksplicator.codecs.ZkGZIPCompressedShardMapCodec;
+import com.pinterest.rocksplicator.codecs.ZkShardMapCodec;
 import com.pinterest.rocksplicator.utils.ZkPathUtils;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -58,7 +59,7 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
   private static final Logger LOG =
       LoggerFactory.getLogger(ZkBasedPerResourceShardMapPublisher.class);
 
-  private final ZkGZIPCompressedShardMapCodec gzipCodec;
+  private final ZkShardMapCodec gzipCodec;
   private final String clusterName;
   private final String zkShardMapConnectString;
   private final CuratorFramework zkShardMapClient;
@@ -96,6 +97,16 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
       this.zkShardMapClient.blockUntilConnected(60, TimeUnit.SECONDS);
     } catch (InterruptedException e) {
       throw new RuntimeException(e);
+    }
+
+    try {
+      String clusterPath = ZkPathUtils.getClusterShardMapParentPath(clusterName);
+      Stat stat = zkShardMapClient.checkExists().creatingParentsIfNeeded().forPath(clusterPath);
+      if (stat == null) {
+        zkShardMapClient.create().creatingParentsIfNeeded().forPath(clusterPath, new byte[0]);
+      }
+    } catch (Throwable throwable) {
+      throw new RuntimeException(throwable);
     }
 
     this.executorServices = Lists.newArrayListWithCapacity(MAX_THREADS);
