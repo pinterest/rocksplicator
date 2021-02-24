@@ -621,6 +621,13 @@ void AdminHandler::async_tm_addDB(
     }
   }
 
+  if (!writeMetaData(request->db_name, "", "")) {
+    std::string errMsg = "AddDB failed to write initial DBMetaData for " + request->db_name;
+    SetException(errMsg, admin::AdminErrorCode::DB_ADMIN_ERROR, &callback);
+    LOG(ERROR) << errMsg;
+    return;
+  }
+
   if (!db_manager_->addDB(request->db_name,
                           std::unique_ptr<rocksdb::DB>(rocksdb_db),
                           role, std::move(upstream_addr),
@@ -1190,6 +1197,14 @@ void AdminHandler::async_tm_restoreDBFromS3(
       return;
     }
 
+    if (!writeMetaData(request->db_name, "", "")) {
+      // TODO: enable backup with meta for checkpoint, then, restore will writ the meta from the backup
+      std::string errMsg = "RestoreDBFromS3 failed to write DBMetaData for " + request->db_name;
+      SetException(errMsg, AdminErrorCode::DB_ADMIN_ERROR, &callback);
+      common::Stats::get()->Incr(kS3RestoreFailure);
+      return;
+    }
+
     std::string err_msg;
     if (!db_manager_->addDB(request->db_name,
                             std::unique_ptr<rocksdb::DB>(restore_db),
@@ -1412,6 +1427,12 @@ void AdminHandler::async_tm_clearDB(
       return;
     }
 
+    if (!writeMetaData(request->db_name, "", "")) {
+      e.message = "ClearDB with reopen failed to write initial DBMetaData for " + request->db_name;
+      callback.release()->exceptionInThread(std::move(e));
+      return;
+    }
+
     std::string err_msg;
     if (!db_manager_->addDB(request->db_name, std::move(db), db_role,
                             std::move(upstream_addr), &err_msg)) {
@@ -1630,7 +1651,13 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     return;
   }
 
-  writeMetaData(request->db_name, request->s3_bucket, request->s3_path);
+  if (!writeMetaData(request->db_name, request->s3_bucket, request->s3_path)) {
+    std::string errMsg = "AddS3SstFilesToDB failed to write DBMetaData from request for " + request->db_name;
+    SetException(errMsg, AdminErrorCode::DB_ADMIN_ERROR, &callback);
+    LOG(ERROR) << errMsg;
+    return;
+  }
+  
 
   if (FLAGS_compact_db_after_load_sst) {
     auto status = db->rocksdb()->CompactRange(nullptr, nullptr);
@@ -1848,7 +1875,10 @@ void AdminHandler::async_tm_startMessageIngestion(
     if (message_count % FLAGS_kafka_ts_update_interval == 0) {
       const auto timestamp_ms = message->timestamp().timestamp;
       const auto meta = getMetaData(db_name);
-      writeMetaData(db_name, meta.s3_bucket, meta.s3_path, timestamp_ms);
+      if (!writeMetaData(db_name, meta.s3_bucket, meta.s3_path, timestamp_ms)) {
+        LOG(ERROR) << "StartMessageIngestion failed to write DBMetaData for " << db_name;
+        return;
+      } 
       LOG(INFO) << "[meta_db] Writing timestamp " << timestamp_ms
                 << " for db: " << db_name;
     }
