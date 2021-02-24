@@ -22,20 +22,6 @@
 
 namespace admin {
 
-/*
- * Convert a segment name to a db name
- */
-std::string SegmentToDbName(const std::string& segment, const int shard_id);
-/*
- * Convert a db name to segment name
- */
-std::string DbNameToSegment(const std::string& db_name);
-
-/*
- * Extract the shard id from a db name
- */
-int ExtractShardId(const std::string& db_name);
-
 template <typename T>
 bool DecodeThriftStruct(const std::string& data, T* obj) {
   auto ex = folly::try_and_catch<std::exception>([data, obj]() {

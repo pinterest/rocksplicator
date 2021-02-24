@@ -32,7 +32,7 @@
 #include "common/stats/stats.h"
 #include "common/stats/status_server.h"
 #include "gflags/gflags.h"
-#include "rocksdb_admin/helix_client.h"
+#include "common/helix_client.h"
 #include "thrift/lib/cpp2/server/ThriftServer.h"
 
 
@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
       // e.g., "az=us-east-1a,pg=placement_group1"
       auto domain = "az=" + az + ",pg=" + (pg.empty() ? az : pg);
       LOG(INFO) << "Joining Helix cluster with domain " << domain;
-      admin::JoinCluster(FLAGS_helix_zk_connect_str,
+      common::JoinCluster(FLAGS_helix_zk_connect_str,
                          FLAGS_helix_cluster_name,
                          FLAGS_read_only_mode ? "OnlineOffline" : "MasterSlave",
                          domain,
