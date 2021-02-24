@@ -42,7 +42,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
-import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -163,9 +162,8 @@ import java.util.stream.Collectors;
  }
  }
  </code>
-
-
  */
+
 public class ConfigGenerator extends RoutingTableProvider implements CustomCodeCallbackHandler,
                                                                      Closeable {
 
@@ -289,10 +287,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
 
     Set<String> existingHosts = new HashSet<String>();
 
-    List<ExternalView> externalViewsToProcess = null;
-    if (externalViewLeaderEventLogger != null) {
-      externalViewsToProcess = new ArrayList<>();
-    }
+    List<ExternalView> externalViewsToProcess = new ArrayList<>();
 
     // compose cluster config
     JSONObject jsonClusterShardMap = new JSONObject();
@@ -319,9 +314,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
         continue;
       }
 
-      if (externalViewLeaderEventLogger != null && externalViewsToProcess != null) {
-        externalViewsToProcess.add(externalView);
-      }
+      externalViewsToProcess.add(externalView);
 
       Set<String> partitions = externalView.getPartitionSet();
 
@@ -461,6 +454,12 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     // at the moment.
     try (AutoCloseableLock lock = new AutoCloseableLock(this.synchronizedCallbackLock)) {
       // Cleanup any remaining items.
+      try {
+        shardMapPublisher.close();
+      } catch (IOException io) {
+        LOG.error("Error closing shardMapPublisher: ", io);
+      }
+
       if (externalViewLeaderEventLogger != null) {
         externalViewLeaderEventLogger.close();
       }

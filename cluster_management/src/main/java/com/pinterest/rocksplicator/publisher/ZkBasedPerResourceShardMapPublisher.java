@@ -98,6 +98,16 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
       throw new RuntimeException(e);
     }
 
+    try {
+      String clusterPath = ZkPathUtils.getClusterShardMapParentPath(clusterName);
+      Stat stat = zkShardMapClient.checkExists().creatingParentsIfNeeded().forPath(clusterPath);
+      if (stat == null) {
+        zkShardMapClient.create().creatingParentsIfNeeded().forPath(clusterPath, new byte[0]);
+      }
+    } catch (Throwable throwable) {
+      throw new RuntimeException(throwable);
+    }
+
     this.executorServices = Lists.newArrayListWithCapacity(MAX_THREADS);
     for (int i = 0; i < MAX_THREADS; ++i) {
       /**
@@ -209,6 +219,9 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
       topLevelJSONObject.put("shard_map", clusterShardMapObj);
 
       try {
+        LOG.error(String.format(
+            "Publishing shard_map / resource_map to zk=%s cluster: %s, resource: %s",
+            zkShardMapConnectString, clusterName, resourceName));
         byte[] serializedCompressedJson = gzipCodec.encode(topLevelJSONObject);
         String zkPath = ZkPathUtils.getClusterResourceShardMapPath(clusterName, resourceName);
         Stat stat = zkShardMapClient.checkExists().creatingParentsIfNeeded().forPath(zkPath);

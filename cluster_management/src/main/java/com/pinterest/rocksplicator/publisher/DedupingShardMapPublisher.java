@@ -44,7 +44,7 @@ public class DedupingShardMapPublisher implements ShardMapPublisher<JSONObject> 
   }
 
   @Override
-  public void publish(
+  public synchronized void publish(
       final Set<String> validResources,
       final List<ExternalView> externalViews,
       final JSONObject jsonShardMap) {
