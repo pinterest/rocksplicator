@@ -74,7 +74,6 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
     this(clusterName, zkShardMapConnectString, false);
   }
 
-
   @VisibleForTesting
   ZkBasedPerResourceShardMapPublisher(
       final String clusterName,
@@ -284,6 +283,9 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
           if (keepTheseResources.contains(resourceName)) {
             continue;
           }
+
+          // First remove the local cache
+          this.latestResourceToConfigMap.remove(resourceName);
 
           Future<?> perResourceResult = getExecutorService(resourceName).submit(() -> {
             try {
