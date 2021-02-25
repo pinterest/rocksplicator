@@ -17,27 +17,38 @@
 //
 
 #include <algorithm>
+#include <ctime>
+#include <thread>
 
 #include "boost/filesystem.hpp"
+#include "common/s3util.h"
 #include "folly/SocketAddress.h"
 #include "gtest/gtest.h"
 #define private public
 #include "rocksdb_admin/admin_handler.h"
 #undef private
 #include "rocksdb_admin/gen-cpp2/Admin.h"
+#include "rocksdb_admin/tests/test_util.h"
 #include "rocksdb_admin/utils.h"
 
 using admin::AddDBRequest;
 using admin::AddDBResponse;
+using admin::AddS3SstFilesToDBRequest;
 using admin::AdminAsyncClient;
 using admin::AdminException;
 using admin::AdminHandler;
 using admin::ApplicationDBManager;
+using admin::BackupDBToS3Request;
+using admin::BackupDBToS3Response;
 using admin::ChangeDBRoleAndUpstreamRequest;
 using admin::ChangeDBRoleAndUpstreamResponse;
 using admin::CheckDBRequest;
 using admin::CheckDBResponse;
+using admin::ClearDBRequest;
+using admin::CloseDBRequest;
 using admin::DBMetaData;
+using admin::RestoreDBFromS3Request;
+using admin::RestoreDBFromS3Response;
 using apache::thrift::HeaderClientChannel;
 using apache::thrift::RpcOptions;
 using apache::thrift::ThriftServer;
@@ -49,13 +60,34 @@ using std::make_tuple;
 using std::make_unique;
 using std::string;
 using std::thread;
+using std::to_string;
 using std::tuple;
 using std::chrono::seconds;
 using std::this_thread::sleep_for;
 
 namespace fs = boost::filesystem;
 
+// FLAGS: enable_integration_test, s3_bucket, s3_backup_prefix must be assigned
+// if intend to test the admin APIs and enable data upload/download from cloud
+DEFINE_bool(enable_integration_test, false,
+            "Enable actual upload/download data from cloud");
+DEFINE_string(s3_bucket, "pinterest-jackson", "The s3 bucket");
+DEFINE_string(s3_backup_prefix, "tmp/backup_test/admin_handler_test/",
+              "The s3 key prefix for backup");
 DECLARE_string(rocksdb_dir);
+
+void clearAndCreateDir(string dir_path) {
+  boost::system::error_code create_err;
+  boost::system::error_code remove_err;
+  fs::remove_all(dir_path, remove_err);
+  fs::create_directories(dir_path, create_err);
+  EXPECT_FALSE(remove_err || create_err);
+}
+
+const string generateDBName() {
+  static thread_local unsigned int seed = time(nullptr);
+  return "test_db_" + to_string(rand_r(&seed));
+}
 
 Options getOptions(const string& segment) {
   Options options;
@@ -83,18 +115,15 @@ makeServer(uint16_t port) {
   return make_tuple(handler, server, move(t), manager);
 }
 
+namespace admin {
+
 class AdminHandlerTestBase : public testing::Test {
  public:
   AdminHandlerTestBase() {
     FLAGS_rocksdb_dir = testDir();
 
-    LOG(INFO) << "Test start, new remove /tmp/meta_db and " << testDir();
-    EXPECT_EQ(std::system("rm -rf /tmp/meta_db"), 0);
-    boost::system::error_code create_err;
-    boost::system::error_code remove_err;
-    fs::remove_all(testDir(), remove_err);
-    fs::create_directories(testDir(), create_err);
-    EXPECT_FALSE(remove_err || create_err);
+    LOG(INFO) << "Test start, clearAndCreateDir " << testDir();
+    clearAndCreateDir(testDir());
 
     tie(handler_, server_, thread_, db_manager_) = makeServer(8090);
     sleep_for(seconds(1));
@@ -165,6 +194,20 @@ class AdminHandlerTestBase : public testing::Test {
     return localIP;
   }
 
+  void verifyMeta(DBMetaData meta, const string& db_name, bool option_set,
+                  const string s3_bucket, const string s3_path) {
+    EXPECT_EQ(meta.db_name, db_name);
+    if (option_set) {
+      EXPECT_TRUE(meta.__isset.s3_bucket);
+      EXPECT_EQ(meta.s3_bucket, s3_bucket);
+      EXPECT_TRUE(meta.__isset.s3_path);
+      EXPECT_EQ(meta.s3_path, s3_path);
+    } else {
+      EXPECT_FALSE(meta.__isset.s3_bucket);
+      EXPECT_FALSE(meta.__isset.s3_path);
+    }
+  }
+
  public:
   shared_ptr<ThriftClientPool<AdminAsyncClient>> pool_;
   shared_ptr<AdminAsyncClient> client_;
@@ -174,6 +217,80 @@ class AdminHandlerTestBase : public testing::Test {
   // this is very hacky, since db_manager is a unique_ptr inside AdminHandler
   ApplicationDBManager* db_manager_;
 };
+
+TEST_F(AdminHandlerTestBase, AdminAPIsWithWriteMeta) {
+  // verify: meta is written with init val (db_name, empty s3_path/bucket) at
+  // addDB
+  const string testdb_1 = generateDBName();
+  addDBWithRole(testdb_1, "MASTER");
+  auto meta = handler_->getMetaData(testdb_1);
+  verifyMeta(meta, testdb_1, true, "", "");
+
+  if (FLAGS_enable_integration_test) {
+    // verify: restoreDBHelper write meta
+    BackupDBToS3Request backup_req;
+    backup_req.db_name = testdb_1;
+    backup_req.s3_bucket = FLAGS_s3_bucket;
+    backup_req.s3_backup_dir = FLAGS_s3_backup_prefix + testdb_1;
+    BackupDBToS3Response backup_resp;
+    LOG(INFO) << "Backup db: " << testdb_1;
+    EXPECT_NO_THROW(backup_resp =
+                        client_->future_backupDBToS3(backup_req).get());
+
+    CloseDBRequest close_req;
+    close_req.db_name = testdb_1;
+    auto close_resp = client_->future_closeDB(close_req).get();
+
+    EXPECT_TRUE(handler_->clearMetaData(testdb_1));
+    auto empty_meta = handler_->getMetaData(testdb_1);
+    verifyMeta(empty_meta, testdb_1, false, "", "");
+
+    LOG(INFO) << "Restore db: " << testdb_1;
+    RestoreDBFromS3Request restore_req;
+    restore_req.db_name = testdb_1;
+    restore_req.s3_bucket = FLAGS_s3_bucket;
+    restore_req.s3_backup_dir = FLAGS_s3_backup_prefix + testdb_1;
+    restore_req.upstream_ip = localIP();
+    restore_req.upstream_port = 8090;
+    RestoreDBFromS3Response restore_resp;
+    EXPECT_NO_THROW(restore_resp =
+                        client_->future_restoreDBFromS3(restore_req).get());
+    // the restoreDBHelper will write from an empty_meta
+    auto meta_after_restore = handler_->getMetaData(testdb_1);
+    verifyMeta(meta_after_restore, testdb_1, true, "", "");
+
+    // Verify: clearDB with reopen will have a DBMetaData with init val
+    EXPECT_TRUE(handler_->clearMetaData(testdb_1));
+    ClearDBRequest clear_req;
+    clear_req.db_name = testdb_1;
+    auto clear_resp = client_->future_clearDB(clear_req).get();
+    auto meta_after_clearreopen = handler_->getMetaData(testdb_1);
+    verifyMeta(meta_after_clearreopen, testdb_1, true, "", "");
+
+    // Verify: addS3SstFilesToDB with updated meta
+    string sst_file1 = "/tmp/file1.sst";
+    list<pair<string, string>> sst1_content = {{"1", "1"}, {"2", "2"}};
+    createSstWithContent(sst_file1, sst1_content);
+
+    std::shared_ptr<common::S3Util> s3_util =
+        common::S3Util::BuildS3Util(50, FLAGS_s3_bucket);
+    auto copy_resp = s3_util->putObject(
+        FLAGS_s3_backup_prefix + "tempsst/file1.sst", sst_file1);
+    ASSERT_TRUE(copy_resp.Error().empty())
+        << "Error happened when uploading files to S3: " + copy_resp.Error();
+
+    AddS3SstFilesToDBRequest adds3_req;
+    adds3_req.db_name = testdb_1;
+    adds3_req.s3_bucket = FLAGS_s3_bucket;
+    adds3_req.s3_path = FLAGS_s3_backup_prefix + "tempsst/";
+    auto adds3_resp = client_->future_addS3SstFilesToDB(adds3_req).get();
+    auto meta_after_adds3 = handler_->getMetaData(testdb_1);
+    verifyMeta(meta_after_adds3, testdb_1, true, adds3_req.s3_bucket,
+               adds3_req.s3_path);
+
+    // Skip Verify: startMessageIngestion with updated meta
+  }
+}
 
 TEST_F(AdminHandlerTestBase, CheckDB) {
   addDBWithRole("imp00001", "MASTER");
@@ -207,7 +324,8 @@ TEST_F(AdminHandlerTestBase, CheckDB) {
 }
 
 TEST(AdminHandlerTest, MetaData) {
-  EXPECT_EQ(std::system("rm -rf /tmp/meta_db"), 0);
+  FLAGS_rocksdb_dir = "/tmp/admin_handler_test/";
+  clearAndCreateDir(FLAGS_rocksdb_dir);
 
   auto db_manager = std::make_unique<admin::ApplicationDBManager>();
   admin::AdminHandler handler(std::move(db_manager),
@@ -284,6 +402,8 @@ TEST(AdminHandlerTest, MetaData) {
   EXPECT_FALSE(DecodeThriftStruct(meta_from_backup, &meta));
   EXPECT_EQ(meta.db_name, db_name);
 }
+
+}  // namespace admin
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

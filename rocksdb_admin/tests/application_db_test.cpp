@@ -26,23 +26,21 @@
 #include "gflags/gflags.h"
 #include "gtest/gtest.h"
 #include "rocksdb/db.h"
-#include "rocksdb/sst_file_writer.h"
 #include "rocksdb_admin/application_db.h"
+#include "rocksdb_admin/tests/test_util.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
 
-DEFINE_bool(log_to_stdout, false, "Enable output some assisting logs to stdout");
+DEFINE_bool(log_to_stdout, false,
+            "Enable output some assisting logs to stdout");
 
 namespace admin {
 
 using boost::filesystem::remove_all;
 using rocksdb::DB;
 using rocksdb::DestroyDB;
-using rocksdb::EnvOptions;
 using rocksdb::FlushOptions;
-using rocksdb::Logger;
 using rocksdb::Options;
 using rocksdb::Slice;
-using rocksdb::SstFileWriter;
 using rocksdb::WriteOptions;
 using std::cout;
 using std::endl;
@@ -58,7 +56,7 @@ using std::chrono::seconds;
 using std::this_thread::sleep_for;
 
 class ApplicationDBTestBase : public testing::Test {
-public:
+ public:
   ApplicationDBTestBase() {
     static thread_local unsigned int seed = time(nullptr);
     db_name_ = "test_db_" + to_string(rand_r(&seed));
@@ -71,27 +69,10 @@ public:
 
   ~ApplicationDBTestBase(){};
 
-  void createSstWithContent(const string& sst_filename, list<pair<string, string>>& key_vals) {
-    EXPECT_NO_THROW(remove_all(sst_filename));
-
-    Options options;
-    SstFileWriter sst_file_writer(EnvOptions(), options, options.comparator);
-    auto s = sst_file_writer.Open(sst_filename);
-    ASSERT_TRUE(s.ok()) << s.ToString();
-
-    list<pair<string, string>>::iterator it;
-    for (it = key_vals.begin(); it != key_vals.end(); ++it) {
-      s = sst_file_writer.Put(it->first, it->second);
-      ASSERT_TRUE(s.ok()) << s.ToString();
-    }
-
-    s = sst_file_writer.Finish();
-    ASSERT_TRUE(s.ok()) << s.ToString();
-  }
-
   int numTableFilesAtLevel(int level) {
     std::string p;
-    db_->rocksdb()->GetProperty("rocksdb.num-files-at-level" + std::to_string(level), &p);
+    db_->rocksdb()->GetProperty(
+        "rocksdb.num-files-at-level" + std::to_string(level), &p);
     return atoi(p.c_str());
   }
 
@@ -117,8 +98,8 @@ public:
     auto status = DB::Open(options, db_path_, &db);
     ASSERT_TRUE(status.ok()) << status.ToString();
     ASSERT_TRUE(db != nullptr);
-    db_ = make_unique<ApplicationDB>(
-        db_name_, shared_ptr<DB>(db), replicator::DBRole::SLAVE, nullptr);
+    db_ = make_unique<ApplicationDB>(db_name_, shared_ptr<DB>(db),
+                                     replicator::DBRole::SLAVE, nullptr);
   }
 
   void DestroyAndReopen(const Options& options) {
@@ -147,7 +128,7 @@ public:
     return options;
   }
 
-public:
+ public:
   unique_ptr<ApplicationDB> db_;
   string db_name_;
   string db_path_;
@@ -188,12 +169,13 @@ TEST_F(ApplicationDBTestBase, SetOptionsDisableEnableAutoCompaction) {
   if (FLAGS_log_to_stdout) {
     cout << "Level Stats Right After Flush 1st sst: \n" << levelStats() << endl;
   }
-  // After flush 1st sst into L0, an auto compaction will be triggered. Ideally, we should wait the
-  // for compaction complete. But, the API is not avail. Thus, here we wait for 1s for compaction
-  // finish
+  // After flush 1st sst into L0, an auto compaction will be triggered. Ideally,
+  // we should wait the for compaction complete. But, the API is not avail.
+  // Thus, here we wait for 1s for compaction finish
   sleep_for(seconds(1));
   if (FLAGS_log_to_stdout) {
-    cout << "Level Stats After Wait(1s) for Compaction: \n" << levelStats() << endl;
+    cout << "Level Stats After Wait(1s) for Compaction: \n"
+         << levelStats() << endl;
   }
   EXPECT_EQ(numTableFilesAtLevel(0), 0);
   EXPECT_EQ(numTableFilesAtLevel(1), 1);
@@ -206,7 +188,8 @@ TEST_F(ApplicationDBTestBase, SetOptionsDisableEnableAutoCompaction) {
   db_->rocksdb()->Flush(FlushOptions());
   sleep_for(seconds(1));  // wait for 1s for compaction finish if exist
   if (FLAGS_log_to_stdout) {
-    cout << "Level Stats after flush a 2nd sst, with auto compaction disabled: \n"
+    cout << "Level Stats after flush a 2nd sst, with auto compaction disabled: "
+            "\n"
          << levelStats() << endl;
   }
   EXPECT_EQ(numTableFilesAtLevel(0), 1);
@@ -217,7 +200,8 @@ TEST_F(ApplicationDBTestBase, SetOptionsDisableEnableAutoCompaction) {
   db_->rocksdb()->Flush(FlushOptions());
   sleep_for(seconds(1));  // wait for 1s for compaction finish if exist
   if (FLAGS_log_to_stdout) {
-    cout << "Level Stats after flush a 3rd sst, with auto compaction disabled: \n"
+    cout << "Level Stats after flush a 3rd sst, with auto compaction disabled: "
+            "\n"
          << levelStats() << endl;
   }
   EXPECT_EQ(numTableFilesAtLevel(0), 2);
@@ -226,18 +210,21 @@ TEST_F(ApplicationDBTestBase, SetOptionsDisableEnableAutoCompaction) {
   EXPECT_EQ(numCompactPending(), 1);
 
   // Verify the compaction continue after enable auto compaction again.
-  // in db.h, it claims that EnableAutoCompaction will first set options and then schedule
-  // a flush/compaction; but, the impl only has the 1st step of setting options.
+  // in db.h, it claims that EnableAutoCompaction will first set options and
+  // then schedule a flush/compaction; but, the impl only has the 1st step of
+  // setting options.
   // (https://github.com/facebook/rocksdb/blob/cf160b98e1a9bd7b45f115337a923e6b6da7d9c2/db/db_impl/db_impl_compaction_flush.cc#L2142).
   // db_->rocksdb()->EnableAutoCompaction({db_->rocksdb()->DefaultColumnFamily()});
   // from our test, SetOptions deliver expected result.
   db_->rocksdb()->SetOptions({{"disable_auto_compactions", "false"}});
   sleep_for(seconds(1));  // wait for 1s for compaction finish if exist
   if (FLAGS_log_to_stdout) {
-    cout << "Level Stats after enable auto compaction again \n" << levelStats() << endl;
+    cout << "Level Stats after enable auto compaction again \n"
+         << levelStats() << endl;
   }
   EXPECT_EQ(numTableFilesAtLevel(0), 0);
-  EXPECT_EQ(numTableFilesAtLevel(1), 2);  // the two sst at L0 will merge into 1 at L1
+  // the two sst at L0 will merge into 1 at L1
+  EXPECT_EQ(numTableFilesAtLevel(1), 2);
   EXPECT_EQ(numCompactPending(), 0);
 }
 
@@ -269,7 +256,8 @@ TEST_F(ApplicationDBTestBase, GetLSMLevelInfo) {
   EXPECT_TRUE(db_->rocksdb()->GetOptions().allow_ingest_behind);
   s = db_->rocksdb()->IngestExternalFile({sst_file1}, ifo);
   EXPECT_TRUE(s.ok());
-  EXPECT_EQ(db_->getHighestEmptyLevel(), 5);  // level6 is occupied by ingested data
+  // level6 is occupied by ingested data
+  EXPECT_EQ(db_->getHighestEmptyLevel(), 5);
 
   // compact DB
   rocksdb::CompactRangeOptions compact_options;
