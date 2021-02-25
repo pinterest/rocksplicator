@@ -79,6 +79,11 @@ public class Spectator {
 
   private final HelixManager helixManager;
   private final RocksplicatorMonitor monitor;
+  private final String httpPostUri;
+  private final String shardMapZkSvr;
+  private final String shardMapDownloadDir;
+  private final String clusterName;
+  private final String instanceName;
   private LeaderEventsLogger spectatorLeaderEventsLogger;
 
   private ConfigGenerator configGenerator = null;
@@ -227,28 +232,10 @@ public class Spectator {
           clusterName, shardMapPath, staticClientLeaderEventsLogger, zkEventHistoryStr);
     }
 
-    /**
-     * If the zkShardMapServer is given and the download directory is given,
-     * start with downloading initial shard_map for this cluster.
-     */
-    if (!(shardMapZkSvr.isEmpty() || shardMapDownloadDir.isEmpty())) {
-      ClusterShardMapAgent
-          clusterShardMapAgent = new ClusterShardMapAgent(shardMapZkSvr, clusterName, shardMapDownloadDir);
-      clusterShardMapAgent.startNotification();
-      Runtime.getRuntime().addShutdownHook(new Thread() {
-        @Override
-        public void run() {
-          try {
-            clusterShardMapAgent.close();
-          } catch (IOException e) {
-            e.printStackTrace();
-          }
-        }
-      });
-    }
-
     LOG.error("Starting spectator with ZK:" + zkConnectString);
-    final Spectator spectator = new Spectator(zkConnectString, clusterName, instanceName,
+    final Spectator spectator = new Spectator(
+        zkConnectString, clusterName, instanceName,
+        postUrl, shardMapZkSvr, shardMapDownloadDir,
         spectatorLeaderEventsLogger);
 
     CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
@@ -289,7 +276,7 @@ public class Spectator {
 
     try (Locker locker = new Locker(mutex)) {
       LOG.error("Obtained lock");
-      spectator.startListener(postUrl, shardMapZkSvr);
+      spectator.startListener();
       Thread.currentThread().join();
     } catch (RuntimeException e) {
       LOG.error("RuntimeException thrown by cluster " + clusterName, e);
@@ -300,11 +287,18 @@ public class Spectator {
   }
 
   public Spectator(String zkConnectString, String clusterName, String instanceName,
+                   String httpPostUri, String shardMapZkSvr, String shardMapDownloadDir,
                    LeaderEventsLogger spectatorLeaderEventsLogger) throws Exception {
-    helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
+    this.clusterName = clusterName;
+    this.instanceName = instanceName;
+    this.httpPostUri = httpPostUri;
+    this.shardMapZkSvr = shardMapZkSvr;
+    this.shardMapDownloadDir = shardMapDownloadDir;
 
-    monitor = new RocksplicatorMonitor(clusterName, instanceName);
+    this.helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
+    this.monitor = new RocksplicatorMonitor(clusterName, instanceName);
     this.spectatorLeaderEventsLogger = spectatorLeaderEventsLogger;
+
     helixManager.connect();
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -319,12 +313,12 @@ public class Spectator {
     });
   }
 
-  private void startListener(String postUrl, String shardMapZkSvr) throws Exception {
+  private void startListener() throws Exception {
     if (this.configGenerator == null) {
       ShardMapPublisherBuilder publisherBuilder = ShardMapPublisherBuilder
           .create(helixManager.getClusterName()).withLocalDump();
-      if (postUrl != null && !postUrl.isEmpty()) {
-        publisherBuilder = publisherBuilder.withPostUrl(postUrl);
+      if (httpPostUri != null && !httpPostUri.isEmpty()) {
+        publisherBuilder = publisherBuilder.withPostUrl(httpPostUri);
       }
       if (shardMapZkSvr != null && !shardMapZkSvr.isEmpty()) {
         publisherBuilder = publisherBuilder.withZkShardMap(shardMapZkSvr);
@@ -341,6 +335,25 @@ public class Spectator {
        */
       helixManager.addExternalViewChangeListener(configGenerator);
       helixManager.addConfigChangeListener(configGenerator);
+
+      /**
+       * If the zkShardMapServer is given and the download directory is given,
+       * start downloading shard_map for this cluster.
+       */
+      if (!(shardMapZkSvr.isEmpty() || shardMapDownloadDir.isEmpty())) {
+        ClusterShardMapAgent clusterShardMapAgent = new ClusterShardMapAgent(shardMapZkSvr, clusterName, shardMapDownloadDir);
+        clusterShardMapAgent.startNotification();
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+          @Override
+          public void run() {
+            try {
+              clusterShardMapAgent.close();
+            } catch (IOException e) {
+              e.printStackTrace();
+            }
+          }
+        });
+      }
     }
   }
 
