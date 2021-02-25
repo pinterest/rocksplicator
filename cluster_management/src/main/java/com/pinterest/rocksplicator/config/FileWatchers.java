@@ -26,4 +26,8 @@ public class FileWatchers {
   public static FileWatcher<byte[]> getPollingPerSecondFileWatcher() {
     return PollingFileWatcher.defaultPerSecondWatcher();
   }
+
+  public static FileWatcher<byte[]> getHighResolutionExpensiveFileWatcher() {
+    return PollingFileWatcher.defaultExpensiveHighResolutionWatcher();
+  }
 }
