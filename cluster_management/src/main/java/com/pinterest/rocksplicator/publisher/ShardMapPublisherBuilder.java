@@ -30,7 +30,7 @@ import java.util.List;
 public class ShardMapPublisherBuilder {
 
   private static final Logger LOG =
-      LoggerFactory.getLogger(ZkBasedPerResourceShardMapPublisher.class);
+      LoggerFactory.getLogger(ShardMapPublisherBuilder.class);
 
   private final String clusterName;
   private String postUrl = null;
