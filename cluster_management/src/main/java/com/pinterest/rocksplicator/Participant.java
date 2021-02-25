@@ -24,10 +24,12 @@ import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
 import com.pinterest.rocksplicator.publisher.ShardMapPublisherBuilder;
+import com.pinterest.rocksplicator.shardmapagent.ClusterShardMapAgent;
 import com.pinterest.rocksplicator.task.BackupTaskFactory;
 import com.pinterest.rocksplicator.task.DedupTaskFactory;
 import com.pinterest.rocksplicator.task.RestoreTaskFactory;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -73,6 +75,9 @@ public class Participant {
   private static final String hostPort = "port";
   private static final String stateModel = "stateModelType";
   private static final String configPostUrl = "configPostUrl";
+  private static final String shardMapZkSvrArg = "shardMapZkSvr";
+  private static final String shardMapDownloadDirArg = "shardMapDownloadDir";
+
   private static final String s3Bucket = "s3Bucket";
   private static final String disableSpectator = "disableSpectator";
   private static final String handoffEventHistoryzkSvr = "handoffEventHistoryzkSvr";
@@ -126,10 +131,25 @@ public class Participant {
     stateModelOption.setArgName("StateModel Type (Required)");
 
     Option configPostUrlOption =
-        OptionBuilder.withLongOpt(configPostUrl).withDescription("URL to post config").create();
+        OptionBuilder.withLongOpt(configPostUrl).withDescription("URL to post config (Optional)").create();
     configPostUrlOption.setArgs(1);
-    configPostUrlOption.setRequired(true);
-    configPostUrlOption.setArgName("URL to post config (Required)");
+    configPostUrlOption.setRequired(false);
+    configPostUrlOption.setArgName("URL to post config (Optional)");
+
+    Option shardMapZkSvrOption =
+        OptionBuilder.withLongOpt(shardMapZkSvrArg).withDescription("Zk Server to post shard_map").create();
+    shardMapZkSvrOption.setArgs(1);
+    shardMapZkSvrOption.setRequired(false);
+    shardMapZkSvrOption.setArgName(shardMapZkSvrArg);
+
+    Option shardMapDownloadDirOption = OptionBuilder
+        .withLongOpt(shardMapDownloadDirArg)
+        .withDescription("Provide directory to download shardMap for each cluster [Optional]"
+            + " If this option is provided, also must provide shardMapZkSvr option to download"
+            + " cluster sghard_map data from").create();
+    shardMapDownloadDirOption.setArgs(1);
+    shardMapDownloadDirOption.setRequired(false);
+    shardMapDownloadDirOption.setArgName(shardMapDownloadDirArg);
 
     Option s3BucketOption =
         OptionBuilder.withLongOpt(s3Bucket).withDescription("S3 Bucket").create();
@@ -190,6 +210,8 @@ public class Participant {
         .addOption(portOption)
         .addOption(stateModelOption)
         .addOption(configPostUrlOption)
+        .addOption(shardMapZkSvrOption)
+        .addOption(shardMapDownloadDirOption)
         .addOption(s3BucketOption)
         .addOption(disableSpectatorOption)
         .addOption(handoffEventHistoryzkSvrOption)
@@ -221,7 +243,9 @@ public class Participant {
     final String host = cmd.getOptionValue(hostAddress);
     final String port = cmd.getOptionValue(hostPort);
     final String stateModelType = cmd.getOptionValue(stateModel);
-    final String postUrl = cmd.getOptionValue(configPostUrl);
+    final String postUrl = cmd.getOptionValue(configPostUrl, "");
+    final String shardMapZkSvr = cmd.getOptionValue(shardMapZkSvrArg, "");
+    final String shardMapDownloadDir = cmd.getOptionValue(shardMapDownloadDirArg, "");
     final String instanceName = host + "_" + port;
     String s3BucketName = "";
     final boolean useS3Backup = cmd.hasOption(s3Bucket);
@@ -233,7 +257,7 @@ public class Participant {
     final String zkEventHistoryStr = cmd.getOptionValue(handoffEventHistoryzkSvr, "");
     final String resourceConfigPath = cmd.getOptionValue(handoffEventHistoryConfigPath, "");
     final String resourceConfigType = cmd.getOptionValue(handoffEventHistoryConfigType, "");
-    final String shardMapPath = cmd.getOptionValue(handoffClientEventHistoryJsonShardMapPath, "");
+    final String clientShardMapPath = cmd.getOptionValue(handoffClientEventHistoryJsonShardMapPath, "");
 
     /**
      * Note that the last parameter is empty, since we don't dictate
@@ -246,18 +270,39 @@ public class Participant {
       staticSpectatorLeaderEventsLogger = new LeaderEventsLoggerImpl(instanceName,
           zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType, Optional.of(128));
 
-      if (shardMapPath != null && !shardMapPath.isEmpty()) {
+      if (clientShardMapPath != null && !clientShardMapPath.isEmpty()) {
         staticClientLeaderEventsLogger = new LeaderEventsLoggerImpl(instanceName,
             zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType, Optional.empty());
 
         staticClientShardMapLeaderEventLoggerDriver = new ClientShardMapLeaderEventLoggerDriver(
-            clusterName, shardMapPath, staticClientLeaderEventsLogger, zkEventHistoryStr);
+            clusterName, clientShardMapPath, staticClientLeaderEventsLogger, zkEventHistoryStr);
       }
+    }
+
+    /**
+     * If the zkShardMapServer is given and the download directory is given,
+     * start with downloading initial shard_map for this cluster.
+     * This is true irrespective of whether a spectator runs in embedded mode
+     * for the given participant cluster.
+     */
+    if (!(shardMapZkSvr.isEmpty() || shardMapDownloadDir.isEmpty())) {
+      ClusterShardMapAgent clusterShardMapAgent = new ClusterShardMapAgent(shardMapZkSvr, clusterName, shardMapDownloadDir);
+      clusterShardMapAgent.startNotification();
+      Runtime.getRuntime().addShutdownHook(new Thread() {
+        @Override
+        public void run() {
+          try {
+            clusterShardMapAgent.close();
+          } catch (IOException e) {
+            e.printStackTrace();
+          }
+        }
+      });
     }
 
     LOG.error("Starting participant with ZK:" + zkConnectString);
     Participant participant = new Participant(zkConnectString, clusterName, instanceName,
-        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator);
+        stateModelType, Integer.parseInt(port), postUrl, shardMapZkSvr, useS3Backup, s3BucketName, runSpectator);
 
     /** TODO:grajpurohit
      * This should probably be done right after connecting to the zk with HelixManager.
@@ -325,8 +370,8 @@ public class Participant {
   }
 
   private Participant(String zkConnectString, String clusterName, String instanceName,
-                      String stateModelType, int port, String postUrl, boolean useS3Backup,
-                      String s3BucketName, boolean runSpectator)
+                      String stateModelType, int port, String postUrl, String shardMapZkSvr,
+                      boolean useS3Backup, String s3BucketName, boolean runSpectator)
       throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
@@ -430,14 +475,20 @@ public class Participant {
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
 
     if (runSpectator) {
+      ShardMapPublisherBuilder publisherBuilder = ShardMapPublisherBuilder
+          .create(clusterName).withLocalDump();
+      if (postUrl != null && !postUrl.isEmpty()) {
+        publisherBuilder = publisherBuilder.withPostUrl(postUrl);
+      }
+      if (shardMapZkSvr != null && !shardMapZkSvr.isEmpty()) {
+        publisherBuilder = publisherBuilder.withZkShardMap(shardMapZkSvr);
+      }
+
       // Add callback to create rocksplicator shard config
       ConfigGenerator configGenerator = new ConfigGenerator(
           clusterName,
           helixManager,
-          ShardMapPublisherBuilder.create(helixManager.getClusterName())
-              .withPostUrl(postUrl)
-              .withLocalDump()
-              .build(),
+          publisherBuilder.build(),
           monitor,
           new ExternalViewLeaderEventsLoggerImpl(staticSpectatorLeaderEventsLogger));
 

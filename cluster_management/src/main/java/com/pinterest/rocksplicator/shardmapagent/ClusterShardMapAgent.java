@@ -23,6 +23,10 @@ import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 import com.pinterest.rocksplicator.codecs.CodecException;
 import com.pinterest.rocksplicator.codecs.ZkGZIPCompressedShardMapCodec;
+<<<<<<< HEAD
+import com.pinterest.rocksplicator.codecs.ZkShardMapCodec;
+=======
+>>>>>>> master
 import com.pinterest.rocksplicator.utils.ZkPathUtils;
 
 import org.apache.curator.framework.CuratorFramework;
@@ -70,12 +74,11 @@ public class ClusterShardMapAgent implements Closeable {
   private final CuratorFramework zkShardMapClient;
   private final PathChildrenCache pathChildrenCache;
   private final ConcurrentHashMap<String, JSONObject> shardMapsByResources;
-  private final ZkGZIPCompressedShardMapCodec gzipCodec;
+  private final ZkShardMapCodec zkShardMapCompressedCodec;
   private final ScheduledExecutorService dumperExecutorService;
   private final AtomicInteger numPendingNotifications;
 
-  public ClusterShardMapAgent(String zkConnectString, String clusterName, String shardMapDir)
-      throws Exception {
+  public ClusterShardMapAgent(String zkConnectString, String clusterName, String shardMapDir) {
     this.clusterName = clusterName;
     this.shardMapDir = shardMapDir;
     this.tempShardMapDir = shardMapDir + "/" + ".temp";
@@ -87,9 +90,13 @@ public class ClusterShardMapAgent implements Closeable {
                 100, 10000, 10));
 
     this.zkShardMapClient.start();
-    this.zkShardMapClient.blockUntilConnected(60, TimeUnit.SECONDS);
+    try {
+      this.zkShardMapClient.blockUntilConnected(60, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+      throw new RuntimeException();
+    }
     this.shardMapsByResources = new ConcurrentHashMap<>();
-    this.gzipCodec = new ZkGZIPCompressedShardMapCodec();
+    this.zkShardMapCompressedCodec = new ZkGZIPCompressedShardMapCodec();
 
     this.pathChildrenCache = new PathChildrenCache(
         zkShardMapClient,
@@ -193,7 +200,7 @@ public class ClusterShardMapAgent implements Closeable {
       }
       String resourceName = splits[splits.length - 1];
       try {
-        JSONObject jsonObject = gzipCodec.decode(data);
+        JSONObject jsonObject = zkShardMapCompressedCodec.decode(data);
         this.shardMapsByResources.put(resourceName, jsonObject);
       } catch (CodecException e) {
         LOG.error(String.format(
