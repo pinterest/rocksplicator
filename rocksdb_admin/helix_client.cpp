@@ -53,6 +53,10 @@ DEFINE_string(shard_map_zk_connect_string,
   "",
   "[Optional]: zk server storing shard_map for individual clusters");
 
+DEFINE_string(shard_map_zk_download_dir,
+  "",
+  "[Optional]: if need to download shard_map from zk. shard_map_zk_connect_string option also must be given");
+
 namespace {
 
 JNIEnv* createVM(const std::string& class_path) {
@@ -159,6 +163,10 @@ void invokeClass(JNIEnv* env,
   if (!FLAGS_shard_map_zk_connect_string.empty()) {
     arguments.push_back(std::string("--shardMapZkSvr"));
     arguments.push_back(std::string(FLAGS_shard_map_zk_connect_string));
+  }
+  if (!FLAGS_shard_map_zk_download_dir.empty()) {
+    arguments.push_back(std::string("--shardMapDownloadDir"));
+    arguments.push_back(std::string(FLAGS_shard_map_zk_download_dir));
   }
   if (FLAGS_use_s3_backup) {
     arguments.push_back(std::string("--s3Bucket"));
