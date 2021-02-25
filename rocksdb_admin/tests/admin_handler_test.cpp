@@ -75,6 +75,7 @@ DEFINE_string(s3_bucket, "pinterest-jackson", "The s3 bucket");
 DEFINE_string(s3_backup_prefix, "tmp/backup_test/admin_handler_test/",
               "The s3 key prefix for backup");
 DECLARE_string(rocksdb_dir);
+DECLARE_bool(enable_checkpoint_backup);
 
 void clearAndCreateDir(string dir_path) {
   boost::system::error_code create_err;
@@ -177,7 +178,7 @@ class AdminHandlerTestBase : public testing::Test {
               << ", upstreamIP " << upstream_ip;
   }
 
-  bool deleteKeyFromDB(const string db_name, const string key) {
+  void deleteKeyFromDB(const string db_name, const string key) {
     rocksdb::WriteBatch batch;
     EXPECT_TRUE(batch.Delete(key).ok());
     auto app_db = db_manager_->getDB(db_name, nullptr);
@@ -227,66 +228,110 @@ TEST_F(AdminHandlerTestBase, AdminAPIsWithWriteMeta) {
   verifyMeta(meta, testdb_1, true, "", "");
 
   if (FLAGS_enable_integration_test) {
-    // verify: restoreDBHelper write meta
-    BackupDBToS3Request backup_req;
-    backup_req.db_name = testdb_1;
-    backup_req.s3_bucket = FLAGS_s3_bucket;
-    backup_req.s3_backup_dir = FLAGS_s3_backup_prefix + testdb_1;
-    BackupDBToS3Response backup_resp;
-    LOG(INFO) << "Backup db: " << testdb_1;
-    EXPECT_NO_THROW(backup_resp =
-                        client_->future_backupDBToS3(backup_req).get());
+    // use checkpoint for db upload/download
+    {
+      FLAGS_enable_checkpoint_backup = true;
+      SCOPE_EXIT { FLAGS_enable_checkpoint_backup = false; };
 
-    CloseDBRequest close_req;
-    close_req.db_name = testdb_1;
-    auto close_resp = client_->future_closeDB(close_req).get();
+      BackupDBToS3Request backup_req;
+      backup_req.db_name = testdb_1;
+      backup_req.s3_bucket = FLAGS_s3_bucket;
+      backup_req.s3_backup_dir =
+          FLAGS_s3_backup_prefix + " checkpoint/" + testdb_1;
+      BackupDBToS3Response backup_resp;
+      LOG(INFO) << "Backup db: " << testdb_1 << " to "
+                << backup_req.s3_backup_dir;
+      EXPECT_NO_THROW(backup_resp =
+                          client_->future_backupDBToS3(backup_req).get());
 
-    EXPECT_TRUE(handler_->clearMetaData(testdb_1));
-    auto empty_meta = handler_->getMetaData(testdb_1);
-    verifyMeta(empty_meta, testdb_1, false, "", "");
+      CloseDBRequest close_req;
+      close_req.db_name = testdb_1;
+      auto close_resp = client_->future_closeDB(close_req).get();
 
-    LOG(INFO) << "Restore db: " << testdb_1;
-    RestoreDBFromS3Request restore_req;
-    restore_req.db_name = testdb_1;
-    restore_req.s3_bucket = FLAGS_s3_bucket;
-    restore_req.s3_backup_dir = FLAGS_s3_backup_prefix + testdb_1;
-    restore_req.upstream_ip = localIP();
-    restore_req.upstream_port = 8090;
-    RestoreDBFromS3Response restore_resp;
-    EXPECT_NO_THROW(restore_resp =
-                        client_->future_restoreDBFromS3(restore_req).get());
-    // the restoreDBHelper will write from an empty_meta
-    auto meta_after_restore = handler_->getMetaData(testdb_1);
-    verifyMeta(meta_after_restore, testdb_1, true, "", "");
+      LOG(INFO) << "Restore db: " << testdb_1;
+      RestoreDBFromS3Request restore_req;
+      restore_req.db_name = testdb_1;
+      restore_req.s3_bucket = FLAGS_s3_bucket;
+      restore_req.s3_backup_dir =
+          FLAGS_s3_backup_prefix + " checkpoint/" + testdb_1;
+      restore_req.upstream_ip = localIP();
+      restore_req.upstream_port = 8090;
+      RestoreDBFromS3Response restore_resp;
+      EXPECT_NO_THROW(restore_resp =
+                          client_->future_restoreDBFromS3(restore_req).get());
+      // the restoreDBHelper will write from an empty_meta
+      auto meta_after_restore = handler_->getMetaData(testdb_1);
+      verifyMeta(meta_after_restore, testdb_1, true, "", "");
 
-    // Verify: clearDB with reopen will have a DBMetaData with init val
-    EXPECT_TRUE(handler_->clearMetaData(testdb_1));
-    ClearDBRequest clear_req;
-    clear_req.db_name = testdb_1;
-    auto clear_resp = client_->future_clearDB(clear_req).get();
-    auto meta_after_clearreopen = handler_->getMetaData(testdb_1);
-    verifyMeta(meta_after_clearreopen, testdb_1, true, "", "");
+      handler_->clearMetaData(testdb_1);
+    }
 
-    // Verify: addS3SstFilesToDB with updated meta
-    string sst_file1 = "/tmp/file1.sst";
-    list<pair<string, string>> sst1_content = {{"1", "1"}, {"2", "2"}};
-    createSstWithContent(sst_file1, sst1_content);
+    // not use checkpoint for db upload/download
+    {
+      EXPECT_FALSE(FLAGS_enable_checkpoint_backup);
 
-    std::shared_ptr<common::S3Util> s3_util =
-        common::S3Util::BuildS3Util(50, FLAGS_s3_bucket);
-    auto copy_resp = s3_util->putObject(
-        FLAGS_s3_backup_prefix + "tempsst/file1.sst", sst_file1);
-    ASSERT_TRUE(copy_resp.Error().empty())
-        << "Error happened when uploading files to S3: " + copy_resp.Error();
+      // verify: restoreDBHelper write meta
+      BackupDBToS3Request backup_req;
+      backup_req.db_name = testdb_1;
+      backup_req.s3_bucket = FLAGS_s3_bucket;
+      backup_req.s3_backup_dir = FLAGS_s3_backup_prefix + testdb_1;
+      BackupDBToS3Response backup_resp;
+      LOG(INFO) << "Backup db: " << testdb_1 << " to "
+                << backup_req.s3_backup_dir;
+      EXPECT_NO_THROW(backup_resp =
+                          client_->future_backupDBToS3(backup_req).get());
 
-    AddS3SstFilesToDBRequest adds3_req;
-    adds3_req.db_name = testdb_1;
-    adds3_req.s3_bucket = FLAGS_s3_bucket;
-    adds3_req.s3_path = FLAGS_s3_backup_prefix + "tempsst/";
-    auto adds3_resp = client_->future_addS3SstFilesToDB(adds3_req).get();
-    auto meta_after_adds3 = handler_->getMetaData(testdb_1);
-    verifyMeta(meta_after_adds3, testdb_1, true, adds3_req.s3_bucket,
-               adds3_req.s3_path);
+      CloseDBRequest close_req;
+      close_req.db_name = testdb_1;
+      auto close_resp = client_->future_closeDB(close_req).get();
+
+      EXPECT_TRUE(handler_->clearMetaData(testdb_1));
+      auto empty_meta = handler_->getMetaData(testdb_1);
+      verifyMeta(empty_meta, testdb_1, false, "", "");
+
+      LOG(INFO) << "Restore db: " << testdb_1;
+      RestoreDBFromS3Request restore_req;
+      restore_req.db_name = testdb_1;
+      restore_req.s3_bucket = FLAGS_s3_bucket;
+      restore_req.s3_backup_dir = FLAGS_s3_backup_prefix + testdb_1;
+      restore_req.upstream_ip = localIP();
+      restore_req.upstream_port = 8090;
+      RestoreDBFromS3Response restore_resp;
+      EXPECT_NO_THROW(restore_resp =
+                          client_->future_restoreDBFromS3(restore_req).get());
+      // the restoreDBHelper will write from an empty_meta
+      auto meta_after_restore = handler_->getMetaData(testdb_1);
+      verifyMeta(meta_after_restore, testdb_1, true, "", "");
+
+      // Verify: clearDB with reopen will have a DBMetaData with init val
+      EXPECT_TRUE(handler_->clearMetaData(testdb_1));
+      ClearDBRequest clear_req;
+      clear_req.db_name = testdb_1;
+      auto clear_resp = client_->future_clearDB(clear_req).get();
+      auto meta_after_clearreopen = handler_->getMetaData(testdb_1);
+      verifyMeta(meta_after_clearreopen, testdb_1, true, "", "");
+
+      // Verify: addS3SstFilesToDB with updated meta
+      string sst_file1 = "/tmp/file1.sst";
+      list<pair<string, string>> sst1_content = {{"1", "1"}, {"2", "2"}};
+      createSstWithContent(sst_file1, sst1_content);
+
+      std::shared_ptr<common::S3Util> s3_util =
+          common::S3Util::BuildS3Util(50, FLAGS_s3_bucket);
+      auto copy_resp = s3_util->putObject(
+          FLAGS_s3_backup_prefix + "tempsst/file1.sst", sst_file1);
+      ASSERT_TRUE(copy_resp.Error().empty())
+          << "Error happened when uploading files to S3: " + copy_resp.Error();
+
+      AddS3SstFilesToDBRequest adds3_req;
+      adds3_req.db_name = testdb_1;
+      adds3_req.s3_bucket = FLAGS_s3_bucket;
+      adds3_req.s3_path = FLAGS_s3_backup_prefix + "tempsst/";
+      auto adds3_resp = client_->future_addS3SstFilesToDB(adds3_req).get();
+      auto meta_after_adds3 = handler_->getMetaData(testdb_1);
+      verifyMeta(meta_after_adds3, testdb_1, true, adds3_req.s3_bucket,
+                 adds3_req.s3_path);
+    }
 
     // Skip Verify: startMessageIngestion with updated meta
   }
@@ -295,7 +340,7 @@ TEST_F(AdminHandlerTestBase, AdminAPIsWithWriteMeta) {
 TEST_F(AdminHandlerTestBase, CheckDB) {
   addDBWithRole("imp00001", "MASTER");
   auto dbs = db_manager_->getAllDBNames();
-  EXPECT_EQ(dbs.size(), 1);
+  EXPECT_EQ(dbs.size(), (unsigned) 1);
   EXPECT_NE(std::find(dbs.begin(), dbs.end(), "imp00001"), dbs.end());
 
   CheckDBRequest req;
