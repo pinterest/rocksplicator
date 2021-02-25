@@ -20,14 +20,13 @@ package com.pinterest.rocksplicator;
 
 import static org.apache.curator.framework.state.ConnectionState.CONNECTED;
 
-import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLogger;
 import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerDriver;
-import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
 import com.pinterest.rocksplicator.publisher.ShardMapPublisherBuilder;
+import com.pinterest.rocksplicator.shardmapagent.ClusterShardMapAgent;
 
 import java.io.IOException;
 import java.util.Optional;
@@ -66,6 +65,8 @@ public class Spectator {
   private static final String hostAddress = "host";
   private static final String hostPort = "port";
   private static final String configPostUrl = "configPostUrl";
+  private static final String shardMapZkSvrArg = "shardMapZkSvr";
+  private static final String shardMapDownloadDirArg = "shardMapDownloadDir";
 
   private static final String handoffEventHistoryzkSvr = "handoffEventHistoryzkSvr";
   private static final String handoffEventHistoryConfigPath = "handoffEventHistoryConfigPath";
@@ -75,7 +76,6 @@ public class Spectator {
   private static LeaderEventsLogger staticClientLeaderEventsLogger = null;
   private static ClientShardMapLeaderEventLoggerDriver
       staticClientShardMapLeaderEventLoggerDriver = null;
-
 
   private final HelixManager helixManager;
   private final RocksplicatorMonitor monitor;
@@ -108,11 +108,27 @@ public class Spectator {
     portOption.setRequired(true);
     portOption.setArgName("Host port (Required)");
 
+    // we keep this optional, so that we can test without posting to any url
     Option configPostUrlOption =
-        OptionBuilder.withLongOpt(configPostUrl).withDescription("URL to post config").create();
+        OptionBuilder.withLongOpt(configPostUrl).withDescription("URL to post config (Optional)").create();
     configPostUrlOption.setArgs(1);
-    configPostUrlOption.setRequired(true);
-    configPostUrlOption.setArgName("URL to post config (Required)");
+    configPostUrlOption.setRequired(false);
+    configPostUrlOption.setArgName("URL to post config (Optional)");
+
+    Option shardMapZkSvrOption =
+        OptionBuilder.withLongOpt(shardMapZkSvrArg).withDescription("Zk Server to post shard_map").create();
+    shardMapZkSvrOption.setArgs(1);
+    shardMapZkSvrOption.setRequired(false);
+    shardMapZkSvrOption.setArgName(shardMapZkSvrArg);
+
+    Option shardMapDownloadDirOption = OptionBuilder
+        .withLongOpt(shardMapDownloadDirArg)
+        .withDescription("Provide directory to download shardMap for each cluster [Optional]"
+            + " If this option is provided, also must provide shardMapZkSvr option to download"
+            + " cluster sghard_map data from").create();
+    shardMapDownloadDirOption.setArgs(1);
+    shardMapDownloadDirOption.setRequired(false);
+    shardMapDownloadDirOption.setArgName(shardMapDownloadDirArg);
 
     Option handoffEventHistoryzkSvrOption =
         OptionBuilder.withLongOpt(handoffEventHistoryzkSvr)
@@ -159,6 +175,8 @@ public class Spectator {
         .addOption(hostOption)
         .addOption(portOption)
         .addOption(configPostUrlOption)
+        .addOption(shardMapZkSvrOption)
+        .addOption(shardMapDownloadDirOption)
         .addOption(handoffEventHistoryzkSvrOption)
         .addOption(handoffEventHistoryConfigPathOption)
         .addOption(handoffEventHistoryConfigTypeOption)
@@ -186,7 +204,9 @@ public class Spectator {
     final String clusterName = cmd.getOptionValue(cluster);
     final String host = cmd.getOptionValue(hostAddress);
     final String port = cmd.getOptionValue(hostPort);
-    final String postUrl = cmd.getOptionValue(configPostUrl);
+    final String postUrl = cmd.getOptionValue(configPostUrl, "");
+    final String shardMapZkSvr = cmd.getOptionValue(shardMapZkSvrArg, "");
+    final String shardMapDownloadDir = cmd.getOptionValue(shardMapDownloadDirArg, "");
     final String instanceName = host + "_" + port;
 
     final String zkEventHistoryStr = cmd.getOptionValue(handoffEventHistoryzkSvr, "");
@@ -205,6 +225,26 @@ public class Spectator {
 
       staticClientShardMapLeaderEventLoggerDriver = new ClientShardMapLeaderEventLoggerDriver(
           clusterName, shardMapPath, staticClientLeaderEventsLogger, zkEventHistoryStr);
+    }
+
+    /**
+     * If the zkShardMapServer is given and the download directory is given,
+     * start with downloading initial shard_map for this cluster.
+     */
+    if (!(shardMapZkSvr.isEmpty() || shardMapDownloadDir.isEmpty())) {
+      ClusterShardMapAgent
+          clusterShardMapAgent = new ClusterShardMapAgent(shardMapZkSvr, clusterName, shardMapDownloadDir);
+      clusterShardMapAgent.startNotification();
+      Runtime.getRuntime().addShutdownHook(new Thread() {
+        @Override
+        public void run() {
+          try {
+            clusterShardMapAgent.close();
+          } catch (IOException e) {
+            e.printStackTrace();
+          }
+        }
+      });
     }
 
     LOG.error("Starting spectator with ZK:" + zkConnectString);
@@ -249,7 +289,7 @@ public class Spectator {
 
     try (Locker locker = new Locker(mutex)) {
       LOG.error("Obtained lock");
-      spectator.startListener(postUrl);
+      spectator.startListener(postUrl, shardMapZkSvr);
       Thread.currentThread().join();
     } catch (RuntimeException e) {
       LOG.error("RuntimeException thrown by cluster " + clusterName, e);
@@ -279,15 +319,21 @@ public class Spectator {
     });
   }
 
-  private void startListener(String postUrl) throws Exception {
+  private void startListener(String postUrl, String shardMapZkSvr) throws Exception {
     if (this.configGenerator == null) {
+      ShardMapPublisherBuilder publisherBuilder = ShardMapPublisherBuilder
+          .create(helixManager.getClusterName()).withLocalDump();
+      if (postUrl != null && !postUrl.isEmpty()) {
+        publisherBuilder = publisherBuilder.withPostUrl(postUrl);
+      }
+      if (shardMapZkSvr != null && !shardMapZkSvr.isEmpty()) {
+        publisherBuilder = publisherBuilder.withZkShardMap(shardMapZkSvr);
+      }
+
       this.configGenerator = new ConfigGenerator(
           helixManager.getClusterName(),
           helixManager,
-          ShardMapPublisherBuilder.create(helixManager.getClusterName())
-              .withPostUrl(postUrl)
-              .withLocalDump()
-              .build(),
+          publisherBuilder.build(),
           monitor, new ExternalViewLeaderEventsLoggerImpl(spectatorLeaderEventsLogger));
 
       /**
