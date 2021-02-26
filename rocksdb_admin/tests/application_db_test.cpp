@@ -232,7 +232,7 @@ TEST_F(ApplicationDBTestBase, GetLSMLevelInfo) {
   // Verify: DB level=7 at new create
   EXPECT_EQ(db_->rocksdb()->NumberLevels(), 7);
   // level num: 0, 1, ..., 6
-  EXPECT_EQ(db_->getHighestEmptyLevel(), 6);
+  EXPECT_EQ(db_->getHighestEmptyLevel(), (unsigned)6);
 
   string sst_file1 = "/tmp/file1.sst";
   list<pair<string, string>> sst1_content = {{"1", "1"}, {"2", "2"}};
@@ -246,7 +246,7 @@ TEST_F(ApplicationDBTestBase, GetLSMLevelInfo) {
   EXPECT_FALSE(db_->rocksdb()->GetOptions().allow_ingest_behind);
   auto s = db_->rocksdb()->IngestExternalFile({sst_file1}, ifo);
   EXPECT_FALSE(s.ok());
-  EXPECT_EQ(db_->getHighestEmptyLevel(), 6);
+  EXPECT_EQ(db_->getHighestEmptyLevel(), (unsigned)6);
 
   auto options = getDefaultOptions();
   options.allow_ingest_behind = true;
@@ -257,19 +257,19 @@ TEST_F(ApplicationDBTestBase, GetLSMLevelInfo) {
   s = db_->rocksdb()->IngestExternalFile({sst_file1}, ifo);
   EXPECT_TRUE(s.ok());
   // level6 is occupied by ingested data
-  EXPECT_EQ(db_->getHighestEmptyLevel(), 5);
+  EXPECT_EQ(db_->getHighestEmptyLevel(), (unsigned)5);
 
   // compact DB
   rocksdb::CompactRangeOptions compact_options;
   compact_options.change_level = false;
   // if change_level is false (default), compacted data will move to bottommost
   db_->rocksdb()->CompactRange(compact_options, nullptr, nullptr);
-  EXPECT_EQ(db_->getHighestEmptyLevel(), 5);
+  EXPECT_EQ(db_->getHighestEmptyLevel(), (unsigned)5);
 
   compact_options.change_level = true;
   // if change_level is false (default), compacted data will move to bottommost
   db_->rocksdb()->CompactRange(compact_options, nullptr, nullptr);
-  EXPECT_EQ(db_->getHighestEmptyLevel(), 6);
+  EXPECT_EQ(db_->getHighestEmptyLevel(), (unsigned)6);
 }
 
 }  // namespace admin
