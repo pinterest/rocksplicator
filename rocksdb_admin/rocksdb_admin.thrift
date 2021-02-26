@@ -49,6 +49,8 @@ struct AddDBRequest {
   3: optional bool overwrite = false,
   # if set, add the db to the db_manager with the specified role. one of MASTER, SLAVE, NOOP
   4: optional string db_role = "SLAVE",
+  # if true, create DB with allow_ingest_behind
+  5: optional bool allow_ingest_behind,
 }
 
 struct AddDBResponse {
@@ -175,6 +177,8 @@ struct GetSequenceNumberResponse {
 struct ClearDBRequest {
   1: required string db_name,
   2: optional bool reopen_db = true,
+  # if true, reopen DB with allow_ingest_behind
+  3: optional bool allow_ingest_behind,
 }
 
 struct ClearDBResponse {
