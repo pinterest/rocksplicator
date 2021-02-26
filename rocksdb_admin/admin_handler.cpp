@@ -1523,7 +1523,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     }
     if (db->getHighestEmptyLevel() != db->rocksdb()->NumberLevels() - 1) {
       // note: default num levels for DB is 7 (0, 1, ..., 6)
-      std::string errMsg = "The Lmax of DB is not empty, skipp add files " + request->db_name;
+      std::string errMsg = "The Lmax of DB is not empty, skip ingestion to " + request->db_name;
       e.message = errMsg;
       callback.release()->exceptionInThread(std::move(e));
       LOG(ERROR) << errMsg;
@@ -1612,7 +1612,8 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
       allow_overlapping_keys_segments_.find(segment) !=
       allow_overlapping_keys_segments_.end();
   // OR with the flag to make backwards compatibility
-  // If ingest to existing DB, allow overlapping keys for backfill to prevent failure
+  // It is very important to allow overlapping keys if ingest to an existing DB,
+  // and do not intend to clear the existing data
   allow_overlapping_keys =
       allow_overlapping_keys || FLAGS_rocksdb_allow_overlapping_keys;
   if (!allow_overlapping_keys) {
