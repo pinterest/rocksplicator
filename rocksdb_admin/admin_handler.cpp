@@ -1420,9 +1420,6 @@ void AdminHandler::async_tm_clearDB(
     LOG(INFO) << "Open DB: " << request->db_name;
     admin::AdminException e;
     e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
-    if (request->__isset.allow_ingest_behind && request->allow_ingest_behind) {
-      options.allow_ingest_behind = true;
-    }
     auto db = GetRocksdb(db_path, options);
     if (db == nullptr) {
       e.message = "Failed to open DB: " + request->db_name;
@@ -1507,6 +1504,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     return;
   }
 
+  // it is important to check meta first to avoid double ingestion
   auto meta = getMetaData(request->db_name);
   if (meta.__isset.s3_bucket && meta.s3_bucket == request->s3_bucket &&
       meta.__isset.s3_path && meta.s3_path == request->s3_path) {
@@ -1644,10 +1642,6 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     LOG(INFO) << "Open DB: " << request->db_name;
     admin::AdminException e;
     e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
-    if (ingest_behind) {
-      // recreate DB with allow_ingest_behind to support ingest behind; default false
-      options.allow_ingest_behind = true;
-    }
     auto rocksdb_db = GetRocksdb(db_path, options);
     if (rocksdb_db == nullptr) {
       e.message = "Failed to open DB: " + request->db_name;

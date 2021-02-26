@@ -78,6 +78,9 @@ DEFINE_bool(enable_integration_test, false,
 DEFINE_string(s3_bucket, "pinterest-jackson", "The s3 bucket");
 DEFINE_string(s3_backup_prefix, "tmp/backup_test/admin_handler_test/",
               "The s3 key prefix for backup");
+DEFINE_bool(
+    test_db_create_with_allow_ingest_behind, false,
+    "If true, db is created with allow_ingest_behind; by default, it is false");
 DECLARE_string(rocksdb_dir);
 DECLARE_bool(enable_checkpoint_backup);
 DECLARE_bool(rocksdb_allow_overlapping_keys);
@@ -101,6 +104,10 @@ Options getOptions(const string& segment) {
   Options options;
   options.create_if_missing = true;
   options.WAL_ttl_seconds = 123;
+  // in production, this will be cluster level once-and-set flag
+  if (FLAGS_test_db_create_with_allow_ingest_behind) {
+    options.allow_ingest_behind = true;
+  }
   return options;
 }
 
@@ -157,11 +164,9 @@ class AdminHandlerTestBase : public testing::Test {
     // TODO: should remove test files from S3 as well
   }
 
-  void addDBWithRole(const string db_name, const string db_role,
-                     bool allow_ingest_behind) {
+  void addDBWithRole(const string db_name, const string db_role) {
     AddDBRequest req;
     req.db_name = db_name;
-    req.set_allow_ingest_behind(allow_ingest_behind);
     req.upstream_ip = localIP();
     if (db_role == "SLAVE" || db_role == "FOLLOWER" || db_role == "NOOP") {
       req.set_db_role(db_role);
@@ -205,12 +210,11 @@ class AdminHandlerTestBase : public testing::Test {
     EXPECT_TRUE(app_db->Write(rocksdb::WriteOptions(), &batch).ok());
   }
 
-  void clearDB(const string db_name, bool reopen_db, bool allow_ingest_behind) {
+  void clearDB(const string db_name) {
     ClearDBResponse clear_resp;
     ClearDBRequest clear_req;
     clear_req.db_name = db_name;
-    clear_req.set_reopen_db(reopen_db);
-    clear_req.set_allow_ingest_behind(allow_ingest_behind);
+    // clear_req.set_reopen_db(true); // by default, alwasys reopen
     EXPECT_NO_THROW(clear_resp = client_->future_clearDB(clear_req).get());
   }
 
@@ -277,7 +281,7 @@ class AdminHandlerTestBase : public testing::Test {
 
 TEST_F(AdminHandlerTestBase, AddS3SstFilesToDBTest) {
   const string testdb = generateDBName();
-  addDBWithRole(testdb, "MASTER", false);
+  addDBWithRole(testdb, "MASTER");
   auto meta = handler_->getMetaData(testdb);
   verifyMeta(meta, testdb, true, "", "");
 
@@ -350,7 +354,7 @@ TEST_F(AdminHandlerTestBase, AddS3SstFilesToDBTest) {
         adds3_req_sstdir1.set_ingest_behind(true);
         SCOPE_EXIT { adds3_req_sstdir1.set_ingest_behind(false); };
 
-        clearDB(testdb, true, false);
+        clearDB(testdb);
         EXPECT_THROW(
             adds3_resp =
                 client_->future_addS3SstFilesToDB(adds3_req_sstdir1).get(),
@@ -368,13 +372,17 @@ TEST_F(AdminHandlerTestBase, AddS3SstFilesToDBTest) {
       // allow_ingest_behind -> ok
       // Then, ingest behind from sstDir2 will violate Lmax.empty() -> exception
       {
+        FLAGS_test_db_create_with_allow_ingest_behind = true;
         // by default, not allow overlap, so always will recreate DB
         EXPECT_FALSE(FLAGS_rocksdb_allow_overlapping_keys);
 
         adds3_req_sstdir1.set_ingest_behind(true);
-        SCOPE_EXIT { adds3_req_sstdir1.set_ingest_behind(false); };
+        SCOPE_EXIT {
+          FLAGS_test_db_create_with_allow_ingest_behind = false;
+          adds3_req_sstdir1.set_ingest_behind(false);
+        };
 
-        clearDB(testdb, true, true);
+        clearDB(testdb);
         EXPECT_NO_THROW(
             adds3_resp =
                 client_->future_addS3SstFilesToDB(adds3_req_sstdir1).get());
@@ -398,7 +406,7 @@ TEST_F(AdminHandlerTestBase, AddS3SstFilesToDBTest) {
         FLAGS_rocksdb_allow_overlapping_keys = true;
         SCOPE_EXIT { FLAGS_rocksdb_allow_overlapping_keys = false; };
 
-        clearDB(testdb, true, true);
+        clearDB(testdb);
         writeToDB(testdb, "1", "1_1");
         EXPECT_NO_THROW(
             adds3_resp =
@@ -409,14 +417,16 @@ TEST_F(AdminHandlerTestBase, AddS3SstFilesToDBTest) {
       // 6th, ingest behind to existing DB from sstDir1 -> ok
       // and, data is indeed ingested behind
       {
+        FLAGS_test_db_create_with_allow_ingest_behind = true;
         FLAGS_rocksdb_allow_overlapping_keys = true;
         adds3_req_sstdir1.set_ingest_behind(true);
         SCOPE_EXIT {
+          FLAGS_test_db_create_with_allow_ingest_behind = false;
           FLAGS_rocksdb_allow_overlapping_keys = false;
           adds3_req_sstdir1.set_ingest_behind(false);
         };
 
-        clearDB(testdb, true, true);
+        clearDB(testdb);
         writeToDB(testdb, "1", "1_1");
         EXPECT_NO_THROW(
             adds3_resp =
@@ -431,7 +441,7 @@ TEST_F(AdminHandlerTestBase, AdminAPIsWithWriteMeta) {
   // verify: meta is written with init val (db_name, empty s3_path/bucket) at
   // addDB
   const string testdb = generateDBName();
-  addDBWithRole(testdb, "MASTER", false);
+  addDBWithRole(testdb, "MASTER");
   auto meta = handler_->getMetaData(testdb);
   verifyMeta(meta, testdb, true, "", "");
 
@@ -513,7 +523,7 @@ TEST_F(AdminHandlerTestBase, AdminAPIsWithWriteMeta) {
 
       // Verify: clearDB with reopen will have a DBMetaData with init val
       EXPECT_TRUE(handler_->clearMetaData(testdb));
-      clearDB(testdb, true, false);
+      clearDB(testdb);
       auto meta_after_clearreopen = handler_->getMetaData(testdb);
       verifyMeta(meta_after_clearreopen, testdb, true, "", "");
 
@@ -539,7 +549,7 @@ TEST_F(AdminHandlerTestBase, AdminAPIsWithWriteMeta) {
 }
 
 TEST_F(AdminHandlerTestBase, CheckDB) {
-  addDBWithRole("imp00001", "MASTER", false);
+  addDBWithRole("imp00001", "MASTER");
   auto dbs = db_manager_->getAllDBNames();
   EXPECT_EQ(dbs.size(), (unsigned)1);
   EXPECT_NE(std::find(dbs.begin(), dbs.end(), "imp00001"), dbs.end());
@@ -556,7 +566,7 @@ TEST_F(AdminHandlerTestBase, CheckDB) {
   EXPECT_EQ(res.wal_ttl_seconds, 123);
   EXPECT_EQ(res.last_update_timestamp_ms, 0);
 
-  addDBWithRole("imp00002", "MASTER", false);
+  addDBWithRole("imp00002", "MASTER");
   dbs = db_manager_->getAllDBNames();
   EXPECT_NE(std::find(dbs.begin(), dbs.end(), "imp00002"), dbs.end());
 
