@@ -1420,6 +1420,9 @@ void AdminHandler::async_tm_clearDB(
     LOG(INFO) << "Open DB: " << request->db_name;
     admin::AdminException e;
     e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+    if (request->__isset.allow_ingest_behind && request->allow_ingest_behind) {
+      options.allow_ingest_behind = true;
+    }
     auto db = GetRocksdb(db_path, options);
     if (db == nullptr) {
       e.message = "Failed to open DB: " + request->db_name;

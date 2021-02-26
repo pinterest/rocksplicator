@@ -4,8 +4,9 @@
 #include <list>
 #include <string>
 
-#include "boost/filesystem.hpp"
 #include "gtest/gtest.h"
+#include "boost/filesystem.hpp"
+#include "common/s3util.h"
 #include "rocksdb/db.h"
 #include "rocksdb/sst_file_writer.h"
 
@@ -35,4 +36,14 @@ void createSstWithContent(const string& sst_filename,
 
   s = sst_file_writer.Finish();
   EXPECT_TRUE(s.ok());
+}
+
+void putObjectFromLocalToS3(const string& local_absolute_path,
+                            const string& s3_bucket,
+                            const string& s3_fullpath) {
+  std::shared_ptr<common::S3Util> s3_util =
+      common::S3Util::BuildS3Util(50, s3_bucket);
+  auto copy_resp = s3_util->putObject(s3_fullpath, local_absolute_path);
+  ASSERT_TRUE(copy_resp.Error().empty())
+      << "Error happened when uploading files to S3: " + copy_resp.Error();
 }
