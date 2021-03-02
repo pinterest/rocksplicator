@@ -19,6 +19,8 @@
 package com.pinterest.rocksplicator.spectator;
 
 import com.pinterest.rocksplicator.ConfigGenerator;
+import com.pinterest.rocksplicator.ConfigGeneratorFactory;
+import com.pinterest.rocksplicator.ConfigGeneratorIface;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
 import com.pinterest.rocksplicator.publisher.ShardMapPublisher;
 import com.pinterest.rocksplicator.publisher.ShardMapPublisherBuilder;
@@ -47,13 +49,14 @@ public class ConfigGeneratorClusterSpectatorImpl implements ClusterSpectator {
   private final String configPostUri;
   private final String shardMapZkSvr;
   private final String shardMapDownloadDir;
+  private final boolean enableCurrentStatesRouter;
 
   /**
    * Live State.
    */
   private HelixManager helixManager = null;
   private ShardMapPublisher<JSONObject> shardMapPublisher = null;
-  private ConfigGenerator configGenerator = null;
+  private ConfigGeneratorIface configGenerator = null;
   private RocksplicatorMonitor monitor = null;
   private ClusterShardMapAgent clusterShardMapAgent = null;
 
@@ -63,13 +66,15 @@ public class ConfigGeneratorClusterSpectatorImpl implements ClusterSpectator {
       final String instanceName,
       final String configPostUri,
       final String zkShardMapConnectString,
-      final String shardMapDownloadDir) {
+      final String shardMapDownloadDir,
+      final boolean enableCurrentStatesRouter) {
     this.zkHelixConnectString = zkHelixConnectString;
     this.clusterName = clusterName;
     this.instanceName = instanceName;
     this.configPostUri = configPostUri;
     this.shardMapZkSvr = zkShardMapConnectString;
     this.shardMapDownloadDir = shardMapDownloadDir;
+    this.enableCurrentStatesRouter = enableCurrentStatesRouter;
     this.LOGGER = LoggerFactory.getLogger(String.format("ConfigGenerator-%s", clusterName));
   }
 
@@ -151,16 +156,15 @@ public class ConfigGeneratorClusterSpectatorImpl implements ClusterSpectator {
      * ConfigGenerator should also start listening to the ExternalView
      * notifications and publishing ShardMap config here.
      */
-    this.configGenerator = new ConfigGenerator(
-        this.clusterName,
-        this.helixManager,
-        this.shardMapPublisher,
-        this.monitor, null);
+    this.configGenerator = new ConfigGeneratorFactory(this.enableCurrentStatesRouter)
+        .createConfigGenerator(
+            this.clusterName,
+            this.helixManager,
+            this.shardMapPublisher,
+            this.monitor, null);
 
     LOGGER.info(String.format("Starging HelixManager Notification to ConfigGenerator"
         + " to zkSvr: %s for cluster=%s", zkHelixConnectString, clusterName));
-    this.helixManager.addExternalViewChangeListener(configGenerator);
-    this.helixManager.addConfigChangeListener(configGenerator);
 
     /**
      * If the zkShardMapServer is given and the download directory is given,

@@ -51,7 +51,7 @@ import java.util.stream.Collectors;
  * Hence is is recommended that this class be only used in either Spectator as a Stand Alone mode
  * or the DistributedSpectator which provides hooks for leadership lost v/s leadership acquired.
  */
-public class CurrentStatesConfigGenerator implements RoutingTableChangeListener, Closeable {
+public class CurrentStatesConfigGenerator implements RoutingTableChangeListener, ConfigGeneratorIface {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConfigGenerator.class);
   private final String clusterName;

@@ -67,6 +67,7 @@ public class Spectator {
   private static final String configPostUrl = "configPostUrl";
   private static final String shardMapZkSvrArg = "shardMapZkSvr";
   private static final String shardMapDownloadDirArg = "shardMapDownloadDir";
+  private static final String enableCurrentStatesRouterArgs = "enableCurrentStatesRouter";
 
   private static final String handoffEventHistoryzkSvr = "handoffEventHistoryzkSvr";
   private static final String handoffEventHistoryConfigPath = "handoffEventHistoryConfigPath";
@@ -84,9 +85,10 @@ public class Spectator {
   private final String shardMapDownloadDir;
   private final String clusterName;
   private final String instanceName;
+  private final boolean enableCurrentStatesRouter;
   private LeaderEventsLogger spectatorLeaderEventsLogger;
 
-  private ConfigGenerator configGenerator = null;
+  private ConfigGeneratorIface configGenerator = null;
 
   private static Options constructCommandLineOptions() {
     Option zkServerOption =
@@ -135,6 +137,13 @@ public class Spectator {
     shardMapDownloadDirOption.setRequired(false);
     shardMapDownloadDirOption.setArgName(shardMapDownloadDirArg);
 
+    Option enableCurrentStatesRouterOption =
+        OptionBuilder.withLongOpt(enableCurrentStatesRouterArgs)
+            .withDescription("Enable to use currentStates based RoutingTable for ConfigGenerator").create();
+    enableCurrentStatesRouterOption.setArgs(0);
+    enableCurrentStatesRouterOption.setRequired(false);
+    enableCurrentStatesRouterOption.setArgName(enableCurrentStatesRouterArgs);
+
     Option handoffEventHistoryzkSvrOption =
         OptionBuilder.withLongOpt(handoffEventHistoryzkSvr)
             .withDescription(
@@ -182,6 +191,7 @@ public class Spectator {
         .addOption(configPostUrlOption)
         .addOption(shardMapZkSvrOption)
         .addOption(shardMapDownloadDirOption)
+        .addOption(enableCurrentStatesRouterOption)
         .addOption(handoffEventHistoryzkSvrOption)
         .addOption(handoffEventHistoryConfigPathOption)
         .addOption(handoffEventHistoryConfigTypeOption)
@@ -213,7 +223,7 @@ public class Spectator {
     final String shardMapZkSvr = cmd.getOptionValue(shardMapZkSvrArg, "");
     final String shardMapDownloadDir = cmd.getOptionValue(shardMapDownloadDirArg, "");
     final String instanceName = host + "_" + port;
-
+    final boolean enableCurrentStatesRouter = cmd.hasOption(enableCurrentStatesRouterArgs);
     final String zkEventHistoryStr = cmd.getOptionValue(handoffEventHistoryzkSvr, "");
     final String resourceConfigPath = cmd.getOptionValue(handoffEventHistoryConfigPath, "");
     final String resourceConfigType = cmd.getOptionValue(handoffEventHistoryConfigType, "");
@@ -236,7 +246,7 @@ public class Spectator {
     final Spectator spectator = new Spectator(
         zkConnectString, clusterName, instanceName,
         postUrl, shardMapZkSvr, shardMapDownloadDir,
-        spectatorLeaderEventsLogger);
+        spectatorLeaderEventsLogger, enableCurrentStatesRouter);
 
     CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString, new ExponentialBackoffRetry(1000, 3));
 
@@ -288,12 +298,13 @@ public class Spectator {
 
   public Spectator(String zkConnectString, String clusterName, String instanceName,
                    String httpPostUri, String shardMapZkSvr, String shardMapDownloadDir,
-                   LeaderEventsLogger spectatorLeaderEventsLogger) throws Exception {
+                   LeaderEventsLogger spectatorLeaderEventsLogger, boolean enableCurrentStatesRouter) throws Exception {
     this.clusterName = clusterName;
     this.instanceName = instanceName;
     this.httpPostUri = httpPostUri;
     this.shardMapZkSvr = shardMapZkSvr;
     this.shardMapDownloadDir = shardMapDownloadDir;
+    this.enableCurrentStatesRouter = enableCurrentStatesRouter;
 
     this.helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
     this.monitor = new RocksplicatorMonitor(clusterName, instanceName);
@@ -324,17 +335,12 @@ public class Spectator {
         publisherBuilder = publisherBuilder.withZkShardMap(shardMapZkSvr);
       }
 
-      this.configGenerator = new ConfigGenerator(
+      this.configGenerator = new ConfigGeneratorFactory(this.enableCurrentStatesRouter)
+          .createConfigGenerator(
           helixManager.getClusterName(),
           helixManager,
           publisherBuilder.build(),
           monitor, new ExternalViewLeaderEventsLoggerImpl(spectatorLeaderEventsLogger));
-
-      /**
-       * Add to the helixManager, message handlers.
-       */
-      helixManager.addExternalViewChangeListener(configGenerator);
-      helixManager.addConfigChangeListener(configGenerator);
 
       /**
        * If the zkShardMapServer is given and the download directory is given,

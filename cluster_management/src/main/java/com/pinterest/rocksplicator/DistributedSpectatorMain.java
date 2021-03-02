@@ -68,6 +68,7 @@ public class DistributedSpectatorMain {
   private static final String shardMapPostUriPattern = "shardMapPostUriPattern";
   private static final String shardMapZkSvrArg = "shardMapZkSvr";
   private static final String shardMapDownloadDirArg = "shardMapDownloadDir";
+  private static final String enableCurrentStatesRouterArgs = "enableCurrentStatesRouter";
 
   // hack: OptionalBuilder is not thread safe
   @SuppressWarnings("static-access")
@@ -134,6 +135,13 @@ public class DistributedSpectatorMain {
     shardMapDownloadDirOption.setRequired(false);
     shardMapDownloadDirOption.setArgName(shardMapDownloadDirArg);
 
+    Option enableCurrentStatesRouterOption =
+        OptionBuilder.withLongOpt(enableCurrentStatesRouterArgs)
+            .withDescription("Enable to use currentStates based RoutingTable for ConfigGenerator").create();
+    enableCurrentStatesRouterOption.setArgs(0);
+    enableCurrentStatesRouterOption.setRequired(false);
+    enableCurrentStatesRouterOption.setArgName(enableCurrentStatesRouterArgs);
+
     Options options = new Options();
     options.addOption(helpOption)
         .addOption(zkServerOption)
@@ -142,7 +150,8 @@ public class DistributedSpectatorMain {
         .addOption(portOption)
         .addOption(shardMapPostUriPatternOption)
         .addOption(shardMapZkSvrOption)
-        .addOption(shardMapDownloadDirOption);
+        .addOption(shardMapDownloadDirOption)
+        .addOption(enableCurrentStatesRouterOption);
 
     return options;
   }
@@ -176,7 +185,8 @@ public class DistributedSpectatorMain {
       final String controllerName,
       final String shardMapPostUriPattern,
       final String shardMapZkSvr,
-      final String shardMapDownloadDir) {
+      final String shardMapDownloadDir,
+      final boolean enableCurrentStatesRouter) {
     HelixManager manager = null;
     try {
       manager = HelixManagerFactory.getZKHelixManager(
@@ -190,7 +200,8 @@ public class DistributedSpectatorMain {
               new ConfigGeneratorClusterSpectatorFactory(
                   shardMapPostUriPattern,
                   shardMapZkSvr,
-                  shardMapDownloadDir));
+                  shardMapDownloadDir,
+                  enableCurrentStatesRouter));
 
       StateMachineEngine stateMach = manager.getStateMachineEngine();
       stateMach.registerStateModelFactory("LeaderStandby", stateModelFactory);
@@ -215,6 +226,7 @@ public class DistributedSpectatorMain {
     final String configPostUriPattern = cmd.getOptionValue(shardMapPostUriPattern, "");
     final String shardMapZkSvr = cmd.getOptionValue(shardMapZkSvrArg, "");
     final String shardMapDownloadDir = cmd.getOptionValue(shardMapDownloadDirArg, "");
+    final boolean enableCurrentStatesRouter = cmd.hasOption(enableCurrentStatesRouterArgs);
 
     String instanceId = String.format("%s_%d", hostName, portInt);
 
@@ -222,7 +234,14 @@ public class DistributedSpectatorMain {
         + clusterName + ", spectatorControllerName:" + instanceId + ", mode:" + "DISTRIBUTED");
 
     HelixManager manager =
-        startHelixController(zkConnectString, clusterName, instanceId, configPostUriPattern, shardMapZkSvr, shardMapDownloadDir);
+        startHelixController(
+            zkConnectString,
+            clusterName,
+            instanceId,
+            configPostUriPattern,
+            shardMapZkSvr,
+            shardMapDownloadDir,
+            enableCurrentStatesRouter);
 
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(manager));
 
