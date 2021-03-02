@@ -51,6 +51,8 @@ using admin::CloseDBRequest;
 using admin::DBMetaData;
 using admin::RestoreDBFromS3Request;
 using admin::RestoreDBFromS3Response;
+using admin::SetDBOptionsRequest;
+using admin::SetDBOptionsResponse;
 using apache::thrift::HeaderClientChannel;
 using apache::thrift::RpcOptions;
 using apache::thrift::ThriftServer;
@@ -278,6 +280,27 @@ class AdminHandlerTestBase : public testing::Test {
   // this is very hacky, since db_manager is a unique_ptr inside AdminHandler
   ApplicationDBManager* db_manager_;
 };
+
+TEST_F(AdminHandlerTestBase, SetRocksDBOptions) {
+  const string testdb = generateDBName();
+  addDBWithRole(testdb, "MASTER");
+  auto app_db = db_manager_->getDB(testdb, nullptr);
+
+  SetDBOptionsResponse resp;
+  SetDBOptionsRequest req;
+  req.set_db_name(testdb);
+
+  // Verify: set mutable db options -> ok
+  EXPECT_FALSE(app_db->rocksdb()->GetOptions().disable_auto_compactions);
+  req.options = {{"disable_auto_compactions", "true"}};
+  EXPECT_NO_THROW(resp = client_->future_setDBOptions(req).get());
+  EXPECT_TRUE(app_db->rocksdb()->GetOptions().disable_auto_compactions);
+
+  // Verify: set immutable db options -> !ok
+  EXPECT_FALSE(app_db->rocksdb()->GetOptions().allow_ingest_behind);
+  req.options = {{"allow_ingest_behind", "true"}};
+  EXPECT_THROW(resp = client_->future_setDBOptions(req).get(), AdminException);
+}
 
 TEST_F(AdminHandlerTestBase, AddS3SstFilesToDBTest) {
   const string testdb = generateDBName();
