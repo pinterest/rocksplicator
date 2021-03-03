@@ -26,6 +26,7 @@
 #include <thread>
 #include <unordered_set>
 #include <vector>
+#include <map>
 
 #include "boost/filesystem.hpp"
 #include "common/identical_name_thread_factory.h"
@@ -1267,6 +1268,18 @@ void AdminHandler::async_tm_checkDB(
         response.set_last_update_timestamp_ms(extractor.ms);
       }
     }
+  }
+
+  // TODO: get options as str for specified optionField
+
+  if (request->__isset.include_meta) {
+    auto meta = getMetaData(request->db_name);
+    std::map<std::string, std::string> metas;
+    metas["s3_bucket"] = meta.s3_bucket;
+    metas["s3_path"] = meta.s3_path;
+    metas["last_kafka_msg_timestamp_ms"] = std::to_string(meta.last_kafka_msg_timestamp_ms);
+    response.db_metas = metas;
+    response.__isset.db_metas = true;
   }
 
   callback->result(response);
