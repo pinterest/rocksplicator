@@ -22,8 +22,11 @@ public class ConfigGeneratorFactory {
       final RocksplicatorMonitor monitor,
       final ExternalViewLeaderEventLogger externalViewLeaderEventLogger) throws Exception {
     if (enableCurrentStatesBasedRoutingTableConfigGenerator) {
-      return new CurrentStatesConfigGenerator(clusterName, helixManager, shardMapPublisher, monitor,
-          externalViewLeaderEventLogger);
+      CurrentStatesConfigGenerator
+          generator =
+          new CurrentStatesConfigGenerator(clusterName, helixManager, shardMapPublisher, monitor,
+              externalViewLeaderEventLogger);
+      return generator;
     } else {
       ConfigGenerator configGenerator =
           new ConfigGenerator(clusterName, helixManager, shardMapPublisher, monitor,

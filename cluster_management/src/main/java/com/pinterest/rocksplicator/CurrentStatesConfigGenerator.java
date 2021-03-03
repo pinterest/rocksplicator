@@ -7,13 +7,23 @@ import com.pinterest.rocksplicator.utils.AutoCloseableLock;
 import com.pinterest.rocksplicator.utils.ExternalViewUtils;
 
 import com.google.common.base.Stopwatch;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixManager;
+import org.apache.helix.NotificationContext;
 import org.apache.helix.PropertyType;
+import org.apache.helix.api.listeners.ExternalViewChangeListener;
+import org.apache.helix.api.listeners.IdealStateChangeListener;
+import org.apache.helix.api.listeners.InstanceConfigChangeListener;
+import org.apache.helix.api.listeners.LiveInstanceChangeListener;
+import org.apache.helix.api.listeners.ResourceConfigChangeListener;
 import org.apache.helix.api.listeners.RoutingTableChangeListener;
 import org.apache.helix.model.ExternalView;
+import org.apache.helix.model.IdealState;
 import org.apache.helix.model.InstanceConfig;
 import org.apache.helix.model.LiveInstance;
+import org.apache.helix.model.ResourceConfig;
 import org.apache.helix.spectator.RoutingTableProvider;
 import org.apache.helix.spectator.RoutingTableSnapshot;
 import org.json.simple.JSONArray;
@@ -21,7 +31,6 @@ import org.json.simple.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -30,6 +39,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
@@ -51,15 +62,24 @@ import java.util.stream.Collectors;
  * Hence is is recommended that this class be only used in either Spectator as a Stand Alone mode
  * or the DistributedSpectator which provides hooks for leadership lost v/s leadership acquired.
  */
-public class CurrentStatesConfigGenerator implements RoutingTableChangeListener, ConfigGeneratorIface {
+public class CurrentStatesConfigGenerator
+    implements RoutingTableChangeListener,
+               ConfigGeneratorIface,
+               ExternalViewChangeListener,
+               LiveInstanceChangeListener,
+               InstanceConfigChangeListener,
+               ResourceConfigChangeListener,
+               IdealStateChangeListener {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConfigGenerator.class);
   private final String clusterName;
   private final Map<String, String> hostToHostWithDomain;
   private final HelixManager helixManager;
+  private final HelixAdmin helixAdmin;
   private final ReentrantLock synchronizedCallbackLock;
   private final ShardMapPublisher shardMapPublisher;
   private final RocksplicatorMonitor monitor;
+  private final ConcurrentMap<String, IdealState> idealStateMap;
   private ExternalViewLeaderEventLogger externalViewLeaderEventLogger;
   private RoutingTableProvider routingTableProvider;
 
@@ -68,17 +88,28 @@ public class CurrentStatesConfigGenerator implements RoutingTableChangeListener,
       final HelixManager helixManager,
       final ShardMapPublisher<JSONObject> shardMapPublisher,
       final RocksplicatorMonitor monitor,
-      final ExternalViewLeaderEventLogger externalViewLeaderEventLogger) {
+      final ExternalViewLeaderEventLogger externalViewLeaderEventLogger) throws Exception {
     this.clusterName = clusterName;
     this.helixManager = helixManager;
+    this.helixAdmin = helixManager.getClusterManagmentTool();
     this.shardMapPublisher = shardMapPublisher;
     this.hostToHostWithDomain = new HashMap<String, String>();
     this.monitor = monitor;
     this.synchronizedCallbackLock = new ReentrantLock();
     this.externalViewLeaderEventLogger = externalViewLeaderEventLogger;
 
-    this.routingTableProvider = new RoutingTableProvider(this.helixManager, PropertyType.CURRENTSTATES);
+    this.idealStateMap = new ConcurrentHashMap<>();
+
+    this.routingTableProvider =
+        new RoutingTableProvider(this.helixManager, PropertyType.CURRENTSTATES);
+
     this.routingTableProvider.addRoutingTableChangeListener(this, this);
+
+    helixManager.addResourceConfigChangeListener(this);
+    helixManager.addIdealStateChangeListener(this);
+    helixManager.addExternalViewChangeListener(this);
+    helixManager.addLiveInstanceChangeListener(this);
+    helixManager.addInstanceConfigChangeListener(this);
   }
 
   private void logUncheckedException(Runnable r) {
@@ -86,8 +117,140 @@ public class CurrentStatesConfigGenerator implements RoutingTableChangeListener,
       r.run();
     } catch (Throwable throwable) {
       this.monitor.incrementConfigGeneratorFailCount();
-      LOG.error("Exception in generateShardConfig()", throwable);
+      LOG.error(String.format("cluster:%s Exception in generateShardConfig()", clusterName), throwable);
       throw throwable;
+    }
+  }
+
+  @Override
+  public void onResourceConfigChange(List<ResourceConfig> resourceConfigs,
+                                     NotificationContext context) {
+    try (AutoCloseableLock autoLock = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
+      logUncheckedException(new Runnable() {
+        @Override
+        public void run() {
+          for (ResourceConfig resourceConfig : resourceConfigs) {
+            String resourceName = resourceConfig.getResourceName();
+            if (resourceName == null || resourceName.startsWith("PARTICIPANT_LEADER")) {
+              continue;
+            }
+            LOG.error(String
+                .format(
+                    "Got ResourceConfig for cluster: %s, resource: %s, resource_type: %s, "
+                        + "resourceConfig: %s",
+                    clusterName,
+                    resourceConfig.getResourceName(),
+                    resourceConfig.getResourceType(),
+                    resourceConfig));
+          }
+        }
+      });
+      uncheckedGenerateConfig(this.routingTableProvider.getRoutingTableSnapshot());
+    }
+  }
+
+  @Override
+  public void onIdealStateChange(List<IdealState> idealStates, NotificationContext changeContext)
+      throws InterruptedException {
+
+    try (AutoCloseableLock autoLock = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
+      logUncheckedException(new Runnable() {
+        @Override
+        public void run() {
+          List<String>
+              resources =
+              helixManager.getClusterManagmentTool().getResourcesInCluster(clusterName);
+
+          for (IdealState idealState : idealStates) {
+            String resourceName = idealState.getResourceName();
+            if (resourceName == null || resourceName.startsWith("PARTICIPANT_LEADER")) {
+              continue;
+            }
+
+            if (isTaskResource(idealState)) {
+              continue;
+            }
+
+            idealStateMap.put(resourceName, idealState);
+
+            LOG.error(String
+                .format(
+                    "Got IdealState for cluster: %s, resource: %s, resource_type:%s idealState: %s",
+                    clusterName,
+                    idealState.getResourceName(),
+                    idealState.getResourceType(),
+                    idealState));
+          }
+
+          idealStateMap.keySet().retainAll(resources);
+        }
+      });
+      uncheckedGenerateConfig(this.routingTableProvider.getRoutingTableSnapshot());
+    }
+  }
+
+
+  @Override
+  public void onExternalViewChange(List<ExternalView> externalViewList,
+                                   NotificationContext changeContext) {
+    try (AutoCloseableLock autoLock = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
+      logUncheckedException(new Runnable() {
+        @Override
+        public void run() {
+          for (ExternalView externalView : externalViewList) {
+            String resourceName = externalView.getResourceName();
+            if (resourceName == null || resourceName.startsWith("PARTICIPANT_LEADER")) {
+              continue;
+            }
+            LOG.error(String
+                .format("Got ExternalView for cluster: %s, resource: %s, externalView: %s",
+                    clusterName,
+                    externalView.getResourceName(),
+                    externalView));
+          }
+        }
+      });
+      uncheckedGenerateConfig(this.routingTableProvider.getRoutingTableSnapshot());
+    }
+  }
+
+  @Override
+  public void onInstanceConfigChange(List<InstanceConfig> instanceConfigs,
+                                     NotificationContext context) {
+    try (AutoCloseableLock autoLock = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
+      logUncheckedException(new Runnable() {
+        @Override
+        public void run() {
+          for (InstanceConfig instanceConfig : instanceConfigs) {
+            LOG.error(String
+                .format("Got InstanceConfig for cluster: %s, instance: %s, instanceConfig: %s",
+                    clusterName,
+                    instanceConfig.getInstanceName(),
+                    instanceConfig));
+          }
+        }
+      });
+      uncheckedGenerateConfig(this.routingTableProvider.getRoutingTableSnapshot());
+    }
+  }
+
+  @Override
+  public void onLiveInstanceChange(List<LiveInstance> liveInstances,
+                                   NotificationContext changeContext) {
+    try (AutoCloseableLock autoLock = AutoCloseableLock.lock(this.synchronizedCallbackLock)) {
+      logUncheckedException(new Runnable() {
+        @Override
+        public void run() {
+          for (LiveInstance liveInstance : liveInstances) {
+            LOG.error(String
+                .format("Got LiveInstance for cluster: %s, instance: %s, liveInstance: %s",
+                    clusterName,
+                    liveInstance.getInstanceName(),
+                    liveInstance));
+          }
+        }
+      });
+      uncheckedGenerateConfig(this.routingTableProvider.getRoutingTableSnapshot());
     }
   }
 
@@ -106,22 +269,18 @@ public class CurrentStatesConfigGenerator implements RoutingTableChangeListener,
     }
   }
 
+  /***
+   * Lock idealState changes here...
+   */
   private void uncheckedGenerateConfig(RoutingTableSnapshot routingTableSnapshot) {
     final long generationStartTimeMillis = System.currentTimeMillis();
 
     this.monitor.incrementConfigGeneratorCalledCount();
     Stopwatch stopwatch = Stopwatch.createStarted();
 
-    Collection<ExternalView> externalViews = routingTableSnapshot.getExternalViews();
     Collection<InstanceConfig> instanceConfigs = routingTableSnapshot.getInstanceConfigs();
     Collection<LiveInstance> liveInstances = routingTableSnapshot.getLiveInstances();
     Collection<String> resources = routingTableSnapshot.getResources();
-
-    final Map<String, ExternalView> externalViewMap = externalViews.stream()
-        .filter(externalView -> externalView != null)
-        .filter(externalView -> externalView.getResourceName() != null)
-        .filter(externalView -> !isTaskResource(externalView))
-        .collect(Collectors.toMap(e -> e.getResourceName(), v -> v));
 
     final Map<String, LiveInstance> liveInstancesMap = liveInstances.stream()
         .filter(liveInstance -> liveInstance != null)
@@ -131,7 +290,6 @@ public class CurrentStatesConfigGenerator implements RoutingTableChangeListener,
     final Set<String> validResources = resources.stream()
         .filter(resource -> resource != null)
         .filter(resource -> !resource.startsWith("PARTICIPANT_LEADER"))
-        .filter(resource -> externalViewMap.containsKey(resource))
         .collect(Collectors.toSet());
 
     final Map<String, InstanceConfig> instanceConfigMap = instanceConfigs.stream()
@@ -143,16 +301,26 @@ public class CurrentStatesConfigGenerator implements RoutingTableChangeListener,
         .filter(instanceConfig -> liveInstancesMap.get(instanceConfig.getInstanceName()) != null)
         .collect(Collectors.toMap(instanceConfig -> instanceConfig.getInstanceName(), v -> v));
 
-    List<ExternalView>
-        externalViewsToProcess =
-        Lists.newArrayListWithCapacity(externalViewMap.size());
+    List<ExternalView> externalViewsToProcess =
+        Lists.newArrayListWithCapacity(idealStateMap.size());
+
     Set<String> existingHosts = new HashSet<>();
     JSONObject jsonClusterShardMap = new JSONObject();
 
     Set<String> disabledHosts = new HashSet<>();
 
     for (String resource : validResources) {
-      ExternalView externalView = externalViewMap.get(resource);
+      IdealState idealState = idealStateMap.get(resource);
+      if (idealState == null) {
+        continue;
+      }
+      if (isTaskResource(idealState)) {
+        continue;
+      }
+
+      ExternalView
+          externalView =
+          createExternalView(idealStateMap.get(resource), routingTableSnapshot);
 
       // compose resource config
       JSONObject resourceConfig = new JSONObject();
@@ -222,8 +390,8 @@ public class CurrentStatesConfigGenerator implements RoutingTableChangeListener,
      * Finally publish the shard_map in json_format to multiple configured publishers.
      */
     shardMapPublisher.publish(
-        validResources.stream().collect(Collectors.toSet()),
-        Lists.newArrayList(externalViewMap.values()),
+        externalViewsToProcess.stream().map(e -> e.getResourceName()).collect(Collectors.toSet()),
+        externalViewsToProcess,
         jsonClusterShardMap);
 
     long shardPostingTimeMillis = System.currentTimeMillis();
@@ -238,6 +406,36 @@ public class CurrentStatesConfigGenerator implements RoutingTableChangeListener,
       externalViewLeaderEventLogger.process(
           externalViewsToProcess, disabledHosts, generationStartTimeMillis, shardPostingTimeMillis);
     }
+  }
+
+  private ExternalView createExternalView(IdealState idealState, RoutingTableSnapshot snapshot) {
+    // First number of partitions
+    int numPartitions = idealState.getNumPartitions();
+    String stateModel = idealState.getStateModelDefRef();
+    List<String> states = ImmutableList.of();
+    if (stateModel.equals("LeaderFollower")) {
+      states = ImmutableList.of("LEADER", "FOLLOWER");
+    } else if (stateModel.equals("MasterSlave")) {
+      states = ImmutableList.of("MASTER", "SLAVE");
+    } else if (stateModel.equals("OnlineOffline")) {
+      states = ImmutableList.of("ONLINE");
+    }
+    ExternalView externalView = new ExternalView(idealState.getResourceName());
+    externalView.setStat(idealState.getStat());
+    externalView.setBucketSize(idealState.getBucketSize());
+    externalView.setBatchMessageMode(idealState.getBatchMessageMode());
+    for (int partId = 0; partId < numPartitions; ++partId) {
+      String helixPartitionName = String.format("%s_%s", idealState.getResourceName(), partId);
+      for (String state : states) {
+        List<InstanceConfig> instanceConfigs = snapshot.getInstancesForResource(
+            idealState.getResourceName(), helixPartitionName, state);
+        for (InstanceConfig instanceConfig : instanceConfigs) {
+          externalView.setState(helixPartitionName, instanceConfig.getInstanceName(), state);
+        }
+      }
+    }
+    externalView.getRecord().setSimpleField("NUM_PARTITIONS", Integer.toString(numPartitions));
+    return externalView;
   }
 
   private String getHostWithDomain(String host, InstanceConfig instanceConfig) {
@@ -260,16 +458,16 @@ public class CurrentStatesConfigGenerator implements RoutingTableChangeListener,
    * filter out resources with "Task" state model (ie. workflows and jobs);
    * only keep db resources from ideal states
    */
-  private boolean isTaskResource(ExternalView externalView) {
-    if (externalView != null) {
-      String stateMode = externalView.getStateModelDefRef();
+  private boolean isTaskResource(IdealState idealState) {
+    if (idealState != null) {
+      String stateMode = idealState.getStateModelDefRef();
       if (stateMode != null && stateMode.equals("Task")) {
         return true;
       }
     } else {
       LOG.error(
           "Did not remove resource from shard map generation, due to can't get ideal state for "
-              + externalView.getResourceName());
+              + idealState.getResourceName());
     }
     return false;
   }
