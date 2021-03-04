@@ -135,6 +135,13 @@ class ApplicationDBTestBase : public testing::Test {
   Options last_options_;
 };
 
+TEST_F(ApplicationDBTestBase, SetImmutableOptionsFail) {
+  EXPECT_FALSE(last_options_.allow_ingest_behind);
+  auto s = db_->rocksdb()->SetOptions({{"allow_ingest_behind", "true"}});
+  EXPECT_FALSE(s.ok());
+  EXPECT_FALSE(last_options_.allow_ingest_behind);
+}
+
 TEST_F(ApplicationDBTestBase, SetOptionsAndTakeEffect) {
   // Control: default has auto compaction on
   EXPECT_FALSE(last_options_.disable_auto_compactions);

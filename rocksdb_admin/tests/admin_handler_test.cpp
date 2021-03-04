@@ -51,6 +51,8 @@ using admin::CloseDBRequest;
 using admin::DBMetaData;
 using admin::RestoreDBFromS3Request;
 using admin::RestoreDBFromS3Response;
+using admin::SetDBOptionsRequest;
+using admin::SetDBOptionsResponse;
 using apache::thrift::HeaderClientChannel;
 using apache::thrift::RpcOptions;
 using apache::thrift::ThriftServer;
@@ -278,6 +280,27 @@ class AdminHandlerTestBase : public testing::Test {
   // this is very hacky, since db_manager is a unique_ptr inside AdminHandler
   ApplicationDBManager* db_manager_;
 };
+
+TEST_F(AdminHandlerTestBase, SetRocksDBOptions) {
+  const string testdb = generateDBName();
+  addDBWithRole(testdb, "MASTER");
+  auto app_db = db_manager_->getDB(testdb, nullptr);
+
+  SetDBOptionsResponse resp;
+  SetDBOptionsRequest req;
+  req.set_db_name(testdb);
+
+  // Verify: set mutable db options -> ok
+  EXPECT_FALSE(app_db->rocksdb()->GetOptions().disable_auto_compactions);
+  req.options = {{"disable_auto_compactions", "true"}};
+  EXPECT_NO_THROW(resp = client_->future_setDBOptions(req).get());
+  EXPECT_TRUE(app_db->rocksdb()->GetOptions().disable_auto_compactions);
+
+  // Verify: set immutable db options -> !ok
+  EXPECT_FALSE(app_db->rocksdb()->GetOptions().allow_ingest_behind);
+  req.options = {{"allow_ingest_behind", "true"}};
+  EXPECT_THROW(resp = client_->future_setDBOptions(req).get(), AdminException);
+}
 
 TEST_F(AdminHandlerTestBase, AddS3SstFilesToDBTest) {
   const string testdb = generateDBName();
@@ -549,10 +572,11 @@ TEST_F(AdminHandlerTestBase, AdminAPIsWithWriteMeta) {
 }
 
 TEST_F(AdminHandlerTestBase, CheckDB) {
-  addDBWithRole("imp00001", "MASTER");
+  const string testdb1 = generateDBName();
+  addDBWithRole(testdb1, "MASTER");
   auto dbs = db_manager_->getAllDBNames();
   EXPECT_EQ(dbs.size(), (unsigned)1);
-  EXPECT_NE(std::find(dbs.begin(), dbs.end(), "imp00001"), dbs.end());
+  EXPECT_NE(std::find(dbs.begin(), dbs.end(), testdb1), dbs.end());
 
   CheckDBRequest req;
   CheckDBResponse res;
@@ -560,23 +584,43 @@ TEST_F(AdminHandlerTestBase, CheckDB) {
 
   EXPECT_THROW(res = client_->future_checkDB(req).get(), AdminException);
 
-  req.db_name = "imp00001";
+  req.db_name = testdb1;
   EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
   EXPECT_EQ(res.seq_num, 0);
   EXPECT_EQ(res.wal_ttl_seconds, 123);
   EXPECT_EQ(res.last_update_timestamp_ms, 0);
+  EXPECT_FALSE(res.__isset.db_metas);
 
-  addDBWithRole("imp00002", "MASTER");
+  const string testdb2 = generateDBName();
+  addDBWithRole(testdb2, "MASTER");
   dbs = db_manager_->getAllDBNames();
-  EXPECT_NE(std::find(dbs.begin(), dbs.end(), "imp00002"), dbs.end());
+  EXPECT_NE(std::find(dbs.begin(), dbs.end(), testdb2), dbs.end());
 
-  deleteKeyFromDB("imp00002", "a");
-  req.db_name = "imp00002";
+  deleteKeyFromDB(testdb2, "a");
+  req.db_name = testdb2;
   EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
   EXPECT_EQ(res.seq_num, 1);
   EXPECT_EQ(res.wal_ttl_seconds, 123);
   // 1521000000 is 03/14/2018 @ 4:00am (UTC)
   EXPECT_GT(res.last_update_timestamp_ms, 1521000000);
+
+  // verify: checkDB get metadata
+  const string testdb3 = generateDBName();
+  addDBWithRole(testdb3, "MASTER");
+  auto meta = handler_->getMetaData(testdb3);
+  verifyMeta(meta, testdb3, true, "", "");
+
+  // write fake DBMetadata for <testdb3>
+  handler_->writeMetaData(testdb3, "fakes3bucket", "fakes3path");
+  meta = handler_->getMetaData(testdb3);
+  verifyMeta(meta, testdb3, true, "fakes3bucket", "fakes3path");
+
+  req.db_name = testdb3;
+  req.set_include_meta(true);
+  EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
+  EXPECT_TRUE(res.__isset.db_metas);
+  EXPECT_EQ(res.db_metas["s3_bucket"], "fakes3bucket");
+  EXPECT_EQ(res.db_metas["s3_path"], "fakes3path");
 }
 
 TEST(AdminHandlerTest, MetaData) {
