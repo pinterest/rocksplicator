@@ -26,6 +26,7 @@ import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
 import com.pinterest.rocksplicator.publisher.ShardMapPublisherBuilder;
 import com.pinterest.rocksplicator.task.BackupTaskFactory;
 import com.pinterest.rocksplicator.task.DedupTaskFactory;
+import com.pinterest.rocksplicator.task.IngestTaskFactory;
 import com.pinterest.rocksplicator.task.RestoreTaskFactory;
 
 import org.apache.commons.cli.CommandLine;
@@ -370,6 +371,8 @@ public class Participant {
           .put("Backup", new BackupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
       taskFactoryRegistry
           .put("Restore", new RestoreTaskFactory(clusterName, port, useS3Backup, s3BucketName));
+      taskFactoryRegistry.put(
+          "Ingest", new IngestTaskFactory(clusterName, instanceName.split("_")[0], port, s3Bucket));
     } else if (stateModelType.equals("LeaderFollower;Task")) {
       stateModelType = "LeaderFollower";
       stateModelFactory = new LeaderFollowerStateModelFactory(instanceName.split("_")[0],
@@ -380,6 +383,8 @@ public class Participant {
           .put("Backup", new BackupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
       taskFactoryRegistry
           .put("Restore", new RestoreTaskFactory(clusterName, port, useS3Backup, s3BucketName));
+      taskFactoryRegistry.put(
+          "Ingest", new IngestTaskFactory(clusterName, instanceName.split("_")[0], port, s3Bucket));
     } else if (stateModelType.equals("Task")) {
       taskFactoryRegistry
           .put("Dedup", new DedupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
