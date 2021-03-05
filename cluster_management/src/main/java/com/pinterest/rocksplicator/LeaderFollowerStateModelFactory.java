@@ -23,7 +23,6 @@ import com.pinterest.rocksplicator.eventstore.LeaderEventsCollector;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEventType;
 
-import com.google.common.base.Preconditions;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
@@ -43,7 +42,8 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * The LeaderFollower state machine has 5 possible states. There are 7 possible state transitions that
+ * The LeaderFollower state machine has 5 possible states. There are 7 possible state transitions
+ * that
  * we need to handle.
  *                         1           3             5
  *                LEADER  <-   FOLLOWER  <-   OFFLINE  ->  DROPPED
@@ -74,7 +74,8 @@ import java.util.concurrent.TimeUnit;
  *    d) changeDBRoleAndUpStream(me, "Follower", "Leader_ip_port") if Leader exists
  *
  * 4) Follower to Offline
- *    a) changeDBRoleAndUpStream(all_other_followers_or_offlines, "Follower", "live_leader_or_follower")
+ *    a) changeDBRoleAndUpStream(all_other_followers_or_offlines, "Follower",
+ *    "live_leader_or_follower")
  *    a) closeDB()
  *
  * 5) Offline to Dropped
@@ -87,6 +88,7 @@ import java.util.concurrent.TimeUnit;
  *    a) clearDB()
  */
 public class LeaderFollowerStateModelFactory extends StateModelFactory<StateModel> {
+
   private static final Logger LOG = LoggerFactory.getLogger(LeaderFollowerStateModelFactory.class);
 
   private final String host;
@@ -133,6 +135,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
 
 
   public static class LeaderFollowerStateModel extends StateModel {
+
     private static final Logger LOG = LoggerFactory.getLogger(LeaderFollowerStateModel.class);
 
     private final String resourceName;
@@ -240,8 +243,9 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           for (int i = 0; i < 600; ++i) {
             TimeUnit.SECONDS.sleep(1);
             long newLocalSeq = Utils.getLocalLatestSequenceNumber(dbName, adminPort);
-            LOG.error("Replicated [" + String.valueOf(localSeq) + ", " + String.valueOf(newLocalSeq) +
-              ") from " + hostWithHighestSeq + " for " + dbName);
+            LOG.error(
+                "Replicated [" + String.valueOf(localSeq) + ", " + String.valueOf(newLocalSeq) +
+                    ") from " + hostWithHighestSeq + " for " + dbName);
             localSeq = newLocalSeq;
             if (highestSeq <= localSeq) {
               LOG.error(dbName + " catched up!");
@@ -258,7 +262,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
 
         // changeDBRoleAndUpStream(me, "Leader")
         Utils.changeDBRoleAndUpStream("localhost", adminPort, dbName, "LEADER",
-        "", adminPort);
+            "", adminPort);
 
         // Get the latest external view and state map
         view = admin.getResourceExternalView(cluster, resourceName);
@@ -433,7 +437,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
         // local partition as error.
         if (!useS3Backup) {
           String hdfsPath = "/rocksplicator/" + cluster + "/" + dbName + "/" + snapshotHost + "_"
-            + String.valueOf(snapshotPort) + "/" + String.valueOf(System.currentTimeMillis());
+              + String.valueOf(snapshotPort) + "/" + String.valueOf(System.currentTimeMillis());
 
           // backup a snapshot from the upstream host, and restore it locally
           LOG.error("Backup " + dbName + " from " + snapshotHost);
@@ -443,14 +447,15 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           Utils.restoreLocalDB(adminPort, dbName, hdfsPath, snapshotHost, snapshotPort);
         } else {
           String s3Path = "backup/" + cluster + "/" + dbName + "/" + snapshotHost + "_"
-            + String.valueOf(snapshotPort) + "/" + String.valueOf(System.currentTimeMillis());
+              + String.valueOf(snapshotPort) + "/" + String.valueOf(System.currentTimeMillis());
 
           // backup a snapshot from the upstream host, and restore it locally
           LOG.error("S3 Backup " + dbName + " from " + snapshotHost);
           Utils.backupDBToS3(snapshotHost, snapshotPort, dbName, s3Bucket, s3Path);
           LOG.error("S3 Restore " + dbName + " from " + s3Path);
           Utils.closeDB(dbName, adminPort);
-          Utils.restoreLocalDBFromS3(adminPort, dbName, s3Bucket, s3Path, snapshotHost, snapshotPort);
+          Utils.restoreLocalDBFromS3(adminPort, dbName, s3Bucket, s3Path, snapshotHost,
+              snapshotPort);
         }
       }
     }
@@ -462,7 +467,8 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
       Utils.logTransitionMessage(message);
 
       try (Locker locker = new Locker(partitionMutex)) {
-        // changeDBRoleAndUpStream(all_other_followers_or_offlines, "Follower", "live_leader_or_follower")
+        // changeDBRoleAndUpStream(all_other_followers_or_offlines, "Follower",
+        // "live_leader_or_follower")
         HelixAdmin admin = context.getManager().getClusterManagmentTool();
         ExternalView view = admin.getResourceExternalView(cluster, resourceName);
         Map<String, String> stateMap = view.getStateMap(partitionName);

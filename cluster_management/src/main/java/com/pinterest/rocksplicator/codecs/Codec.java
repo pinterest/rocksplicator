@@ -18,5 +18,5 @@
 
 package com.pinterest.rocksplicator.codecs;
 
-public interface Codec<S, T> extends Encoder<S, T>, Decoder <T, S> {
+public interface Codec<S, T> extends Encoder<S, T>, Decoder<T, S> {
 }

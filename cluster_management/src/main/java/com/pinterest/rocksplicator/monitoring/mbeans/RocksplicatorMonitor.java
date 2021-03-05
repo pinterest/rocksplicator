@@ -85,7 +85,7 @@ public class RocksplicatorMonitor {
     }
   }
 
-  public void close () {
+  public void close() {
     try {
       unregister(getObjectName(getInstanceBeanName(instanceName)));
     } catch (MalformedObjectNameException e) {

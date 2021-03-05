@@ -123,7 +123,6 @@ public class ClientShardMapLeaderEventLoggerDriverTest {
             eventsLogger, zkTestServer.getConnectString());
     Thread.currentThread().sleep(1000);
 
-
     clientDriver.close();
     eventsLogger.close();
 

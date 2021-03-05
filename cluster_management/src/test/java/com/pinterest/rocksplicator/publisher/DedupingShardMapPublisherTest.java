@@ -47,13 +47,15 @@ public class DedupingShardMapPublisherTest {
     shardMapJsonObject.put("resource1", new JSONObject());
 
     deDupublisher.publish(resources, externalViews, shardMapJsonObject);
-    verify(mockPublisher, Mockito.times(1)).publish(resources, externalViews, shardMapJsonObject.toString());
+    verify(mockPublisher, Mockito.times(1))
+        .publish(resources, externalViews, shardMapJsonObject.toString());
 
     deDupublisher.publish(resources, externalViews, shardMapJsonObject);
     verifyNoMoreInteractions(mockPublisher);
 
     shardMapJsonObject.put("resource2", new JSONObject());
     deDupublisher.publish(resources, externalViews, shardMapJsonObject);
-    verify(mockPublisher, Mockito.times(1)).publish(resources, externalViews, shardMapJsonObject.toString());
+    verify(mockPublisher, Mockito.times(1))
+        .publish(resources, externalViews, shardMapJsonObject.toString());
   }
 }

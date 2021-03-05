@@ -513,7 +513,7 @@ public class Utils {
   }
 
   public static String getMetaLocation(String cluster, String resourceName) {
-    return  getMetaParentResourceLocation(cluster, resourceName) + "/resource_meta";
+    return getMetaParentResourceLocation(cluster, resourceName) + "/resource_meta";
   }
 
   public static String getMetaData(
@@ -564,7 +564,6 @@ public class Utils {
       }
     });
   }
-
 
 
   // partition name is in format: test_0
