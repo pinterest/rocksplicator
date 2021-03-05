@@ -1524,6 +1524,12 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     LOG(INFO) << "Already hosting " << meta.s3_bucket << "/" << meta.s3_path;
     callback->result(AddS3SstFilesToDBResponse());
     return;
+  } else {
+    LOG(INFO) << folly::stringPrintf(
+        "Current meta, s3_bucket: %s, s3_path: %s. Update with, s3_bucket: %s, "
+        "s3_path: %s",
+        meta.s3_bucket.c_str(), meta.s3_path.c_str(),
+        request->s3_bucket.c_str(), request->s3_path.c_str());
   }
 
   bool ingest_behind = request->__isset.ingest_behind && request->ingest_behind;

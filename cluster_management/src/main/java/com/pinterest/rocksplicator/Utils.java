@@ -19,6 +19,7 @@
 package com.pinterest.rocksplicator;
 
 import com.pinterest.rocksdb_admin.thrift.AddDBRequest;
+import com.pinterest.rocksdb_admin.thrift.AddS3SstFilesToDBRequest;
 import com.pinterest.rocksdb_admin.thrift.Admin;
 import com.pinterest.rocksdb_admin.thrift.AdminErrorCode;
 import com.pinterest.rocksdb_admin.thrift.AdminException;
@@ -287,7 +288,7 @@ public class Utils {
       CheckDBRequest req = new CheckDBRequest(dbName);
       return client.checkDB(req);
     } catch (TException e) {
-      LOG.error("Failed to check DB: ", e.toString());
+      LOG.error("Failed to check DB: ", e);
       throw new RuntimeException(e);
     }
   }
@@ -310,7 +311,7 @@ public class Utils {
       req.setInclude_meta(true);
       client.backupDB(req);
     } catch (TException e) {
-      LOG.error("Failed to backup DB: ", e.toString());
+      LOG.error("Failed to backup DB: ", e);
       throw new RuntimeException(e);
     }
   }
@@ -327,7 +328,7 @@ public class Utils {
       req.setShare_files_with_checksum(shareFilesWithChecksum);
       client.backupDB(req);
     } catch (TException e) {
-      LOG.error("Failed to backup DB: ", e.toString());
+      LOG.error("Failed to backup DB: ", e);
       throw new RuntimeException(e);
     }
   }
@@ -356,10 +357,28 @@ public class Utils {
           new RestoreDBRequest(dbName, hdfsPath, upsreamHost, (short) upstreamPort);
       client.restoreDB(req);
     } catch (TException e) {
-      LOG.error("Failed to restore DB: ", e.toString());
+      LOG.error("Failed to restore DB: ", e);
       throw new RuntimeException(e);
     }
   }
+
+  public static void ingestFromS3(String host, int adminPort, String dbName, boolean ingest_behind,
+                                  int downloadLimitMbs, String s3Bucket, String s3Path) {
+    LOG.error("(S3) Ingest " + dbName + " from " + s3Path
+        + ", ingest_behind=" + String.valueOf(ingest_behind));
+    try {
+      Admin.Client client = getAdminClient(host, adminPort);
+
+      AddS3SstFilesToDBRequest req = new AddS3SstFilesToDBRequest(dbName, s3Bucket, s3Path);
+      req.setS3_download_limit_mb(downloadLimitMbs);
+      req.setIngest_behind(ingest_behind);
+      client.addS3SstFilesToDB(req);
+    } catch (TException e) {
+      LOG.error("Failed to ingest DB: ", e);
+      throw new RuntimeException(e);
+    }
+  }
+
 
   /**
    * Backup the DB on the host to S3
@@ -381,7 +400,7 @@ public class Utils {
       req.setInclude_meta(true);
       client.backupDBToS3(req);
     } catch (TException e) {
-      LOG.error("Failed to backup DB: ", e.toString());
+      LOG.error("Failed to backup DB: ", e);
       throw new RuntimeException(e);
     }
   }
@@ -397,7 +416,7 @@ public class Utils {
       req.setLimit_mbs(limitMbs);
       client.backupDBToS3(req);
     } catch (TException e) {
-      LOG.error("Failed to backup DB: ", e.toString());
+      LOG.error("Failed to backup DB: ", e);
       throw new RuntimeException(e);
     }
   }
@@ -429,7 +448,7 @@ public class Utils {
           new RestoreDBFromS3Request(dbName, s3Bucket, s3Path, upsreamHost, (short) upstreamPort);
       client.restoreDBFromS3(req);
     } catch (TException e) {
-      LOG.error("Failed to restore DB: ", e.toString());
+      LOG.error("Failed to restore DB: ", e);
       throw new RuntimeException(e);
     }
   }
@@ -441,7 +460,7 @@ public class Utils {
       CompactDBRequest req = new CompactDBRequest(dbName);
       client.compactDB(req);
     } catch (TException e) {
-      LOG.error("Failed to dedup DB: ", e.toString());
+      LOG.error("Failed to dedup DB: ", e);
       throw new RuntimeException(e);
     }
   }
@@ -461,7 +480,7 @@ public class Utils {
       CheckDBResponse res = client.checkDB(req);
       return res.is_master;
     } catch (TException e) {
-      LOG.error("Failed to check DB: ", e.toString());
+      LOG.error("Failed to check DB: ", e);
       return false;
     }
   }
@@ -482,7 +501,7 @@ public class Utils {
       // TODO (rajathprasad): add a new field "is_leader" and use that instead.
       return res.is_master;
     } catch (TException e) {
-      LOG.error("Failed to check DB: ", e.toString());
+      LOG.error("Failed to check DB: ", e);
       return false;
     }
   }

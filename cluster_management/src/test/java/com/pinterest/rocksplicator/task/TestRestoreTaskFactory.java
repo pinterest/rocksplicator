@@ -54,7 +54,7 @@ public class TestRestoreTaskFactory extends TaskTestBase {
   @Override
   protected void startParticipant(String zkAddr, int i) {
     final String instanceName = PARTICIPANT_PREFIX + "_" + (_startPort + i);
-    Map<String, TaskFactory> taskFactoryReg = new HashMap();
+    Map<String, TaskFactory> taskFactoryReg = new HashMap<>();
     taskFactoryReg.put("Restore", new TestRestoreTaskFactory.DummyRestoreTaskFactory(CLUSTER_NAME,
         Integer.parseInt(instanceName.split("_")[1]), true, fakeS3Bucket));
     this._participants[i] = new MockParticipantManager(zkAddr, this.CLUSTER_NAME, instanceName);
