@@ -26,6 +26,7 @@ import org.junit.After;
 import org.junit.Before;
 
 public abstract class CodecTestBase {
+
   protected LeaderEventsHistory history;
 
   @Before

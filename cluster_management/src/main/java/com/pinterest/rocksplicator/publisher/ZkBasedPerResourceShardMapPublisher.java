@@ -243,7 +243,7 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
      * This is only used for testing purpose
      */
     if (syncPublish) {
-      while (! result.isDone()) {
+      while (!result.isDone()) {
         try {
           Thread.sleep(10);
         } catch (InterruptedException e) {
@@ -303,7 +303,7 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
            * This is only used for testing purpose
            */
           if (syncPublish) {
-            while (! perResourceResult.isDone()) {
+            while (!perResourceResult.isDone()) {
               try {
                 Thread.sleep(10);
               } catch (InterruptedException e) {
@@ -323,7 +323,7 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
      * This is only used for testing purpose
      */
     if (syncPublish) {
-      while (! result.isDone()) {
+      while (!result.isDone()) {
         try {
           Thread.sleep(10);
         } catch (InterruptedException e) {

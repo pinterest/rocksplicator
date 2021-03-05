@@ -19,6 +19,7 @@
 package com.pinterest.rocksplicator.config;
 
 public class FileWatchers {
+
   public static FileWatcher<byte[]> getPollingFileWatcher() {
     return PollingFileWatcher.defaultPerTenSecondsWatcher();
   }

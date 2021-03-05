@@ -58,6 +58,7 @@ import java.util.Arrays;
  */
 
 public class DistributedSpectatorMain {
+
   private static final Logger logger = LoggerFactory.getLogger(DistributedSpectatorMain.class);
 
   private static final String zkSvr = "zkSvr";
@@ -120,7 +121,8 @@ public class DistributedSpectatorMain {
     portOption.setArgName("uri pattern to post json shard_map [Optional]");
 
     Option shardMapZkSvrOption =
-        OptionBuilder.withLongOpt(shardMapZkSvrArg).withDescription("Zk Server to post shard_map").create();
+        OptionBuilder.withLongOpt(shardMapZkSvrArg).withDescription("Zk Server to post shard_map")
+            .create();
     shardMapZkSvrOption.setArgs(1);
     shardMapZkSvrOption.setRequired(false);
     shardMapZkSvrOption.setArgName(shardMapZkSvrArg);
@@ -222,7 +224,8 @@ public class DistributedSpectatorMain {
         + clusterName + ", spectatorControllerName:" + instanceId + ", mode:" + "DISTRIBUTED");
 
     HelixManager manager =
-        startHelixController(zkConnectString, clusterName, instanceId, configPostUriPattern, shardMapZkSvr, shardMapDownloadDir);
+        startHelixController(zkConnectString, clusterName, instanceId, configPostUriPattern,
+            shardMapZkSvr, shardMapDownloadDir);
 
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(manager));
 

@@ -186,10 +186,10 @@ public class JsonShardMapTest {
     ResourceMap resourceMap = firstOne.getResourceMap("resource3");
     assertEquals(4, resourceMap.getNumShards());
     assertEquals(ImmutableList.of(
-            new Replica(
-                new Partition("resource3_0"),
-                new Instance("host0:9090:az_pg"),
-                ReplicaState.ONLINE)),
+        new Replica(
+            new Partition("resource3_0"),
+            new Instance("host0:9090:az_pg"),
+            ReplicaState.ONLINE)),
         resourceMap.getAllReplicasForPartition(new Partition("resource3_0")));
 
     assertEquals(ImmutableList.of(

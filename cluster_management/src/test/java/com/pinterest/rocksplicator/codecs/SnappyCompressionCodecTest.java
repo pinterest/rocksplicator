@@ -32,7 +32,9 @@ public class SnappyCompressionCodecTest extends CodecTestBase {
   public void testBinaryCompressionCodec() throws Exception {
     Codec<LeaderEventsHistory, byte[]> thriftCodec =
         Codecs.createThriftCodec(LeaderEventsHistory.class, SerializationProtocol.BINARY);
-    SnappyCompressionCodec<LeaderEventsHistory> snappyCodec = new SnappyCompressionCodec<>(thriftCodec);
+    SnappyCompressionCodec<LeaderEventsHistory>
+        snappyCodec =
+        new SnappyCompressionCodec<>(thriftCodec);
     byte[] compressedBinaryData = snappyCodec.encode(history);
 
     LeaderEventsHistory decodedHistory = snappyCodec.decode(compressedBinaryData);
@@ -56,7 +58,9 @@ public class SnappyCompressionCodecTest extends CodecTestBase {
   public void testCompactCompressionCodec() throws Exception {
     Codec<LeaderEventsHistory, byte[]> thriftCodec =
         Codecs.createThriftCodec(LeaderEventsHistory.class, SerializationProtocol.COMPACT);
-    SnappyCompressionCodec<LeaderEventsHistory> snappyCodec = new SnappyCompressionCodec<>(thriftCodec);
+    SnappyCompressionCodec<LeaderEventsHistory>
+        snappyCodec =
+        new SnappyCompressionCodec<>(thriftCodec);
     byte[] compressedBinaryData = snappyCodec.encode(history);
 
     LeaderEventsHistory decodedHistory = snappyCodec.decode(compressedBinaryData);
