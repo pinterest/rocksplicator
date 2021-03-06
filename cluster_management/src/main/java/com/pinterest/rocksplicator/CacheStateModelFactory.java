@@ -26,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class CacheStateModelFactory extends StateModelFactory<StateModel> {
+
   private static final Logger LOG = LoggerFactory.getLogger(CacheStateModelFactory.class);
 
   @Override
@@ -35,6 +36,7 @@ public class CacheStateModelFactory extends StateModelFactory<StateModel> {
   }
 
   public static class CacheStateModel extends StateModel {
+
     private static final Logger LOG = LoggerFactory.getLogger(CacheStateModel.class);
     private final String resourceName;
     private final String partitionName;

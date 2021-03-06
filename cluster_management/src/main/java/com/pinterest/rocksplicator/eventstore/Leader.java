@@ -19,6 +19,7 @@
 package com.pinterest.rocksplicator.eventstore;
 
 class Leader {
+
   private final String leaderInstanceId;
   private final LeaderState state;
 

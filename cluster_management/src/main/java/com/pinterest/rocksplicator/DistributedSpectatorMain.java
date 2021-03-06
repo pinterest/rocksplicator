@@ -58,6 +58,7 @@ import java.util.Arrays;
  */
 
 public class DistributedSpectatorMain {
+
   private static final Logger logger = LoggerFactory.getLogger(DistributedSpectatorMain.class);
 
   private static final String zkSvr = "zkSvr";
@@ -121,7 +122,8 @@ public class DistributedSpectatorMain {
     portOption.setArgName("uri pattern to post json shard_map [Optional]");
 
     Option shardMapZkSvrOption =
-        OptionBuilder.withLongOpt(shardMapZkSvrArg).withDescription("Zk Server to post shard_map").create();
+        OptionBuilder.withLongOpt(shardMapZkSvrArg).withDescription("Zk Server to post shard_map")
+            .create();
     shardMapZkSvrOption.setArgs(1);
     shardMapZkSvrOption.setRequired(false);
     shardMapZkSvrOption.setArgName(shardMapZkSvrArg);
@@ -137,7 +139,8 @@ public class DistributedSpectatorMain {
 
     Option enableCurrentStatesRouterOption =
         OptionBuilder.withLongOpt(enableCurrentStatesRouterArgs)
-            .withDescription("Enable to use currentStates based RoutingTable for ConfigGenerator").create();
+            .withDescription("Enable to use currentStates based RoutingTable for ConfigGenerator")
+            .create();
     enableCurrentStatesRouterOption.setArgs(0);
     enableCurrentStatesRouterOption.setRequired(false);
     enableCurrentStatesRouterOption.setArgName(enableCurrentStatesRouterArgs);

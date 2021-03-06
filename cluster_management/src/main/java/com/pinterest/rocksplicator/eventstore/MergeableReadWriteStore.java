@@ -22,6 +22,7 @@ import java.io.Closeable;
 import java.io.IOException;
 
 public interface MergeableReadWriteStore<R, E> extends Closeable {
+
   /**
    * Read an existing data from the store. Reading a non-existing data will cause an io exception.
    */

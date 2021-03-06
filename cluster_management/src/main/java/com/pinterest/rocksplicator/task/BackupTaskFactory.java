@@ -23,7 +23,6 @@ import org.apache.helix.task.Task;
 import org.apache.helix.task.TaskCallbackContext;
 import org.apache.helix.task.TaskConfig;
 import org.apache.helix.task.TaskFactory;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

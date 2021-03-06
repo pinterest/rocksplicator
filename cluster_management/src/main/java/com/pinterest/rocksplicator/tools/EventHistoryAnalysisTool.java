@@ -65,7 +65,8 @@ import java.util.stream.Collectors;
  *          --resource ${resource_for_which_data_is_store_in_above_cluster}
  *          --min_partition 0    // This is minimum index of partition to analyze
  *          --num_partitions 1000 // The number of partitions to analyze starting from min_partition
- *          --num_seconds_ago 3600 // Filter out events older then this age relative to the last event in each partition, for analysis.
+ *          --num_seconds_ago 3600 // Filter out events older then this age relative to the last
+ *          event in each partition, for analysis.
  *
  */
 public class EventHistoryAnalysisTool {
@@ -281,7 +282,6 @@ public class EventHistoryAnalysisTool {
               (long) percentile,
               (long) StatUtils.percentile(e2ePropogationDelays, percentile)));
     }
-
 
     System.out.println(String.format("\nBelow is the max e2e latency leader event profile"));
     printLeaderEvents(maxE2EDelayEvents, currentTimeMillis);

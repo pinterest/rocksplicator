@@ -234,7 +234,8 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
           LOG.error("Received notification: " + notificationContext.getChangeType());
           if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
             generateShardConfig();
-          } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.INSTANCE_CONFIG) {
+          } else if (notificationContext.getChangeType()
+              == HelixConstants.ChangeType.INSTANCE_CONFIG) {
             if (updateDisabledHosts()) {
               generateShardConfig();
             }
@@ -283,7 +284,9 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     filterOutTaskResources(resources);
 
     // Resources starting with PARTICIPANT_LEADER is for HelixCustomCodeRunner
-    resources = resources.stream().filter(r -> ! r.startsWith("PARTICIPANT_LEADER")).collect(Collectors.toList());
+    resources =
+        resources.stream().filter(r -> !r.startsWith("PARTICIPANT_LEADER"))
+            .collect(Collectors.toList());
 
     Set<String> existingHosts = new HashSet<String>();
 
@@ -379,7 +382,8 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
      * Finally publish the shard_map in json_format to multiple configured publishers.
      */
     shardMapPublisher.publish(
-        resources.stream().collect(Collectors.toSet()), externalViewsToProcess, jsonClusterShardMap);
+        resources.stream().collect(Collectors.toSet()), externalViewsToProcess,
+        jsonClusterShardMap);
 
     long shardPostingTimeMillis = System.currentTimeMillis();
 
