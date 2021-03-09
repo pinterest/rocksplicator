@@ -140,6 +140,8 @@ struct CheckDBRequest {
   2: optional list<string> option_names,
   # if true, get the DBMetaData of the db
   3: optional bool include_meta,
+  # get DB's properties
+  4: optional list<string> property_names,
 }
 
 struct CheckDBResponse {
@@ -153,6 +155,7 @@ struct CheckDBResponse {
   4: optional bool is_master = false,
   5: optional map<string, string> options,
   6: optional map<string, string> db_metas,
+  7: optional map<string, string> properties,
 }
 
 struct ChangeDBRoleAndUpstreamRequest {
