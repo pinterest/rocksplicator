@@ -20,13 +20,18 @@
 #include <ctime>
 #include <iostream>
 #include <thread>
+#include <unordered_map>
+#include <map>
 #include <vector>
 
 #include "boost/filesystem.hpp"
 #include "gflags/gflags.h"
 #include "gtest/gtest.h"
+#include "rocksdb/convenience.h"
 #include "rocksdb/db.h"
+#define private public
 #include "rocksdb_admin/application_db.h"
+#undef private
 #include "rocksdb_admin/tests/test_util.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
 
@@ -51,6 +56,7 @@ using std::shared_ptr;
 using std::string;
 using std::to_string;
 using std::unique_ptr;
+using std::unordered_map;
 using std::vector;
 using std::chrono::seconds;
 using std::this_thread::sleep_for;
@@ -72,19 +78,19 @@ class ApplicationDBTestBase : public testing::Test {
   int numTableFilesAtLevel(int level) {
     std::string p;
     db_->rocksdb()->GetProperty(
-        "rocksdb.num-files-at-level" + std::to_string(level), &p);
+        DB::Properties::kNumFilesAtLevelPrefix + std::to_string(level), &p);
     return atoi(p.c_str());
   }
 
   int numCompactPending() {
     uint64_t p;
-    db_->rocksdb()->GetIntProperty("rocksdb.compaction-pending", &p);
+    db_->rocksdb()->GetIntProperty(DB::Properties::kCompactionPending, &p);
     return static_cast<int>(p);
   }
 
   string levelStats() {
     std::string p;
-    db_->rocksdb()->GetProperty("rocksdb.levelstats", &p);
+    db_->rocksdb()->GetProperty(DB::Properties::kLevelStats, &p);
     return p;
   }
 
@@ -134,6 +140,33 @@ class ApplicationDBTestBase : public testing::Test {
   string db_path_;
   Options last_options_;
 };
+
+TEST_F(ApplicationDBTestBase, GetOptionsAsStrMap) {
+  unordered_map<string, string> option_with_expvals{
+      {"create_if_missing", "true"},
+      {"error_if_exists", "true"},
+      {"WAL_size_limit_MB", "100"},
+      {"allow_ingest_behind", "false"},
+      {"bottommost_compression", "kDisableCompressionOption"},
+      {"compaction_style", "kCompactionStyleLevel"},
+      {"disable_auto_compactions", "false"}};
+
+  vector<string> option_names{"unknown_option_name"};
+  for (const auto& map_entry : option_with_expvals) {
+    option_names.push_back(map_entry.first);
+  }
+
+  map<string, string> resp_options;
+  EXPECT_TRUE(db_->GetOptions(option_names, &resp_options).ok());
+
+  for (const auto& option_name : option_names) {
+    if (option_name == "unknown_option_name") {
+      EXPECT_EQ(resp_options.find(option_name), resp_options.end());
+    } else {
+      EXPECT_EQ(resp_options[option_name], option_with_expvals[option_name]);
+    }
+  }
+}
 
 TEST_F(ApplicationDBTestBase, SetImmutableOptionsFail) {
   EXPECT_FALSE(last_options_.allow_ingest_behind);
@@ -233,6 +266,15 @@ TEST_F(ApplicationDBTestBase, SetOptionsDisableEnableAutoCompaction) {
   // the two sst at L0 will merge into 1 at L1
   EXPECT_EQ(numTableFilesAtLevel(1), 2);
   EXPECT_EQ(numCompactPending(), 0);
+}
+
+TEST_F(ApplicationDBTestBase, GetProperty) {
+  string p_val;
+  EXPECT_TRUE(db_->GetProperty(ApplicationDB::Properties::kNumLevels, &p_val));
+  EXPECT_EQ(atoi(p_val.c_str()), 7);
+  EXPECT_TRUE(db_->GetProperty(ApplicationDB::Properties::kHighestEmptyLevel, &p_val));
+  EXPECT_EQ(atoi(p_val.c_str()), 6);
+  EXPECT_TRUE(db_->DBLmaxEmpty());
 }
 
 TEST_F(ApplicationDBTestBase, GetLSMLevelInfo) {

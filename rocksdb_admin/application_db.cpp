@@ -12,11 +12,11 @@
 /// See the License for the specific language governing permissions and
 /// limitations under the License.
 
-
 #include "rocksdb_admin/application_db.h"
 
 #include <string>
 
+#include "rocksdb/convenience.h"
 #include "common/stats/stats.h"
 #include "common/timer.h"
 
@@ -40,6 +40,13 @@ const std::string kRocksdbCompactionMs = "rocksdb_compact_range_ms";
 }  // anonymous namespace
 
 namespace admin {
+
+static const std::string rocksdb_prefix = "rocksdb.";
+static const std::string applicationdb_prefix = "applicationdb.";
+const std::string ApplicationDB::Properties::kNumLevels =
+    applicationdb_prefix + "num-levels";
+const std::string ApplicationDB::Properties::kHighestEmptyLevel =
+    applicationdb_prefix + "highest-empty-level";
 
 ApplicationDB::ApplicationDB(
     const std::string& db_name,
@@ -133,6 +140,84 @@ rocksdb::Status ApplicationDB::CompactRange(
   common::Stats::get()->Incr(kRocksdbCompaction);
   common::Timer timer(kRocksdbCompactionMs);
   return db_->CompactRange(options, begin, end);
+}
+
+rocksdb::Status ApplicationDB::GetOptions(
+    std::vector<std::string>& option_names,
+    std::map<std::string, std::string>* options_map) {
+  rocksdb::Options options = db_->GetOptions();
+  std::string opts_str;
+  std::unordered_map<std::string, std::string> opts_map;
+  auto get_s = GetStringFromOptions(&opts_str, options);
+  auto to_map_s = rocksdb::StringToMap(opts_str, &opts_map);
+  if (!get_s.ok() || !to_map_s.ok()) {
+    return !get_s.ok() ? get_s : to_map_s;
+  }
+  for (const auto& option_name : option_names) {
+    if (opts_map.find(option_name) != opts_map.end()) {
+      (*options_map)[option_name] = opts_map[option_name];
+    } else {
+      LOG(ERROR) << "Option name not found, " << option_name;
+    }
+  }
+  return rocksdb::Status();
+}
+
+rocksdb::Status ApplicationDB::GetStringFromOptions(
+    std::string* options_str, const rocksdb::Options& options,
+    const std::string& delimiter) {
+  std::string dboptions_str;
+  std::string cfoptions_str;
+  auto db_s =
+      rocksdb::GetStringFromDBOptions(&dboptions_str, options, delimiter);
+  auto cf_s = rocksdb::GetStringFromColumnFamilyOptions(&cfoptions_str, options,
+                                                        delimiter);
+  if (!db_s.ok() || !cf_s.ok()) {
+    return !db_s.ok() ? db_s : cf_s;
+  }
+  *options_str = dboptions_str + delimiter + cfoptions_str;
+  return rocksdb::Status();
+}
+
+bool ApplicationDB::GetProperty(const rocksdb::Slice& property,
+                                std::string* value) {
+  if (property.starts_with(applicationdb_prefix)) {
+    if (property == Properties::kHighestEmptyLevel) {
+      *value = std::to_string(getHighestEmptyLevel());
+      return true;
+    } else if (property == Properties::kNumLevels) {
+      *value = std::to_string(db_->NumberLevels());
+      return true;
+    } else {
+      LOG(ERROR) << "ApplicationDb property not defined, "
+                 << property.ToString();
+      return false;
+    }
+  } else if (property.starts_with(rocksdb_prefix)) {
+    return db_->GetProperty(property, value);
+  } else {
+    LOG(ERROR) << "Property not defined, " << property.ToString();
+    return false;
+  }
+}
+
+bool ApplicationDB::DBLmaxEmpty() {
+  std::string num_levels;
+  std::string highest_empty_level;
+  auto ex = folly::try_and_catch<std::exception>(
+      [&num_levels, &highest_empty_level, this]() {
+        if (this->GetProperty(Properties::kNumLevels, &num_levels) &&
+            this->GetProperty(Properties::kHighestEmptyLevel,
+                              &highest_empty_level) &&
+            std::atoi(num_levels.c_str()) - 1 !=
+                std::atoi(highest_empty_level.c_str())) {
+          LOG(INFO) << "DBLmax not empty, num_levels: " << num_levels
+                    << ", highest_empty_level: " << highest_empty_level;
+          return false;
+        }
+      });
+  ex.with_exception([](std::exception& e) { LOG(ERROR) << e.what(); });
+  return true;
 }
 
 uint32_t ApplicationDB::getHighestEmptyLevel() {

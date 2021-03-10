@@ -18,12 +18,15 @@
 
 #include <algorithm>
 #include <ctime>
+#include <map>
 #include <thread>
 
 #include "boost/filesystem.hpp"
 #include "folly/SocketAddress.h"
 #include "gtest/gtest.h"
+#include "rocksdb/options.h"
 #include "rocksdb/status.h"
+#include "rocksdb_admin/application_db.h"
 #define private public
 #include "rocksdb_admin/admin_handler.h"
 #undef private
@@ -58,12 +61,14 @@ using apache::thrift::RpcOptions;
 using apache::thrift::ThriftServer;
 using apache::thrift::async::TAsyncSocket;
 using common::ThriftClientPool;
+using rocksdb::FlushOptions;
 using rocksdb::Options;
 using rocksdb::ReadOptions;
 using rocksdb::Status;
 using std::make_shared;
 using std::make_tuple;
 using std::make_unique;
+using std::map;
 using std::string;
 using std::thread;
 using std::to_string;
@@ -212,6 +217,12 @@ class AdminHandlerTestBase : public testing::Test {
     EXPECT_TRUE(app_db->Write(rocksdb::WriteOptions(), &batch).ok());
   }
 
+  void flushDB(const string db_name) {
+    auto app_db = db_manager_->getDB(db_name, nullptr);
+    auto s = app_db->rocksdb()->Flush(FlushOptions());
+    EXPECT_TRUE(s.ok());
+  }
+
   void clearDB(const string db_name) {
     ClearDBResponse clear_resp;
     ClearDBRequest clear_req;
@@ -295,6 +306,14 @@ TEST_F(AdminHandlerTestBase, SetRocksDBOptions) {
   req.options = {{"disable_auto_compactions", "true"}};
   EXPECT_NO_THROW(resp = client_->future_setDBOptions(req).get());
   EXPECT_TRUE(app_db->rocksdb()->GetOptions().disable_auto_compactions);
+
+  CheckDBRequest check_req;
+  CheckDBResponse check_resp;
+  check_req.db_name = testdb;
+  check_req.__isset.option_names = true;
+  check_req.option_names = {"disable_auto_compactions"};
+  EXPECT_NO_THROW(check_resp = client_->future_checkDB(check_req).get());
+  EXPECT_EQ(check_resp.options["disable_auto_compactions"], "true");
 
   // Verify: set immutable db options -> !ok
   EXPECT_FALSE(app_db->rocksdb()->GetOptions().allow_ingest_behind);
@@ -393,7 +412,7 @@ TEST_F(AdminHandlerTestBase, AddS3SstFilesToDBTest) {
 
       // 4th ingest, ingest behind from ssDir1 after clearDB with reopen with
       // allow_ingest_behind -> ok
-      // Then, ingest behind from sstDir2 will violate Lmax.empty() -> exception
+      // Then, ingest behind from sstDir2 will violate Lmax.empty()->exception
       {
         FLAGS_test_db_create_with_allow_ingest_behind = true;
         // by default, not allow overlap, so always will recreate DB
@@ -580,47 +599,164 @@ TEST_F(AdminHandlerTestBase, CheckDB) {
 
   CheckDBRequest req;
   CheckDBResponse res;
-  req.db_name = "unknown_db";
 
-  EXPECT_THROW(res = client_->future_checkDB(req).get(), AdminException);
+  {
+    SCOPE_EXIT {
+      req.__clear();
+      res.__clear();
+    };
 
-  req.db_name = testdb1;
-  EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
-  EXPECT_EQ(res.seq_num, 0);
-  EXPECT_EQ(res.wal_ttl_seconds, 123);
-  EXPECT_EQ(res.last_update_timestamp_ms, 0);
-  EXPECT_FALSE(res.__isset.db_metas);
+    req.db_name = "unknown_db";
+    EXPECT_THROW(res = client_->future_checkDB(req).get(), AdminException);
+  }
 
-  const string testdb2 = generateDBName();
-  addDBWithRole(testdb2, "MASTER");
-  dbs = db_manager_->getAllDBNames();
-  EXPECT_NE(std::find(dbs.begin(), dbs.end(), testdb2), dbs.end());
+  // Verify checkDB of newly DB with default vals
+  {
+    SCOPE_EXIT {
+      req.__clear();
+      res.__clear();
+    };
 
-  deleteKeyFromDB(testdb2, "a");
-  req.db_name = testdb2;
-  EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
-  EXPECT_EQ(res.seq_num, 1);
-  EXPECT_EQ(res.wal_ttl_seconds, 123);
-  // 1521000000 is 03/14/2018 @ 4:00am (UTC)
-  EXPECT_GT(res.last_update_timestamp_ms, 1521000000);
+    req.db_name = testdb1;
+
+    EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
+    EXPECT_EQ(res.seq_num, 0);
+    EXPECT_EQ(res.wal_ttl_seconds, 123);
+    EXPECT_EQ(res.last_update_timestamp_ms, 0);
+    EXPECT_FALSE(res.__isset.db_metas);
+    EXPECT_FALSE(res.__isset.properties);
+  }
+
+  // Verify checkDB from existed DB
+  {
+    SCOPE_EXIT {
+      req.__clear();
+      res.__clear();
+    };
+
+    const string testdb2 = generateDBName();
+    addDBWithRole(testdb2, "MASTER");
+    dbs = db_manager_->getAllDBNames();
+    EXPECT_NE(std::find(dbs.begin(), dbs.end(), testdb2), dbs.end());
+    deleteKeyFromDB(testdb2, "a");
+
+    req.db_name = testdb2;
+
+    EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
+    EXPECT_EQ(res.seq_num, 1);
+    EXPECT_EQ(res.wal_ttl_seconds, 123);
+    // 1521000000 is 03/14/2018 @ 4:00am (UTC)
+    EXPECT_GT(res.last_update_timestamp_ms, 1521000000);
+  }
 
   // verify: checkDB get metadata
-  const string testdb3 = generateDBName();
-  addDBWithRole(testdb3, "MASTER");
-  auto meta = handler_->getMetaData(testdb3);
-  verifyMeta(meta, testdb3, true, "", "");
+  {
+    SCOPE_EXIT {
+      req.__clear();
+      res.__clear();
+    };
 
-  // write fake DBMetadata for <testdb3>
-  handler_->writeMetaData(testdb3, "fakes3bucket", "fakes3path");
-  meta = handler_->getMetaData(testdb3);
-  verifyMeta(meta, testdb3, true, "fakes3bucket", "fakes3path");
+    const string testdb3 = generateDBName();
+    addDBWithRole(testdb3, "MASTER");
+    auto meta = handler_->getMetaData(testdb3);
+    verifyMeta(meta, testdb3, true, "", "");
 
-  req.db_name = testdb3;
-  req.set_include_meta(true);
-  EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
-  EXPECT_TRUE(res.__isset.db_metas);
-  EXPECT_EQ(res.db_metas["s3_bucket"], "fakes3bucket");
-  EXPECT_EQ(res.db_metas["s3_path"], "fakes3path");
+    // write fake DBMetadata for <testdb3>
+    handler_->writeMetaData(testdb3, "fakes3bucket", "fakes3path");
+    meta = handler_->getMetaData(testdb3);
+    verifyMeta(meta, testdb3, true, "fakes3bucket", "fakes3path");
+
+    req.db_name = testdb3;
+    req.set_include_meta(true);
+
+    EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
+    EXPECT_TRUE(res.__isset.db_metas);
+    EXPECT_EQ(res.db_metas["s3_bucket"], "fakes3bucket");
+    EXPECT_EQ(res.db_metas["s3_path"], "fakes3path");
+  }
+
+  // verify CheckDB get options
+  {
+    SCOPE_EXIT {
+      req.__clear();
+      res.__clear();
+    };
+
+    map<string, string> option_with_expvals{
+        {"WAL_ttl_seconds", "123"},
+        {"allow_ingest_behind", "false"},
+        {"disable_auto_compactions", "false"}};
+    vector<string> option_names{"unknown_option_name"};
+    for (const auto& map_entry : option_with_expvals) {
+      option_names.push_back(map_entry.first);
+    }
+
+    req.db_name = testdb1;
+    req.option_names = option_names;
+    req.__isset.option_names = true;
+
+    EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
+    for (const auto& option_name : option_names) {
+      if (option_name == "unknown_option_name") {
+        EXPECT_EQ(res.options.find(option_name), res.options.end());
+      } else {
+        EXPECT_EQ(res.options[option_name], option_with_expvals[option_name]);
+      }
+    }
+
+    // get DB options when created with allow_ingest_behind
+    {
+      FLAGS_test_db_create_with_allow_ingest_behind = true;
+      SCOPE_EXIT { FLAGS_test_db_create_with_allow_ingest_behind = false; };
+      const string testdbOptions2 = generateDBName();
+      addDBWithRole(testdbOptions2, "MASTER");
+
+      req.db_name = testdbOptions2;
+
+      EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
+      EXPECT_EQ(res.options["allow_ingest_behind"], "true");
+    }
+  }
+
+  const string app_p_not_define = "applicationdb.not-defined-property";
+  const string rocksdb_p_not_define = "rocksdb.not-defined-property";
+  const string p_not_define = "not-defined-property";
+  const string num_files_at_l0 =
+      rocksdb::DB::Properties::kNumFilesAtLevelPrefix + "0";
+  vector<string> property_names{{ApplicationDB::Properties::kNumLevels,
+                                 ApplicationDB::Properties::kHighestEmptyLevel,
+                                 app_p_not_define, num_files_at_l0,
+                                 rocksdb_p_not_define, p_not_define}};
+  // Verify: checkDB get properties
+  {
+    SCOPE_EXIT {
+      req.__clear();
+      res.__clear();
+    };
+
+    const string testdbP = generateDBName();
+    addDBWithRole(testdbP, "MASTER");
+
+    req.db_name = testdbP;
+    req.property_names = property_names;
+    req.__isset.property_names = true;
+
+    EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
+    EXPECT_TRUE(res.__isset.properties);
+    EXPECT_EQ(res.properties[ApplicationDB::Properties::kNumLevels], "7");
+    EXPECT_EQ(res.properties[ApplicationDB::Properties::kHighestEmptyLevel],
+              "6");
+    EXPECT_EQ(res.properties.find(app_p_not_define), res.properties.end());
+    EXPECT_EQ(res.properties[num_files_at_l0], "0");
+    EXPECT_EQ(res.properties.find(rocksdb_p_not_define), res.properties.end());
+    EXPECT_EQ(res.properties.find(p_not_define), res.properties.end());
+
+    writeToDB(testdbP, "1", "1");
+    flushDB(testdbP);
+    EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
+    EXPECT_EQ(res.seq_num, 1);
+    EXPECT_EQ(res.properties[num_files_at_l0], "1");
+  }
 }
 
 TEST(AdminHandlerTest, MetaData) {
