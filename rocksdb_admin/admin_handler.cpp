@@ -622,11 +622,18 @@ void AdminHandler::async_tm_addDB(
     }
   }
 
-  if (!writeMetaData(request->db_name, "", "")) {
-    std::string errMsg = "AddDB failed to write initial DBMetaData for " + request->db_name;
-    SetException(errMsg, admin::AdminErrorCode::DB_ADMIN_ERROR, &callback);
-    LOG(ERROR) << errMsg;
-    return;
+  // update meta if not exist
+  auto meta = getMetaData(request->db_name);
+  if (!meta.__isset.s3_bucket && !meta.__isset.s3_path &&
+      !meta.__isset.last_kafka_msg_timestamp_ms) {
+    LOG(INFO) << "No preivous meta exist, write a fresh meta to metadb";
+    if (!writeMetaData(request->db_name, "", "")) {
+      std::string errMsg =
+          "AddDB failed to write initial DBMetaData for " + request->db_name;
+      SetException(errMsg, admin::AdminErrorCode::DB_ADMIN_ERROR, &callback);
+      LOG(ERROR) << errMsg;
+      return;
+    }
   }
 
   if (!db_manager_->addDB(request->db_name,
