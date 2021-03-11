@@ -3,10 +3,13 @@ package com.pinterest.rocksplicator.task;
 import com.pinterest.rocksplicator.Utils;
 
 import org.apache.helix.task.Task;
+import org.apache.helix.task.TaskConfig;
 import org.apache.helix.task.TaskResult;
 import org.apache.helix.task.UserContentStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Arrays;
 
 public class DedupTask extends UserContentStore implements Task {
 
@@ -23,11 +26,12 @@ public class DedupTask extends UserContentStore implements Task {
   private final String s3Bucket;
   private final int backupLimitMbs;
   private final boolean shareFilesWithChecksum;
+  private final TaskConfig taskConfig;
 
   public DedupTask(String srcStorePathPrefix, long resourceVersion, String partitionName,
                    String taskCluster, String job, int adminPort,
                    String destStorePathPrefix, boolean useS3Store, String s3Bucket,
-                   int backupLimitMbs, boolean shareFilesWithChecksum) {
+                   int backupLimitMbs, boolean shareFilesWithChecksum, TaskConfig taskConfig) {
     this.srcStorePathPrefix = srcStorePathPrefix;
     this.resourceVersion = resourceVersion;
     this.partitionName = partitionName;
@@ -39,6 +43,7 @@ public class DedupTask extends UserContentStore implements Task {
     this.s3Bucket = s3Bucket;
     this.shareFilesWithChecksum = shareFilesWithChecksum;
     this.backupLimitMbs = backupLimitMbs;
+    this.taskConfig = taskConfig;
   }
 
   /**
@@ -72,8 +77,9 @@ public class DedupTask extends UserContentStore implements Task {
       LOG.error(
           String.format(
               "DedupTask run to dedup partition: %s from source path: %s, to dest path: %s "
-                  + "Other info {cluster: %s, job: %s, resourceVersion: %d}", dbName,
-              srcStorePath, destStorePath, taskCluster, job, resourceVersion));
+                  + "Other info {cluster: %s, job: %s, resourceVersion: %d, taskConfig=%s}", dbName,
+              srcStorePath, destStorePath, taskCluster, job, resourceVersion,
+              taskConfig.toString()));
 
       executeDedup(dbName, adminPort, srcStorePath, destStorePath, useS3Store, s3Bucket,
           backupLimitMbs, shareFilesWithChecksum);
@@ -81,8 +87,10 @@ public class DedupTask extends UserContentStore implements Task {
       LOG.error("DedupTask completed, with: success");
       return new TaskResult(TaskResult.Status.COMPLETED, "DedupTask is completed!");
     } catch (Exception e) {
-      LOG.error("Task dedup failed", e);
-      return new TaskResult(TaskResult.Status.FAILED, "DedupTask failed");
+      String errMsg = String.format("Task dedup failed. errMsg=%s. stacktrace=%s. taskConfig=%s.",
+          e.getMessage(), Arrays.toString(e.getStackTrace()), taskConfig.toString());
+      LOG.error(errMsg);
+      return new TaskResult(TaskResult.Status.FAILED, errMsg);
     }
 
   }
@@ -130,6 +138,6 @@ public class DedupTask extends UserContentStore implements Task {
     // upon cancel, clear db from local
     String dbName = Utils.getDbName(partitionName);
     Utils.clearDB(dbName, adminPort);
-    LOG.error("DedupTask cancelled");
+    LOG.error(String.format("DedupTask cancelled. taskConfig=%s", taskConfig.toString()));
   }
 }
