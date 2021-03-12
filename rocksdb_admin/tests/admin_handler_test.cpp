@@ -24,9 +24,7 @@
 #include "boost/filesystem.hpp"
 #include "folly/SocketAddress.h"
 #include "gtest/gtest.h"
-#include "rocksdb/options.h"
 #include "rocksdb/status.h"
-#include "rocksdb_admin/application_db.h"
 #define private public
 #include "rocksdb_admin/admin_handler.h"
 #undef private
@@ -61,7 +59,6 @@ using apache::thrift::RpcOptions;
 using apache::thrift::ThriftServer;
 using apache::thrift::async::TAsyncSocket;
 using common::ThriftClientPool;
-using rocksdb::FlushOptions;
 using rocksdb::Options;
 using rocksdb::ReadOptions;
 using rocksdb::Status;
@@ -215,12 +212,6 @@ class AdminHandlerTestBase : public testing::Test {
     batch.Put(key, val);
     auto app_db = db_manager_->getDB(db_name, nullptr);
     EXPECT_TRUE(app_db->Write(rocksdb::WriteOptions(), &batch).ok());
-  }
-
-  void flushDB(const string db_name) {
-    auto app_db = db_manager_->getDB(db_name, nullptr);
-    auto s = app_db->rocksdb()->Flush(FlushOptions());
-    EXPECT_TRUE(s.ok());
   }
 
   void clearDB(const string db_name) {
@@ -412,7 +403,7 @@ TEST_F(AdminHandlerTestBase, AddS3SstFilesToDBTest) {
 
       // 4th ingest, ingest behind from ssDir1 after clearDB with reopen with
       // allow_ingest_behind -> ok
-      // Then, ingest behind from sstDir2 will violate Lmax.empty()->exception
+      // Then, ingest behind from sstDir2 will violate Lmax.empty() -> exception
       {
         FLAGS_test_db_create_with_allow_ingest_behind = true;
         // by default, not allow overlap, so always will recreate DB
@@ -624,7 +615,6 @@ TEST_F(AdminHandlerTestBase, CheckDB) {
     EXPECT_EQ(res.wal_ttl_seconds, 123);
     EXPECT_EQ(res.last_update_timestamp_ms, 0);
     EXPECT_FALSE(res.__isset.db_metas);
-    EXPECT_FALSE(res.__isset.properties);
   }
 
   // Verify checkDB from existed DB
@@ -716,46 +706,6 @@ TEST_F(AdminHandlerTestBase, CheckDB) {
       EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
       EXPECT_EQ(res.options["allow_ingest_behind"], "true");
     }
-  }
-
-  const string app_p_not_define = "applicationdb.not-defined-property";
-  const string rocksdb_p_not_define = "rocksdb.not-defined-property";
-  const string p_not_define = "not-defined-property";
-  const string num_files_at_l0 =
-      rocksdb::DB::Properties::kNumFilesAtLevelPrefix + "0";
-  vector<string> property_names{{ApplicationDB::Properties::kNumLevels,
-                                 ApplicationDB::Properties::kHighestEmptyLevel,
-                                 app_p_not_define, num_files_at_l0,
-                                 rocksdb_p_not_define, p_not_define}};
-  // Verify: checkDB get properties
-  {
-    SCOPE_EXIT {
-      req.__clear();
-      res.__clear();
-    };
-
-    const string testdbP = generateDBName();
-    addDBWithRole(testdbP, "MASTER");
-
-    req.db_name = testdbP;
-    req.property_names = property_names;
-    req.__isset.property_names = true;
-
-    EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
-    EXPECT_TRUE(res.__isset.properties);
-    EXPECT_EQ(res.properties[ApplicationDB::Properties::kNumLevels], "7");
-    EXPECT_EQ(res.properties[ApplicationDB::Properties::kHighestEmptyLevel],
-              "6");
-    EXPECT_EQ(res.properties.find(app_p_not_define), res.properties.end());
-    EXPECT_EQ(res.properties[num_files_at_l0], "0");
-    EXPECT_EQ(res.properties.find(rocksdb_p_not_define), res.properties.end());
-    EXPECT_EQ(res.properties.find(p_not_define), res.properties.end());
-
-    writeToDB(testdbP, "1", "1");
-    flushDB(testdbP);
-    EXPECT_NO_THROW(res = client_->future_checkDB(req).get());
-    EXPECT_EQ(res.seq_num, 1);
-    EXPECT_EQ(res.properties[num_files_at_l0], "1");
   }
 }
 
