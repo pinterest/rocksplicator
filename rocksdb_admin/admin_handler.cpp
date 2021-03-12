@@ -626,7 +626,8 @@ void AdminHandler::async_tm_addDB(
   auto meta = getMetaData(request->db_name);
   if (!meta.__isset.s3_bucket && !meta.__isset.s3_path &&
       !meta.__isset.last_kafka_msg_timestamp_ms) {
-    LOG(INFO) << "No preivous meta exist, write a fresh meta to metadb";
+    LOG(INFO) << "No preivous meta exist, write a fresh meta to metadb for db: "
+              << request->db_name;
     if (!writeMetaData(request->db_name, "", "")) {
       std::string errMsg =
           "AddDB failed to write initial DBMetaData for " + request->db_name;
