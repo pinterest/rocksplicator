@@ -29,9 +29,7 @@
 #include "gtest/gtest.h"
 #include "rocksdb/convenience.h"
 #include "rocksdb/db.h"
-#define private public
 #include "rocksdb_admin/application_db.h"
-#undef private
 #include "rocksdb_admin/tests/test_util.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
 
@@ -78,19 +76,19 @@ class ApplicationDBTestBase : public testing::Test {
   int numTableFilesAtLevel(int level) {
     std::string p;
     db_->rocksdb()->GetProperty(
-        DB::Properties::kNumFilesAtLevelPrefix + std::to_string(level), &p);
+        "rocksdb.num-files-at-level" + std::to_string(level), &p);
     return atoi(p.c_str());
   }
 
   int numCompactPending() {
     uint64_t p;
-    db_->rocksdb()->GetIntProperty(DB::Properties::kCompactionPending, &p);
+    db_->rocksdb()->GetIntProperty("rocksdb.compaction-pending", &p);
     return static_cast<int>(p);
   }
 
   string levelStats() {
     std::string p;
-    db_->rocksdb()->GetProperty(DB::Properties::kLevelStats, &p);
+    db_->rocksdb()->GetProperty("rocksdb.levelstats", &p);
     return p;
   }
 
@@ -266,15 +264,6 @@ TEST_F(ApplicationDBTestBase, SetOptionsDisableEnableAutoCompaction) {
   // the two sst at L0 will merge into 1 at L1
   EXPECT_EQ(numTableFilesAtLevel(1), 2);
   EXPECT_EQ(numCompactPending(), 0);
-}
-
-TEST_F(ApplicationDBTestBase, GetProperty) {
-  string p_val;
-  EXPECT_TRUE(db_->GetProperty(ApplicationDB::Properties::kNumLevels, &p_val));
-  EXPECT_EQ(atoi(p_val.c_str()), 7);
-  EXPECT_TRUE(db_->GetProperty(ApplicationDB::Properties::kHighestEmptyLevel, &p_val));
-  EXPECT_EQ(atoi(p_val.c_str()), 6);
-  EXPECT_TRUE(db_->DBLmaxEmpty());
 }
 
 TEST_F(ApplicationDBTestBase, GetLSMLevelInfo) {
