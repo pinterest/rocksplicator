@@ -20,14 +20,11 @@
 #include <ctime>
 #include <iostream>
 #include <thread>
-#include <unordered_map>
-#include <map>
 #include <vector>
 
 #include "boost/filesystem.hpp"
 #include "gflags/gflags.h"
 #include "gtest/gtest.h"
-#include "rocksdb/convenience.h"
 #include "rocksdb/db.h"
 #include "rocksdb_admin/application_db.h"
 #include "rocksdb_admin/tests/test_util.h"
@@ -54,7 +51,6 @@ using std::shared_ptr;
 using std::string;
 using std::to_string;
 using std::unique_ptr;
-using std::unordered_map;
 using std::vector;
 using std::chrono::seconds;
 using std::this_thread::sleep_for;
@@ -138,33 +134,6 @@ class ApplicationDBTestBase : public testing::Test {
   string db_path_;
   Options last_options_;
 };
-
-TEST_F(ApplicationDBTestBase, GetOptionsAsStrMap) {
-  unordered_map<string, string> option_with_expvals{
-      {"create_if_missing", "true"},
-      {"error_if_exists", "true"},
-      {"WAL_size_limit_MB", "100"},
-      {"allow_ingest_behind", "false"},
-      {"bottommost_compression", "kDisableCompressionOption"},
-      {"compaction_style", "kCompactionStyleLevel"},
-      {"disable_auto_compactions", "false"}};
-
-  vector<string> option_names{"unknown_option_name"};
-  for (const auto& map_entry : option_with_expvals) {
-    option_names.push_back(map_entry.first);
-  }
-
-  map<string, string> resp_options;
-  EXPECT_TRUE(db_->GetOptions(option_names, &resp_options).ok());
-
-  for (const auto& option_name : option_names) {
-    if (option_name == "unknown_option_name") {
-      EXPECT_EQ(resp_options.find(option_name), resp_options.end());
-    } else {
-      EXPECT_EQ(resp_options[option_name], option_with_expvals[option_name]);
-    }
-  }
-}
 
 TEST_F(ApplicationDBTestBase, SetImmutableOptionsFail) {
   EXPECT_FALSE(last_options_.allow_ingest_behind);
