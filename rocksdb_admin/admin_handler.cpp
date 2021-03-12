@@ -1278,16 +1278,7 @@ void AdminHandler::async_tm_checkDB(
     }
   }
 
-  if (request->__isset.option_names && !request->option_names.empty()) {
-    std::map<std::string, std::string> options_map;
-    auto s = db->GetOptions(request->option_names, &options_map);
-    if (s.ok()) {
-      response.options = options_map;
-      response.__isset.options = true;
-    } else {
-      LOG(ERROR) << "Failed to GetOptions from db, " << s.ToString();
-    }
-  }
+  // TODO: get options as str for specified optionField
 
   if (request->__isset.include_meta) {
     auto meta = getMetaData(request->db_name);
