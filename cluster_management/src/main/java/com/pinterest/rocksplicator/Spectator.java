@@ -91,35 +91,6 @@ public class Spectator {
 
   private ConfigGenerator configGenerator = null;
 
-  public Spectator(String zkConnectString, String clusterName, String instanceName,
-                   String httpPostUri, String shardMapZkSvr, String shardMapDownloadDir,
-                   LeaderEventsLogger spectatorLeaderEventsLogger) throws Exception {
-    this.clusterName = clusterName;
-    this.instanceName = instanceName;
-    this.httpPostUri = httpPostUri;
-    this.shardMapZkSvr = shardMapZkSvr;
-    this.shardMapDownloadDir = shardMapDownloadDir;
-
-    this.helixManager =
-        HelixManagerFactory
-            .getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
-    this.monitor = new RocksplicatorMonitor(clusterName, instanceName);
-    this.spectatorLeaderEventsLogger = spectatorLeaderEventsLogger;
-
-    helixManager.connect();
-
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      @Override
-      public void run() {
-        try {
-          stopListeners();
-        } catch (Exception e) {
-          e.printStackTrace();
-        }
-      }
-    });
-  }
-
   private static Options constructCommandLineOptions() {
     Option zkServerOption =
         OptionBuilder.withLongOpt(zkServer).withDescription("Provide zookeeper addresses").create();
@@ -325,8 +296,33 @@ public class Spectator {
     LOG.error("Returning from main");
   }
 
-  private static String getClusterLockPath(String cluster) {
-    return "/rocksplicator/" + cluster + "/spectator/lock";
+  public Spectator(String zkConnectString, String clusterName, String instanceName,
+                   String httpPostUri, String shardMapZkSvr, String shardMapDownloadDir,
+                   LeaderEventsLogger spectatorLeaderEventsLogger) throws Exception {
+    this.clusterName = clusterName;
+    this.instanceName = instanceName;
+    this.httpPostUri = httpPostUri;
+    this.shardMapZkSvr = shardMapZkSvr;
+    this.shardMapDownloadDir = shardMapDownloadDir;
+
+    this.helixManager =
+        HelixManagerFactory
+            .getZKHelixManager(clusterName, instanceName, InstanceType.SPECTATOR, zkConnectString);
+    this.monitor = new RocksplicatorMonitor(clusterName, instanceName);
+    this.spectatorLeaderEventsLogger = spectatorLeaderEventsLogger;
+
+    helixManager.connect();
+
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      @Override
+      public void run() {
+        try {
+          stopListeners();
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
+      }
+    });
   }
 
   private void startListener() throws Exception {
@@ -357,7 +353,8 @@ public class Spectator {
        * start downloading shard_map for this cluster.
        */
       if (!(shardMapZkSvr.isEmpty() || shardMapDownloadDir.isEmpty())) {
-        ClusterShardMapAgent clusterShardMapAgent =
+        ClusterShardMapAgent
+            clusterShardMapAgent =
             new ClusterShardMapAgent(shardMapZkSvr, null, clusterName, shardMapDownloadDir);
         clusterShardMapAgent.startNotification();
         Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -421,5 +418,9 @@ public class Spectator {
       }
       staticClientLeaderEventsLogger = null;
     }
+  }
+
+  private static String getClusterLockPath(String cluster) {
+    return "/rocksplicator/" + cluster + "/spectator/lock";
   }
 }
