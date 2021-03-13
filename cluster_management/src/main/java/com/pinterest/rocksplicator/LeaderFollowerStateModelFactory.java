@@ -90,7 +90,6 @@ import java.util.concurrent.TimeUnit;
 public class LeaderFollowerStateModelFactory extends StateModelFactory<StateModel> {
 
   private static final Logger LOG = LoggerFactory.getLogger(LeaderFollowerStateModelFactory.class);
-  private static final String LOCAL_HOST_IP = "127.0.0.1";
 
   private final String host;
   private final int adminPort;
@@ -238,7 +237,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           LOG.error("Found another host " + hostWithHighestSeq + " with higher seq num: " +
               String.valueOf(highestSeq) + " for " + dbName);
           Utils.changeDBRoleAndUpStream(
-              LOCAL_HOST_IP, adminPort, dbName, "FOLLOWER", hostWithHighestSeq, adminPort);
+              "localhost", adminPort, dbName, "FOLLOWER", hostWithHighestSeq, adminPort);
 
           // wait for up to 10 mins
           for (int i = 0; i < 600; ++i) {
@@ -262,7 +261,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
         }
 
         // changeDBRoleAndUpStream(me, "Leader")
-        Utils.changeDBRoleAndUpStream(LOCAL_HOST_IP, adminPort, dbName, "LEADER",
+        Utils.changeDBRoleAndUpStream("localhost", adminPort, dbName, "LEADER",
             "", adminPort);
 
         // Get the latest external view and state map
@@ -315,8 +314,8 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
       Utils.logTransitionMessage(message);
 
       try (Locker locker = new Locker(partitionMutex)) {
-        Utils.changeDBRoleAndUpStream(LOCAL_HOST_IP, adminPort, Utils.getDbName(partitionName),
-            "FOLLOWER", LOCAL_HOST_IP, adminPort);
+        Utils.changeDBRoleAndUpStream("localhost", adminPort, Utils.getDbName(partitionName),
+            "FOLLOWER", "127.0.0.1", adminPort);
         leaderEventsCollector.addEvent(LeaderEventType.PARTICIPANT_LEADER_DOWN_SUCCESS, null);
       } catch (RuntimeException e) {
         leaderEventsCollector.addEvent(LeaderEventType.PARTICIPANT_LEADER_DOWN_FAILURE, null);
@@ -386,26 +385,17 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
               upstream = instanceNameAndRole.getKey();
             }
           }
-          String upstreamHost = (upstream == null ? LOCAL_HOST_IP : upstream.split("_")[0]);
+          String upstreamHost = (upstream == null ? "127.0.0.1" : upstream.split("_")[0]);
           snapshotHost = upstreamHost;
           int upstreamPort =
               (upstream == null ? adminPort : Integer.parseInt(upstream.split("_")[1]));
           snapshotPort = upstreamPort;
 
           // check if the local replica needs rebuild
-          CheckDBResponse
-              localStatus =
-              Utils.checkRemoteOrLocalDB(LOCAL_HOST_IP, adminPort, dbName, true, null);
-          CheckDBResponse upstreamStatus = null;
-          if (!upstreamHost.equals(LOCAL_HOST_IP) && !upstreamHost.equals(this.host)) {
-            upstreamStatus =
-                Utils.checkRemoteOrLocalDB(upstreamHost, upstreamPort, dbName, true, null);
-          }
+          CheckDBResponse localStatus = Utils.checkLocalDB(dbName, adminPort);
 
           boolean needRebuild = true;
-          if (upstreamStatus != null && !upstreamStatus.db_metas.equals(localStatus.db_metas)) {
-            LOG.error("upstreamStatus exist and differ from localStatus, rebuild.");
-          } else if (liveHostAndRole.isEmpty()) {
+          if (liveHostAndRole.isEmpty()) {
             LOG.error("No other live replicas, skip rebuild " + dbName);
             needRebuild = false;
           } else if (System.currentTimeMillis() <
@@ -423,7 +413,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
 
           // if rebuild is not needed, setup upstream and return
           if (!needRebuild) {
-            Utils.changeDBRoleAndUpStream(LOCAL_HOST_IP, adminPort, dbName, "FOLLOWER",
+            Utils.changeDBRoleAndUpStream("localhost", adminPort, dbName, "FOLLOWER",
                 upstreamHost, upstreamPort);
             Utils.logTransitionCompletionMessage(message);
             return;

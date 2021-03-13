@@ -12,6 +12,7 @@
 /// See the License for the specific language governing permissions and
 /// limitations under the License.
 
+
 #pragma once
 
 #include <string>
@@ -28,15 +29,6 @@ namespace admin {
 // along with basic data operations(read/write)
 class ApplicationDB {
  public:
-
-  struct Properties {
-    // "applicationdb.num-levels" - return string of the configured level of DB
-    static const std::string kNumLevels;
-    // "applicationdb.highest-empty-level" - return string of the highest empty
-    // level number
-    static const std::string kHighestEmptyLevel;
-  };
-
   // Create a ApplicationDB instance
   // db_name:       (IN) name of this db instance
   // db:            (IN) shared pointer of rocksdb instance
@@ -97,17 +89,9 @@ class ApplicationDB {
   rocksdb::Status CompactRange(const rocksdb::CompactRangeOptions& options,
                                const rocksdb::Slice* begin,
                                const rocksdb::Slice* end);
-
-  rocksdb::Status GetOptions(std::vector<std::string>& option_names,
-                             std::map<std::string, std::string>* options_map);
-
-  rocksdb::Status GetStringFromOptions(std::string* options_str,
-                                       const rocksdb::Options& options,
-                                       const std::string& delimiter = ";  ");
-
-  bool GetProperty(const rocksdb::Slice& property, std::string* value);
-
-  bool DBLmaxEmpty();
+  
+  // get the highest empty level of default column family
+  uint32_t getHighestEmptyLevel();
 
   // Whether this db instance is slave
   bool IsSlave() const { return role_ == replicator::DBRole::SLAVE; }
@@ -129,9 +113,6 @@ class ApplicationDB {
   ~ApplicationDB();
 
  private:
-  // get the highest empty level of default column family
-  uint32_t getHighestEmptyLevel();
-
   const std::string db_name_;
   std::shared_ptr<rocksdb::DB> db_;
 

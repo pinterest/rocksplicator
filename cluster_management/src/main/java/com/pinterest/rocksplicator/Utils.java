@@ -47,14 +47,12 @@ import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Utils {
 
   private static final Logger LOG = LoggerFactory.getLogger(Utils.class);
-  private static final String LOCAL_HOST_IP = "127.0.0.1";
 
   /**
    * Build a thrift client to local adminPort
@@ -63,7 +61,7 @@ public class Utils {
    * @throws TTransportException
    */
   public static Admin.Client getLocalAdminClient(int adminPort) throws TTransportException {
-    return getAdminClient(LOCAL_HOST_IP, adminPort);
+    return getAdminClient("localhost", adminPort);
   }
 
   /**
@@ -118,7 +116,7 @@ public class Utils {
    */
   public static void closeDB(String dbName, int adminPort) {
     try {
-      closeRemoteOrLocalDB(LOCAL_HOST_IP, adminPort, dbName);
+      closeRemoteOrLocalDB("localhost", adminPort, dbName);
     } catch (RuntimeException e) {
       LOG.error("closeDB failed with exception", e);
     }
@@ -159,7 +157,7 @@ public class Utils {
     try {
       try {
         client = getLocalAdminClient(adminPort);
-        req = new AddDBRequest(dbName, LOCAL_HOST_IP);
+        req = new AddDBRequest(dbName, "127.0.0.1");
         req.setDb_role(dbRole);
         client.addDB(req);
       } catch (AdminException e) {
@@ -220,7 +218,7 @@ public class Utils {
   public static long getLocalLatestSequenceNumber(String dbName, int adminPort)
       throws RuntimeException {
     LOG.error("Get local seq number");
-    long seqNum = getLatestSequenceNumber(dbName, LOCAL_HOST_IP, adminPort);
+    long seqNum = getLatestSequenceNumber(dbName, "localhost", adminPort);
     if (seqNum == -1) {
       throw new RuntimeException("Failed to fetch local sequence number for DB: " + dbName);
     }
@@ -277,35 +275,23 @@ public class Utils {
   }
 
   /**
-   * Check the status of a local DB.
-   * This method is deprecated, please use @checkRemoteOrLocalDB
+   * Check the status of a local DB
    * @param dbName
    * @param adminPort
    * @return the DB status
    * @throws RuntimeException
    */
-  @Deprecated
   public static CheckDBResponse checkLocalDB(String dbName, int adminPort) throws RuntimeException {
-    return checkRemoteOrLocalDB(LOCAL_HOST_IP, adminPort, dbName, false, null);
-  }
-
-  public static CheckDBResponse checkRemoteOrLocalDB(String host, int adminPort, String dbName,
-                                                     boolean includeMeta,
-                                                     List<String> optionNames) {
     try {
-      Admin.Client client = getAdminClient(host, adminPort);
+      Admin.Client client = getLocalAdminClient(adminPort);
 
       CheckDBRequest req = new CheckDBRequest(dbName);
-      req.setInclude_meta(includeMeta);
-      req.setOption_names(optionNames);
-
       return client.checkDB(req);
     } catch (TException e) {
       LOG.error("Failed to check DB: ", e);
       throw new RuntimeException(e);
     }
   }
-
 
   /**
    * Backup the DB on the host
@@ -357,7 +343,7 @@ public class Utils {
   public static void restoreLocalDB(int adminPort, String dbName, String hdfsPath,
                                     String upsreamHost, int upstreamPort)
       throws RuntimeException {
-    restoreRemoteOrLocalDB(LOCAL_HOST_IP, adminPort, dbName, hdfsPath, upsreamHost, upstreamPort);
+    restoreRemoteOrLocalDB("localhost", adminPort, dbName, hdfsPath, upsreamHost, upstreamPort);
   }
 
   public static void restoreRemoteOrLocalDB(String host, int adminPort, String dbName,
@@ -446,7 +432,7 @@ public class Utils {
   public static void restoreLocalDBFromS3(int adminPort, String dbName, String s3Bucket,
                                           String s3Path, String upsreamHost, int upstreamPort)
       throws RuntimeException {
-    restoreRemoteOrLocalDBFromS3(LOCAL_HOST_IP, adminPort, dbName, s3Bucket, s3Path, upsreamHost,
+    restoreRemoteOrLocalDBFromS3("localhost", adminPort, dbName, s3Bucket, s3Path, upsreamHost,
         upstreamPort);
   }
 
