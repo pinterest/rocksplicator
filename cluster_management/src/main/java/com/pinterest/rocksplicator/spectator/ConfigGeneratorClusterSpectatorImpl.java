@@ -169,8 +169,13 @@ public class ConfigGeneratorClusterSpectatorImpl implements ClusterSpectator {
     if (this.clusterShardMapAgent == null) {
       if (shardMapZkSvr != null && !shardMapZkSvr.isEmpty()) {
         if (shardMapDownloadDir != null && !shardMapDownloadDir.isEmpty()) {
+          /**
+           * There is no need to share the zk client, as number of spectator instances is expected
+           * to be really small and total number of zk clients created will be linear to number of
+           * participant clusters being watched in total by all spectator instances...
+           */
           this.clusterShardMapAgent =
-              new ClusterShardMapAgent(shardMapZkSvr, clusterName, shardMapDownloadDir);
+              new ClusterShardMapAgent(shardMapZkSvr, null, clusterName, shardMapDownloadDir);
           this.clusterShardMapAgent.startNotification();
           LOGGER.info(
               String.format("Successfully started ShardMapAgent for cluster=%s", clusterName));

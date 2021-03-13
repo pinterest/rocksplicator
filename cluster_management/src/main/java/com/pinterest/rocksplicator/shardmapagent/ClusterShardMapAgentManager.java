@@ -96,7 +96,8 @@ public class ClusterShardMapAgentManager implements Closeable {
         try {
           LOG.error(String.format("Start Watching cluster: %s", cluster));
           ClusterShardMapAgent agent =
-              new ClusterShardMapAgent(this.zkShardMapSvr, cluster, shardMapDir);
+              new ClusterShardMapAgent(this.zkShardMapSvr, this.zkShardMapClient, cluster,
+                  shardMapDir);
           clusterAgents.put(cluster, agent);
           clusterAgents.get(cluster).startNotification();
         } catch (Exception e) {
