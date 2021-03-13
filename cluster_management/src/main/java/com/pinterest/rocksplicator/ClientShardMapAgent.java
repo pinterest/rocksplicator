@@ -46,7 +46,6 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
@@ -180,25 +179,25 @@ public class ClientShardMapAgent {
       };
     }
 
-    final AtomicReference<CuratorFramework> zkShardMapClientRef = new AtomicReference<>(null);
+    CuratorFramework localZkShardMapClient = null;
     if (!disableSharingZkClient) {
-      CuratorFramework zkShardMapClient = CuratorFrameworkFactory
+      localZkShardMapClient = CuratorFrameworkFactory
           .newClient(zkConnectString,
               new BoundedExponentialBackoffRetry(
                   250, 10000, 60));
 
-      zkShardMapClient.start();
+      localZkShardMapClient.start();
       try {
-        zkShardMapClient.blockUntilConnected(120, TimeUnit.SECONDS);
-        zkShardMapClientRef.set(zkShardMapClient);
+        localZkShardMapClient.blockUntilConnected(120, TimeUnit.SECONDS);
       } catch (InterruptedException e) {
-        zkShardMapClient.close();
+        localZkShardMapClient.close();
         throw new RuntimeException();
       }
     }
 
+    final CuratorFramework zkShardMapClient = localZkShardMapClient;
     ClusterShardMapAgentManager handler =
-        new ClusterShardMapAgentManager(zkConnectString, zkShardMapClientRef.get(),
+        new ClusterShardMapAgentManager(zkConnectString, zkShardMapClient,
             shardMapDownloadDir, clustersSupplier);
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -209,8 +208,8 @@ public class ClientShardMapAgent {
         } catch (IOException e) {
           e.printStackTrace();
         }
-        if (zkShardMapClientRef.get() != null) {
-          zkShardMapClientRef.get().close();
+        if (zkShardMapClient != null) {
+          zkShardMapClient.close();
         }
       }
     });
