@@ -201,7 +201,6 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
       if (latestResourceMapStr != null && latestResourceMapStr.equals(currentResourceMapStr)) {
         return;
       }
-      latestResourceToConfigMap.put(resourceName, currentResourceMapStr);
 
       final JSONObject topLevelJSONObject = new JSONObject();
       final JSONObject metaBlock = new JSONObject();
@@ -232,6 +231,7 @@ public class ZkBasedPerResourceShardMapPublisher implements ShardMapPublisher<JS
         } else {
           zkShardMapClient.setData().forPath(zkPath, serializedCompressedJson);
         }
+        latestResourceToConfigMap.put(resourceName, currentResourceMapStr);
       } catch (Exception e) {
         LOG.error(String.format(
             "Error publishing shard_map / resource_map to zk cluster: %s, resource: %s",
