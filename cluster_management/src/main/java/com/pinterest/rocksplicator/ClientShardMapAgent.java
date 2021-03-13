@@ -32,6 +32,9 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.CuratorFrameworkFactory;
+import org.apache.curator.retry.BoundedExponentialBackoffRetry;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.ConsoleAppender;
 import org.apache.log4j.Level;
@@ -42,6 +45,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
@@ -71,6 +76,7 @@ public class ClientShardMapAgent {
   private static final String clustersArg = "clusters";
   private static final String clustersFileArg = "clustersFile";
   private static final String shardMapDownloadDirArg = "shardMapDownloadDir";
+  private static final String disableSharingZkClientArg = "disableSharingZkClient";
 
   private static Options constructCommandLineOptions() {
     Option shardMapZkSvrOption =
@@ -104,11 +110,20 @@ public class ClientShardMapAgent {
     shardMapDownloadDirOption.setRequired(true);
     shardMapDownloadDirOption.setArgName(shardMapDownloadDirArg);
 
+    Option disableSharingZkClientOption = OptionBuilder
+        .withLongOpt(disableSharingZkClientArg)
+        .withDescription("Explicitly disable sharing zk connection for watching multiple clusters")
+        .create();
+    disableSharingZkClientOption.setArgs(0);
+    disableSharingZkClientOption.setRequired(false);
+    disableSharingZkClientOption.setArgName(disableSharingZkClientArg);
+
     Options options = new Options();
     options.addOption(shardMapZkSvrOption)
         .addOption(clustersOption)
         .addOption(clustersFileOption)
-        .addOption(shardMapDownloadDirOption);
+        .addOption(shardMapDownloadDirOption)
+        .addOption(disableSharingZkClientOption);
 
     return options;
   }
@@ -130,6 +145,7 @@ public class ClientShardMapAgent {
     final String shardMapDownloadDir = cmd.getOptionValue(shardMapDownloadDirArg);
     final String csClusters = cmd.getOptionValue(clustersArg, "");
     final String clustersFile = cmd.getOptionValue(clustersFileArg, "");
+    final boolean disableSharingZkClient = cmd.hasOption(disableSharingZkClientArg);
 
     Preconditions.checkArgument(!(csClusters.isEmpty() && clustersFile.isEmpty()));
 
@@ -164,8 +180,26 @@ public class ClientShardMapAgent {
       };
     }
 
+    final AtomicReference<CuratorFramework> zkShardMapClientRef = new AtomicReference<>(null);
+    if (!disableSharingZkClient) {
+      CuratorFramework zkShardMapClient = CuratorFrameworkFactory
+          .newClient(zkConnectString,
+              new BoundedExponentialBackoffRetry(
+                  250, 10000, 60));
+
+      zkShardMapClient.start();
+      try {
+        zkShardMapClient.blockUntilConnected(120, TimeUnit.SECONDS);
+        zkShardMapClientRef.set(zkShardMapClient);
+      } catch (InterruptedException e) {
+        zkShardMapClient.close();
+        throw new RuntimeException();
+      }
+    }
+
     ClusterShardMapAgentManager handler =
-        new ClusterShardMapAgentManager(zkConnectString, shardMapDownloadDir, clustersSupplier);
+        new ClusterShardMapAgentManager(zkConnectString, zkShardMapClientRef.get(),
+            shardMapDownloadDir, clustersSupplier);
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override
@@ -174,6 +208,9 @@ public class ClientShardMapAgent {
           handler.close();
         } catch (IOException e) {
           e.printStackTrace();
+        }
+        if (zkShardMapClientRef.get() != null) {
+          zkShardMapClientRef.get().close();
         }
       }
     });
