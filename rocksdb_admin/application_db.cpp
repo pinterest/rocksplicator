@@ -12,7 +12,6 @@
 /// See the License for the specific language governing permissions and
 /// limitations under the License.
 
-
 #include "rocksdb_admin/application_db.h"
 
 #include <string>
@@ -41,6 +40,13 @@ const std::string kRocksdbCompactionMs = "rocksdb_compact_range_ms";
 }  // anonymous namespace
 
 namespace admin {
+
+static const std::string rocksdb_prefix = "rocksdb.";
+static const std::string applicationdb_prefix = "applicationdb.";
+const std::string ApplicationDB::Properties::kNumLevels =
+    applicationdb_prefix + "num-levels";
+const std::string ApplicationDB::Properties::kHighestEmptyLevel =
+    applicationdb_prefix + "highest-empty-level";
 
 ApplicationDB::ApplicationDB(
     const std::string& db_name,
@@ -171,6 +177,47 @@ rocksdb::Status ApplicationDB::GetStringFromOptions(
   }
   *options_str = dboptions_str + delimiter + cfoptions_str;
   return rocksdb::Status();
+}
+
+bool ApplicationDB::GetProperty(const rocksdb::Slice& property,
+                                std::string* value) {
+  if (property.starts_with(applicationdb_prefix)) {
+    if (property == Properties::kHighestEmptyLevel) {
+      *value = std::to_string(getHighestEmptyLevel());
+      return true;
+    } else if (property == Properties::kNumLevels) {
+      *value = std::to_string(db_->NumberLevels());
+      return true;
+    } else {
+      LOG(ERROR) << "ApplicationDb property not defined, "
+                 << property.ToString();
+      return false;
+    }
+  } else if (property.starts_with(rocksdb_prefix)) {
+    return db_->GetProperty(property, value);
+  } else {
+    LOG(ERROR) << "Property not defined, " << property.ToString();
+    return false;
+  }
+}
+
+bool ApplicationDB::DBLmaxEmpty() {
+  std::string num_levels;
+  std::string highest_empty_level;
+  auto ex = folly::try_and_catch<std::exception>(
+      [&num_levels, &highest_empty_level, this]() {
+        if (this->GetProperty(Properties::kNumLevels, &num_levels) &&
+            this->GetProperty(Properties::kHighestEmptyLevel,
+                              &highest_empty_level) &&
+            std::atoi(num_levels.c_str()) - 1 !=
+                std::atoi(highest_empty_level.c_str())) {
+          LOG(INFO) << "DBLmax not empty, num_levels: " << num_levels
+                    << ", highest_empty_level: " << highest_empty_level;
+          return false;
+        }
+      });
+  ex.with_exception([](std::exception& e) { LOG(ERROR) << e.what(); });
+  return true;
 }
 
 uint32_t ApplicationDB::getHighestEmptyLevel() {

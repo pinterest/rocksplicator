@@ -1300,6 +1300,20 @@ void AdminHandler::async_tm_checkDB(
     response.__isset.db_metas = true;
   }
 
+  if (request->__isset.property_names && !request->property_names.empty()) {
+    std::map<std::string, std::string> properties;
+    for (const auto& p : request->property_names) {
+      std::string p_val;
+      if (db->GetProperty(p, &p_val)) {
+        properties[p] = p_val;
+      } else {
+        LOG(ERROR) << "Failed to getProperty for " << p;
+      }
+    }
+    response.properties = properties;
+    response.__isset.properties = true;
+  }
+
   callback->result(response);
 }
 
@@ -1558,7 +1572,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
       callback.release()->exceptionInThread(std::move(e));
       return;
     }
-    if (db->getHighestEmptyLevel() != db->rocksdb()->NumberLevels() - 1) {
+    if (!db->DBLmaxEmpty()) {
       // note: default num levels for DB is 7 (0, 1, ..., 6)
       std::string errMsg = "The Lmax of DB is not empty, skip ingestion to " + request->db_name;
       e.message = errMsg;
