@@ -2,7 +2,6 @@ package com.pinterest.rocksplicator.publisher;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.pinterest.rocksplicator.codecs.ZkGZIPCompressedShardMapCodec;
@@ -26,6 +25,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 public class ZkBasedPerResourceShardMapPublisherTest {
+
   private static final String CLUSTER_NAME = "myCluster";
   private static final String RESOURCE_1 = "myResource_1";
   private static final String RESOURCE_2 = "myResource_2";
@@ -70,22 +70,24 @@ public class ZkBasedPerResourceShardMapPublisherTest {
     JSONObject retrieved1 = getData(RESOURCE_1);
     JSONObject shard_map_1 = new JSONObject();
     shard_map_1.put(RESOURCE_1, resourceJsonObj1);
-    assertEquals(shard_map_1.toJSONString(), ((JSONObject)retrieved1.get("shard_map")).toJSONString());
+    assertEquals(shard_map_1.toJSONString(),
+        ((JSONObject) retrieved1.get("shard_map")).toJSONString());
 
     shard_map.put(RESOURCE_2, resourceJsonObj2);
     publisher.publish(resources, externalViews, shard_map);
     JSONObject retrieved_1_1 = getData(RESOURCE_1);
     JSONObject retrieved_2_1 = getData(RESOURCE_2);
 
-    assertEquals(shard_map_1.toJSONString(), ((JSONObject)retrieved_1_1.get("shard_map")).toJSONString());
+    assertEquals(shard_map_1.toJSONString(),
+        ((JSONObject) retrieved_1_1.get("shard_map")).toJSONString());
 
     //Ensure the first one has not changed.
     assertEquals(retrieved_1_1.toJSONString(), retrieved1.toJSONString());
 
     JSONObject shard_map_2 = new JSONObject();
     shard_map_2.put(RESOURCE_2, resourceJsonObj2);
-    assertEquals(shard_map_2.toJSONString(), ((JSONObject)retrieved_2_1.get("shard_map")).toJSONString());
-
+    assertEquals(shard_map_2.toJSONString(),
+        ((JSONObject) retrieved_2_1.get("shard_map")).toJSONString());
 
     // Make a change in resource2
     resourceJsonObj2 = new JSONObject();
@@ -97,10 +99,10 @@ public class ZkBasedPerResourceShardMapPublisherTest {
     JSONObject retrieved_2_2 = getData(RESOURCE_2);
 
     //Ensure that second one is on expected lines
-    assertEquals(shard_map_2_2.toJSONString(), ((JSONObject)retrieved_2_2.get("shard_map")).toJSONString());
+    assertEquals(shard_map_2_2.toJSONString(),
+        ((JSONObject) retrieved_2_2.get("shard_map")).toJSONString());
     // And it is different from posted earlier.
     assertNotEquals(retrieved_2_1.toJSONString(), retrieved_2_2.toJSONString());
-
 
     // Now ensure that the resource 2 is removed...
     shard_map.put(RESOURCE_3, resourceJsonObj3);

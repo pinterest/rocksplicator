@@ -35,6 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel> {
+
   private static final int MAX_ZK_RETRIES = 7;
   private final int adminPort;
   private final String cluster;
@@ -46,7 +47,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
     this.adminPort = adminPort;
     this.cluster = cluster;
     this.zkClient = CuratorFrameworkFactory.newClient(zkConnectString,
-        new BoundedExponentialBackoffRetry(1000,  10000, MAX_ZK_RETRIES));
+        new BoundedExponentialBackoffRetry(1000, 10000, MAX_ZK_RETRIES));
     zkClient.start();
   }
 
@@ -57,6 +58,7 @@ public class OnlineOfflineStateModelFactory extends StateModelFactory<StateModel
   }
 
   public static class OnlineOfflineStateModel extends StateModel {
+
     private static final Logger LOG = LoggerFactory.getLogger(OnlineOfflineStateModel.class);
 
     private final String resourceName;

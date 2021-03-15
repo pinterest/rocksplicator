@@ -621,11 +621,19 @@ void AdminHandler::async_tm_addDB(
     }
   }
 
-  if (!writeMetaData(request->db_name, "", "")) {
-    std::string errMsg = "AddDB failed to write initial DBMetaData for " + request->db_name;
-    SetException(errMsg, admin::AdminErrorCode::DB_ADMIN_ERROR, &callback);
-    LOG(ERROR) << errMsg;
-    return;
+  // update meta if not exist
+  auto meta = getMetaData(request->db_name);
+  if (!meta.__isset.s3_bucket && !meta.__isset.s3_path &&
+      !meta.__isset.last_kafka_msg_timestamp_ms) {
+    LOG(INFO) << "No preivous meta exist, write a fresh meta to metadb for db: "
+              << request->db_name;
+    if (!writeMetaData(request->db_name, "", "")) {
+      std::string errMsg =
+          "AddDB failed to write initial DBMetaData for " + request->db_name;
+      SetException(errMsg, admin::AdminErrorCode::DB_ADMIN_ERROR, &callback);
+      LOG(ERROR) << errMsg;
+      return;
+    }
   }
 
   if (!db_manager_->addDB(request->db_name,
@@ -1482,6 +1490,9 @@ std::shared_ptr<common::S3Util> AdminHandler::createLocalS3Util(
   return local_s3_util;
 }
 
+// This API is used to ingest sst files to DB with two models: ingest ahead or ingest behind.
+// It will check local metaData to avoid duplicate ingestion. If ingest_behind, DB's Lmax
+// must also be emtpy and DB must created with allow_ingest_behind. 
 void AdminHandler::async_tm_addS3SstFilesToDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       AddS3SstFilesToDBResponse>>> callback,
@@ -1501,12 +1512,37 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     return;
   }
 
+  // it is important to check meta first to avoid double ingestion
   auto meta = getMetaData(request->db_name);
   if (meta.__isset.s3_bucket && meta.s3_bucket == request->s3_bucket &&
       meta.__isset.s3_path && meta.s3_path == request->s3_path) {
     LOG(INFO) << "Already hosting " << meta.s3_bucket << "/" << meta.s3_path;
     callback->result(AddS3SstFilesToDBResponse());
     return;
+  } else {
+    LOG(INFO) << folly::stringPrintf(
+        "Current meta, s3_bucket: %s, s3_path: %s. Update with, s3_bucket: %s, "
+        "s3_path: %s",
+        meta.s3_bucket.c_str(), meta.s3_path.c_str(),
+        request->s3_bucket.c_str(), request->s3_path.c_str());
+  }
+
+  bool ingest_behind = request->__isset.ingest_behind && request->ingest_behind;
+  if (ingest_behind) {
+    if (!db->rocksdb()->GetDBOptions().allow_ingest_behind) {
+      e.message = request->db_name + " DBOptions.allow_ingest_behind false";
+      LOG(ERROR) << "DBOptions.allow_ingest_behind false, can't ingest behind " << request->db_name;
+      callback.release()->exceptionInThread(std::move(e));
+      return;
+    }
+    if (db->getHighestEmptyLevel() != db->rocksdb()->NumberLevels() - 1) {
+      // note: default num levels for DB is 7 (0, 1, ..., 6)
+      std::string errMsg = "The Lmax of DB is not empty, skip ingestion to " + request->db_name;
+      e.message = errMsg;
+      callback.release()->exceptionInThread(std::move(e));
+      LOG(ERROR) << errMsg;
+      return;
+    }
   }
 
   // The local data is not the latest, so we need to download the latest data
@@ -1590,6 +1626,8 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
       allow_overlapping_keys_segments_.find(segment) !=
       allow_overlapping_keys_segments_.end();
   // OR with the flag to make backwards compatibility
+  // It is very important to allow overlapping keys if ingest to an existing DB,
+  // and do not intend to clear the existing data
   allow_overlapping_keys =
       allow_overlapping_keys || FLAGS_rocksdb_allow_overlapping_keys;
   if (!allow_overlapping_keys) {
@@ -1642,6 +1680,9 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   /* if true, rocksdb will allow for overlapping keys */
   ifo.allow_global_seqno = allow_overlapping_keys;
   ifo.allow_blocking_flush = allow_overlapping_keys;
+  if (ingest_behind) {
+    ifo.ingest_behind = true;
+  }
   auto status = db->rocksdb()->IngestExternalFile(sst_file_paths, ifo);
   if (!OKOrSetException(status,
                         AdminErrorCode::DB_ADMIN_ERROR,
@@ -1659,6 +1700,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   }
   
 
+  // attention: no compaction during backfill to prevent removing deletion tombstone
   if (FLAGS_compact_db_after_load_sst) {
     auto status = db->rocksdb()->CompactRange(nullptr, nullptr);
     if (!status.ok()) {

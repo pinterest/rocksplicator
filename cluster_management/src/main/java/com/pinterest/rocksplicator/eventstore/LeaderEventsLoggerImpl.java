@@ -36,6 +36,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
+
   private static final Logger LOGGER = LoggerFactory.getLogger(LeaderEventsLoggerImpl.class);
 
   private final String zkConnectString;
@@ -75,7 +76,8 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
      * If there is not valid resourceConfigType available, there is no configStore.
      */
     ConfigStore<Set<String>> localConfigStore = null;
-    if (decoder != null && resourcesEnabledConfigPath != null && !resourcesEnabledConfigPath.isEmpty()) {
+    if (decoder != null && resourcesEnabledConfigPath != null && !resourcesEnabledConfigPath
+        .isEmpty()) {
       try {
         localConfigStore = new ConfigStore<Set<String>>(decoder, resourcesEnabledConfigPath);
       } catch (IOException e) {
@@ -85,9 +87,11 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
     this.enabledResourcesCache = localConfigStore;
 
     /**
-     * If there is no enabledResourcesCache or empty zkConnectString, there is no leaderEventHistoryStore
+     * If there is no enabledResourcesCache or empty zkConnectString, there is no
+     * leaderEventHistoryStore
      */
-    if (this.enabledResourcesCache != null && zkConnectString != null && !zkConnectString.isEmpty()) {
+    if (this.enabledResourcesCache != null && zkConnectString != null && !zkConnectString
+        .isEmpty()) {
       this.leaderEventHistoryStore = new LeaderEventHistoryStore(
           zkConnectString, clusterName, maxEventsToKeep);
     } else {
@@ -138,6 +142,7 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
   }
 
   private static class LoggingDisabledLeaderEventsCollector implements LeaderEventsCollector {
+
     @Override
     public LeaderEventsCollector addEvent(LeaderEventType eventType, String leaderNode) {
       // Ignore
@@ -157,6 +162,7 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
   }
 
   private static class ResourceDisabledLeaderEventsCollector implements LeaderEventsCollector {
+
     private final String resourceName;
     private final String partitionName;
 
@@ -167,14 +173,18 @@ public class LeaderEventsLoggerImpl implements LeaderEventsLogger {
 
     @Override
     public LeaderEventsCollector addEvent(LeaderEventType eventType, String leaderNode) {
-      LOGGER.info(String.format("Ignoring disabled Resource: %s Partition:%s LeaderEventType: %s", resourceName, partitionName, eventType));
+      LOGGER.info(String
+          .format("Ignoring disabled Resource: %s Partition:%s LeaderEventType: %s", resourceName,
+              partitionName, eventType));
       return this;
     }
 
     @Override
     public LeaderEventsCollector addEvent(LeaderEventType eventType, String leaderNode,
                                           long eventTimeMillis) {
-      LOGGER.info(String.format("Ignoring disabled Resource: %s Partition:%s LeaderEventType: %s", resourceName, partitionName, eventType));
+      LOGGER.info(String
+          .format("Ignoring disabled Resource: %s Partition:%s LeaderEventType: %s", resourceName,
+              partitionName, eventType));
       return this;
     }
 

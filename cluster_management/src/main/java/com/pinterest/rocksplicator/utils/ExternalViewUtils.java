@@ -21,12 +21,14 @@ package com.pinterest.rocksplicator.utils;
 import org.apache.helix.model.ExternalView;
 
 public class ExternalViewUtils {
+
   private ExternalViewUtils() {
     throw new AssertionError(
         "Cannot instantiate static utility class ExternalViewUtils");
   }
 
   public static class StateUtils {
+
     public static boolean isStateOnline(String state) {
       return "ONLINE".equalsIgnoreCase(state);
     }

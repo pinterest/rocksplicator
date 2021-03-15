@@ -19,6 +19,7 @@
 package com.pinterest.rocksplicator.config;
 
 public class WatchedFileContext<R> {
+
   private R data;
   private long lastModifiedTimeMillis;
 

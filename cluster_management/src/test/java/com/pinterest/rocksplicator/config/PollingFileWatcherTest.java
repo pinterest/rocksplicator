@@ -47,14 +47,15 @@ public class PollingFileWatcherTest extends ConfigTestBase {
     writeContentToFile(testConfigFile, "test1");
 
     // Setup watch and ensure it fires immediately.
-    configFileWatcher.addWatch(testConfigFile.getPath(), new Function<WatchedFileContext<byte[]>, Void>() {
-      @Override
-      public Void apply(WatchedFileContext<byte[]> context) {
-        watchFiredCount.incrementAndGet();
-        contentRetrieved.set(new String(context.getData(), Charsets.UTF_8));
-        return null;
-      }
-    });
+    configFileWatcher
+        .addWatch(testConfigFile.getPath(), new Function<WatchedFileContext<byte[]>, Void>() {
+          @Override
+          public Void apply(WatchedFileContext<byte[]> context) {
+            watchFiredCount.incrementAndGet();
+            contentRetrieved.set(new String(context.getData(), Charsets.UTF_8));
+            return null;
+          }
+        });
     assertEquals(1, watchFiredCount.get());
     assertEquals("test1", contentRetrieved.get());
 
@@ -174,14 +175,15 @@ public class PollingFileWatcherTest extends ConfigTestBase {
     for (int i = 0; i < 10; i++) {
       fileContents.add(new AtomicReference<String>());
       final int index = i;
-      configFileWatcher.addWatch(testConfigFile.getPath(), new Function<WatchedFileContext<byte[]>, Void>() {
-        @Override
-        public Void apply(WatchedFileContext<byte[]> context) {
-          watchesFired.incrementAndGet();
-          fileContents.get(index).set(new String(context.getData(), Charsets.UTF_8));
-          return null;
-        }
-      });
+      configFileWatcher
+          .addWatch(testConfigFile.getPath(), new Function<WatchedFileContext<byte[]>, Void>() {
+            @Override
+            public Void apply(WatchedFileContext<byte[]> context) {
+              watchesFired.incrementAndGet();
+              fileContents.get(index).set(new String(context.getData(), Charsets.UTF_8));
+              return null;
+            }
+          });
     }
     assertEquals(10, watchesFired.get());
     for (AtomicReference<String> sRef : fileContents) {
@@ -211,23 +213,25 @@ public class PollingFileWatcherTest extends ConfigTestBase {
 
     // Add a watcher that throws an exception in its callback. It should not prevent other
     // watchers from getting notified.
-    configFileWatcher.addWatch(testConfigFile.getPath(), new Function<WatchedFileContext<byte[]>, Void>() {
-      @Override
-      public Void apply(WatchedFileContext<byte[]> context) {
-        if (new String(context.getData(), Charset.defaultCharset()).equals("update")) {
-          throw new RuntimeException();
-        }
-        return null;
-      }
-    });
+    configFileWatcher
+        .addWatch(testConfigFile.getPath(), new Function<WatchedFileContext<byte[]>, Void>() {
+          @Override
+          public Void apply(WatchedFileContext<byte[]> context) {
+            if (new String(context.getData(), Charset.defaultCharset()).equals("update")) {
+              throw new RuntimeException();
+            }
+            return null;
+          }
+        });
 
-    configFileWatcher.addWatch(testConfigFile.getPath(), new Function<WatchedFileContext<byte[]>, Void>() {
-      @Override
-      public Void apply(WatchedFileContext<byte[]> context) {
-        watchesFired.incrementAndGet();
-        return null;
-      }
-    });
+    configFileWatcher
+        .addWatch(testConfigFile.getPath(), new Function<WatchedFileContext<byte[]>, Void>() {
+          @Override
+          public Void apply(WatchedFileContext<byte[]> context) {
+            watchesFired.incrementAndGet();
+            return null;
+          }
+        });
 
     assertEquals(1, watchesFired.get());
 
