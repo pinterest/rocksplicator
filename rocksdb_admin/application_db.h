@@ -89,7 +89,14 @@ class ApplicationDB {
   rocksdb::Status CompactRange(const rocksdb::CompactRangeOptions& options,
                                const rocksdb::Slice* begin,
                                const rocksdb::Slice* end);
-  
+
+  rocksdb::Status GetOptions(std::vector<std::string>& option_names,
+                             std::map<std::string, std::string>* options_map);
+
+  rocksdb::Status GetStringFromOptions(std::string* options_str,
+                                       const rocksdb::Options& options,
+                                       const std::string& delimiter = ";  ");
+
   // get the highest empty level of default column family
   uint32_t getHighestEmptyLevel();
 

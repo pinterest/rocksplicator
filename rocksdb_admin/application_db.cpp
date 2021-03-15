@@ -17,6 +17,7 @@
 
 #include <string>
 
+#include "rocksdb/convenience.h"
 #include "common/stats/stats.h"
 #include "common/timer.h"
 
@@ -133,6 +134,43 @@ rocksdb::Status ApplicationDB::CompactRange(
   common::Stats::get()->Incr(kRocksdbCompaction);
   common::Timer timer(kRocksdbCompactionMs);
   return db_->CompactRange(options, begin, end);
+}
+
+rocksdb::Status ApplicationDB::GetOptions(
+    std::vector<std::string>& option_names,
+    std::map<std::string, std::string>* options_map) {
+  rocksdb::Options options = db_->GetOptions();
+  std::string opts_str;
+  std::unordered_map<std::string, std::string> opts_map;
+  auto get_s = GetStringFromOptions(&opts_str, options);
+  auto to_map_s = rocksdb::StringToMap(opts_str, &opts_map);
+  if (!get_s.ok() || !to_map_s.ok()) {
+    return !get_s.ok() ? get_s : to_map_s;
+  }
+  for (const auto& option_name : option_names) {
+    if (opts_map.find(option_name) != opts_map.end()) {
+      (*options_map)[option_name] = opts_map[option_name];
+    } else {
+      LOG(ERROR) << "Option name not found, " << option_name;
+    }
+  }
+  return rocksdb::Status();
+}
+
+rocksdb::Status ApplicationDB::GetStringFromOptions(
+    std::string* options_str, const rocksdb::Options& options,
+    const std::string& delimiter) {
+  std::string dboptions_str;
+  std::string cfoptions_str;
+  auto db_s =
+      rocksdb::GetStringFromDBOptions(&dboptions_str, options, delimiter);
+  auto cf_s = rocksdb::GetStringFromColumnFamilyOptions(&cfoptions_str, options,
+                                                        delimiter);
+  if (!db_s.ok() || !cf_s.ok()) {
+    return !db_s.ok() ? db_s : cf_s;
+  }
+  *options_str = dboptions_str + delimiter + cfoptions_str;
+  return rocksdb::Status();
 }
 
 uint32_t ApplicationDB::getHighestEmptyLevel() {
