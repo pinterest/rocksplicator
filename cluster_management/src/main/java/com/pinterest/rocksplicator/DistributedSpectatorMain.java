@@ -58,6 +58,7 @@ import java.util.Arrays;
  */
 
 public class DistributedSpectatorMain {
+
   private static final Logger logger = LoggerFactory.getLogger(DistributedSpectatorMain.class);
 
   private static final String zkSvr = "zkSvr";
