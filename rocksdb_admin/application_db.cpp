@@ -16,6 +16,7 @@
 
 #include <string>
 
+#include "folly/Conv.h"
 #include "rocksdb/convenience.h"
 #include "common/stats/stats.h"
 #include "common/timer.h"
@@ -188,36 +189,26 @@ bool ApplicationDB::GetProperty(const rocksdb::Slice& property,
     } else if (property == Properties::kNumLevels) {
       *value = std::to_string(db_->NumberLevels());
       return true;
-    } else {
-      LOG(ERROR) << "ApplicationDb property not defined, "
-                 << property.ToString();
-      return false;
     }
   } else if (property.starts_with(rocksdb_prefix)) {
     return db_->GetProperty(property, value);
-  } else {
-    LOG(ERROR) << "Property not defined, " << property.ToString();
-    return false;
   }
+  LOG(ERROR) << "Property not defined, " << property.ToString();
+  return false;
 }
 
 bool ApplicationDB::DBLmaxEmpty() {
   std::string num_levels;
   std::string highest_empty_level;
-  auto ex = folly::try_and_catch<std::exception>(
-      [&num_levels, &highest_empty_level, this]() {
-        if (this->GetProperty(Properties::kNumLevels, &num_levels) &&
-            this->GetProperty(Properties::kHighestEmptyLevel,
-                              &highest_empty_level) &&
-            std::atoi(num_levels.c_str()) - 1 !=
-                std::atoi(highest_empty_level.c_str())) {
-          LOG(INFO) << "DBLmax not empty, num_levels: " << num_levels
-                    << ", highest_empty_level: " << highest_empty_level;
-          return false;
-        }
-      });
-  ex.with_exception([](std::exception& e) { LOG(ERROR) << e.what(); });
-  return true;
+  if (GetProperty(Properties::kNumLevels, &num_levels) &&
+      GetProperty(Properties::kHighestEmptyLevel, &highest_empty_level) &&
+      folly::to<int32_t>(num_levels) - 1 ==
+          folly::to<int32_t>(highest_empty_level)) {
+    return true;
+  }
+  LOG(INFO) << "DBLmax not empty, num_levels: " << num_levels
+            << ", highest_empty_level: " << highest_empty_level;
+  return false;
 }
 
 uint32_t ApplicationDB::getHighestEmptyLevel() {
