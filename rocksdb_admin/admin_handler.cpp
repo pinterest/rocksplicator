@@ -1295,7 +1295,8 @@ void AdminHandler::async_tm_checkDB(
     std::map<std::string, std::string> metas;
     metas["s3_bucket"] = meta.s3_bucket;
     metas["s3_path"] = meta.s3_path;
-    metas["last_kafka_msg_timestamp_ms"] = std::to_string(meta.last_kafka_msg_timestamp_ms);
+    metas["last_kafka_msg_timestamp_ms"] =
+        std::to_string(meta.last_kafka_msg_timestamp_ms);
     response.db_metas = metas;
     response.__isset.db_metas = true;
   }
@@ -1568,13 +1569,15 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   if (ingest_behind) {
     if (!db->rocksdb()->GetDBOptions().allow_ingest_behind) {
       e.message = request->db_name + " DBOptions.allow_ingest_behind false";
-      LOG(ERROR) << "DBOptions.allow_ingest_behind false, can't ingest behind " << request->db_name;
+      LOG(ERROR) << "DBOptions.allow_ingest_behind false, can't ingest behind "
+                 << request->db_name;
       callback.release()->exceptionInThread(std::move(e));
       return;
     }
     if (!db->DBLmaxEmpty()) {
       // note: default num levels for DB is 7 (0, 1, ..., 6)
-      std::string errMsg = "The Lmax of DB is not empty, skip ingestion to " + request->db_name;
+      std::string errMsg =
+          "The Lmax of DB is not empty, skip ingestion to " + request->db_name;
       e.message = errMsg;
       callback.release()->exceptionInThread(std::move(e));
       LOG(ERROR) << errMsg;
