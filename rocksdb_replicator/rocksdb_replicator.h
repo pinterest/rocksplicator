@@ -113,7 +113,6 @@ class RocksDBReplicator {
                  = nullptr);
 
     void pullFromUpstream();
-    void resetUpstream();
     using CallbackType =
       apache::thrift::HandlerCallback<std::unique_ptr<ReplicateResponse>>;
     void handleReplicateRequest(std::unique_ptr<CallbackType> callback,
@@ -128,7 +127,7 @@ class RocksDBReplicator {
     std::shared_ptr<rocksdb::DB> db_;
     folly::Executor* const executor_;
     const DBRole role_;
-    folly::SocketAddress upstream_addr_;
+    const folly::SocketAddress upstream_addr_;
     common::ThriftClientPool<ReplicatorAsyncClient>* const client_pool_;
     std::shared_ptr<ReplicatorAsyncClient> client_;
     detail::NonBlockingConditionVariable cond_var_;

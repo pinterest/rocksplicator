@@ -13,7 +13,7 @@
 /// limitations under the License.
 
 
-#include "common/segment_utils.h"
+#include "rocksdb_admin/utils.h"
 
 #include <string>
 
@@ -21,7 +21,7 @@
 
 const uint32_t kShardLength = 5;
 
-namespace common {
+namespace admin {
 
 std::string SegmentToDbName(const std::string& segment,
                             const int shard_id) {
@@ -47,8 +47,4 @@ int ExtractShardId(const std::string& db_name) {
   }
 }
 
-std::string DbNameToHelixPartitionName(const std::string& db_name) {
-  return DbNameToSegment(db_name) + '_' + std::to_string(ExtractShardId(db_name));
-}
-
-}  // namespace common
+}  // namespace admin

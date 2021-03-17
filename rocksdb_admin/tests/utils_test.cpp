@@ -13,43 +13,32 @@
 /// limitations under the License.
 
 
-#include "common/segment_utils.h"
+#include "rocksdb_admin/utils.h"
 
 #include "gtest/gtest.h"
 
 TEST(SegmentToDbNameTest, Basics) {
-  EXPECT_EQ(common::SegmentToDbName("seg", 1), "seg00001");
-  EXPECT_EQ(common::SegmentToDbName("seg", 12345), "seg12345");
+  EXPECT_EQ(admin::SegmentToDbName("seg", 1), "seg00001");
+  EXPECT_EQ(admin::SegmentToDbName("seg", 12345), "seg12345");
 }
 
 TEST(DbNameToSegmentTest, Basics) {
-  EXPECT_EQ(common::DbNameToSegment("seg00001"), "seg");
-  EXPECT_EQ(common::DbNameToSegment("seg12345"), "seg");
-  EXPECT_EQ(common::DbNameToSegment("seg12"), "seg12");
+  EXPECT_EQ(admin::DbNameToSegment("seg00001"), "seg");
+  EXPECT_EQ(admin::DbNameToSegment("seg12345"), "seg");
+  EXPECT_EQ(admin::DbNameToSegment("seg12"), "seg12");
 }
 
 TEST(ExtractShardIDTest, Basics) {
   std::string db_name;
 
   db_name = "test_db00000";
-  EXPECT_EQ(common::ExtractShardId(db_name), 0);
+  EXPECT_EQ(admin::ExtractShardId(db_name), 0);
 
   db_name = "test_db00030";
-  EXPECT_EQ(common::ExtractShardId(db_name), 30);
+  EXPECT_EQ(admin::ExtractShardId(db_name), 30);
 
   db_name = "test_db";
-  EXPECT_EQ(common::ExtractShardId(db_name), -1);
-}
-
-TEST(DbNameToHelixPartitionNameTest, Basics) {
-  std::string db_name;
-
-  db_name = "test_db00000";
-  EXPECT_EQ(common::DbNameToHelixPartitionName(db_name), "test_db_0");
-
-  db_name = "test_db00030";
-  EXPECT_EQ(common::DbNameToHelixPartitionName(db_name), "test_db_30");
-
+  EXPECT_EQ(admin::ExtractShardId(db_name), -1);
 }
 
 int main(int argc, char** argv) {
