@@ -107,8 +107,7 @@ public class IngestTask extends UserContentStore implements Task {
 
             LOG.error(String.format(
                 "IngestTask run to ingest partition: %s from partitionStorePath: %s to instance: "
-                    + "%s, "
-                    + "role: %s. Other info {taskCluster: %s, job: %s, RpcFrom: %s_%d, "
+                    + "%s, role: %s. Other info {taskCluster: %s, job: %s, RpcFrom: %s_%d, "
                     + "taskConfig=%s}",
                 partitionName, partitionStorePath, hostPort, dbRole, taskCluster, job, host,
                 adminPort, taskConfig.toString()));
@@ -144,7 +143,7 @@ public class IngestTask extends UserContentStore implements Task {
                 + partitionName);
       }
     } catch (Exception e) {
-      String errMsg = String.format("Task ingest failed. errMsg=%s. stacktrack=%s. taskConfig=%s.",
+      String errMsg = String.format("Task ingest failed. errMsg=%s. stacktrace=%s. taskConfig=%s.",
           e.getMessage(), Arrays.toString(e.getStackTrace()), taskConfig.toString());
       LOG.error(errMsg);
       return new TaskResult(TaskResult.Status.FAILED, errMsg);

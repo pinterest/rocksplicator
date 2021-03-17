@@ -46,7 +46,11 @@
  */
 // DEFINE_int32(recheck_removed_file_interval_ms, 2 * 1000,
 //              "The interval for checking removed files");
-const int kRecheckRemovedFileIntervalMs = 2000;
+
+const int MAX_TIME_INTERVAL_SLOTS = 10;
+const int* TIME_INTERVALS = new int[MAX_TIME_INTERVAL_SLOTS]{
+  5, 10, 20, 40, 80, 160, 320, 640, 1280, 2560
+};
 
 namespace common {
 FileWatcher* FileWatcher::Instance() {
@@ -193,6 +197,8 @@ std::string FileWatcher::ReadFileAndHash(const std::string& file_name,
 
 int FileWatcher::RegisterFile(const std::string& file_name,
                               const bool check_dup) {
+  LOG(INFO) << "Registering file " << file_name << " to watch for changes";
+
   if (check_dup && states_.count(file_name) == 1) {
     LOG(ERROR) << file_name << " is already being watched, RemoveFile() "
                << "first if you want to change its callback.";
@@ -206,14 +212,28 @@ int FileWatcher::RegisterFile(const std::string& file_name,
         " : " << strerror(errno);
   }
 
+  LOG(INFO) << "Registered file " << file_name << " to watch for changes";
+
   return watch_fd;
 }
 
 void FileWatcher::ScheduleRegisterMonitoredFile(const std::string& file_name) {
-  LOG(INFO) << "Schedule registering file " << file_name << " in "
-            << kRecheckRemovedFileIntervalMs << " ms.";
+  ScheduleRegisterMonitoredFile(file_name, 0);
+}
+
+void FileWatcher::ScheduleRegisterMonitoredFile(
+  const std::string& file_name,
+  const int time_slot_index) {
+  int effective_time_slot_index = time_slot_index;
+  if (time_slot_index >= MAX_TIME_INTERVAL_SLOTS) {
+    effective_time_slot_index = MAX_TIME_INTERVAL_SLOTS - 1;
+  }
+
+  LOG(ERROR) << "Schedule registering file " << file_name << " in "
+            << TIME_INTERVALS[effective_time_slot_index] << " ms.";
   try {
-    evb_.runAfterDelay([this, file_name] {
+
+    evb_.runAfterDelay([this, file_name, time_slot_index] {
       auto itor = states_.find(file_name);
       if (itor == states_.end()) {
         LOG(ERROR) << file_name << " has been removed, cancel registering";
@@ -222,7 +242,7 @@ void FileWatcher::ScheduleRegisterMonitoredFile(const std::string& file_name) {
 
       auto watch_fd = RegisterFile(file_name, false);
       if (watch_fd == -1) {
-        ScheduleRegisterMonitoredFile(file_name);
+        ScheduleRegisterMonitoredFile(file_name, time_slot_index + 1);
         return;
       }
 
@@ -232,7 +252,7 @@ void FileWatcher::ScheduleRegisterMonitoredFile(const std::string& file_name) {
       file_names_.emplace(watch_fd, std::move(file_name));
       state.watch_fd = watch_fd;
     },
-    kRecheckRemovedFileIntervalMs);
+    TIME_INTERVALS[effective_time_slot_index]);
   } catch (const std::system_error& err) {
     LOG(ERROR) << "Failed to schedule registering file: " << file_name
                << std::endl << err.what();

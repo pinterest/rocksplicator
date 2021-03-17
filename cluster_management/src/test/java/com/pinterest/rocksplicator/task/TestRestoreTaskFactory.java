@@ -177,9 +177,11 @@ public class TestRestoreTaskFactory extends TaskTestBase {
     @Override
     protected Task getTask(HelixAdmin admin, String cluster, String targetPartition,
                            String storePathPrefix, String src_cluster, long resourceVersion,
-                           String job, int port, boolean useS3Store, String s3Bucket) {
+                           String job, int port, boolean useS3Store, String s3Bucket,
+                           TaskConfig taskConfig) {
       return new TestRestoreTaskFactory.DummyRestoreTask(admin, cluster, targetPartition,
-          storePathPrefix, src_cluster, resourceVersion, job, port, useS3Store, s3Bucket);
+          storePathPrefix, src_cluster, resourceVersion, job, port, useS3Store, s3Bucket,
+          taskConfig);
     }
   }
 
@@ -187,9 +189,10 @@ public class TestRestoreTaskFactory extends TaskTestBase {
 
     public DummyRestoreTask(HelixAdmin admin, String taskCluster, String partitionName,
                             String storePathPrefix, String src_cluster, long resourceVersion,
-                            String job, int adminPort, boolean useS3Store, String s3Bucket) {
+                            String job, int adminPort, boolean useS3Store, String s3Bucket,
+                            TaskConfig taskConfig) {
       super(admin, taskCluster, partitionName, storePathPrefix, src_cluster, resourceVersion, job,
-          adminPort, useS3Store, s3Bucket);
+          adminPort, useS3Store, s3Bucket, taskConfig);
     }
 
     @Override

@@ -21,10 +21,13 @@ package com.pinterest.rocksplicator.task;
 import com.pinterest.rocksplicator.Utils;
 
 import org.apache.helix.task.Task;
+import org.apache.helix.task.TaskConfig;
 import org.apache.helix.task.TaskResult;
 import org.apache.helix.task.UserContentStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Arrays;
 
 /**
  * backup a single local db shard to cloud
@@ -43,10 +46,12 @@ public class BackupTask extends UserContentStore implements Task {
   private final boolean useS3Store;
   private final String s3Bucket;
   private final boolean shareFilesWithChecksum;
+  private final TaskConfig taskConfig;
 
   public BackupTask(String taskCluster, String partitionName, int backupLimitMbs,
                     String storePathPrefix, long resourceVersion, String job, int adminPort,
-                    boolean useS3Store, String s3Bucket, boolean shareFilesWithChecksum) {
+                    boolean useS3Store, String s3Bucket, boolean shareFilesWithChecksum,
+                    TaskConfig taskConfig) {
     this.taskCluster = taskCluster;
     this.partitionName = partitionName;
     this.backupLimitMbs = backupLimitMbs;
@@ -57,6 +62,7 @@ public class BackupTask extends UserContentStore implements Task {
     this.useS3Store = useS3Store;
     this.s3Bucket = s3Bucket;
     this.shareFilesWithChecksum = shareFilesWithChecksum;
+    this.taskConfig = taskConfig;
   }
 
   /**
@@ -71,7 +77,10 @@ public class BackupTask extends UserContentStore implements Task {
     String dbName = Utils.getDbName(partitionName);
     if (storePathPrefix.isEmpty()) {
       String errMsg =
-          "Cancel the task, storePathPrefix is not provided from job command config map";
+          String.format(
+              "Cancel the task, storePathPrefix is not provided from job command config map. "
+                  + "taskConfig=%s",
+              taskConfig.toString());
       LOG.error(errMsg);
       return new TaskResult(TaskResult.Status.CANCELED, errMsg);
     }
@@ -83,16 +92,20 @@ public class BackupTask extends UserContentStore implements Task {
       LOG.error(
           String.format(
               "BackupTask run to backup partition: %s to storePath: %s. Other info {taskCluster: "
-                  + "%s, job: %s, version: %d}", partitionName, storePath, taskCluster, job,
-              resourceVersion));
+                  + "%s, job: %s, version: %d, taskConfig=%s}", partitionName, storePath,
+              taskCluster, job, resourceVersion, taskConfig.toString()));
 
       executeBackup("127.0.0.1", adminPort, dbName, storePath, backupLimitMbs, useS3Store,
           s3Bucket, shareFilesWithChecksum);
 
       return new TaskResult(TaskResult.Status.COMPLETED, "BackupTask is completed!");
     } catch (Exception e) {
-      LOG.error("Task backup failed", e);
-      return new TaskResult(TaskResult.Status.FAILED, "BackupTask failed");
+      String errMsg =
+          String
+              .format("Task backup failed. errMsg=%s. stacktrace=%s. taskConfig=%s", e.getMessage(),
+                  Arrays.toString(e.getStackTrace()), taskConfig.toString());
+      LOG.error(errMsg);
+      return new TaskResult(TaskResult.Status.FAILED, errMsg);
     }
 
   }
@@ -131,6 +144,6 @@ public class BackupTask extends UserContentStore implements Task {
     // resume on another replica, will ignore(?) leftovers since checksum of files are verified
 
     // options2: leave leftovers untouched
-    LOG.error("BackupTask cancelled");
+    LOG.error(String.format("BackupTask cancelled. taskConfig=%s", taskConfig.toString()));
   }
 }
