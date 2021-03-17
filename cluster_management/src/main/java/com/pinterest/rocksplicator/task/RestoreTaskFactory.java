@@ -145,15 +145,14 @@ public class RestoreTaskFactory implements TaskFactory {
             System.currentTimeMillis()));
 
     return getTask(admin, cluster, targetPartition, storePathPrefix, src_cluster, resourceVersion,
-        job,
-        adminPort, useS3Store, s3Bucket);
+        job, adminPort, useS3Store, s3Bucket, taskConfig);
   }
 
   protected Task getTask(HelixAdmin admin, String cluster, String targetPartition,
-                         String storePathPrefix,
-                         String src_cluster, long resourceVersion, String job, int port,
-                         boolean useS3Store, String s3Bucket) {
+                         String storePathPrefix, String src_cluster, long resourceVersion,
+                         String job, int port, boolean useS3Store, String s3Bucket,
+                         TaskConfig taskConfig) {
     return new RestoreTask(admin, cluster, targetPartition, storePathPrefix, src_cluster,
-        resourceVersion, job, port, useS3Store, s3Bucket);
+        resourceVersion, job, port, useS3Store, s3Bucket, taskConfig);
   }
 }

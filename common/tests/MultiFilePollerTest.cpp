@@ -243,7 +243,11 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
   // cb3 concatenates the data of f3 and f3 and writes the value to data3.
   /* cb3 */ updater_->registerFiles(
       {f3, f1}, [&](const MultiFilePoller::CallbackArg& newData) {
-        if (count3 == 0) {
+        const auto& f3Data = folly::get_or_throw(newData, f3);
+        const auto& f1Data = folly::get_default(newData, f1, "<NODATA>");
+        data3 = {f3Data, f1Data};
+        count3++;
+        if (count3 == 1) {
           // When we write to f3 to trigger cb3, f1 does not exist yet.
           // Check that f1 is not in the map.
           ASSERT_EQ(newData.end(), newData.find(f1));
@@ -251,16 +255,12 @@ TEST_F(MultiFilePollerTest, ComplexTest) {
         } else {
           // Otherwise f1 must exist in the map.
           ASSERT_NE(newData.end(), newData.find(f1));
-          if (count3 == 1) {
+          if (count3 == 2) {
             promise32.set_value(true);
-          } else if (count3 == 2) {
+          } else if (count3 == 3) {
             promise33.set_value(true);
           }
         }
-        const auto& f3Data = folly::get_or_throw(newData, f3);
-        const auto& f1Data = folly::get_default(newData, f1, "<NODATA>");
-        data3 = {f3Data, f1Data};
-        count3++;
       });
 
   // Create f2 to trigger cb2.

@@ -16,7 +16,7 @@
 // @author bol (bol@pinterest.com)
 //
 
-#include "rocksdb_admin/helix_client.h"
+#include "common/helix_client.h"
 
 #include "jni.h"
 
@@ -26,7 +26,7 @@
 
 #include "common/network_util.h"
 
-DECLARE_int32(port);
+DEFINE_int32(port, 9090, "Port of the server");
 DEFINE_string(helix_log_config_file_path, "",
     "Participant log config file path "
     "e.g: /etc/config/helix/log4j.properties");
@@ -212,7 +212,7 @@ std::string JStringToString(JNIEnv* env, jstring jstr) {
 
 } // namespace
 
-namespace admin {
+namespace common {
 
 void JoinCluster(const std::string& zk_connect_str,
                  const std::string& cluster,
@@ -314,4 +314,4 @@ std::string GetLeaderInstanceId(
     return JStringToString(env, jstr);
 }
 
-}  // namespace admin
+}  // namespace common

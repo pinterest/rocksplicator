@@ -69,28 +69,39 @@ public class ClusterShardMapAgent implements Closeable {
   private final String clusterName;
   private final String zkConnectString;
   private final CuratorFramework zkShardMapClient;
+  private final boolean zkClientIsOwned;
   private final PathChildrenCache pathChildrenCache;
   private final ConcurrentHashMap<String, JSONObject> shardMapsByResources;
   private final ZkShardMapCodec zkShardMapCompressedCodec;
   private final ScheduledExecutorService dumperExecutorService;
   private final AtomicInteger numPendingNotifications;
 
-  public ClusterShardMapAgent(String zkConnectString, String clusterName, String shardMapDir) {
+  public ClusterShardMapAgent(
+      String zkConnectString,
+      CuratorFramework zkSharedShardMapClient,
+      String clusterName,
+      String shardMapDir) {
     this.clusterName = clusterName;
     this.shardMapDir = shardMapDir;
     this.tempShardMapDir = shardMapDir + "/" + ".temp";
     this.zkConnectString = zkConnectString;
 
-    this.zkShardMapClient = CuratorFrameworkFactory
-        .newClient(this.zkConnectString,
-            new BoundedExponentialBackoffRetry(
-                100, 10000, 10));
+    if (zkSharedShardMapClient != null) {
+      this.zkClientIsOwned = false;
+      this.zkShardMapClient = zkSharedShardMapClient;
+    } else {
+      this.zkClientIsOwned = true;
+      this.zkShardMapClient = CuratorFrameworkFactory
+          .newClient(this.zkConnectString,
+              new BoundedExponentialBackoffRetry(
+                  250, 10000, 60));
 
-    this.zkShardMapClient.start();
-    try {
-      this.zkShardMapClient.blockUntilConnected(60, TimeUnit.SECONDS);
-    } catch (InterruptedException e) {
-      throw new RuntimeException();
+      this.zkShardMapClient.start();
+      try {
+        this.zkShardMapClient.blockUntilConnected(60, TimeUnit.SECONDS);
+      } catch (InterruptedException e) {
+        throw new RuntimeException();
+      }
     }
     this.shardMapsByResources = new ConcurrentHashMap<>();
     this.zkShardMapCompressedCodec = new ZkGZIPCompressedShardMapCodec();
@@ -296,6 +307,8 @@ public class ClusterShardMapAgent implements Closeable {
     }
 
     this.pathChildrenCache.close();
-    this.zkShardMapClient.close();
+    if (zkClientIsOwned && zkShardMapClient != null) {
+      this.zkShardMapClient.close();
+    }
   }
 }

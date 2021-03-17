@@ -355,7 +355,7 @@ public class Spectator {
       if (!(shardMapZkSvr.isEmpty() || shardMapDownloadDir.isEmpty())) {
         ClusterShardMapAgent
             clusterShardMapAgent =
-            new ClusterShardMapAgent(shardMapZkSvr, clusterName, shardMapDownloadDir);
+            new ClusterShardMapAgent(shardMapZkSvr, null, clusterName, shardMapDownloadDir);
         clusterShardMapAgent.startNotification();
         Runtime.getRuntime().addShutdownHook(new Thread() {
           @Override

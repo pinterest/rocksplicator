@@ -20,7 +20,7 @@
 
 #include <string>
 
-namespace admin {
+namespace common {
 
 /*
  * Join a Helix managed cluster.
@@ -57,4 +57,4 @@ std::string GetLeaderInstanceId(
   const std::string& resource,
   const std::string& partition);
 
-}  // namespace admin
+}  // namespace common

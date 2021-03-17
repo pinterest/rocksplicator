@@ -51,8 +51,6 @@ public class DedupTaskFactory implements TaskFactory {
     JobConfig jobConfig = context.getJobConfig();
     String job = jobConfig.getJobId();
 
-    LOG.error("Create task with TaskConfig: " + taskConfig.toString());
-
     String srcStorePathPrefix = "";
     long resourceVersion = -1;
     String destStorePathPrefix = "";
@@ -87,21 +85,22 @@ public class DedupTaskFactory implements TaskFactory {
 
     LOG.error(String.format(
         "Create Task for cluster: %s, targetPartition: %s from job: %s to execute at localhost, "
-            + "port:"
-            + " %d. {resourceVersion: %d, helixJobCreationTime: %d, taskCreationTime: %d}", cluster,
-        targetPartition, job, adminPort, resourceVersion, jobConfig.getStat().getCreationTime(),
-        System.currentTimeMillis()));
+            + "port: %d. {resourceVersion: %d, helixJobCreationTime: %d, taskCreationTime: %d, "
+            + "taskConfig: %s}", cluster, targetPartition, job, adminPort, resourceVersion,
+        jobConfig.getStat().getCreationTime(), System.currentTimeMillis(), taskConfig.toString()));
 
     return getTask(srcStorePathPrefix, resourceVersion, targetPartition, cluster, job, adminPort,
-        destStorePathPrefix, useS3Store, s3Bucket, backupLimitMbs, shareFilesWithChecksum);
+        destStorePathPrefix, useS3Store, s3Bucket, backupLimitMbs, shareFilesWithChecksum,
+        taskConfig);
   }
 
   protected DedupTask getTask(String srcStorePathPrefix, long resourceVersion, String partitionName,
                               String cluster, String job, int port, String destStorePathPrefix,
                               boolean useS3Store, String s3Bucket, int backupLimitMbs,
-                              boolean shareFilesWithChecksum) {
+                              boolean shareFilesWithChecksum, TaskConfig taskConfig) {
     return new DedupTask(srcStorePathPrefix, resourceVersion, partitionName, cluster, job, port,
-        destStorePathPrefix, useS3Store, s3Bucket, backupLimitMbs, shareFilesWithChecksum);
+        destStorePathPrefix, useS3Store, s3Bucket, backupLimitMbs, shareFilesWithChecksum,
+        taskConfig);
   }
 
 }

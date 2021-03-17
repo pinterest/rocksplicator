@@ -23,11 +23,13 @@ import com.pinterest.rocksplicator.Utils;
 import org.apache.helix.HelixAdmin;
 import org.apache.helix.model.ExternalView;
 import org.apache.helix.task.Task;
+import org.apache.helix.task.TaskConfig;
 import org.apache.helix.task.TaskResult;
 import org.apache.helix.task.UserContentStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.Map;
 
 public class RestoreTask extends UserContentStore implements Task {
@@ -43,11 +45,13 @@ public class RestoreTask extends UserContentStore implements Task {
   private final int adminPort;
   private final boolean useS3Store;
   private final String s3Bucket;
+  private final TaskConfig taskConfig;
   private HelixAdmin admin;
+
 
   public RestoreTask(HelixAdmin admin, String taskCluster, String partitionName,
                      String storePathPrefix, String srcCluster, long resourceVersion, String job,
-                     int adminPort, boolean useS3Store, String s3Bucket) {
+                     int adminPort, boolean useS3Store, String s3Bucket, TaskConfig taskConfig) {
     this.admin = admin;
     this.taskCluster = taskCluster;
     this.partitionName = partitionName;
@@ -58,6 +62,7 @@ public class RestoreTask extends UserContentStore implements Task {
     this.adminPort = adminPort;
     this.useS3Store = useS3Store;
     this.s3Bucket = s3Bucket;
+    this.taskConfig = taskConfig;
   }
 
   @Override
@@ -92,8 +97,8 @@ public class RestoreTask extends UserContentStore implements Task {
                 String.format(
                     "RestoreTask run to restore partition: %s from storePath: %s to host: %s, "
                         + "role: %s. Other info {src_cluster: %s, taskCluster: %s, job: %s, "
-                        + "version: %d}", partitionName, storePath, host, role, srcCluster,
-                    taskCluster, job, resourceVersion));
+                        + "version: %d, taskConfig: %s}", partitionName, storePath, host, role,
+                    srcCluster, taskCluster, job, resourceVersion, taskConfig.toString()));
 
             executeRestore(host, port, dbName, storePath, useS3Store, s3Bucket);
           }
@@ -110,8 +115,13 @@ public class RestoreTask extends UserContentStore implements Task {
 
       return new TaskResult(TaskResult.Status.COMPLETED, "RestoreTask is completed!");
     } catch (Exception e) {
-      LOG.error("Task restore failed", e);
-      return new TaskResult(TaskResult.Status.FAILED, "RestoreTask failed");
+      String errMsg =
+          String
+              .format("Task restore failed. errMsg=%s. stacktrace=%s. taskConfig=%s",
+                  e.getMessage(),
+                  Arrays.toString(e.getStackTrace()), taskConfig.toString());
+      LOG.error(errMsg);
+      return new TaskResult(TaskResult.Status.FAILED, errMsg);
     }
   }
 
@@ -133,6 +143,6 @@ public class RestoreTask extends UserContentStore implements Task {
 
   @Override
   public void cancel() {
-    LOG.error("RestoreTask cancelled");
+    LOG.error(String.format("RestoreTask cancelled. taskConfig=%s", taskConfig.toString()));
   }
 }

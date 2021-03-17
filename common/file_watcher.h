@@ -101,6 +101,7 @@ class FileWatcher {
   std::string ReadFileAndHash(const std::string& file_name, uint64_t* hash);
   int RegisterFile(const std::string& file_name, const bool check_dup = true);
   void ScheduleRegisterMonitoredFile(const std::string& file_name);
+  void ScheduleRegisterMonitoredFile(const std::string& file_name, const int time_slot_index);
   void CheckFileAndCallback(const std::string& file_name, State* state);
 
   struct INotifyHandler : public folly::EventHandler {

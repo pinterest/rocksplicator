@@ -85,7 +85,8 @@ public class ClusterShardMapAgentTest {
      * Now enable downloading of the data to local file.
      */
     ClusterShardMapAgent clusterShardMapAgent =
-        new ClusterShardMapAgent(zkTestServer.getConnectString(), CLUSTER_NAME, "target/shardmap");
+        new ClusterShardMapAgent(zkTestServer.getConnectString(), null, CLUSTER_NAME,
+            "target/shardmap");
 
     clusterShardMapAgent.startNotification();
 

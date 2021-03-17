@@ -18,6 +18,7 @@
 
 package com.pinterest.rocksplicator.shardmapagent;
 
+import org.apache.curator.framework.CuratorFramework;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,15 +38,19 @@ public class ClusterShardMapAgentManager implements Closeable {
 
   private final String shardMapDir;
   private final String zkShardMapSvr;
+  private final CuratorFramework zkShardMapClient;
   private final Supplier<Set<String>> clustersSupplier;
   private final ConcurrentHashMap<String, ClusterShardMapAgent> clusterAgents;
   private final ScheduledExecutorService scheduledExecutorService;
 
+
   public ClusterShardMapAgentManager(
       final String zkShardMapSvr,
+      final CuratorFramework zkShardMapClient,
       final String shardMapDir,
       final Supplier<Set<String>> clustersSupplier) {
     this.zkShardMapSvr = zkShardMapSvr;
+    this.zkShardMapClient = zkShardMapClient;
     this.shardMapDir = shardMapDir;
     this.clustersSupplier = clustersSupplier;
     this.clusterAgents = new ConcurrentHashMap<>();
@@ -91,7 +96,8 @@ public class ClusterShardMapAgentManager implements Closeable {
         try {
           LOG.error(String.format("Start Watching cluster: %s", cluster));
           ClusterShardMapAgent agent =
-              new ClusterShardMapAgent(this.zkShardMapSvr, cluster, shardMapDir);
+              new ClusterShardMapAgent(this.zkShardMapSvr, this.zkShardMapClient, cluster,
+                  shardMapDir);
           clusterAgents.put(cluster, agent);
           clusterAgents.get(cluster).startNotification();
         } catch (Exception e) {
