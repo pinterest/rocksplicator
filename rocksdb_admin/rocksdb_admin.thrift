@@ -64,6 +64,8 @@ struct BackupDBRequest {
   3: optional i32 limit_mbs = 0,
   # enable appending checksum to sst file name during backup
   4: optional bool share_files_with_checksum = false,
+  # enable backup with metadata
+  5: optional bool include_meta = false,
 }
 
 struct BackupDBResponse {
@@ -95,6 +97,9 @@ struct BackupDBToS3Request {
   3: required string s3_backup_dir,
   # rate limit in MB/S, a non positive value means no limit
   4: optional i32 limit_mbs = 0,
+  5: optional bool share_files_with_checksum = false,
+  # enable backup with metadata
+  6: optional bool include_meta = false,
 }
 
 struct  BackupDBToS3Response {
@@ -131,6 +136,12 @@ struct CloseDBResponse {
 struct CheckDBRequest {
   # the DB to check
   1: required string db_name,
+  # retrieve DB's option values for specified option names
+  2: optional list<string> option_names,
+  # if true, get the DBMetaData of the db
+  3: optional bool include_meta,
+  # get DB's properties
+  4: optional list<string> property_names,
 }
 
 struct CheckDBResponse {
@@ -142,6 +153,9 @@ struct CheckDBResponse {
   3: optional i64 last_update_timestamp_ms = 0,
   # if the DB is Master
   4: optional bool is_master = false,
+  5: optional map<string, string> options,
+  6: optional map<string, string> db_metas,
+  7: optional map<string, string> properties,
 }
 
 struct ChangeDBRoleAndUpstreamRequest {
@@ -181,6 +195,8 @@ struct AddS3SstFilesToDBRequest {
   2: required string s3_bucket,
   3: required string s3_path,
   4: optional i32 s3_download_limit_mb = 64,
+  # if true, ingest files at the bottom of RocksDB
+  5: optional bool ingest_behind,
 }
 
 struct AddS3SstFilesToDBResponse {

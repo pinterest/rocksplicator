@@ -86,6 +86,7 @@ import java.util.concurrent.TimeUnit;
  *    a) clearDB()
  */
 public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> {
+
   private static final Logger LOG = LoggerFactory.getLogger(MasterSlaveStateModelFactory.class);
 
   private final String host;
@@ -132,6 +133,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
 
 
   public static class MasterSlaveStateModel extends StateModel {
+
     private static final Logger LOG = LoggerFactory.getLogger(MasterSlaveStateModel.class);
 
     private final String resourceName;
@@ -238,8 +240,9 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           for (int i = 0; i < 600; ++i) {
             TimeUnit.SECONDS.sleep(1);
             long newLocalSeq = Utils.getLocalLatestSequenceNumber(dbName, adminPort);
-            LOG.error("Replicated [" + String.valueOf(localSeq) + ", " + String.valueOf(newLocalSeq) +
-              ") from " + hostWithHighestSeq + " for " + dbName);
+            LOG.error(
+                "Replicated [" + String.valueOf(localSeq) + ", " + String.valueOf(newLocalSeq) +
+                    ") from " + hostWithHighestSeq + " for " + dbName);
             localSeq = newLocalSeq;
             if (highestSeq <= localSeq) {
               LOG.error(dbName + " catched up!");
@@ -256,7 +259,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
 
         // changeDBRoleAndUpStream(me, "Master")
         Utils.changeDBRoleAndUpStream("localhost", adminPort, dbName, "MASTER",
-        "", adminPort);
+            "", adminPort);
 
         // Get the latest external view and state map
         view = admin.getResourceExternalView(cluster, resourceName);
@@ -431,7 +434,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         // local partition as error.
         if (!useS3Backup) {
           String hdfsPath = "/rocksplicator/" + cluster + "/" + dbName + "/" + snapshotHost + "_"
-            + String.valueOf(snapshotPort) + "/" + String.valueOf(System.currentTimeMillis());
+              + String.valueOf(snapshotPort) + "/" + String.valueOf(System.currentTimeMillis());
 
           // backup a snapshot from the upstream host, and restore it locally
           LOG.error("Backup " + dbName + " from " + snapshotHost);
@@ -441,14 +444,15 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           Utils.restoreLocalDB(adminPort, dbName, hdfsPath, snapshotHost, snapshotPort);
         } else {
           String s3Path = "backup/" + cluster + "/" + dbName + "/" + snapshotHost + "_"
-            + String.valueOf(snapshotPort) + "/" + String.valueOf(System.currentTimeMillis());
+              + String.valueOf(snapshotPort) + "/" + String.valueOf(System.currentTimeMillis());
 
           // backup a snapshot from the upstream host, and restore it locally
           LOG.error("S3 Backup " + dbName + " from " + snapshotHost);
           Utils.backupDBToS3(snapshotHost, snapshotPort, dbName, s3Bucket, s3Path);
           LOG.error("S3 Restore " + dbName + " from " + s3Path);
           Utils.closeDB(dbName, adminPort);
-          Utils.restoreLocalDBFromS3(adminPort, dbName, s3Bucket, s3Path, snapshotHost, snapshotPort);
+          Utils.restoreLocalDBFromS3(adminPort, dbName, s3Bucket, s3Path, snapshotHost,
+              snapshotPort);
         }
       }
     }

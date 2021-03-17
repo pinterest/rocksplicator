@@ -48,7 +48,8 @@ import org.slf4j.LoggerFactory;
  *
  *
  * 1) Bootstrap to Online
- *    a) Take the zk metadata and send a StartMessageIngestionRequest, will return when we have hit kafka EOF
+ *    a) Take the zk metadata and send a StartMessageIngestionRequest, will return when we have
+ *    hit kafka EOF
  *
  * 2) Online to Offline
  *    a) send a StopMessageIngestionRequest for the given partition
@@ -70,6 +71,7 @@ import org.slf4j.LoggerFactory;
  */
 
 public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
+
   private static final int MAX_ZK_RETRIES = 7;
   private final int adminPort;
   private final String cluster;
@@ -81,7 +83,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
     this.adminPort = adminPort;
     this.cluster = cluster;
     this.zkClient = CuratorFrameworkFactory.newClient(zkConnectString,
-        new BoundedExponentialBackoffRetry(1000,  10000, MAX_ZK_RETRIES));
+        new BoundedExponentialBackoffRetry(1000, 10000, MAX_ZK_RETRIES));
     zkClient.start();
   }
 
@@ -92,6 +94,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
   }
 
   public static class BootstrapStateModel extends StateModel {
+
     private static final Logger LOG = LoggerFactory.getLogger(BootstrapStateModel.class);
 
     private final String resourceName;
@@ -104,7 +107,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
      * State model that handles the state machine of a single partition.
      */
     public BootstrapStateModel(String resourceName, String partitionName, int adminPort,
-                                   String cluster, CuratorFramework zkClient) {
+                               String cluster, CuratorFramework zkClient) {
       this.resourceName = resourceName;
       this.partitionName = partitionName;
       this.adminPort = adminPort;
@@ -122,7 +125,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
       Utils.checkStateTransitions("OFFLINE", "BOOTSTRAP", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
-      try{
+      try {
         Utils.addDB(Utils.getDbName(partitionName), adminPort, "NOOP");
       } catch (Exception e) {
         LOG.error("addDB with dbRole: NOOP failed with exception during offline->bootstrap");
@@ -145,7 +148,7 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
         }
 
         AddS3SstFilesToDBRequest req = new AddS3SstFilesToDBRequest(Utils.getDbName(partitionName),
-                s3Bucket, s3Path + Utils.getS3PartPrefix(partitionName));
+            s3Bucket, s3Path + Utils.getS3PartPrefix(partitionName));
         req.setS3_download_limit_mb(s3_download_limit_mb);
         Admin.Client client = Utils.getLocalAdminClient(adminPort);
         client.addS3SstFilesToDB(req);
@@ -166,7 +169,9 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
       Utils.logTransitionMessage(message);
 
       try {
-        StopMessageIngestionRequest req = new StopMessageIngestionRequest(Utils.getDbName(partitionName));
+        StopMessageIngestionRequest
+            req =
+            new StopMessageIngestionRequest(Utils.getDbName(partitionName));
         Admin.Client client = Utils.getLocalAdminClient(adminPort);
         client.stopMessageIngestion(req);
       } catch (Exception e) {
@@ -189,7 +194,9 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
       Utils.logTransitionMessage(message);
 
       try {
-        StopMessageIngestionRequest req = new StopMessageIngestionRequest(Utils.getDbName(partitionName));
+        StopMessageIngestionRequest
+            req =
+            new StopMessageIngestionRequest(Utils.getDbName(partitionName));
         Admin.Client client = Utils.getLocalAdminClient(adminPort);
         client.stopMessageIngestion(req);
       } catch (Exception e) {
@@ -213,13 +220,17 @@ public class BootstrapStateModelFactory extends StateModelFactory<StateModel> {
         String meta = Utils.getMetaData(zkClient, cluster, resourceName, MAX_ZK_RETRIES);
         JsonObject jsonObject = new JsonParser().parse(meta).getAsJsonObject();
         long replay_timestamp_ms = jsonObject.get("replay_timestamp_ms").getAsLong();
-        String kafkaBrokerServersetPath = jsonObject.get("kafka_broker_serverset_path").getAsString();
+        String
+            kafkaBrokerServersetPath =
+            jsonObject.get("kafka_broker_serverset_path").getAsString();
         String topicName = jsonObject.get("topic_name").getAsString();
-        boolean isKafkaPayloadSerialized = jsonObject.get("is_kafka_payload_serialized").getAsBoolean();
+        boolean
+            isKafkaPayloadSerialized =
+            jsonObject.get("is_kafka_payload_serialized").getAsBoolean();
 
         StartMessageIngestionRequest req =
-                new StartMessageIngestionRequest(Utils.getDbName(partitionName), topicName,
-                        kafkaBrokerServersetPath, replay_timestamp_ms, isKafkaPayloadSerialized);
+            new StartMessageIngestionRequest(Utils.getDbName(partitionName), topicName,
+                kafkaBrokerServersetPath, replay_timestamp_ms, isKafkaPayloadSerialized);
         Admin.Client client = Utils.getLocalAdminClient(adminPort);
         client.startMessageIngestion(req);
       } catch (Exception e) {

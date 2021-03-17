@@ -25,7 +25,6 @@ import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEventType;
 import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEventsHistory;
 
 import com.google.common.collect.ImmutableList;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 

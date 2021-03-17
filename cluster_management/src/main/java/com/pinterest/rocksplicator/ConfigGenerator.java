@@ -20,6 +20,7 @@ package com.pinterest.rocksplicator;
 
 import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventLogger;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
+import com.pinterest.rocksplicator.publisher.ShardMapPublisher;
 import com.pinterest.rocksplicator.utils.AutoCloseableLock;
 import com.pinterest.rocksplicator.utils.ExternalViewUtils;
 
@@ -35,18 +36,12 @@ import org.apache.helix.model.IdealState;
 import org.apache.helix.model.InstanceConfig;
 import org.apache.helix.participant.CustomCodeCallbackHandler;
 import org.apache.helix.spectator.RoutingTableProvider;
-import org.apache.http.HttpResponse;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.DefaultHttpClient;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -57,6 +52,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 /**
 
@@ -166,50 +162,45 @@ import java.util.concurrent.locks.ReentrantLock;
  }
  }
  </code>
-
-
  */
+
 public class ConfigGenerator extends RoutingTableProvider implements CustomCodeCallbackHandler,
                                                                      Closeable {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConfigGenerator.class);
 
   private final String clusterName;
-  private final String postUrl;
-  private final boolean enableDumpToLocal;
   private final Map<String, String> hostToHostWithDomain;
-  private final JSONObject dataParameters;
   private final RocksplicatorMonitor monitor;
   private final ReentrantLock synchronizedCallbackLock;
+  private final ShardMapPublisher shardMapPublisher;
   private HelixManager helixManager;
   private HelixAdmin helixAdmin;
-  private String lastPostedContent;
   private Set<String> disabledHosts;
   private ExternalViewLeaderEventLogger externalViewLeaderEventLogger;
 
   @VisibleForTesting
-  ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl) {
-    this(clusterName, helixManager, configPostUrl,
+  ConfigGenerator(
+      final String clusterName,
+      final HelixManager helixManager,
+      final ShardMapPublisher<JSONObject> shardMapPublisher) {
+    this(clusterName, helixManager, shardMapPublisher,
         new RocksplicatorMonitor(clusterName, helixManager.getInstanceName()), null);
   }
 
-  public ConfigGenerator(String clusterName, HelixManager helixManager, String configPostUrl,
-                         RocksplicatorMonitor monitor,
-                         ExternalViewLeaderEventLogger externalViewLeaderEventLogger) {
+  public ConfigGenerator(
+      final String clusterName,
+      final HelixManager helixManager,
+      final ShardMapPublisher<JSONObject> shardMapPublisher,
+      final RocksplicatorMonitor monitor,
+      final ExternalViewLeaderEventLogger externalViewLeaderEventLogger) {
     this.clusterName = clusterName;
     this.helixManager = helixManager;
     this.helixAdmin = this.helixManager.getClusterManagmentTool();
     this.hostToHostWithDomain = new HashMap<String, String>();
-    this.postUrl = configPostUrl;
-    this.dataParameters = new JSONObject();
-    this.dataParameters.put("config_version", "v3");
-    this.dataParameters.put("author", "ConfigGenerator");
-    this.dataParameters.put("comment", "new shard config");
-    this.dataParameters.put("content", "{}");
-    this.lastPostedContent = null;
+    this.shardMapPublisher = shardMapPublisher;
     this.disabledHosts = new HashSet<>();
     this.monitor = monitor;
-    this.enableDumpToLocal = new File("/var/log/helixspectator").canWrite();
     this.synchronizedCallbackLock = new ReentrantLock();
     this.externalViewLeaderEventLogger = externalViewLeaderEventLogger;
   }
@@ -243,7 +234,8 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
           LOG.error("Received notification: " + notificationContext.getChangeType());
           if (notificationContext.getChangeType() == HelixConstants.ChangeType.EXTERNAL_VIEW) {
             generateShardConfig();
-          } else if (notificationContext.getChangeType() == HelixConstants.ChangeType.INSTANCE_CONFIG) {
+          } else if (notificationContext.getChangeType()
+              == HelixConstants.ChangeType.INSTANCE_CONFIG) {
             if (updateDisabledHosts()) {
               generateShardConfig();
             }
@@ -291,21 +283,18 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     List<String> resources = this.helixAdmin.getResourcesInCluster(clusterName);
     filterOutTaskResources(resources);
 
+    // Resources starting with PARTICIPANT_LEADER is for HelixCustomCodeRunner
+    resources =
+        resources.stream().filter(r -> !r.startsWith("PARTICIPANT_LEADER"))
+            .collect(Collectors.toList());
+
     Set<String> existingHosts = new HashSet<String>();
 
-    List<ExternalView> externalViewsToProcess = null;
-    if (externalViewLeaderEventLogger != null) {
-      externalViewsToProcess = new ArrayList<>();
-    }
+    List<ExternalView> externalViewsToProcess = new ArrayList<>();
 
     // compose cluster config
-    JSONObject config = new JSONObject();
+    JSONObject jsonClusterShardMap = new JSONObject();
     for (String resource : resources) {
-      // Resources starting with PARTICIPANT_LEADER is for HelixCustomCodeRunner
-      if (resource.startsWith("PARTICIPANT_LEADER")) {
-        continue;
-      }
-
       ExternalView externalView = this.helixAdmin.getResourceExternalView(clusterName, resource);
       if (externalView == null) {
         this.monitor.incrementConfigGeneratorNullExternalView();
@@ -328,9 +317,7 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
         continue;
       }
 
-      if (externalViewLeaderEventLogger != null && externalViewsToProcess != null) {
-        externalViewsToProcess.add(externalView);
-      }
+      externalViewsToProcess.add(externalView);
 
       Set<String> partitions = externalView.getPartitionSet();
 
@@ -385,58 +372,20 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
       }
 
       // add the resource config to the cluster config
-      config.put(resource, resourceConfig);
+      jsonClusterShardMap.put(resource, resourceConfig);
     }
 
     // remove host that doesn't exist in the ExternalView from hostToHostWithDomain
     hostToHostWithDomain.keySet().retainAll(existingHosts);
 
-    String newContent = config.toString();
-    if (lastPostedContent != null && lastPostedContent.equals(newContent)) {
-      LOG.error("Identical external view observed, skip updating config.");
-      return;
-    }
-
-    // Write the shard config to local
-    if (enableDumpToLocal) {
-      try {
-        FileWriter shard_config_writer = new FileWriter("/var/log/helixspectator/shard_config");
-        shard_config_writer.write(newContent);
-        shard_config_writer.close();
-        LOG.error("Successfully wrote the shard config to the local.");
-      } catch (IOException e) {
-        LOG.error("An error occurred when writing shard config to local");
-        e.printStackTrace();
-      }
-    }
-
-    // Write the config to ZK
-    LOG.error("Generating a new shard config...");
-
     /**
-     * TODO: gopalrajpurohit
-     * Move shard_map updating logic into separate method.
+     * Finally publish the shard_map in json_format to multiple configured publishers.
      */
-    this.dataParameters.remove("content");
-    this.dataParameters.put("content", newContent);
-    HttpPost httpPost = new HttpPost(this.postUrl);
+    shardMapPublisher.publish(
+        resources.stream().collect(Collectors.toSet()), externalViewsToProcess,
+        jsonClusterShardMap);
 
     long shardPostingTimeMillis = System.currentTimeMillis();
-
-    try {
-      httpPost.setEntity(new StringEntity(this.dataParameters.toString()));
-      HttpResponse response = new DefaultHttpClient().execute(httpPost);
-      if (response.getStatusLine().getStatusCode() == 200) {
-        lastPostedContent = newContent;
-        LOG.error("Succeed to generate a new shard config");
-      } else {
-        shardPostingTimeMillis = -1;
-        LOG.error(response.getStatusLine().getReasonPhrase());
-      }
-    } catch (Exception e) {
-      shardPostingTimeMillis = -1;
-      LOG.error("Failed to post the new config", e);
-    }
 
     stopwatch.stop();
     long elapsedMs = stopwatch.elapsed(TimeUnit.MILLISECONDS);
@@ -509,7 +458,15 @@ public class ConfigGenerator extends RoutingTableProvider implements CustomCodeC
     // at the moment.
     try (AutoCloseableLock lock = new AutoCloseableLock(this.synchronizedCallbackLock)) {
       // Cleanup any remaining items.
-      externalViewLeaderEventLogger.close();
+      try {
+        shardMapPublisher.close();
+      } catch (IOException io) {
+        LOG.error("Error closing shardMapPublisher: ", io);
+      }
+
+      if (externalViewLeaderEventLogger != null) {
+        externalViewLeaderEventLogger.close();
+      }
     } catch (IOException e) {
       e.printStackTrace();
     }

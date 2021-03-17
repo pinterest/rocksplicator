@@ -18,8 +18,6 @@
 
 package com.pinterest.rocksplicator.helix_client;
 
-import java.util.Map;
-
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
@@ -36,6 +34,8 @@ import org.apache.log4j.Level;
 import org.apache.log4j.PatternLayout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Map;
 
 
 public class HelixClient {
@@ -73,9 +73,9 @@ public class HelixClient {
 
     Options options = new Options();
     options.addOption(zkServerOption)
-           .addOption(clusterOption)
-           .addOption(resourceOption)
-           .addOption(partitionOption);
+        .addOption(clusterOption)
+        .addOption(resourceOption)
+        .addOption(partitionOption);
     return options;
   }
 
@@ -92,9 +92,9 @@ public class HelixClient {
    * and the port in which the service is running.
    */
   public static String getleaderInstanceId(String zkConnectString,
-                                       String clusterName,
-                                       String resourceName,
-                                       String partitionName) {
+                                           String clusterName,
+                                           String resourceName,
+                                           String partitionName) {
     HelixAdmin helixAdmin = null;
     try {
       LOG.error("Starting helix with ZK:" + zkConnectString);

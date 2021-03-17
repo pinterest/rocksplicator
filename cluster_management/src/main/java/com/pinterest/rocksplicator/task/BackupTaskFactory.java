@@ -23,7 +23,6 @@ import org.apache.helix.task.Task;
 import org.apache.helix.task.TaskCallbackContext;
 import org.apache.helix.task.TaskConfig;
 import org.apache.helix.task.TaskFactory;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,8 +69,6 @@ public class BackupTaskFactory implements TaskFactory {
     JobConfig jobConfig = context.getJobConfig();
     String job = jobConfig.getJobId();
 
-    LOG.error("Create task with TaskConfig: " + taskConfig.toString());
-
     long jobCreationTime = jobConfig.getStat().getCreationTime() / 1000; // milli to seconds
 
     String storePathPrefix = "";
@@ -109,19 +106,20 @@ public class BackupTaskFactory implements TaskFactory {
         String.format(
             "Create Task for cluster: %s, targetPartition: %s from job: %s to execute at "
                 + "localhost, port: %d. {resourceVersion: %d, helixJobCreationTime: %d, "
-                + "taskCreationTime: %d}",
+                + "taskCreationTime: %d, taskConfig: %s}",
             cluster, targetPartition, job, adminPort, resourceVersion, jobCreationTime,
-            System.currentTimeMillis()));
+            System.currentTimeMillis(), taskConfig.toString()));
 
     return getTask(cluster, targetPartition, backupLimitMbs, storePathPrefix, resourceVersion, job,
-        adminPort, useS3Store, s3Bucket, shareFilesWithChecksum);
+        adminPort, useS3Store, s3Bucket, shareFilesWithChecksum, taskConfig);
   }
 
   protected Task getTask(String cluster, String targetPartition, int backupLimitMbs,
                          String storePathPrefix, long resourceVersion, String job, int port,
-                         boolean useS3Store, String s3Bucket, boolean shareFilesWithChecksum) {
+                         boolean useS3Store, String s3Bucket, boolean shareFilesWithChecksum,
+                         TaskConfig taskConfig) {
     return new BackupTask(cluster, targetPartition, backupLimitMbs, storePathPrefix,
-        resourceVersion, job, port, useS3Store, s3Bucket, shareFilesWithChecksum);
+        resourceVersion, job, port, useS3Store, s3Bucket, shareFilesWithChecksum, taskConfig);
   }
 
 }

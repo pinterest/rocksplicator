@@ -68,8 +68,10 @@ import java.util.Map;
  * The Task will be running as targeted job similar to backupTask, which means the db resource
  * must exist first before the restoreTask to pinpoint the targetPartition and restore it.
  *
- * Since {@link RestoreTask} will only be used for {@link com.pinterest.rocksplicator.MasterSlaveStateModelFactory.MasterSlaveStateModel},
- * and restore task will be configured (ie. set "TargetPartitionStates": "Master" in {@link JobConfig})
+ * Since {@link RestoreTask} will only be used for
+ * {@link com.pinterest.rocksplicator.MasterSlaveStateModelFactory.MasterSlaveStateModel},
+ * and restore task will be configured (ie. set "TargetPartitionStates": "Master" in
+ * {@link JobConfig})
  * to target 1 and only 1 replica in Master state (compared to {@link BackupTask} which target
  * 1 and only 1 replica either in Master or Slave with "TargetPartitionStates": "Master, Slave").
  * If replica factor (RF) > 1, then {@link RestoreTask} is also responsible to initiate restore
@@ -142,14 +144,15 @@ public class RestoreTaskFactory implements TaskFactory {
             cluster, targetPartition, job, adminPort, src_cluster, resourceVersion,
             System.currentTimeMillis()));
 
-    return getTask(admin, cluster, targetPartition, storePathPrefix, src_cluster, resourceVersion, job,
-        adminPort, useS3Store, s3Bucket);
+    return getTask(admin, cluster, targetPartition, storePathPrefix, src_cluster, resourceVersion,
+        job, adminPort, useS3Store, s3Bucket, taskConfig);
   }
 
-  protected Task getTask(HelixAdmin admin, String cluster, String targetPartition, String storePathPrefix,
-                         String src_cluster, long resourceVersion, String job, int port,
-                         boolean useS3Store, String s3Bucket) {
+  protected Task getTask(HelixAdmin admin, String cluster, String targetPartition,
+                         String storePathPrefix, String src_cluster, long resourceVersion,
+                         String job, int port, boolean useS3Store, String s3Bucket,
+                         TaskConfig taskConfig) {
     return new RestoreTask(admin, cluster, targetPartition, storePathPrefix, src_cluster,
-        resourceVersion, job, port, useS3Store, s3Bucket);
+        resourceVersion, job, port, useS3Store, s3Bucket, taskConfig);
   }
 }

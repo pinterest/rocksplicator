@@ -89,6 +89,9 @@ class ApplicationDB {
   rocksdb::Status CompactRange(const rocksdb::CompactRangeOptions& options,
                                const rocksdb::Slice* begin,
                                const rocksdb::Slice* end);
+  
+  // get the highest empty level of default column family
+  uint32_t getHighestEmptyLevel();
 
   // Whether this db instance is slave
   bool IsSlave() const { return role_ == replicator::DBRole::SLAVE; }

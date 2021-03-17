@@ -19,13 +19,15 @@ public class RocksplicatorMonitor {
   private MBeanServer beanServer;
   private RocksplicatorSpectatorMonitor spectatorStatsMonitor;
   private String cluster;
+  private String instanceName;
 
   public RocksplicatorMonitor(String clusterName, String instanceName) {
-    beanServer = ManagementFactory.getPlatformMBeanServer();
-    cluster = clusterName;
+    this.beanServer = ManagementFactory.getPlatformMBeanServer();
+    this.cluster = clusterName;
+    this.instanceName = instanceName;
 
     try {
-      spectatorStatsMonitor = new RocksplicatorSpectatorMonitor(instanceName);
+      spectatorStatsMonitor = new RocksplicatorSpectatorMonitor(this.instanceName);
 
       register(spectatorStatsMonitor, getObjectName(getInstanceBeanName(instanceName)));
     } catch (Exception e) {
@@ -83,4 +85,23 @@ public class RocksplicatorMonitor {
     }
   }
 
+  public void close() {
+    try {
+      unregister(getObjectName(getInstanceBeanName(instanceName)));
+    } catch (MalformedObjectNameException e) {
+      e.printStackTrace();
+    }
+  }
+
+  private void unregister(ObjectName name) {
+    if (beanServer == null) {
+      LOG.warn("bean server is null, nothing to do");
+      return;
+    }
+    try {
+      beanServer.unregisterMBean(name);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+  }
 }

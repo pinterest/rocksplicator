@@ -60,6 +60,10 @@ enum ErrorCode {
   OTHER = 0,
   SOURCE_NOT_FOUND = 1, # could not find the upstream db
   SOURCE_READ_ERROR = 2,
+  # upstream db was recently removed. This is an optimization to reduce reads from
+  # helix, and there is no harm if the upstream fails to distinguish between
+  # SOURCE_REMOVED and SOURCE_NOT_FOUND
+  SOURCE_REMOVED = 3,
 }
 
 exception ReplicateException {

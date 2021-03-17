@@ -13,7 +13,6 @@ import org.apache.helix.task.TaskStateModelFactory;
 import org.apache.helix.task.TaskUtil;
 import org.apache.helix.task.Workflow;
 import org.apache.helix.task.WorkflowConfig;
-
 import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
@@ -160,9 +159,11 @@ public class TestDedupTaskFactory extends TaskTestBase {
     protected DedupTask getTask(String srcStorePathPrefix, long resourceVersion,
                                 String partitionName, String cluster, String job, int port,
                                 String destStorePathPrefix, boolean useS3Store, String s3Bucket,
-                                int backupLimitMbs, boolean shareFilesWithChecksum) {
-      return new DummyDedupTask(srcStorePathPrefix, resourceVersion, partitionName, cluster, job, port,
-          destStorePathPrefix, useS3Store, s3Bucket, backupLimitMbs, shareFilesWithChecksum);
+                                int backupLimitMbs, boolean shareFilesWithChecksum,
+                                TaskConfig taskConfig) {
+      return new DummyDedupTask(srcStorePathPrefix, resourceVersion, partitionName, cluster, job,
+          port, destStorePathPrefix, useS3Store, s3Bucket, backupLimitMbs, shareFilesWithChecksum,
+          taskConfig);
     }
 
   }
@@ -172,9 +173,11 @@ public class TestDedupTaskFactory extends TaskTestBase {
     public DummyDedupTask(String srcStorePathPrefix, long resourceVersion,
                           String partitionName, String taskCluster, String job, int adminPort,
                           String destStorePathPrefix, boolean useS3Store, String s3Bucket,
-                          int backupLimitMbs, boolean shareFilesWithChecksum) {
+                          int backupLimitMbs, boolean shareFilesWithChecksum,
+                          TaskConfig taskConfig) {
       super(srcStorePathPrefix, resourceVersion, partitionName, taskCluster, job, adminPort,
-          destStorePathPrefix, useS3Store, s3Bucket, backupLimitMbs, shareFilesWithChecksum);
+          destStorePathPrefix, useS3Store, s3Bucket, backupLimitMbs, shareFilesWithChecksum,
+          taskConfig);
     }
 
     @Override

@@ -63,9 +63,11 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
   private static final HashFunction HASH_FUNCTION = Hashing.md5();
   private static final int DEFAULT_POLL_PERIOD_MILLIS = 10000;
   private static final int DEFAULT_HIGH_RESOLUTION_POLL_PERIOD_MILLIS = 1000;
+  private static final int DEFAULT_EXPENSIVE_HIGH_RESOLUTION_POLL_PERIOD_MILLIS = 50;
 
   private static volatile PollingFileWatcher DEFAULT_INSTANCE = null;
   private static volatile PollingFileWatcher HIGH_RESOLUTION_INSTANCE = null;
+  private static volatile PollingFileWatcher EXPENSIVE_HIGH_RESOLUTION_INSTANCE = null;
 
   // Thread safety note: only addWatch() can add new entries to this map, and that method
   // is synchronized. The reason for using a concurrent map is only to allow the watcher
@@ -119,6 +121,21 @@ public class PollingFileWatcher implements FileWatcher<byte[]> {
     }
 
     return HIGH_RESOLUTION_INSTANCE;
+  }
+
+  /**
+   * Creates the default ConfigFileWatcher instance on demand.
+   */
+  public static PollingFileWatcher defaultExpensiveHighResolutionWatcher() {
+    if (EXPENSIVE_HIGH_RESOLUTION_INSTANCE == null) {
+      synchronized (PollingFileWatcher.class) {
+        if (EXPENSIVE_HIGH_RESOLUTION_INSTANCE == null) {
+          EXPENSIVE_HIGH_RESOLUTION_INSTANCE = new PollingFileWatcher(
+              DEFAULT_EXPENSIVE_HIGH_RESOLUTION_POLL_PERIOD_MILLIS, TimeUnit.MILLISECONDS, false);
+        }
+      }
+    }
+    return EXPENSIVE_HIGH_RESOLUTION_INSTANCE;
   }
 
   private static byte[] read(File file) throws IOException {

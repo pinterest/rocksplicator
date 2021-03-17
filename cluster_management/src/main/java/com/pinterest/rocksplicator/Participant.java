@@ -18,16 +18,17 @@
 
 package com.pinterest.rocksplicator;
 
-import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.ClientShardMapLeaderEventLoggerDriver;
+import com.pinterest.rocksplicator.eventstore.ExternalViewLeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLoggerImpl;
 import com.pinterest.rocksplicator.monitoring.mbeans.RocksplicatorMonitor;
+import com.pinterest.rocksplicator.publisher.ShardMapPublisherBuilder;
 import com.pinterest.rocksplicator.task.BackupTaskFactory;
 import com.pinterest.rocksplicator.task.DedupTaskFactory;
+import com.pinterest.rocksplicator.task.IngestTaskFactory;
 import com.pinterest.rocksplicator.task.RestoreTaskFactory;
 
-import com.google.common.base.Preconditions;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.GnuParser;
@@ -41,6 +42,7 @@ import org.apache.helix.HelixManager;
 import org.apache.helix.HelixManagerFactory;
 import org.apache.helix.InstanceType;
 import org.apache.helix.manager.zk.HelixManagerShutdownHook;
+import org.apache.helix.manager.zk.ZKHelixAdmin;
 import org.apache.helix.model.HelixConfigScope;
 import org.apache.helix.model.Message;
 import org.apache.helix.model.builder.HelixConfigScopeBuilder;
@@ -54,6 +56,7 @@ import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.ConsoleAppender;
 import org.apache.log4j.Level;
 import org.apache.log4j.PatternLayout;
+import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,17 +81,22 @@ public class Participant {
   private static final String handoffEventHistoryzkSvr = "handoffEventHistoryzkSvr";
   private static final String handoffEventHistoryConfigPath = "handoffEventHistoryConfigPath";
   private static final String handoffEventHistoryConfigType = "handoffEventHistoryConfigType";
-  private static final String  handoffClientEventHistoryJsonShardMapPath = "handoffClientEventHistoryJsonShardMapPath";
+  private static final String
+      handoffClientEventHistoryJsonShardMapPath =
+      "handoffClientEventHistoryJsonShardMapPath";
 
   private static HelixManager helixManager = null;
   private static LeaderEventsLogger staticParticipantLeaderEventsLogger = null;
   private static LeaderEventsLogger staticSpectatorLeaderEventsLogger = null;
   private static LeaderEventsLogger staticClientLeaderEventsLogger = null;
-  private static ClientShardMapLeaderEventLoggerDriver staticClientShardMapLeaderEventLoggerDriver = null;
+  private static ClientShardMapLeaderEventLoggerDriver
+      staticClientShardMapLeaderEventLoggerDriver =
+      null;
   private static StateModelFactory<StateModel> stateModelFactory;
   private static String staticClusterName = null;
   private static String staticInstanceId = null;
   private static boolean staticDisableParticipantInstanceWhenExiting = false;
+  private static String staticZkConnectString = null;
   private final RocksplicatorMonitor monitor;
 
   private static Options constructCommandLineOptions() {
@@ -161,27 +169,30 @@ public class Participant {
     handoffEventHistoryzkSvrOption.setArgName(
         "Zk connect string for logging state transitions for leader handoff profiling (Optional)");
 
-    Option  handoffEventHistoryConfigPathOption =
+    Option handoffEventHistoryConfigPathOption =
         OptionBuilder.withLongOpt(handoffEventHistoryConfigPath)
             .withDescription(
-                "local disk path to config containing resources to enable for handoff events history tracking")
+                "local disk path to config containing resources to enable for handoff events "
+                    + "history tracking")
             .create();
     handoffEventHistoryConfigPathOption.setArgs(1);
     handoffEventHistoryConfigPathOption.setRequired(false);
     handoffEventHistoryConfigPathOption.setArgName(
         "config path containing resources to enabled for handoff events history (Optional)");
 
-    Option  handoffEventHistoryConfigTypeOption =
+    Option handoffEventHistoryConfigTypeOption =
         OptionBuilder.withLongOpt(handoffEventHistoryConfigType)
             .withDescription(
-                "format of config for resources to track handoff events [LINE_TERMINATED / JSON_ARRAY]")
+                "format of config for resources to track handoff events [LINE_TERMINATED / "
+                    + "JSON_ARRAY]")
             .create();
     handoffEventHistoryConfigTypeOption.setArgs(1);
     handoffEventHistoryConfigTypeOption.setRequired(false);
     handoffEventHistoryConfigTypeOption.setArgName(
-        "format of config for resources to track handoff events [LINE_TERMINATED / JSON_ARRAY] (Optional)");
+        "format of config for resources to track handoff events [LINE_TERMINATED / JSON_ARRAY] "
+            + "(Optional)");
 
-    Option  handoffClientEventHistoryJsonShardMapPathOption =
+    Option handoffClientEventHistoryJsonShardMapPathOption =
         OptionBuilder.withLongOpt(handoffClientEventHistoryJsonShardMapPath)
             .withDescription(
                 "path to shard_map in json format, generated by Spectator")
@@ -268,9 +279,10 @@ public class Participant {
     LOG.error(String.format("CmdLine: handoffClientEventHistoryJsonShardMapPath: %s", shardMapPath));
 
 
-    staticDisableParticipantInstanceWhenExiting = disableParticipantInstanceWhenExiting;
+    staticZkConnectString = zkConnectString;
     staticClusterName = clusterName;
     staticInstanceId = instanceName;
+    staticDisableParticipantInstanceWhenExiting = disableParticipantInstanceWhenExiting;
 
     /**
      * Note that the last parameter is empty, since we don't dictate
@@ -285,7 +297,8 @@ public class Participant {
 
       if (shardMapPath != null && !shardMapPath.isEmpty()) {
         staticClientLeaderEventsLogger = new LeaderEventsLoggerImpl(instanceName,
-            zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType, Optional.empty());
+            zkEventHistoryStr, clusterName, resourceConfigPath, resourceConfigType,
+            Optional.empty());
 
         staticClientShardMapLeaderEventLoggerDriver = new ClientShardMapLeaderEventLoggerDriver(
             clusterName, shardMapPath, staticClientLeaderEventsLogger, zkEventHistoryStr);
@@ -337,6 +350,8 @@ public class Participant {
           .put("Backup", new BackupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
       taskFactoryRegistry
           .put("Restore", new RestoreTaskFactory(clusterName, port, useS3Backup, s3BucketName));
+      taskFactoryRegistry.put(
+          "Ingest", new IngestTaskFactory(clusterName, instanceName.split("_")[0], port, s3Bucket));
     } else if (stateModelType.equals("LeaderFollower;Task")) {
       stateModelType = "LeaderFollower";
       stateModelFactory = new LeaderFollowerStateModelFactory(instanceName.split("_")[0],
@@ -347,6 +362,8 @@ public class Participant {
           .put("Backup", new BackupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
       taskFactoryRegistry
           .put("Restore", new RestoreTaskFactory(clusterName, port, useS3Backup, s3BucketName));
+      taskFactoryRegistry.put(
+          "Ingest", new IngestTaskFactory(clusterName, instanceName.split("_")[0], port, s3Bucket));
     } else if (stateModelType.equals("Task")) {
       taskFactoryRegistry
           .put("Dedup", new DedupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
@@ -413,7 +430,14 @@ public class Participant {
 
     if (runSpectator) {
       // Add callback to create rocksplicator shard config
-      ConfigGenerator configGenerator = new ConfigGenerator(clusterName, helixManager, postUrl, monitor,
+      ConfigGenerator configGenerator = new ConfigGenerator(
+          clusterName,
+          helixManager,
+          ShardMapPublisherBuilder.create(helixManager.getClusterName())
+              .withPostUrl(postUrl)
+              .withLocalDump()
+              .build(),
+          monitor,
           new ExternalViewLeaderEventsLoggerImpl(staticSpectatorLeaderEventsLogger));
 
       HelixCustomCodeRunner codeRunner = new HelixCustomCodeRunner(helixManager, zkConnectString)
@@ -512,6 +536,16 @@ public class Participant {
       if (helixManager != null) {
         new HelixManagerShutdownHook(helixManager).run();
         helixManager = null;
+      }
+
+      if (staticDisableParticipantInstanceWhenExiting) {
+        try {
+        HelixAdmin helixAdmin = new ZKHelixAdmin(staticZkConnectString);
+        enableInstance(helixAdmin, staticClusterName, staticInstanceId);
+        helixAdmin.close();
+        } catch (Exception exp) {
+          LOG.error("Error while re-anabling the participant in helix, after shutdown", exp);
+        }
       }
     }
 

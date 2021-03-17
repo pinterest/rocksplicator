@@ -14,14 +14,13 @@ import org.apache.helix.task.TaskStateModelFactory;
 import org.apache.helix.task.TaskUtil;
 import org.apache.helix.task.Workflow;
 import org.apache.helix.task.WorkflowConfig;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.testng.Assert;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
-import org.testng.Assert;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -207,9 +206,10 @@ public class TestBackupTaskFactory extends TaskTestBase {
     @Override
     protected Task getTask(String cluster, String targetPartition, int backupLimitMbs,
                            String storePathPrefix, long resourceVersion, String job, int port,
-                           boolean useS3Store, String s3Bucket, boolean shareFilesWithChecksum) {
+                           boolean useS3Store, String s3Bucket, boolean shareFilesWithChecksum,
+                           TaskConfig taskConfig) {
       return new DummyBackupTask(cluster, targetPartition, backupLimitMbs, storePathPrefix,
-          resourceVersion, job, port, useS3Store, s3Bucket, shareFilesWithChecksum);
+          resourceVersion, job, port, useS3Store, s3Bucket, shareFilesWithChecksum, taskConfig);
     }
 
   }
@@ -218,9 +218,10 @@ public class TestBackupTaskFactory extends TaskTestBase {
 
     public DummyBackupTask(String taskCluster, String partitionName, int backupLimitMbs,
                            String storePathPrefix, long resourceVersion, String job, int adminPort,
-                           boolean useS3Store, String s3Bucket, boolean shareFilesWithChecksum) {
+                           boolean useS3Store, String s3Bucket, boolean shareFilesWithChecksum,
+                           TaskConfig taskConfig) {
       super(taskCluster, partitionName, backupLimitMbs, storePathPrefix, resourceVersion, job,
-          adminPort, useS3Store, s3Bucket, shareFilesWithChecksum);
+          adminPort, useS3Store, s3Bucket, shareFilesWithChecksum, taskConfig);
     }
 
     @Override
