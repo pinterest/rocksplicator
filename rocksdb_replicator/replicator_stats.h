@@ -32,7 +32,8 @@ extern const std::string kReplicatorGetUpdatesSinceErrors;
 extern const std::string kReplicatorGetUpdatesSinceMs;
 extern const std::string kReplicatorWriteMs;
 extern const std::string kReplicatorLeaderSequenceNumbersBehind;
-
+extern const std::string kReplicatorLeaderReset;
+extern const std::string kReplicatorRemoteApplicationExceptionsNotFound;
 
 // add value to metric_name. If db_name is not empty, add value to the per db
 // metric also
