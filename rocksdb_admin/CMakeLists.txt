@@ -22,7 +22,7 @@ AUX_SOURCE_DIRECTORY(./ SRC_FILES)
 add_library(rocksdb_admin ${GEN_FILES} ${SRC_FILES})
 target_link_libraries(rocksdb_admin thrift thriftcpp2 rocksdb rocksdb_replicator
         rocksdb_admin_detail folly glog pthread boost_filesystem rocksdb_glogger
-        common jvm kafka_consumer rdkafka++ )
+        common kafka_consumer rdkafka++ )
 
 add_subdirectory(tests)
 add_subdirectory(detail)
