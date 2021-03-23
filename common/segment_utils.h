@@ -27,6 +27,15 @@ std::string SegmentToDbName(const std::string& segment, const int shard_id);
 std::string DbNameToSegment(const std::string& db_name);
 
 /*
+ * Segment might have a <version> suffix, e.g. users---123[:05d], in which
+ * "users" is segment name, "---" is the versioning_delimiter and "123" is the
+ * <version> and [:05d] is a 5 digit shard number
+ */
+void DbNameToSegmentAndVersion(const std::string& db_name, std::string* seg,
+                               std::string* v,
+                               const std::string v_deli = "---");
+
+/*
  * Extract the shard id from a db name
  */
 int ExtractShardId(const std::string& db_name);
