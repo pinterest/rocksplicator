@@ -26,6 +26,7 @@
 #include <thread>
 #include <unordered_set>
 #include <vector>
+#include <map>
 
 #include "boost/filesystem.hpp"
 #include "common/identical_name_thread_factory.h"
@@ -1278,6 +1279,42 @@ void AdminHandler::async_tm_checkDB(
     }
   }
 
+  if (request->__isset.option_names && !request->option_names.empty()) {
+    std::map<std::string, std::string> options_map;
+    auto s = db->GetOptions(request->option_names, &options_map);
+    if (s.ok()) {
+      response.options = options_map;
+      response.__isset.options = true;
+    } else {
+      LOG(ERROR) << "Failed to GetOptions from db, " << s.ToString();
+    }
+  }
+
+  if (request->__isset.include_meta) {
+    auto meta = getMetaData(request->db_name);
+    std::map<std::string, std::string> metas;
+    metas["s3_bucket"] = meta.s3_bucket;
+    metas["s3_path"] = meta.s3_path;
+    metas["last_kafka_msg_timestamp_ms"] =
+        std::to_string(meta.last_kafka_msg_timestamp_ms);
+    response.db_metas = metas;
+    response.__isset.db_metas = true;
+  }
+
+  if (request->__isset.property_names && !request->property_names.empty()) {
+    std::map<std::string, std::string> properties;
+    for (const auto& p : request->property_names) {
+      std::string p_val;
+      if (db->GetProperty(p, &p_val)) {
+        properties[p] = p_val;
+      } else {
+        LOG(ERROR) << "Failed to getProperty for " << p;
+      }
+    }
+    response.properties = properties;
+    response.__isset.properties = true;
+  }
+
   callback->result(response);
 }
 
@@ -1532,13 +1569,15 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   if (ingest_behind) {
     if (!db->rocksdb()->GetDBOptions().allow_ingest_behind) {
       e.message = request->db_name + " DBOptions.allow_ingest_behind false";
-      LOG(ERROR) << "DBOptions.allow_ingest_behind false, can't ingest behind " << request->db_name;
+      LOG(ERROR) << "DBOptions.allow_ingest_behind false, can't ingest behind "
+                 << request->db_name;
       callback.release()->exceptionInThread(std::move(e));
       return;
     }
-    if (db->getHighestEmptyLevel() != db->rocksdb()->NumberLevels() - 1) {
+    if (!db->DBLmaxEmpty()) {
       // note: default num levels for DB is 7 (0, 1, ..., 6)
-      std::string errMsg = "The Lmax of DB is not empty, skip ingestion to " + request->db_name;
+      std::string errMsg =
+          "The Lmax of DB is not empty, skip ingestion to " + request->db_name;
       e.message = errMsg;
       callback.release()->exceptionInThread(std::move(e));
       LOG(ERROR) << errMsg;
