@@ -307,6 +307,7 @@ TEST_F(ApplicationDBTestBase, GetLSMLevelInfo) {
   EXPECT_TRUE(s.ok());
   // level6 is occupied by ingested data
   EXPECT_EQ(db_->getHighestEmptyLevel(), (unsigned)5);
+  EXPECT_FALSE(db_->DBLmaxEmpty());
 
   // compact DB
   rocksdb::CompactRangeOptions compact_options;
@@ -319,6 +320,7 @@ TEST_F(ApplicationDBTestBase, GetLSMLevelInfo) {
   // if change_level is false (default), compacted data will move to bottommost
   db_->rocksdb()->CompactRange(compact_options, nullptr, nullptr);
   EXPECT_EQ(db_->getHighestEmptyLevel(), (unsigned)6);
+  EXPECT_TRUE(db_->DBLmaxEmpty());
 }
 
 }  // namespace admin
