@@ -35,23 +35,24 @@ std::string DbNameToSegment(const std::string& db_name) {
   return segment;
 }
 
-void DbNameToSegmentAndVersion(const std::string& db_name, std::string* seg,
-                               std::string* v, const std::string v_deli) {
+void DbNameToSegmentAndVersion(const std::string& db_name, std::string* segment,
+                               std::string* version,
+                               const std::string version_delim) {
   if (db_name.size() <= kShardLength) {
-    *seg = db_name;
+    *segment = db_name;
     return;
   }
-  if (!v_deli.empty()) {
-    auto iter = db_name.rfind(v_deli);
+  if (!version_delim.empty()) {
+    auto iter = db_name.rfind(version_delim);
     if (iter != std::string::npos) {
-      *seg = db_name.substr(0, iter);
-      *v = db_name.substr(
-          iter + v_deli.size(),
-          db_name.size() - seg->size() - v_deli.size() - kShardLength);
+      *segment = db_name.substr(0, iter);
+      *version = db_name.substr(iter + version_delim.size(),
+                                db_name.size() - segment->size() -
+                                    version_delim.size() - kShardLength);
       return;
     }
   }
-  *seg = db_name.substr(0, db_name.size() - kShardLength);
+  *segment = db_name.substr(0, db_name.size() - kShardLength);
 }
 
 int ExtractShardId(const std::string& db_name) {
