@@ -401,7 +401,7 @@ class ThriftClientPool {
 
       void operator()(T* t) {
         // We have to wait for it to avoid memory leak.
-        evb_->runInEventBaseThreadAndWait([t] {
+        evb_->runImmediatelyOrRunInEventBaseThreadAndWait([t] {
             delete t;
           });
       }
@@ -413,7 +413,7 @@ class ThriftClientPool {
     std::unique_ptr<T, Deleter> client(nullptr, deleter);
     auto ssl_ctx =
         ssl_ctx_ == nullptr ? nullptr : std::atomic_load_explicit(ssl_ctx_, std::memory_order_acquire);
-    event_loops_[idx].evb_->runInEventBaseThreadAndWait(
+    event_loops_[idx].evb_->runImmediatelyOrRunInEventBaseThreadAndWait(
         [&client, &event_loop = event_loops_[idx], &addr, &is_good,
          connect_timeout_ms, aggressively, ssl_ctx = std::move(ssl_ctx)] () mutable {
           auto channel = event_loop.getChannelFor(addr, connect_timeout_ms,
