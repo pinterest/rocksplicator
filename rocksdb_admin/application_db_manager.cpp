@@ -21,7 +21,6 @@
 #include <vector>
 
 #include "glog/logging.h"
-#include "common/segment_utils.h"
 
 namespace admin {
 
@@ -118,12 +117,8 @@ std::string ApplicationDBManager::DumpDBStatsAsText() const {
       sz = 0;
     }
 
-    std::string seg;
-    std::string v;
-    common::DbNameToSegmentAndVersion(db->db_name(), &seg, &v);
-    stats += folly::stringPrintf(
-        "  total_sst_file_size segment=%s version=%s db=%s: %" PRIu64 "\n",
-        seg.c_str(), v.c_str(), db->db_name().c_str(), sz);
+    stats += folly::stringPrintf("  total_sst_file_size db=%s: %" PRIu64 "\n",
+                                 db->db_name().c_str(), sz);
   }
 
   return stats;
