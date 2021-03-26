@@ -9,6 +9,7 @@ import com.pinterest.rocksplicator.utils.ExternalViewUtils;
 import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
+import org.apache.helix.HelixAdmin;
 import org.apache.helix.HelixManager;
 import org.apache.helix.HelixProperty;
 import org.apache.helix.NotificationContext;
@@ -69,6 +70,7 @@ public class CurrentStatesConfigGenerator
   private final String clusterName;
   private final Map<String, String> hostToHostWithDomain;
   private final HelixManager helixManager;
+  private final HelixAdmin helixAdmin;
   private final ReentrantLock synchronizedCallbackLock;
   private final ShardMapPublisher shardMapPublisher;
   private final RocksplicatorMonitor monitor;
@@ -86,6 +88,7 @@ public class CurrentStatesConfigGenerator
       final ExternalViewLeaderEventLogger externalViewLeaderEventLogger) throws Exception {
     this.clusterName = clusterName;
     this.helixManager = helixManager;
+    this.helixAdmin = helixManager.getClusterManagmentTool();
     this.shardMapPublisher = shardMapPublisher;
     this.hostToHostWithDomain = new HashMap<String, String>();
     this.monitor = monitor;
@@ -98,7 +101,6 @@ public class CurrentStatesConfigGenerator
      */
     helixManager.addIdealStateChangeListener(this);
     helixManager.addExternalViewChangeListener(this);
-
   }
 
   private void initializeRoutingTable() {
@@ -111,6 +113,7 @@ public class CurrentStatesConfigGenerator
           && externalViewsByResourceName != null // Ensure externalViews has also been initialized.
           && routingTableProvider == null // Ensure that routingTable has not yet been initialized.
       ) {
+        LOG.error(String.format("clusterName: %s Initializing the routingTableProvider", clusterName));
         this.routingTableProvider =
             new RoutingTableProvider(this.helixManager, PropertyType.CURRENTSTATES);
         this.routingTableProvider.addRoutingTableChangeListener(this, this);
@@ -123,7 +126,7 @@ public class CurrentStatesConfigGenerator
       r.run();
     } catch (Throwable throwable) {
       this.monitor.incrementConfigGeneratorFailCount();
-      LOG.error(String.format("cluster:%s Exception in generateShardConfig()", clusterName),
+      LOG.error(String.format("cluster: %s Exception in generateShardConfig()", clusterName),
           throwable);
       throw throwable;
     }
@@ -156,11 +159,9 @@ public class CurrentStatesConfigGenerator
 
             LOG.error(String
                 .format(
-                    "Got IdealState for cluster: %s, resource: %s, resource_type:%s idealState: %s",
+                    "Got IdealState for cluster: %s, resource: %s",
                     clusterName,
-                    idealState.getResourceName(),
-                    idealState.getResourceType(),
-                    idealState));
+                    idealState.getResourceName()));
           }
           if (routingTableProvider == null) {
             initializeRoutingTable();
@@ -197,10 +198,9 @@ public class CurrentStatesConfigGenerator
             externalViewsByResourceName.put(resourceName, externalView);
 
             LOG.error(String
-                .format("Got ExternalView for cluster: %s, resource: %s, externalView: %s",
+                .format("Got ExternalView for cluster: %s, resource: %s",
                     clusterName,
-                    externalView.getResourceName(),
-                    externalView));
+                    externalView.getResourceName()));
           }
 
           if (routingTableProvider == null) {
@@ -218,6 +218,9 @@ public class CurrentStatesConfigGenerator
         @Override
         public void run() {
           if (routingTableProvider != null) {
+
+            LOG.error(String.format(
+                "clusterName: %s, generatingShardConfigAfterExternalNotification", clusterName));
             uncheckedGenerateConfig(routingTableProvider.getRoutingTableSnapshot());
           }
         }
@@ -234,6 +237,8 @@ public class CurrentStatesConfigGenerator
       logUncheckedException(new Runnable() {
         @Override
         public void run() {
+          LOG.error(String.format(
+              "clusterName: %s, generatingShardConfigOnRoutingTableChange", clusterName));
           uncheckedGenerateConfig(routingTableSnapshot);
         }
       });
@@ -250,7 +255,7 @@ public class CurrentStatesConfigGenerator
     Stopwatch stopwatch = Stopwatch.createStarted();
 
     // Make sure only resources available in the cluster are counted.
-    Collection<String> availableResources = routingTableSnapshot.getResources();
+    Collection<String> availableResources = helixAdmin.getResourcesInCluster(clusterName);
 
     // Prune idealStates / externalViews depending based on existing resources.
     idealStatesByResourceName.keySet().retainAll(availableResources);
