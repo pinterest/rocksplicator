@@ -15,75 +15,42 @@
 
 #include "common/segment_utils.h"
 
-#include <iostream>
 #include "gtest/gtest.h"
 
-namespace common {
-
 TEST(SegmentToDbNameTest, Basics) {
-  EXPECT_EQ(SegmentToDbName("seg", 1), "seg00001");
-  EXPECT_EQ(SegmentToDbName("seg", 12345), "seg12345");
+  EXPECT_EQ(common::SegmentToDbName("seg", 1), "seg00001");
+  EXPECT_EQ(common::SegmentToDbName("seg", 12345), "seg12345");
 }
 
 TEST(DbNameToSegmentTest, Basics) {
-  EXPECT_EQ(DbNameToSegment("seg00001"), "seg");
-  EXPECT_EQ(DbNameToSegment("seg12345"), "seg");
-  EXPECT_EQ(DbNameToSegment("seg12"), "seg12");
-}
-
-TEST(DbNameToSegmentAndVersionTest, Basics) {
-  std::string seg;
-  std::string v;
-
-  DbNameToSegmentAndVersion("seg", &seg, &v);
-  EXPECT_EQ(seg, "seg");
-  EXPECT_TRUE(v.empty());
-
-  DbNameToSegmentAndVersion("seg00001", &seg, &v);
-  EXPECT_EQ(seg, "seg");
-  EXPECT_TRUE(v.empty());
-
-  DbNameToSegmentAndVersion("seg---200001", &seg, &v);
-  EXPECT_EQ(seg, "seg");
-  EXPECT_EQ(v, "2");
-
-  v.clear();
-  DbNameToSegmentAndVersion("seg---200001", &seg, &v, "***");
-  EXPECT_EQ(seg, "seg---2");
-  EXPECT_TRUE(v.empty());
-
-  v.clear();
-  DbNameToSegmentAndVersion("seg---200001", &seg, &v, "--");
-  EXPECT_EQ(seg, "seg-");
-  EXPECT_EQ(v, "2");
+  EXPECT_EQ(common::DbNameToSegment("seg00001"), "seg");
+  EXPECT_EQ(common::DbNameToSegment("seg12345"), "seg");
+  EXPECT_EQ(common::DbNameToSegment("seg12"), "seg12");
 }
 
 TEST(ExtractShardIDTest, Basics) {
   std::string db_name;
 
   db_name = "test_db00000";
-  EXPECT_EQ(ExtractShardId(db_name), 0);
+  EXPECT_EQ(common::ExtractShardId(db_name), 0);
 
   db_name = "test_db00030";
-  EXPECT_EQ(ExtractShardId(db_name), 30);
+  EXPECT_EQ(common::ExtractShardId(db_name), 30);
 
   db_name = "test_db";
-  EXPECT_EQ(ExtractShardId(db_name), -1);
+  EXPECT_EQ(common::ExtractShardId(db_name), -1);
 }
 
 TEST(DbNameToHelixPartitionNameTest, Basics) {
   std::string db_name;
 
   db_name = "test_db00000";
-  EXPECT_EQ(DbNameToHelixPartitionName(db_name), "test_db_0");
+  EXPECT_EQ(common::DbNameToHelixPartitionName(db_name), "test_db_0");
 
   db_name = "test_db00030";
-  EXPECT_EQ(DbNameToHelixPartitionName(db_name), "test_db_30");
+  EXPECT_EQ(common::DbNameToHelixPartitionName(db_name), "test_db_30");
+
 }
-
-} // namespace common
-
-
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
