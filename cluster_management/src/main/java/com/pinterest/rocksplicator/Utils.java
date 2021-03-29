@@ -286,18 +286,20 @@ public class Utils {
    */
   @Deprecated
   public static CheckDBResponse checkLocalDB(String dbName, int adminPort) throws RuntimeException {
-    return checkRemoteOrLocalDB(LOCAL_HOST_IP, adminPort, dbName, false, null);
+    return checkRemoteOrLocalDB(LOCAL_HOST_IP, adminPort, dbName, false, null, null);
   }
 
   public static CheckDBResponse checkRemoteOrLocalDB(String host, int adminPort, String dbName,
                                                      boolean includeMeta,
-                                                     List<String> optionNames) {
+                                                     List<String> optionNames,
+                                                     List<String> property_names) {
     try {
       Admin.Client client = getAdminClient(host, adminPort);
 
       CheckDBRequest req = new CheckDBRequest(dbName);
       req.setInclude_meta(includeMeta);
       req.setOption_names(optionNames);
+      req.setProperty_names(property_names);
 
       return client.checkDB(req);
     } catch (TException e) {

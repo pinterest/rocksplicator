@@ -395,11 +395,11 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           // check if the local replica needs rebuild
           CheckDBResponse
               localStatus =
-              Utils.checkRemoteOrLocalDB(LOCAL_HOST_IP, adminPort, dbName, true, null);
+              Utils.checkRemoteOrLocalDB(LOCAL_HOST_IP, adminPort, dbName, true, null, null);
           CheckDBResponse upstreamStatus = null;
           if (!upstreamHost.equals(LOCAL_HOST_IP) && !upstreamHost.equals(this.host)) {
             upstreamStatus =
-                Utils.checkRemoteOrLocalDB(upstreamHost, upstreamPort, dbName, true, null);
+                Utils.checkRemoteOrLocalDB(upstreamHost, upstreamPort, dbName, true, null, null);
           }
 
           boolean needRebuild = true;
