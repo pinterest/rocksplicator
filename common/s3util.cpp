@@ -42,6 +42,7 @@
 #include "boost/algorithm/string.hpp"
 #include "boost/iostreams/stream.hpp"
 #include "common/aws_s3_rate_limiter.h"
+#include "common/stats/stats.h"
 #include "glog/logging.h"
 
 using std::string;
@@ -58,6 +59,25 @@ DEFINE_int32(direct_io_buffer_n_pages, 1,
              "Number of pages we need to set to direct io buffer");
 DEFINE_bool(disable_s3_download_stream_buffer, false,
             "disable the stream buffer used by s3 downloading");
+
+
+namespace {
+  const std::string kS3GetObject = "s3_getobject";
+  const std::string kS3GetObjectToStream = "s3_getobject_tostream";
+  const std::string kS3ListObject = "s3_listobject";
+  const std::string kS3ListObjectItems = "s3_listobject_items";
+  const std::string kS3ListObjectV2 = "s3_listobjectv2";
+  const std::string kS3ListObjectV2Items = "s3_listobjectv2_items";
+  const std::string kS3ListAllObjects = "s3_listallobjects";
+  const std::string kS3ListAllObjectsItems = "s3_listallobjects_items";
+  const std::string kS3GetObjects = "s3_getobjects";
+  const std::string kS3GetObjectMetadata = "s3_getobject_metadata";
+  const std::string kS3GetObjectSizeAndModTime = "s3_getobject_sizeandmodtime";
+  const std::string kS3PutObject = "s3_putobject";
+  const std::string kS3GetObjectCallable = "s3_getobject_callable";
+  const std::string kS3CopyObject = "s3_copyobject";
+  const std::string kS3DeleteObject = "s3_deleteobject";
+}
 
 namespace common {
 
@@ -131,6 +151,7 @@ std::streamsize DirectIOWritableFile::write(const char* s, std::streamsize n) {
 
 GetObjectResponse S3Util::getObject(
     const string& key, const string& local_path, const bool direct_io) {
+  Stats::get()->Incr(kS3GetObject);
   auto getObjectResult = sdkGetObject(key, local_path, direct_io);
   string err_msg_prefix =
     "Failed to download from " + key + " to " + local_path + " error: ";
@@ -143,6 +164,7 @@ GetObjectResponse S3Util::getObject(
 }
 
 GetObjectResponse S3Util::getObject(const string& key, iostream* out) {
+  Stats::get()->Incr(kS3GetObjectToStream);
   GetObjectRequest getObjectRequest;
   getObjectRequest.SetBucket(bucket_);
   getObjectRequest.SetKey(key);
@@ -238,25 +260,30 @@ void S3Util::listObjectsHelper(const string& prefix, const string& delimiter,
 
 ListObjectsResponse S3Util::listObjects(const string& prefix,
                                         const string& delimiter) {
+  Stats::get()->Incr(kS3ListObject);
   vector<string> objects;
   string error_message;
   listObjectsHelper(prefix, delimiter, "", &objects, nullptr, &error_message);
+  Stats::get()->Incr(kS3ListObjectItems, objects.size());
   return ListObjectsResponse(objects, error_message);
 }
 
 ListObjectsResponseV2 S3Util::listObjectsV2(const string& prefix,
                                             const string& delimiter,
                                             const string& marker) {
+  Stats::get()->Incr(kS3ListObjectV2);
   vector<string> objects;
   string error_message;
   string next_marker;
   listObjectsHelper(prefix, delimiter, marker, &objects,
                     &next_marker, &error_message);
+  Stats::get()->Incr(kS3ListObjectV2Items, objects.size());
   return ListObjectsResponseV2(
           ListObjectsResponseV2Body(objects, next_marker), error_message);
 }
 
 ListObjectsResponseV2 S3Util::listAllObjects(const string& prefix, const string& delimiter) {
+  Stats::get()->Incr(kS3ListAllObjects);
   vector<string> output;
   vector<string> objects;
   string error_message;
@@ -272,12 +299,14 @@ ListObjectsResponseV2 S3Util::listAllObjects(const string& prefix, const string&
     marker = next_marker;
     next_marker.clear();
   } while (!marker.empty());
+  Stats::get()->Incr(kS3ListAllObjectsItems, output.size());
   return ListObjectsResponseV2(ListObjectsResponseV2Body(output, next_marker), error_message);
 }
 
 GetObjectsResponse S3Util::getObjects(
     const string& prefix, const string& local_directory,
     const string& delimiter, const bool direct_io) {
+  Stats::get()->Incr(kS3GetObjects);
   ListObjectsResponse list_result = listObjects(prefix);
   vector<S3UtilResponse<bool>> results;
   if (!list_result.Error().empty()) {
@@ -308,6 +337,7 @@ GetObjectsResponse S3Util::getObjects(
 }
 
 GetObjectMetadataResponse S3Util::getObjectMetadata(const string &key) {
+  Stats::get()->Incr(kS3GetObjectMetadata);
   HeadObjectRequest headObjectRequest;
   headObjectRequest.SetBucket(bucket_);
   headObjectRequest.SetKey(key);
@@ -336,6 +366,7 @@ GetObjectMetadataResponse S3Util::getObjectMetadata(const string &key) {
 }
 
 GetObjectSizeAndModTimeResponse S3Util::getObjectSizeAndModTime(const string& key) {
+  Stats::get()->Incr(kS3GetObjectSizeAndModTime);
   HeadObjectRequest headObjectRequest;
   headObjectRequest.SetBucket(bucket_);
   headObjectRequest.SetKey(key);
@@ -352,6 +383,7 @@ GetObjectSizeAndModTimeResponse S3Util::getObjectSizeAndModTime(const string& ke
 }
 
 PutObjectResponse S3Util::putObject(const string& key, const string& local_path, const string& tags) {
+  Stats::get()->Incr(kS3PutObject);
   PutObjectRequest object_request;
   object_request.WithBucket(bucket_).WithKey(key);
   if (!tags.empty()) {
@@ -374,6 +406,7 @@ PutObjectResponse S3Util::putObject(const string& key, const string& local_path,
 
 Aws::S3::Model::PutObjectOutcomeCallable
 S3Util::putObjectCallable(const string& key, const string& local_path) {
+  Stats::get()->Incr(kS3GetObjectCallable);
   PutObjectRequest object_request;
   object_request.WithBucket(bucket_).WithKey(key);
   auto input_data = Aws::MakeShared<Aws::FStream>("PutObjectInputStream",
@@ -384,6 +417,7 @@ S3Util::putObjectCallable(const string& key, const string& local_path) {
 }
 
 CopyObjectResponse S3Util::copyObject(const string& src, const string& target) {
+  Stats::get()->Incr(kS3CopyObject);
   CopyObjectRequest copyObjectRequest;
   copyObjectRequest.SetCopySource(bucket_ + "/" + src);
   copyObjectRequest.SetBucket(bucket_);
@@ -399,6 +433,7 @@ CopyObjectResponse S3Util::copyObject(const string& src, const string& target) {
 }
 
 DeleteObjectResponse S3Util::deleteObject(const string& key) {
+  Stats::get()->Incr(kS3DeleteObject);
   DeleteObjectRequest deleteObjectRequest;
   deleteObjectRequest.SetBucket(bucket_);
   deleteObjectRequest.SetKey(key);
