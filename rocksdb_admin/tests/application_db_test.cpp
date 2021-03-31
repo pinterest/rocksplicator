@@ -19,9 +19,9 @@
 #include <stdlib.h>
 #include <ctime>
 #include <iostream>
+#include <map>
 #include <thread>
 #include <unordered_map>
-#include <map>
 #include <vector>
 
 #include "boost/filesystem.hpp"
@@ -168,11 +168,28 @@ TEST_F(ApplicationDBTestBase, GetOptionsAsStrMap) {
   }
 }
 
-TEST_F(ApplicationDBTestBase, SetImmutableOptionsFail) {
+TEST_F(ApplicationDBTestBase, SetDBOptions) {
+  // set immutable DBOptions failed
   EXPECT_FALSE(last_options_.allow_ingest_behind);
-  auto s = db_->rocksdb()->SetOptions({{"allow_ingest_behind", "true"}});
+  // allow_ingest_behind is immutable DBoption, Option not changeable
+  auto s = db_->rocksdb()->SetDBOptions({{"allow_ingest_behind", "true"}});
   EXPECT_FALSE(s.ok());
   EXPECT_FALSE(last_options_.allow_ingest_behind);
+
+  s = db_->rocksdb()->SetDBOptions({{"stats_dump_period_sec", "700"}});
+  EXPECT_TRUE(s.ok());
+}
+
+TEST_F(ApplicationDBTestBase, SetCFImmutableOptionsOrDBOptionsFail) {
+  // set immutable CF options -> !ok
+  EXPECT_EQ(last_options_.num_levels, 7);
+  auto s = db_->rocksdb()->SetOptions({{"num_levels", "5"}});
+  EXPECT_FALSE(s.ok());
+  EXPECT_EQ(last_options_.num_levels, 7);
+
+  // SetOptions only set Column family options, set dboptions -> !ok
+  s = db_->rocksdb()->SetOptions({{"stats_dump_period_sec", "700"}});
+  EXPECT_FALSE(s.ok());
 }
 
 TEST_F(ApplicationDBTestBase, SetOptionsAndTakeEffect) {
@@ -272,7 +289,8 @@ TEST_F(ApplicationDBTestBase, GetProperty) {
   string p_val;
   EXPECT_TRUE(db_->GetProperty(ApplicationDB::Properties::kNumLevels, &p_val));
   EXPECT_EQ(atoi(p_val.c_str()), 7);
-  EXPECT_TRUE(db_->GetProperty(ApplicationDB::Properties::kHighestEmptyLevel, &p_val));
+  EXPECT_TRUE(
+      db_->GetProperty(ApplicationDB::Properties::kHighestEmptyLevel, &p_val));
   EXPECT_EQ(atoi(p_val.c_str()), 6);
   EXPECT_TRUE(db_->DBLmaxEmpty());
 }
