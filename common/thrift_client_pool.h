@@ -284,7 +284,7 @@ class ThriftClientPool {
         }
         // in some environment the isEventBase check will fail when setting read callback of async socket. this is a hacky fix
         channel->getEventBase()->runImmediatelyOrRunInEventBaseThreadAndWait([channel, cb = cb.get()] {
-          channel->setCloseCallback(cb.get());
+          channel->setCloseCallback(cb);
         });
         channels_[addr] =
           std::pair<std::weak_ptr<apache::thrift::HeaderClientChannel>,
