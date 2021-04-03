@@ -183,6 +183,9 @@ class ThriftClientPool {
           evb->loopForever();
         });
 
+      // wait until running to prevent call runInEventbase before the evb is running
+      evb->waitUntilRunning();
+
       evb_ = evb.release();
       last_cleanup_time_ = time(nullptr);
     }
@@ -282,10 +285,7 @@ class ThriftClientPool {
         if (is_good) {
           *is_good = &cb->is_good;
         }
-        // in some environment the isEventBase check will fail when setting read callback of async socket. this is a hacky fix
-        channel->getEventBase()->runImmediatelyOrRunInEventBaseThreadAndWait([channel, cb = cb.get()] {
-          channel->setCloseCallback(cb);
-        });
+        channel->setCloseCallback(cb->get());
         channels_[addr] =
           std::pair<std::weak_ptr<apache::thrift::HeaderClientChannel>,
                     std::unique_ptr<ClientStatusCallback>>(
