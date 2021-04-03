@@ -183,6 +183,9 @@ class ThriftClientPool {
           evb->loopForever();
         });
 
+      // wait until running to prevent call runInEventbase before the evb is running
+      evb->waitUntilRunning();
+
       evb_ = evb.release();
       last_cleanup_time_ = time(nullptr);
     }
