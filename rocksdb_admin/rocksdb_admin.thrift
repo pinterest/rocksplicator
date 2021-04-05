@@ -235,6 +235,7 @@ struct KafkaMessagePayload {
   2: optional binary value
 }
 
+// currently, only support set column family options, not rocksdb::DBOptions
 struct SetDBOptionsRequest {
   # For keys supported in this map, please refer to:
   # https://github.com/facebook/rocksdb/blob/master/util/cf_options.h#L161
