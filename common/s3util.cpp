@@ -64,10 +64,10 @@ DEFINE_bool(disable_s3_download_stream_buffer, false,
 namespace {
   const std::string kS3GetObject = "s3_getobject";
   const std::string kS3GetObjectToStream = "s3_getobject_tostream";
-  const std::string kS3ListObject = "s3_listobject";
-  const std::string kS3ListObjectItems = "s3_listobject_items";
-  const std::string kS3ListObjectV2 = "s3_listobjectv2";
-  const std::string kS3ListObjectV2Items = "s3_listobjectv2_items";
+  const std::string kS3ListObjects = "s3_listobjects";
+  const std::string kS3ListObjectsItems = "s3_listobjects_items";
+  const std::string kS3ListObjectsV2 = "s3_listobjectsv2";
+  const std::string kS3ListObjectsV2Items = "s3_listobjectsv2_items";
   const std::string kS3ListAllObjects = "s3_listallobjects";
   const std::string kS3ListAllObjectsItems = "s3_listallobjects_items";
   const std::string kS3GetObjects = "s3_getobjects";
@@ -260,24 +260,24 @@ void S3Util::listObjectsHelper(const string& prefix, const string& delimiter,
 
 ListObjectsResponse S3Util::listObjects(const string& prefix,
                                         const string& delimiter) {
-  Stats::get()->Incr(kS3ListObject);
+  Stats::get()->Incr(kS3ListObjects);
   vector<string> objects;
   string error_message;
   listObjectsHelper(prefix, delimiter, "", &objects, nullptr, &error_message);
-  Stats::get()->Incr(kS3ListObjectItems, objects.size());
+  Stats::get()->Incr(kS3ListObjectsItems, objects.size());
   return ListObjectsResponse(objects, error_message);
 }
 
 ListObjectsResponseV2 S3Util::listObjectsV2(const string& prefix,
                                             const string& delimiter,
                                             const string& marker) {
-  Stats::get()->Incr(kS3ListObjectV2);
+  Stats::get()->Incr(kS3ListObjectsV2);
   vector<string> objects;
   string error_message;
   string next_marker;
   listObjectsHelper(prefix, delimiter, marker, &objects,
                     &next_marker, &error_message);
-  Stats::get()->Incr(kS3ListObjectV2Items, objects.size());
+  Stats::get()->Incr(kS3ListObjectsV2Items, objects.size());
   return ListObjectsResponseV2(
           ListObjectsResponseV2Body(objects, next_marker), error_message);
 }
