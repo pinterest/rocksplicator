@@ -981,9 +981,12 @@ void AdminHandler::async_tm_backupDBToS3(
     std::string formatted_s3_dir_path = ensure_ends_with_pathsep(request->s3_backup_dir);
     std::string formatted_checkpoint_local_path = ensure_ends_with_pathsep(checkpoint_local_path);
     auto upload_func = [&](const std::string& dest, const std::string& source) {
+      LOG(INFO) << "Copying " << source << " to " << dest;
       auto copy_resp = local_s3_util->putObject(dest, source);
       if (!copy_resp.Error().empty()) {
-        LOG(ERROR) << "Error happened when uploading files from checkpoint to S3: " << copy_resp.Error();
+        LOG(ERROR)
+            << "Error happened when uploading files from checkpoint to S3: "
+            << copy_resp.Error();
         return false;
       }
       return true;
@@ -1065,7 +1068,8 @@ void AdminHandler::async_tm_backupDBToS3(
     }
   }
 
-  LOG(INFO) << "S3 Backup is done.";
+  LOG(INFO) << "S3 Backup is done for " << request->db_name
+            << " with latency(ms) " << timer.getElapsedTimeMs();
   common::Stats::get()->Incr(kS3BackupSuccess);
   callback->result(BackupDBToS3Response());
 }
@@ -1137,12 +1141,14 @@ void AdminHandler::async_tm_restoreDBFromS3(
     }
 
     auto download_func = [&](const std::string& s3_path) {
-      auto get_resp = local_s3_util->getObject(
-          s3_path,
-          formatted_local_path + s3_path.substr(formatted_s3_dir_path.size()),
-          FLAGS_s3_direct_io);
+      const string dest =
+          formatted_local_path + s3_path.substr(formatted_s3_dir_path.size());
+      LOG(INFO) << "Copying " << s3_path << " to " << dest;
+      auto get_resp =
+          local_s3_util->getObject(s3_path, dest, FLAGS_s3_direct_io);
       if (!get_resp.Error().empty()) {
-        LOG(ERROR) << "Error happened when downloading the file in checkpoint from S3 to local: "
+        LOG(ERROR) << "Error happened when downloading the file in checkpoint "
+                      "from S3 to local: "
                    << get_resp.Error();
         return false;
       }
@@ -1243,7 +1249,8 @@ void AdminHandler::async_tm_restoreDBFromS3(
     }
   }
 
-  LOG(INFO) << "Restore is done.";
+  LOG(INFO) << "S3 Restore is done for " << request->db_name
+            << " with latency(ms) " << timer.getElapsedTimeMs();
   callback->result(RestoreDBFromS3Response());
   common::Stats::get()->Incr(kS3RestoreSuccess);
 }
