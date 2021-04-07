@@ -91,6 +91,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
 
   private static final Logger LOG = LoggerFactory.getLogger(LeaderFollowerStateModelFactory.class);
   private static final String LOCAL_HOST_IP = "127.0.0.1";
+  private static final int LEADER_CATCH_UP_THRESHOLD = 100;
 
   private final String host;
   private final int adminPort;
@@ -249,7 +250,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
                     ") from " + hostWithHighestSeq + " for " + dbName);
             localSeq = newLocalSeq;
             if (highestSeq <= localSeq) {
-              LOG.error(dbName + " catched up!");
+              LOG.error(dbName + " caught up!");
               break;
             }
             LOG.error("Slept for " + String.valueOf(i + 1) + " seconds for replicating " + dbName);
@@ -337,6 +338,37 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
       Utils.logTransitionCompletionMessage(message);
     }
 
+  public Map<String, String> getLiveHostAndRole(NotificationContext context, String dbName) {
+    HelixAdmin admin = context.getManager().getClusterManagmentTool();
+    ExternalView view = admin.getResourceExternalView(cluster, resourceName);
+    Map<String, String> stateMap = view.getStateMap(partitionName);
+
+    // find live replicas
+    Map<String, String> liveHostAndRole = new HashMap<>();
+    for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
+      String role = instanceNameAndRole.getValue();
+      if (!role.equalsIgnoreCase("LEADER") &&
+          !role.equalsIgnoreCase("FOLLOWER") &&
+          !role.equalsIgnoreCase("OFFLINE")) {
+        continue;
+      }
+
+      String hostPort = instanceNameAndRole.getKey();
+      String host = hostPort.split("_")[0];
+      int port = Integer.parseInt(hostPort.split("_")[1]);
+
+      if (this.host.equals(host)) {
+        // myself
+        continue;
+      }
+
+      if (Utils.getLatestSequenceNumber(dbName, host, port) != -1) {
+        liveHostAndRole.put(hostPort, role);
+      }
+    }
+    return liveHostAndRole;
+  }
+
     /**
      * 3) Offline to Follower
      */
@@ -353,33 +385,8 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           // open the DB if it's currently not opened yet
           Utils.addDB(dbName, adminPort, "FOLLOWER");
 
-          HelixAdmin admin = context.getManager().getClusterManagmentTool();
-          ExternalView view = admin.getResourceExternalView(cluster, resourceName);
-          Map<String, String> stateMap = view.getStateMap(partitionName);
-
           // find live replicas
-          Map<String, String> liveHostAndRole = new HashMap<>();
-          for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
-            String role = instanceNameAndRole.getValue();
-            if (!role.equalsIgnoreCase("LEADER") &&
-                !role.equalsIgnoreCase("FOLLOWER") &&
-                !role.equalsIgnoreCase("OFFLINE")) {
-              continue;
-            }
-
-            String hostPort = instanceNameAndRole.getKey();
-            String host = hostPort.split("_")[0];
-            int port = Integer.parseInt(hostPort.split("_")[1]);
-
-            if (this.host.equals(host)) {
-              // myself
-              continue;
-            }
-
-            if (Utils.getLatestSequenceNumber(dbName, host, port) != -1) {
-              liveHostAndRole.put(hostPort, role);
-            }
-          }
+          Map<String, String> liveHostAndRole = getLiveHostAndRole(context, dbName);
 
           // Find upstream, prefer Leader
           String upstream = null;
@@ -476,6 +483,50 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           Utils.closeDB(dbName, adminPort);
           Utils.restoreLocalDBFromS3(adminPort, dbName, s3Bucket, s3Path, snapshotHost,
               snapshotPort);
+        }
+
+        try {
+          LOG.error(dbName + " Catching up live updates to leader");
+          Map<String, String> liveHostAndRole = getLiveHostAndRole(context, dbName);
+          // Find upstream, prefer Leader
+          String upstream = null;
+          for (Map.Entry<String, String> instanceNameAndRole : liveHostAndRole.entrySet()) {
+            String role = instanceNameAndRole.getValue();
+            if (role.equalsIgnoreCase("OFFLINE")) {
+              continue;
+            }
+            if (role.equalsIgnoreCase("LEADER")) {
+              upstream = instanceNameAndRole.getKey();
+              break;
+            } else {
+              upstream = instanceNameAndRole.getKey();
+            }
+          }
+
+          String upstreamHost = (upstream == null ? LOCAL_HOST_IP : upstream.split("_")[0]);
+          LOG.error(dbName + " got leader " + upstreamHost);
+          int upstreamPort =
+              (upstream == null ? adminPort : Integer.parseInt(upstream.split("_")[1]));
+
+          long local_seq_num;
+          long leader_seq_num;
+          // wait for up to 10 mins
+          for (int i = 0; i < 600; ++i) {
+            local_seq_num = Utils.getLocalLatestSequenceNumber(dbName, adminPort);
+            leader_seq_num = Utils.getLatestSequenceNumber(dbName, upstreamHost, upstreamPort);
+
+            // If leader sequence number is within threshold, consider caught up.
+            if (leader_seq_num < local_seq_num + LEADER_CATCH_UP_THRESHOLD) {
+              LOG.error(dbName + " caught up!");
+              break;
+            }
+            TimeUnit.SECONDS.sleep(1);
+          }
+        } catch (Exception e) {
+          // We've already backed up leader data and restored, ignore exception while
+          // waiting to catch up to leader
+          // TODO (rajathprasad): Add a stat for monitoring.
+          LOG.error("Failed to catch up to leader after backup " + dbName, e);
         }
       }
     }

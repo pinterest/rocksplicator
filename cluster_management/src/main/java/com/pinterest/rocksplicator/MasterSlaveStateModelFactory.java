@@ -89,6 +89,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
 
   private static final Logger LOG = LoggerFactory.getLogger(MasterSlaveStateModelFactory.class);
   private static final String LOCAL_HOST_IP = "127.0.0.1";
+  private static final int MASTER_CATCH_UP_THRESHOLD = 100;
 
   private final String host;
   private final int adminPort;
@@ -334,6 +335,37 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
       Utils.logTransitionCompletionMessage(message);
     }
 
+    public Map<String, String> getLiveHostAndRole(NotificationContext context, String dbName) {
+      HelixAdmin admin = context.getManager().getClusterManagmentTool();
+      ExternalView view = admin.getResourceExternalView(cluster, resourceName);
+      Map<String, String> stateMap = view.getStateMap(partitionName);
+
+      // find live replicas
+      Map<String, String> liveHostAndRole = new HashMap<>();
+      for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
+        String role = instanceNameAndRole.getValue();
+        if (!role.equalsIgnoreCase("MASTER") &&
+            !role.equalsIgnoreCase("SLAVE") &&
+            !role.equalsIgnoreCase("OFFLINE")) {
+          continue;
+        }
+
+        String hostPort = instanceNameAndRole.getKey();
+        String host = hostPort.split("_")[0];
+        int port = Integer.parseInt(hostPort.split("_")[1]);
+
+        if (this.host.equals(host)) {
+          // myself
+          continue;
+        }
+
+        if (Utils.getLatestSequenceNumber(dbName, host, port) != -1) {
+          liveHostAndRole.put(hostPort, role);
+        }
+      }
+      return liveHostAndRole;
+    }
+
     /**
      * 3) Offline to Slave
      */
@@ -350,33 +382,8 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           // open the DB if it's currently not opened yet
           Utils.addDB(dbName, adminPort);
 
-          HelixAdmin admin = context.getManager().getClusterManagmentTool();
-          ExternalView view = admin.getResourceExternalView(cluster, resourceName);
-          Map<String, String> stateMap = view.getStateMap(partitionName);
-
           // find live replicas
-          Map<String, String> liveHostAndRole = new HashMap<>();
-          for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
-            String role = instanceNameAndRole.getValue();
-            if (!role.equalsIgnoreCase("MASTER") &&
-                !role.equalsIgnoreCase("SLAVE") &&
-                !role.equalsIgnoreCase("OFFLINE")) {
-              continue;
-            }
-
-            String hostPort = instanceNameAndRole.getKey();
-            String host = hostPort.split("_")[0];
-            int port = Integer.parseInt(hostPort.split("_")[1]);
-
-            if (this.host.equals(host)) {
-              // myself
-              continue;
-            }
-
-            if (Utils.getLatestSequenceNumber(dbName, host, port) != -1) {
-              liveHostAndRole.put(hostPort, role);
-            }
-          }
+          Map<String, String> liveHostAndRole = getLiveHostAndRole(context, dbName);
 
           // Find upstream, prefer Master
           String upstream = null;
@@ -473,6 +480,49 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           Utils.closeDB(dbName, adminPort);
           Utils.restoreLocalDBFromS3(adminPort, dbName, s3Bucket, s3Path, snapshotHost,
               snapshotPort);
+        }
+
+        try {
+          LOG.error(dbName + " Catching up live updates to master");
+          Map<String, String> liveHostAndRole = getLiveHostAndRole(context, dbName);
+          // Find upstream, prefer Master
+          String upstream = null;
+          for (Map.Entry<String, String> instanceNameAndRole : liveHostAndRole.entrySet()) {
+            String role = instanceNameAndRole.getValue();
+            if (role.equalsIgnoreCase("OFFLINE")) {
+              continue;
+            }
+            if (role.equalsIgnoreCase("MASTER")) {
+              upstream = instanceNameAndRole.getKey();
+              break;
+            } else {
+              upstream = instanceNameAndRole.getKey();
+            }
+          }
+
+          String upstreamHost = (upstream == null ? LOCAL_HOST_IP : upstream.split("_")[0]);
+          LOG.error(dbName + " got master " + upstreamHost);
+          int upstreamPort =
+              (upstream == null ? adminPort : Integer.parseInt(upstream.split("_")[1]));
+
+          long local_seq_num;
+          long master_seq_num;
+          // wait for up to 10 mins
+          for (int i = 0; i < 600; ++i) {
+            local_seq_num = Utils.getLocalLatestSequenceNumber(dbName, adminPort);
+            master_seq_num = Utils.getLatestSequenceNumber(dbName, upstreamHost, upstreamPort);
+
+            // If master sequence number is within threshold, consider caught up.
+            if (master_seq_num < local_seq_num + MASTER_CATCH_UP_THRESHOLD) {
+              LOG.error(dbName + " caught up!");
+              break;
+            }
+            TimeUnit.SECONDS.sleep(1);
+          }
+        } catch (Exception e) {
+          // We've already backed up master data and restored, ignore exception while
+          // waiting to catch up to master
+          LOG.error("Failed to catch up to master after backup " + dbName, e);
         }
       }
     }
