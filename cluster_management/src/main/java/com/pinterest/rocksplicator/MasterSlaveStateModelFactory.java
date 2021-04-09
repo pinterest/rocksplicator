@@ -184,6 +184,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
       leaderEventsCollector.addEvent(LeaderEventType.PARTICIPANT_LEADER_UP_INIT, null);
 
       Utils.logTransitionMessage(message);
+      final String dbName = Utils.getDbName(partitionName);
 
       try (Locker locker = new Locker(partitionMutex)) {
         HelixAdmin admin = context.getManager().getClusterManagmentTool();
@@ -207,7 +208,6 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           LOG.error("Slept for " + String.valueOf(i + 1) + " seconds for 0 Master");
         }
 
-        final String dbName = Utils.getDbName(partitionName);
         // make sure local replica has the highest sequence number
         long localSeq = Utils.getLocalLatestSequenceNumber(dbName, adminPort);
         String hostWithHighestSeq = null;
@@ -263,7 +263,9 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
             "", adminPort);
 
         // Get the latest external view and state map
+        LOG.error("[" + dbName + "] Getting external view");
         view = admin.getResourceExternalView(cluster, resourceName);
+        LOG.error("[" + dbName + "] Got external view");
         stateMap = view.getStateMap(partitionName);
         // changeDBRoleAndUpStream(all_other_slaves_or_offlines, "Slave", "my_ip_port")
         for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
@@ -280,6 +282,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
                 instanceNameAndRole.getValue().equalsIgnoreCase("OFFLINE")) {
               Utils.changeDBRoleAndUpStream(
                   hostName, port, dbName, "SLAVE", this.host, adminPort);
+              LOG.error("[" + dbName + "] Done calling changeDBRoleAndUpStream");
             }
           } catch (RuntimeException e) {
             LOG.error("Failed to set upstream for " + dbName + " on " + hostName + e.toString());
@@ -287,6 +290,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         }
         leaderEventsCollector
             .addEvent(LeaderEventType.PARTICIPANT_LEADER_UP_SUCCESS, null);
+        LOG.error("[" + dbName + "] Done calling leaderEventsCollector.addEvent");
       } catch (RuntimeException e) {
         leaderEventsCollector.addEvent(LeaderEventType.PARTICIPANT_LEADER_UP_FAILURE, null);
         LOG.error(e.toString());
@@ -296,7 +300,9 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
         LOG.error("Failed to release the mutex for partition " + resourceName + "/" + partitionName,
             e);
       } finally {
+        LOG.error("[" + dbName + "] Calling leaderEventsCollector.commit");
         leaderEventsCollector.commit();
+        LOG.error("[" + dbName + "] Done calling leaderEventsCollector.commit");
       }
       Utils.logTransitionCompletionMessage(message);
     }
