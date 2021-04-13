@@ -136,6 +136,7 @@ public class RestoreTask extends UserContentStore implements Task {
       } else {
         Utils.restoreRemoteOrLocalDB(host, adminPort, dbName, storePath, host, adminPort);
       }
+      Utils.addRemoteOrLocalDB(host, adminPort, dbName, "SLAVE", false);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
