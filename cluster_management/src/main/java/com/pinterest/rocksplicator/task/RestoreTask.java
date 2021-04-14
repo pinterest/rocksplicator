@@ -144,7 +144,6 @@ public class RestoreTask extends UserContentStore implements Task {
       } else {
         Utils.restoreRemoteOrLocalDB(host, adminPort, dbName, storePath, host, adminPort);
       }
-      Utils.addRemoteOrLocalDB(host, adminPort, dbName, "FOLLOWER", false);
 
       if (isLeader) {
         Utils.changeDBRoleAndUpStream(host, adminPort, dbName, "LEADER", host, adminPort);
