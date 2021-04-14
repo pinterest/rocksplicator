@@ -18,6 +18,7 @@
 
 package com.pinterest.rocksplicator.task;
 
+import com.pinterest.rocksdb_admin.thrift.CheckDBResponse;
 import com.pinterest.rocksplicator.Utils;
 
 import org.apache.helix.HelixAdmin;
@@ -129,6 +130,13 @@ public class RestoreTask extends UserContentStore implements Task {
                                 boolean useS3Store, String s3Bucket)
       throws RuntimeException {
     try {
+      CheckDBResponse
+          checkDBResponse =
+          Utils.checkRemoteOrLocalDB(host, adminPort, dbName, false, null, null);
+      boolean isLeader = checkDBResponse.isIs_master();
+      LOG.error(String.format("Execute restore %s to %s, whose dbRole is %s", dbName, host,
+          isLeader ? "LEADER" : "FOLLOWER"));
+
       Utils.closeRemoteOrLocalDB(host, adminPort, dbName);
       if (useS3Store) {
         Utils.restoreRemoteOrLocalDBFromS3(host, adminPort, dbName, s3Bucket, storePath, host,
@@ -136,7 +144,11 @@ public class RestoreTask extends UserContentStore implements Task {
       } else {
         Utils.restoreRemoteOrLocalDB(host, adminPort, dbName, storePath, host, adminPort);
       }
-      Utils.addRemoteOrLocalDB(host, adminPort, dbName, "SLAVE", false);
+      Utils.addRemoteOrLocalDB(host, adminPort, dbName, "FOLLOWER", false);
+
+      if (isLeader) {
+        Utils.changeDBRoleAndUpStream(host, adminPort, dbName, "LEADER", host, adminPort);
+      }
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
