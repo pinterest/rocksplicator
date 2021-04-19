@@ -164,7 +164,7 @@ public class Utils {
 
   public static void addRemoteOrLocalDB(String host, int adminPort, String dbName,
                                         String dbRole,
-                                        boolean overwrite_if_fail_add)
+                                        boolean overwriteIfFailAdd)
       throws RuntimeException {
     if (!dbRole.equals("SLAVE") && !dbRole.equals("FOLLOWER") && !dbRole.equals("NOOP")) {
       throw new RuntimeException("Invalid db role requested for new db " + dbName + " : " + dbRole);
@@ -183,7 +183,7 @@ public class Utils {
           LOG.error(dbName + " already exists");
           return;
         }
-        if (overwrite_if_fail_add) {
+        if (overwriteIfFailAdd) {
           LOG.error("Failed to open " + dbName, e);
           if (e.errorCode == AdminErrorCode.DB_ERROR) {
             LOG.error("Trying to overwrite open " + dbName);
