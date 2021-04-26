@@ -422,7 +422,7 @@ public class Utils {
   }
 
   public static void backupDBToS3WithLimit(String host, int adminPort, String dbName, int limitMbs,
-                                           String s3Bucket, String s3Path)
+                                           String s3Bucket, String s3Path, , boolean shareFilesWithChecksum)
       throws RuntimeException {
     LOG.error("(S3)Backup " + dbName + " from " + host + " to " + s3Path);
     try {
@@ -430,6 +430,7 @@ public class Utils {
 
       BackupDBToS3Request req = new BackupDBToS3Request(dbName, s3Bucket, s3Path);
       req.setLimit_mbs(limitMbs);
+      req.setShare_files_with_checksum(shareFilesWithChecksum);
       client.backupDBToS3(req);
     } catch (TException e) {
       LOG.error("Failed to backup DB: ", e);

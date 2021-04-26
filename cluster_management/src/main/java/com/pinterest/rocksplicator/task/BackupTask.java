@@ -116,7 +116,7 @@ public class BackupTask extends UserContentStore implements Task {
       throws RuntimeException {
     try {
       if (useS3Store) {
-        Utils.backupDBToS3WithLimit(host, port, dbName, backupLimitMbs, s3Bucket, storePath);
+        Utils.backupDBToS3WithLimit(host, port, dbName, backupLimitMbs, s3Bucket, storePath, shareFilesWithChecksum);
       } else {
         Utils.backupDBWithLimit(host, port, dbName, storePath, backupLimitMbs,
             shareFilesWithChecksum);
