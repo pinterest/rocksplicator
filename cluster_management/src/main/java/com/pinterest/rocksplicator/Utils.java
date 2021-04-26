@@ -422,7 +422,7 @@ public class Utils {
   }
 
   public static void backupDBToS3WithLimit(String host, int adminPort, String dbName, int limitMbs,
-                                           String s3Bucket, String s3Path, , boolean shareFilesWithChecksum)
+                                           String s3Bucket, String s3Path, boolean shareFilesWithChecksum)
       throws RuntimeException {
     LOG.error("(S3)Backup " + dbName + " from " + host + " to " + s3Path);
     try {
