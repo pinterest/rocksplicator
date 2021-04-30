@@ -781,12 +781,15 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
 
   DBMetaData meta;
   const std::string& meta_from_backup = backup_infos.back().app_metadata;
-  LOG(INFO) << "Get backupInfo.app_metadata:" << meta_from_backup << " from backupId: " << std::to_string(latest_backup_id);
-  if (!meta_from_backup.empty() && !DecodeThriftStruct(meta_from_backup, &meta)) {
-      e->errorCode = AdminErrorCode::DB_ERROR;
-      e->message = "Failed to decode DBMetaData";
-      return false;
-  } 
+  LOG(INFO) << "Get backupInfo.app_metadata (hexlified):"
+            << folly::hexlify(meta_from_backup)
+            << " from backupId: " << std::to_string(latest_backup_id);
+  if (!meta_from_backup.empty() &&
+      !DecodeThriftStruct(meta_from_backup, &meta)) {
+    e->errorCode = AdminErrorCode::DB_ERROR;
+    e->message = "Failed to decode DBMetaData";
+    return false;
+  }
   meta.set_db_name(db_name);
   if (!writeMetaData(meta.db_name, meta.s3_bucket, meta.s3_path)) {
     e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
