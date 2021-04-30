@@ -90,6 +90,12 @@ public class Utils {
         Integer.parseInt(partitionName.substring(lastIdx + 1)));
   }
 
+  public static String getPartitionName(String dbName) {
+    String resourceName = dbName.substring(0, dbName.length() - 5);
+    int partitionNumber = Integer.parseInt(dbName.substring(dbName.length() - 5));
+    return String.format("%s_%d", resourceName, partitionNumber);
+  }
+
   /**
    * Clear the content of a DB and leave it as closed.
    * @param dbName
@@ -144,38 +150,22 @@ public class Utils {
   }
 
   /**
-   * Add a DB as a Slave, and set it upstream to be itself. Do nothing if the DB already exists
-   * @param dbName
-   * @param adminPort
-   */
-  public static void addDB(String dbName, int adminPort) {
-    addRemoteOrLocalDB(LOCAL_HOST_IP, adminPort, dbName, "SLAVE", true);
-  }
-
-  /**
    * Add a db with a specific role.
    * @param dbName
    * @param adminPort
    * @param dbRole one of SLAVE or NOOP
    */
   public static void addDB(String dbName, int adminPort, String dbRole) throws RuntimeException {
-    addRemoteOrLocalDB(LOCAL_HOST_IP, adminPort, dbName, dbRole, true);
-  }
-
-  public static void addRemoteOrLocalDB(String host, int adminPort, String dbName,
-                                        String dbRole,
-                                        boolean overwriteIfFailAdd)
-      throws RuntimeException {
-    if (!dbRole.equals("SLAVE") && !dbRole.equals("FOLLOWER") && !dbRole.equals("NOOP")) {
+    if ((dbRole != "SLAVE") && (dbRole != "FOLLOWER") && (dbRole != "NOOP")) {
       throw new RuntimeException("Invalid db role requested for new db " + dbName + " : " + dbRole);
     }
-    LOG.error("Add DB: " + dbName + " with role " + dbRole + " on host: " + host);
+    LOG.error("Add local DB: " + dbName + " with role " + dbRole);
     Admin.Client client = null;
     AddDBRequest req = null;
     try {
       try {
-        client = getAdminClient(host, adminPort);
-        req = new AddDBRequest(dbName, host);
+        client = getLocalAdminClient(adminPort);
+        req = new AddDBRequest(dbName, LOCAL_HOST_IP);
         req.setDb_role(dbRole);
         client.addDB(req);
       } catch (AdminException e) {
@@ -183,21 +173,33 @@ public class Utils {
           LOG.error(dbName + " already exists");
           return;
         }
-        if (overwriteIfFailAdd) {
-          LOG.error("Failed to open " + dbName, e);
-          if (e.errorCode == AdminErrorCode.DB_ERROR) {
-            LOG.error("Trying to overwrite open " + dbName);
-            req.setOverwrite(true);
-            client.addDB(req);
-          }
+
+        LOG.error("Failed to open " + dbName, e);
+        if (e.errorCode == AdminErrorCode.DB_ERROR) {
+          LOG.error("Trying to overwrite open " + dbName);
+          req.setOverwrite(true);
+          client.addDB(req);
         }
       }
     } catch (TTransportException e) {
-      LOG.error("Failed to connect to Admin port", e);
+      LOG.error("Failed to connect to local Admin port", e);
       throw new RuntimeException(e);
     } catch (TException e) {
       LOG.error("AddDB() request failed", e);
       throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * Add a DB as a Slave, and set it upstream to be itself. Do nothing if the DB already exists
+   * @param dbName
+   * @param adminPort
+   */
+  public static void addDB(String dbName, int adminPort) {
+    try {
+      addDB(dbName, adminPort, "SLAVE");
+    } catch (RuntimeException e) {
+      LOG.error("addDB failed with exception", e);
     }
   }
 
