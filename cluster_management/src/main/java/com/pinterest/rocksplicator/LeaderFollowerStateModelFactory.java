@@ -338,36 +338,36 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
       Utils.logTransitionCompletionMessage(message);
     }
 
-  public Map<String, String> getLiveHostAndRole(NotificationContext context, String dbName) {
-    HelixAdmin admin = context.getManager().getClusterManagmentTool();
-    ExternalView view = admin.getResourceExternalView(cluster, resourceName);
-    Map<String, String> stateMap = view.getStateMap(partitionName);
+    public Map<String, String> getLiveHostAndRole(NotificationContext context, String dbName) {
+      HelixAdmin admin = context.getManager().getClusterManagmentTool();
+      ExternalView view = admin.getResourceExternalView(cluster, resourceName);
+      Map<String, String> stateMap = view.getStateMap(partitionName);
 
-    // find live replicas
-    Map<String, String> liveHostAndRole = new HashMap<>();
-    for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
-      String role = instanceNameAndRole.getValue();
-      if (!role.equalsIgnoreCase("LEADER") &&
-          !role.equalsIgnoreCase("FOLLOWER") &&
-          !role.equalsIgnoreCase("OFFLINE")) {
-        continue;
+      // find live replicas
+      Map<String, String> liveHostAndRole = new HashMap<>();
+      for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
+        String role = instanceNameAndRole.getValue();
+        if (!role.equalsIgnoreCase("LEADER") &&
+            !role.equalsIgnoreCase("FOLLOWER") &&
+            !role.equalsIgnoreCase("OFFLINE")) {
+          continue;
+        }
+
+        String hostPort = instanceNameAndRole.getKey();
+        String host = hostPort.split("_")[0];
+        int port = Integer.parseInt(hostPort.split("_")[1]);
+
+        if (this.host.equals(host)) {
+          // myself
+          continue;
+        }
+
+        if (Utils.getLatestSequenceNumber(dbName, host, port) != -1) {
+          liveHostAndRole.put(hostPort, role);
+        }
       }
-
-      String hostPort = instanceNameAndRole.getKey();
-      String host = hostPort.split("_")[0];
-      int port = Integer.parseInt(hostPort.split("_")[1]);
-
-      if (this.host.equals(host)) {
-        // myself
-        continue;
-      }
-
-      if (Utils.getLatestSequenceNumber(dbName, host, port) != -1) {
-        liveHostAndRole.put(hostPort, role);
-      }
+      return liveHostAndRole;
     }
-    return liveHostAndRole;
-  }
 
     /**
      * 3) Offline to Follower
@@ -419,9 +419,9 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           if (upstreamStatus != null && upstreamStatus.isSetDb_metas() && !upstreamStatus.db_metas
               .equals(localStatus.db_metas)) {
             LOG.error(String.format(
-                "upstreamStatus exist and differ from localStatus, rebuild. upstreamStatus: %s, "
-                    + "localStatus: %s",
-                upstreamStatus.toString(), localStatus.toString()));
+                "upstreamStatus exist and differ from localStatus for %s, rebuild. "
+                    + "upstreamStatus: %s, localStatus: %s", dbName, upstreamStatus.toString(),
+                localStatus.toString()));
           } else if (liveHostAndRole.isEmpty()) {
             LOG.error("No other live replicas, skip rebuild " + dbName);
             needRebuild = false;
