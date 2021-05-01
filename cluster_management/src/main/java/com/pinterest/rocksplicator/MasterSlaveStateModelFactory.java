@@ -416,9 +416,9 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           if (upstreamStatus != null && upstreamStatus.isSetDb_metas() && !upstreamStatus.db_metas
               .equals(localStatus.db_metas)) {
             LOG.error(String.format(
-                "upstreamStatus exist and differ from localStatus, rebuild. upstreamStatus: %s, "
-                    + "localStatus: %s",
-                upstreamStatus.toString(), localStatus.toString()));
+                "upstreamStatus exist and differ from localStatus for %s, rebuild. "
+                    + "upstreamStatus: %s, localStatus: %s", dbName, upstreamStatus.toString(),
+                localStatus.toString()));
           } else if (liveHostAndRole.isEmpty()) {
             LOG.error("No other live replicas, skip rebuild " + dbName);
             needRebuild = false;
