@@ -497,7 +497,7 @@ TEST_F(AdminHandlerTestBase, AdminAPIsWithWriteMeta) {
       backup_req.db_name = testdb;
       backup_req.s3_bucket = FLAGS_s3_bucket;
       backup_req.s3_backup_dir =
-          FLAGS_s3_backup_prefix + " checkpoint/" + testdb;
+          FLAGS_s3_backup_prefix + "checkpoint/" + testdb;
       BackupDBToS3Response backup_resp;
       LOG(INFO) << "Backup db: " << testdb << " to "
                 << backup_req.s3_backup_dir;
@@ -513,7 +513,7 @@ TEST_F(AdminHandlerTestBase, AdminAPIsWithWriteMeta) {
       restore_req.db_name = testdb;
       restore_req.s3_bucket = FLAGS_s3_bucket;
       restore_req.s3_backup_dir =
-          FLAGS_s3_backup_prefix + " checkpoint/" + testdb;
+          FLAGS_s3_backup_prefix + "checkpoint/" + testdb;
       restore_req.upstream_ip = localIP();
       restore_req.upstream_port = 8090;
       RestoreDBFromS3Response restore_resp;

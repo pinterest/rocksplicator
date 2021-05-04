@@ -28,6 +28,7 @@
 #include <vector>
 #include <map>
 
+#include <boost/algorithm/string/predicate.hpp>
 #include "boost/filesystem.hpp"
 #include "common/identical_name_thread_factory.h"
 #include "common/kafka/kafka_broker_file_watcher.h"
@@ -41,6 +42,7 @@
 #include "common/thrift_router.h"
 #include "common/timer.h"
 #include "common/timeutil.h"
+#include "common/file_util.h"
 #include "folly/futures/Future.h"
 #include "folly/FileUtil.h"
 #include "folly/MoveWrapper.h"
@@ -143,6 +145,8 @@ using wangle::QueueBehaviorIfFull;
 #endif
 
 namespace {
+
+const std::string kSuccessFilename = "_SUCCESS";
 
 const int kMB = 1024 * 1024;
 const int kS3UtilRecheckSec = 5;
@@ -1049,6 +1053,25 @@ void AdminHandler::async_tm_backupDBToS3(
       }
     }
 
+    bool create_success = true;
+    std::string success_filepath;
+    try {
+      success_filepath =
+          common::FileUtil::createSuccessFile(formatted_checkpoint_local_path);
+    } catch (std::exception& e) {
+      LOG(ERROR) << "Failed to create _SUCCESS, " << e.what();
+      create_success = false;
+    }
+    if (!create_success ||
+        !upload_func(formatted_s3_dir_path + kSuccessFilename,
+                     success_filepath)) {
+      SetException(
+          "Error happened when create/upload _SUCCESS from checkpoint to S3",
+          AdminErrorCode::DB_ADMIN_ERROR, &callback);
+      common::Stats::get()->Incr(kS3BackupFailure);
+      return;
+    }
+
     // Delete the directory to remove the snapshot.
     boost::filesystem::remove_all(local_path);
   } else {
@@ -1143,6 +1166,21 @@ void AdminHandler::async_tm_restoreDBFromS3(
       return;
     }
 
+    std::vector<std::string> files_to_download = resp.Body().objects;
+    auto success_file_iter = std::find_if(
+        files_to_download.begin(), files_to_download.end(),
+        [&kSuccessFilename](const std::string& file) {
+          return boost::algorithm::ends_with(file, kSuccessFilename);
+        });
+    if (success_file_iter == files_to_download.end()) {
+      SetException(
+          "Failed to restoreDBFromS3, the source db has no _SUCCESS file",
+          AdminErrorCode::DB_ADMIN_ERROR, &callback);
+      common::Stats::get()->Incr(kS3RestoreFailure);
+      return;
+    }
+    files_to_download.erase(success_file_iter);
+
     auto download_func = [&](const std::string& s3_path) {
       const string dest =
           formatted_local_path + s3_path.substr(formatted_s3_dir_path.size());
@@ -1161,8 +1199,8 @@ void AdminHandler::async_tm_restoreDBFromS3(
     if (FLAGS_checkpoint_backup_batch_num_download> 1) {
       // Download checkpoint files to s3 in parallel
       std::vector<std::vector<std::string>> file_batches(FLAGS_checkpoint_backup_batch_num_download);
-      for (size_t i = 0; i < resp.Body().objects.size(); ++i) {
-        file_batches[i%FLAGS_checkpoint_backup_batch_num_download].push_back(resp.Body().objects[i]);
+      for (size_t i = 0; i < files_to_download.size(); ++i) {
+        file_batches[i%FLAGS_checkpoint_backup_batch_num_download].push_back(files_to_download[i]);
       }
 
       std::vector<folly::Future<bool>> futures;
@@ -1193,7 +1231,7 @@ void AdminHandler::async_tm_restoreDBFromS3(
         }
       }
     } else {
-      for (auto& v : resp.Body().objects) {
+      for (auto& v : files_to_download) {
         if (!download_func(v)) {
           // If there is error in one file uploading, then we fail the whole backup process
           SetException("Error happened when downloading the file in checkpoint from S3 to local",
@@ -1216,6 +1254,7 @@ void AdminHandler::async_tm_restoreDBFromS3(
       return;
     }
 
+    // TODO: Write the meta based on the thrift deserialized dbmeta from s3 object
     if (!writeMetaData(request->db_name, "", "")) {
       // TODO: enable backup with meta for checkpoint, then, restore will writ the meta from the backup
       std::string errMsg = "RestoreDBFromS3 failed to write DBMetaData for " + request->db_name;
