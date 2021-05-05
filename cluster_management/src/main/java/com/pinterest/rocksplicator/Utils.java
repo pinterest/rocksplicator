@@ -91,6 +91,16 @@ public class Utils {
   }
 
   /**
+   * @param dbName e.g. "p2p100001"
+   * @return e.g. "p2p1_1"
+   */
+  public static String getPartitionName(String dbName) {
+    String resourceName = dbName.substring(0, dbName.length() - 5);
+    int partitionNumber = Integer.parseInt(dbName.substring(dbName.length() - 5));
+    return String.format("%s_%d", resourceName, partitionNumber);
+  }
+
+  /**
    * Clear the content of a DB and leave it as closed.
    * @param dbName
    * @param adminPort
