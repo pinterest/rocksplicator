@@ -524,6 +524,17 @@ TEST_F(AdminHandlerTestBase, AdminAPIsWithWriteMeta) {
       verifyMeta(meta_after_restore, testdb, true, "", "");
 
       handler_->clearMetaData(testdb);
+
+      // verify backup & restore with meta for checkpoint
+      handler_->writeMetaData(testdb, "fakes3bucket", "fakes3path");
+      EXPECT_NO_THROW(backup_resp =
+                          client_->future_backupDBToS3(backup_req).get());
+      close_resp = client_->future_closeDB(close_req).get();
+      EXPECT_NO_THROW(restore_resp =
+                          client_->future_restoreDBFromS3(restore_req).get());
+      meta_after_restore = handler_->getMetaData(testdb);
+      verifyMeta(meta_after_restore, testdb, true, "fakes3bucket",
+                 "fakes3path");
     }
 
     // not use checkpoint for db upload/download

@@ -147,6 +147,7 @@ using wangle::QueueBehaviorIfFull;
 namespace {
 
 const std::string kSuccessFilename = "_SUCCESS";
+const std::string kMetaFilename = "dbmeta";
 
 const int kMB = 1024 * 1024;
 const int kS3UtilRecheckSec = 5;
@@ -1053,20 +1054,29 @@ void AdminHandler::async_tm_backupDBToS3(
       }
     }
 
-    bool create_success = true;
+    auto meta = getMetaData(request->db_name);
+    std::string dbmeta_path = formatted_checkpoint_local_path + kMetaFilename;
     std::string success_filepath;
     try {
+      std::string encoded_meta;
+      EncodeThriftStruct(meta, &encoded_meta);
+      common::FileUtil::createFileWithContent(formatted_checkpoint_local_path,
+                                              kMetaFilename, encoded_meta);
+
       success_filepath =
           common::FileUtil::createSuccessFile(formatted_checkpoint_local_path);
     } catch (std::exception& e) {
-      LOG(ERROR) << "Failed to create _SUCCESS, " << e.what();
-      create_success = false;
+      SetException(
+          "Failed to create meta or _SUCCESS file, " + std::string(e.what()),
+          AdminErrorCode::DB_ADMIN_ERROR, &callback);
+      common::Stats::get()->Incr(kS3BackupFailure);
+      return;
     }
-    if (!create_success ||
+    if (!upload_func(formatted_s3_dir_path + kMetaFilename, dbmeta_path) ||
         !upload_func(formatted_s3_dir_path + kSuccessFilename,
                      success_filepath)) {
       SetException(
-          "Error happened when create/upload _SUCCESS from checkpoint to S3",
+          "Error happened when upload meta or _SUCCESS from checkpoint to S3",
           AdminErrorCode::DB_ADMIN_ERROR, &callback);
       common::Stats::get()->Incr(kS3BackupFailure);
       return;
@@ -1169,13 +1179,12 @@ void AdminHandler::async_tm_restoreDBFromS3(
     std::vector<std::string> files_to_download = resp.Body().objects;
     auto success_file_iter = std::find_if(
         files_to_download.begin(), files_to_download.end(),
-        [&kSuccessFilename](const std::string& file) {
+        [](const std::string& file) {
           return boost::algorithm::ends_with(file, kSuccessFilename);
         });
     if (success_file_iter == files_to_download.end()) {
-      SetException(
-          "Failed to restoreDBFromS3, the source db has no _SUCCESS file",
-          AdminErrorCode::DB_ADMIN_ERROR, &callback);
+      SetException("Failed to restore, the source db has no _SUCCESS file",
+                   AdminErrorCode::DB_ADMIN_ERROR, &callback);
       common::Stats::get()->Incr(kS3RestoreFailure);
       return;
     }
@@ -1254,10 +1263,21 @@ void AdminHandler::async_tm_restoreDBFromS3(
       return;
     }
 
-    // TODO: Write the meta based on the thrift deserialized dbmeta from s3 object
-    if (!writeMetaData(request->db_name, "", "")) {
-      // TODO: enable backup with meta for checkpoint, then, restore will writ the meta from the backup
-      std::string errMsg = "RestoreDBFromS3 failed to write DBMetaData for " + request->db_name;
+    std::string meta_content;
+    boost::filesystem::directory_iterator it(formatted_local_path), end_it;
+    for (; it != end_it; ++it) {
+      std::string file = it->path().string();
+      if (boost::algorithm::ends_with(file, kMetaFilename)) {
+        common::FileUtil::readFileToString(file, &meta_content);
+        boost::filesystem::remove_all(file);
+        break;
+      }
+    }
+    DBMetaData meta;
+    DecodeThriftStruct(meta_content, &meta);
+    if (!writeMetaData(request->db_name, meta.s3_bucket, meta.s3_path)) {
+      std::string errMsg =
+          "RestoreDBFromS3 failed to write DBMetaData for " + request->db_name;
       SetException(errMsg, AdminErrorCode::DB_ADMIN_ERROR, &callback);
       common::Stats::get()->Incr(kS3RestoreFailure);
       return;

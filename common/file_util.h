@@ -11,5 +11,11 @@ class FileUtil {
 
   // Create an empty _SUCCESS file; the file path is "<baseDir>/_SUCCESS".
   static std::string createSuccessFile(const std::string& base_dir);
+
+  static std::string createFileWithContent(const std::string& base_dir,
+                                           const std::string& filename,
+                                           const std::string& content);
+
+  static void readFileToString(const std::string& path, std::string* content);
 };
 }  // namespace common
