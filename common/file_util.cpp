@@ -9,12 +9,8 @@ namespace filesystem = boost::filesystem;
 namespace common {
 
 void FileUtil::touch(const std::string& path) {
-  try {
-    std::ofstream file(path);
-    file.close();
-  } catch (std::exception& e) {
-    throw e;
-  }
+  std::ofstream file(path);
+  file.close();
 }
 
 std::string FileUtil::getSuccessFilePath(const std::string& base_dir) {

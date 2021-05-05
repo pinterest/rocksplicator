@@ -1055,14 +1055,13 @@ void AdminHandler::async_tm_backupDBToS3(
     }
 
     auto meta = getMetaData(request->db_name);
-    std::string dbmeta_path = formatted_checkpoint_local_path + kMetaFilename;
+    std::string dbmeta_path;
     std::string success_filepath;
     try {
       std::string encoded_meta;
       EncodeThriftStruct(meta, &encoded_meta);
-      common::FileUtil::createFileWithContent(formatted_checkpoint_local_path,
-                                              kMetaFilename, encoded_meta);
-
+      dbmeta_path = common::FileUtil::createFileWithContent(
+          formatted_checkpoint_local_path, kMetaFilename, encoded_meta);
       success_filepath =
           common::FileUtil::createSuccessFile(formatted_checkpoint_local_path);
     } catch (std::exception& e) {

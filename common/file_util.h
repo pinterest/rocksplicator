@@ -12,6 +12,7 @@ class FileUtil {
   // Create an empty _SUCCESS file; the file path is "<baseDir>/_SUCCESS".
   static std::string createSuccessFile(const std::string& base_dir);
 
+  // create file at path: "<baseDir>/filename"
   static std::string createFileWithContent(const std::string& base_dir,
                                            const std::string& filename,
                                            const std::string& content);
