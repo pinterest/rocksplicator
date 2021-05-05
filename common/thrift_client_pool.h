@@ -56,6 +56,8 @@ DECLARE_int32(thrift_client_pool_log_frequency);
 
 DECLARE_bool(channel_enable_snappy);
 
+DECLARE_bool(channel_enable_zstd);
+
 DECLARE_bool(use_framed_transport_for_binary_protocol);
 
 namespace common {
@@ -275,6 +277,11 @@ class ThriftClientPool {
         if (FLAGS_channel_enable_snappy) {
           channel->setTransform(apache::thrift::transport::THeader::SNAPPY_TRANSFORM);
         }
+#if __GNUC__ >= 8
+        if (FLAGS_channel_enable_zstd) {
+          channel->setTransform(apache::thrift::transport::THeader::ZSTD_TRANSFORM);
+        }
+#endif
         if (USE_BINARY_PROTOCOL) {
           channel->setProtocolId(apache::thrift::protocol::T_BINARY_PROTOCOL);
           if (FLAGS_use_framed_transport_for_binary_protocol) {
