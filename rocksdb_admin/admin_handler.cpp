@@ -146,7 +146,6 @@ using wangle::QueueBehaviorIfFull;
 
 namespace {
 
-const std::string kSuccessFilename = "_SUCCESS";
 const std::string kMetaFilename = "dbmeta";
 
 const int kMB = 1024 * 1024;
@@ -1056,27 +1055,20 @@ void AdminHandler::async_tm_backupDBToS3(
 
     auto meta = getMetaData(request->db_name);
     std::string dbmeta_path;
-    std::string success_filepath;
     try {
       std::string encoded_meta;
       EncodeThriftStruct(meta, &encoded_meta);
       dbmeta_path = common::FileUtil::createFileWithContent(
           formatted_checkpoint_local_path, kMetaFilename, encoded_meta);
-      success_filepath =
-          common::FileUtil::createSuccessFile(formatted_checkpoint_local_path);
     } catch (std::exception& e) {
-      SetException(
-          "Failed to create meta or _SUCCESS file, " + std::string(e.what()),
-          AdminErrorCode::DB_ADMIN_ERROR, &callback);
+      SetException("Failed to create meta file, " + std::string(e.what()),
+                   AdminErrorCode::DB_ADMIN_ERROR, &callback);
       common::Stats::get()->Incr(kS3BackupFailure);
       return;
     }
-    if (!upload_func(formatted_s3_dir_path + kMetaFilename, dbmeta_path) ||
-        !upload_func(formatted_s3_dir_path + kSuccessFilename,
-                     success_filepath)) {
-      SetException(
-          "Error happened when upload meta or _SUCCESS from checkpoint to S3",
-          AdminErrorCode::DB_ADMIN_ERROR, &callback);
+    if (!upload_func(formatted_s3_dir_path + kMetaFilename, dbmeta_path)) {
+      SetException("Error happened when upload meta from checkpoint to S3",
+                   AdminErrorCode::DB_ADMIN_ERROR, &callback);
       common::Stats::get()->Incr(kS3BackupFailure);
       return;
     }
@@ -1175,20 +1167,6 @@ void AdminHandler::async_tm_restoreDBFromS3(
       return;
     }
 
-    std::vector<std::string> files_to_download = resp.Body().objects;
-    auto success_file_iter = std::find_if(
-        files_to_download.begin(), files_to_download.end(),
-        [](const std::string& file) {
-          return boost::algorithm::ends_with(file, kSuccessFilename);
-        });
-    if (success_file_iter == files_to_download.end()) {
-      SetException("Failed to restore, the source db has no _SUCCESS file",
-                   AdminErrorCode::DB_ADMIN_ERROR, &callback);
-      common::Stats::get()->Incr(kS3RestoreFailure);
-      return;
-    }
-    files_to_download.erase(success_file_iter);
-
     auto download_func = [&](const std::string& s3_path) {
       const string dest =
           formatted_local_path + s3_path.substr(formatted_s3_dir_path.size());
@@ -1207,8 +1185,8 @@ void AdminHandler::async_tm_restoreDBFromS3(
     if (FLAGS_checkpoint_backup_batch_num_download> 1) {
       // Download checkpoint files to s3 in parallel
       std::vector<std::vector<std::string>> file_batches(FLAGS_checkpoint_backup_batch_num_download);
-      for (size_t i = 0; i < files_to_download.size(); ++i) {
-        file_batches[i%FLAGS_checkpoint_backup_batch_num_download].push_back(files_to_download[i]);
+      for (size_t i = 0; i < resp.Body().objects.size(); ++i) {
+        file_batches[i%FLAGS_checkpoint_backup_batch_num_download].push_back(resp.Body().objects[i]);
       }
 
       std::vector<folly::Future<bool>> futures;
@@ -1239,7 +1217,7 @@ void AdminHandler::async_tm_restoreDBFromS3(
         }
       }
     } else {
-      for (auto& v : files_to_download) {
+      for (auto& v : resp.Body().objects) {
         if (!download_func(v)) {
           // If there is error in one file uploading, then we fail the whole backup process
           SetException("Error happened when downloading the file in checkpoint from S3 to local",

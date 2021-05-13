@@ -7,28 +7,6 @@
 namespace filesystem = boost::filesystem;
 
 namespace common {
-TEST(FileUtilTest, Touch) {
-  std::string path = "/tmp/_SUCCESS";
-  filesystem::remove(path);
-  EXPECT_FALSE(filesystem::exists(path));
-
-  FileUtil::touch(path);
-  EXPECT_TRUE(filesystem::exists(path));
-}
-
-TEST(FileUtilTest, CreateSuccessFile) {
-  std::string path = "/tmp/_SUCCESS";
-  filesystem::remove(path);
-  EXPECT_FALSE(filesystem::exists(path));
-
-  std::string succ_path = FileUtil::createSuccessFile("/tmp");
-  EXPECT_TRUE(filesystem::exists(succ_path));
-  EXPECT_EQ(succ_path, path);
-
-  std::string nonexist_dir = "/tmp/no-exist";
-  filesystem::remove(nonexist_dir);
-  EXPECT_THROW(FileUtil::createSuccessFile(nonexist_dir), std::runtime_error);
-}
 
 TEST(FileUtilTest, CreateFileWithContent) {
   std::string base_dir = "/tmp";

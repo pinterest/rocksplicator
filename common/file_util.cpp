@@ -8,26 +8,6 @@ namespace filesystem = boost::filesystem;
 
 namespace common {
 
-void FileUtil::touch(const std::string& path) {
-  std::ofstream file(path);
-  file.close();
-}
-
-std::string FileUtil::getSuccessFilePath(const std::string& base_dir) {
-  if (!filesystem::exists(base_dir)) {
-    throw std::runtime_error(
-        "Failed to get success file path since base dir not exist, " +
-        base_dir);
-  }
-  return base_dir + ((base_dir.back() == '/') ? "_SUCCESS" : "/_SUCCESS");
-}
-
-std::string FileUtil::createSuccessFile(const std::string& base_dir) {
-  std::string path = FileUtil::getSuccessFilePath(base_dir);
-  touch(path);
-  return path;
-}
-
 std::string FileUtil::createFileWithContent(const std::string& base_dir,
                                             const std::string& filename,
                                             const std::string& content) {
