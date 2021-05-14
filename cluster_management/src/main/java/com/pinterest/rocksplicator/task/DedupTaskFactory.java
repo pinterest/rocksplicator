@@ -55,7 +55,7 @@ public class DedupTaskFactory implements TaskFactory {
     long resourceVersion = -1;
     String destStorePathPrefix = "";
     int backupLimitMbs = DEFAULT_BACKUP_LIMIT_MBS;
-    boolean shareFilesWithChecksum = true;
+    boolean shareFilesWithChecksum = false;
 
     try {
       Map<String, String> jobCmdMap = jobConfig.getJobCommandConfigMap();
