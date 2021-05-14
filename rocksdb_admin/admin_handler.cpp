@@ -1053,24 +1053,26 @@ void AdminHandler::async_tm_backupDBToS3(
       }
     }
 
-    auto meta = getMetaData(request->db_name);
-    std::string dbmeta_path;
-    try {
-      std::string encoded_meta;
-      EncodeThriftStruct(meta, &encoded_meta);
-      dbmeta_path = common::FileUtil::createFileWithContent(
-          formatted_checkpoint_local_path, kMetaFilename, encoded_meta);
-    } catch (std::exception& e) {
-      SetException("Failed to create meta file, " + std::string(e.what()),
-                   AdminErrorCode::DB_ADMIN_ERROR, &callback);
-      common::Stats::get()->Incr(kS3BackupFailure);
-      return;
-    }
-    if (!upload_func(formatted_s3_dir_path + kMetaFilename, dbmeta_path)) {
-      SetException("Error happened when upload meta from checkpoint to S3",
-                   AdminErrorCode::DB_ADMIN_ERROR, &callback);
-      common::Stats::get()->Incr(kS3BackupFailure);
-      return;
+    if (request->__isset.include_meta && request->include_meta) {
+      auto meta = getMetaData(request->db_name);
+      std::string dbmeta_path;
+      try {
+        std::string encoded_meta;
+        EncodeThriftStruct(meta, &encoded_meta);
+        dbmeta_path = common::FileUtil::createFileWithContent(
+            formatted_checkpoint_local_path, kMetaFilename, encoded_meta);
+      } catch (std::exception& e) {
+        SetException("Failed to create meta file, " + std::string(e.what()),
+                     AdminErrorCode::DB_ADMIN_ERROR, &callback);
+        common::Stats::get()->Incr(kS3BackupFailure);
+        return;
+      }
+      if (!upload_func(formatted_s3_dir_path + kMetaFilename, dbmeta_path)) {
+        SetException("Error happened when upload meta from checkpoint to S3",
+                     AdminErrorCode::DB_ADMIN_ERROR, &callback);
+        common::Stats::get()->Incr(kS3BackupFailure);
+        return;
+      }
     }
 
     // Delete the directory to remove the snapshot.
@@ -1240,18 +1242,20 @@ void AdminHandler::async_tm_restoreDBFromS3(
       return;
     }
 
+    DBMetaData meta;
     std::string meta_content;
-    boost::filesystem::directory_iterator it(formatted_local_path), end_it;
-    for (; it != end_it; ++it) {
-      std::string file = it->path().string();
-      if (boost::algorithm::ends_with(file, kMetaFilename)) {
-        common::FileUtil::readFileToString(file, &meta_content);
-        boost::filesystem::remove_all(file);
-        break;
+    std::string restored_dbmeta_file = formatted_local_path + kMetaFilename;
+    if (boost::filesystem::exists(restored_dbmeta_file)) {
+      common::FileUtil::readFileToString(restored_dbmeta_file, &meta_content);
+      boost::filesystem::remove_all(restored_dbmeta_file);
+      if (!DecodeThriftStruct(meta_content, &meta)) {
+        std::string errMsg = "Failed to decode DBMetaData from " +
+                             meta_content + " for " + request->db_name;
+        SetException(errMsg, AdminErrorCode::DB_ADMIN_ERROR, &callback);
+        common::Stats::get()->Incr(kS3RestoreFailure);
+        return;
       }
     }
-    DBMetaData meta;
-    DecodeThriftStruct(meta_content, &meta);
     if (!writeMetaData(request->db_name, meta.s3_bucket, meta.s3_path)) {
       std::string errMsg =
           "RestoreDBFromS3 failed to write DBMetaData for " + request->db_name;

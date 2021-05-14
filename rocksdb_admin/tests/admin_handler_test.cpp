@@ -493,6 +493,8 @@ TEST_F(AdminHandlerTestBase, AdminAPIsWithWriteMeta) {
       FLAGS_enable_checkpoint_backup = true;
       SCOPE_EXIT { FLAGS_enable_checkpoint_backup = false; };
 
+      handler_->writeMetaData(testdb, "fakes3bucket", "fakes3path");
+
       BackupDBToS3Request backup_req;
       backup_req.db_name = testdb;
       backup_req.s3_bucket = FLAGS_s3_bucket;
@@ -519,7 +521,8 @@ TEST_F(AdminHandlerTestBase, AdminAPIsWithWriteMeta) {
       RestoreDBFromS3Response restore_resp;
       EXPECT_NO_THROW(restore_resp =
                           client_->future_restoreDBFromS3(restore_req).get());
-      // the restoreDBHelper will write from an empty_meta
+      // the restoreDBHelper will overwrite existing meta with an empty_meta
+      // since no dbmeta file is uploaded from Backup path
       auto meta_after_restore = handler_->getMetaData(testdb);
       verifyMeta(meta_after_restore, testdb, true, "", "");
 
@@ -527,6 +530,7 @@ TEST_F(AdminHandlerTestBase, AdminAPIsWithWriteMeta) {
 
       // verify backup & restore with meta for checkpoint
       handler_->writeMetaData(testdb, "fakes3bucket", "fakes3path");
+      backup_req.set_include_meta(true);
       EXPECT_NO_THROW(backup_resp =
                           client_->future_backupDBToS3(backup_req).get());
       close_resp = client_->future_closeDB(close_req).get();

@@ -10,6 +10,16 @@ namespace filesystem = boost::filesystem;
 
 namespace admin {
 
+TEST(UtilsTest, ThriftSeder) {
+  // decode Meta from empty string is !ok
+  std::string content;
+  DBMetaData meta;
+  EXPECT_FALSE(DecodeThriftStruct(content, &meta));
+  EXPECT_TRUE(meta.db_name.empty());
+  EXPECT_FALSE(meta.__isset.s3_bucket);
+  EXPECT_FALSE(meta.__isset.s3_path);
+}
+
 TEST(UtilsTest, ThriftSederWithFileUtils) {
   std::string base_dir = "/tmp";
   std::string filename = "thrift_seder";
