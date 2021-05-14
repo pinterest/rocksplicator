@@ -28,7 +28,6 @@
 #include <vector>
 #include <map>
 
-#include <boost/algorithm/string/predicate.hpp>
 #include "boost/filesystem.hpp"
 #include "common/identical_name_thread_factory.h"
 #include "common/kafka/kafka_broker_file_watcher.h"

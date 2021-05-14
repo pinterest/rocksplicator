@@ -1,10 +1,7 @@
 #include "file_util.h"
 
-#include <boost/filesystem.hpp>
 #include <fstream>
 #include <sstream>
-
-namespace filesystem = boost::filesystem;
 
 namespace common {
 
