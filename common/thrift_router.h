@@ -30,6 +30,7 @@
 
 #include "common/file_watcher.h"
 #include "common/network_util.h"
+#include "common/stats/stats.h"
 #include "common/thrift_client_pool.h"
 #include "folly/Hash.h"
 #include "folly/SocketAddress.h"
@@ -109,7 +110,7 @@ class ThriftRouter {
       , parser_(std::move(parser))
       , cluster_layout_()
       , local_client_map_(std::move(client_pool)) {
-    CHECK(common::FileWatcher::Instance()->AddFile(
+    auto ret = common::FileWatcher::Instance()->AddFile(
       config_path_,
       [this, local_group] (std::string content) {
         std::shared_ptr<const ClusterLayout> new_layout(
@@ -120,8 +121,11 @@ class ThriftRouter {
         } else {
           LOG(ERROR) << "Failed to parse the config: " << content;
         }
-      }))
-    << "Failed to watch " << config_path_;
+      });
+    if (!ret) {
+      common::Stats::get()->Incr("router_config_file_watch_failure");  
+    }
+    CHECK(ret) << "Failed to watch " << config_path_;
     LOG(INFO) << "Local Group used by ThriftRouter: " << local_group;
   }
 
