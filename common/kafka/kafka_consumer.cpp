@@ -174,10 +174,6 @@ KafkaConsumer::~KafkaConsumer() {
       SSLFilePollerHolder::getFilePollerInstance()->cancelCallback(cbId);
     }
   }
-
-  if (rd_kafka_consumer_provider_) {
-    rd_kafka_consumer_provider_->close();
-  }
 }
 
 bool KafkaConsumer::IsHealthy() const { return is_healthy_.load(); }
