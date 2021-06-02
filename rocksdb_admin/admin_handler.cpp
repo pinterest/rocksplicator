@@ -1339,7 +1339,7 @@ void AdminHandler::async_tm_checkDB(
     }
   }
 
-  if (request->__isset.include_meta) {
+  if (request->__isset.include_meta && request->include_meta) {
     auto meta = getMetaData(request->db_name);
     std::map<std::string, std::string> metas;
     metas["s3_bucket"] = meta.s3_bucket;
