@@ -1,0 +1,430 @@
+# The base OS
+FROM ubuntu:18.04
+
+MAINTAINER Bo Liu <bol@pinterest.com>
+
+LABEL version=0.1
+
+ARG BUILD_JOBS=10
+ENV BUILD_JOBS ${BUILD_JOBS}
+
+
+RUN apt-get -q -y update && \
+    apt-get -q -y install \
+      software-properties-common \
+      wget \
+      git \
+      software-properties-common
+
+# For gcc 6
+RUN add-apt-repository -y ppa:ubuntu-toolchain-r/test
+
+# For open jdk 8
+RUN add-apt-repository ppa:openjdk-r/ppa && apt-get update
+
+# For HDFS debian libs
+#RUN wget 'https://archive.cloudera.com/cdh5/ubuntu/trusty/amd64/cdh/cloudera.list' \
+#    -O /etc/apt/sources.list.d/cloudera.list && \
+#    wget https://archive.cloudera.com/cdh5/ubuntu/trusty/amd64/cdh/archive.key \
+#    -O archive.key && \
+#    apt-key add archive.key \
+#    apt-get update \
+#    apt-get install --force-yes -q -y hadoop-hdfs
+
+
+RUN apt-get -q -y update && \
+    apt-get install --force-yes -q -y \
+      automake \
+      autoconf \
+      autoconf-archive \
+      binutils-dev \
+      bison \
+      curl \
+      flex \
+      gcc-6 \
+      g++-6 \
+      gcc-8 \
+      g++-8 \
+      gdb \
+      ghostscript \
+      git \
+      google-perftools \
+      graphviz \
+      #hadoop \
+      #hadoop-hdfs \
+      #hadoop-client \
+      libapr1-dev \
+      libboost-all-dev \
+      libbz2-dev \
+      libcap-dev \
+      libcppunit-dev \
+      libcurl4-openssl-dev \
+      libdouble-conversion-dev \
+      libdwarf-dev \
+      libevent-dev \
+      libfftw3-dev \
+      libgflags-dev \
+      libgtest-dev \
+      libhdf5-serial-dev \
+      #libhdfs0 \
+      #libhdfs0-dev \
+      libiberty-dev \
+      libkrb5-dev \
+      libleveldb-dev \
+      liblua5.2-dev \
+      liblzma-dev \
+      libnuma-dev \
+      libpcap-dev \
+      libsasl2-dev \
+      libsodium-dev \
+      libsnappy-dev \
+      libssl-dev \
+      libsvn-dev \
+      libtool \
+      linux-tools-generic \
+      make \
+      openjdk-8-jdk \
+      python-setuptools \
+      python-pip \
+      scons \
+      libsparsehash-dev \
+      subversion \
+      unzip \
+      uuid-dev \
+      vim \
+      zlib1g-dev
+
+# Change the gcc/g++ aliases to point to 8
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 60 --slave /usr/bin/g++ g++ /usr/bin/g++-8
+
+# Downgrade zookeeper to cdh5's version. trusty's default zookeeper version is 3.4.5+dfsg-1
+# which is higher than cdh5's version. We need to downgrade to cdh5's version, otherwise hadoop
+# package is broken.
+#RUN apt-get install --force-yes -q -y zookeeper=3.4.5+cdh5*
+
+# Install awscli
+RUN cd /opt && \
+    wget https://s3.amazonaws.com/aws-cli/awscli-bundle.zip && \
+    unzip awscli-bundle.zip && \
+    ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws && \
+    rm awscli-bundle.zip && rm -rf awscli-bundle
+
+# Change the gcc/g++ aliases to point to 6
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-6 60 --slave /usr/bin/g++ g++ /usr/bin/g++-6
+
+# Set fake git credentials, otherwise git cherry-pick would throw fatal error.
+RUN git config --global user.email "you@example.com" && \
+    git config --global user.name "Your Name"
+
+# LZ4
+RUN cd /opt && \
+    git clone https://github.com/lz4/lz4.git && \
+    (cd lz4 && \
+    git reset --hard c10863b98e1503af90616ae99725ecd120265dfb && \
+    make && \
+    make install && \
+    ldconfig) && \
+    rm -rf lz4
+
+# glog
+RUN cd /opt && \
+    git clone https://github.com/google/glog.git && \
+    (cd /opt/glog && git reset --hard v0.3.3 &&\
+      CPPFLAGS="-gdwarf-2 -O3 -fno-omit-frame-pointer" CC=/usr/bin/gcc-6 CXX=/usr/bin/g++-6 ./configure && \
+      make -j ${BUILD_JOBS} && \
+      make install && \
+      ldconfig)
+    #rm -rf glog-0.3.3.tar.gz glog-0.3.3
+
+RUN apt-get update && apt-get install --force-yes -q -y libunwind8-dev
+
+# Adding Java lib path ld.so searching path configuration
+RUN JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 && \
+    echo $JAVA_HOME/jre/lib/amd64/ >> /etc/ld.so.conf.d/realpin.conf && \
+    echo $JAVA_HOME/jre/lib/amd64/server >> /etc/ld.so.conf.d/realpin.conf && \
+    echo $JAVA_HOME/jre/lib/amd64/jamvm >> /etc/ld.so.conf.d/realpin.conf
+
+# numa
+RUN cd /opt && \
+    wget https://github.com/numactl/numactl/archive/v2.0.11.zip && \
+    unzip v2.0.11.zip && \
+    (cd numactl-2.0.11 && \
+      ./autogen.sh && \
+      ./configure && \
+      make -j ${BUILD_JOBS} && \
+      make install && \
+      ldconfig) && \
+    rm -rf v2.0.11.zip numactl-2.0.11/
+
+# newer version of cmake
+RUN cd /opt && \
+    wget https://cmake.org/files/v3.4/cmake-3.4.3-Linux-x86_64.tar.gz --no-check-certificate && \
+    tar zxvf cmake-3.4.3-Linux-x86_64.tar.gz --strip-components=1 -C /usr/local && \
+    rm cmake-3.4.3-Linux-x86_64.tar.gz
+
+# jemalloc
+RUN cd /opt && \
+    wget https://github.com/jemalloc/jemalloc/archive/5.2.1.tar.gz && \
+    tar -zxvf 5.2.1.tar.gz && \
+    (cd jemalloc-5.2.1 && \
+      autoconf && \
+      ./configure --enable-prof --disable-initial-exec-tls && \
+      make && \
+# the unusual (make install; exit 0) is to ignore error for missing html doc
+      (make install; exit 0) && \
+      ldconfig) && \
+    rm -rf 5.2.1.tar.gz jemalloc-5.2.1
+
+# microhttpd
+RUN cd /opt && \
+    wget http://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-0.9.42.tar.gz && \
+    tar -zxvf libmicrohttpd-0.9.42.tar.gz && \
+    (cd libmicrohttpd-0.9.42 && \
+      CPPFLAGS="-gdwarf-2 -O3 -fno-omit-frame-pointer" ./configure && \
+      make -j ${BUILD_JOBS}  && \
+      make install) && \
+    rm -rf libmicrohttpd-0.9.42.tar.gz libmicrohttpd-0.9.42
+
+# download zstd
+RUN cd /opt && \
+    git clone https://github.com/facebook/zstd.git && \
+    (cd zstd && git reset --hard 83b51e9f886be7c2a4d477b6e7bc6db831791d8d) && \
+##    (cd zstd && git reset --hard 23b55d6b3e705794613111e9d343adee3c987e02 ) && \
+    (cd zstd/build/cmake && \
+      cmake -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+      -DCMAKE_CXX_FLAGS="-gdwarf-2 -O3 -fno-omit-frame-pointer -DNDEBUG" -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON . && \
+      make -j ${BUILD_JOBS} && \
+      make install && \
+      ln -sf /usr/local/lib/libzstd.so.1.4.0 /usr/local/lib/libzstd.so && \
+      ldconfig) && \
+    rm -rf zstd
+
+# download folly
+RUN cd /opt && \
+    git clone https://github.com/facebook/folly && \
+    (cd folly && \
+     git reset --hard 60be5ec6d5b85c89cadd6ff9a986fa59e88b714d && \
+     # git reset --hard 92dd0f714562029307964767a93b9d8108673ac0 && \
+     sed -i 's/#if !defined(JEMALLOC_VERSION_MAJOR) || (JEMALLOC_VERSION_MAJOR < 5)/#if !defined(JEMALLOC_VERSION_MAJOR)/g' folly/experimental/JemallocHugePageAllocator.cpp && \
+     mkdir _build && cd _build && \
+     LDFLAGS="-ljemalloc" && \
+     cmake -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+     -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_CXX_FLAGS="-gdwarf-2 -O3 -fno-omit-frame-pointer" .. && \
+     make -j ${BUILD_JOBS}  && \
+     make install && \
+     ldconfig) && \
+    rm -rf folly
+
+# fizz
+RUN cd /opt && \
+    git clone https://github.com/facebookincubator/fizz && \
+    (cd fizz && git reset --hard e6a1a76835d950aeb0f68208e7afd70269a735b1 && \
+    mkdir build_ && cd build_ && \
+    cmake -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo ../fizz && \
+    make -j $(nproc) && \
+    make install) && \
+    rm -rf fizz
+
+
+# download fmt
+RUN cd /opt && \
+    git clone https://github.com/fmtlib/fmt && \
+    (cd fmt && \
+      cmake -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo . && \
+      make -j ${BUILD_JOBS} && \
+      make install && \
+      ldconfig) && \
+    rm -rf fmt
+
+# wangle
+#
+# TODO: When wangle if upgraded to latest version, and the latest version
+# contains following files, please remove corresponding files from
+# common directory.
+#    if wangle has                 remove these files and migrate code to use wangle library
+# wangle/util/FilePoller.h                 -> common/FilePoller.h
+# wangle/util/FilePoller.cpp               -> common/FilePoller.cpp
+# wangle/util/MultiFilePoller.h            -> common/MultiFilePoller.h
+# wangle/util/MultiFilePoller.cpp          -> common/MultiFilePoller.cpp
+# wangle/util/test/FilePollerTest.cpp      -> common/tests/FilePollerTest.cpp
+# wangle/util/test/MultiFilePollerTest.cpp -> common/tests/MultiFilePollerTest.cpp
+#
+RUN cd /opt && \
+    git clone https://github.com/facebook/wangle && \
+    (cd wangle && git reset --hard 7614031c1d10a1ef61e523c1ea6c6dc4f7f48ee8) && \
+    (cd wangle/wangle && mkdir build_static && cd build_static && \
+    LDFLAGS="-ljemalloc" && \
+    cmake -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON \
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_CXX_FLAGS="-gdwarf-2 -O3 -fno-omit-frame-pointer" .. && \
+      make -j ${BUILD_JOBS} && \
+      make install && \
+      ldconfig) && \
+     rm -rf wangle
+
+RUN cd /opt && \
+    git clone https://github.com/rsocket/rsocket-cpp && \
+    (cd rsocket-cpp && git reset --hard 5ddc222d9e45943fd6862095ddc7de0211167e82 && \
+    mkdir -p build && cd build && \
+    cmake -DBUILD_TESTS=OFF -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+    -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo ../ && make -j && make install) && \
+    rm -rf rsocket-cpp
+# git clone https://github.com/no1msd/mstch
+RUN cd /opt && \
+    git clone https://github.com/no1msd/mstch && \
+    (cd mstch && git reset --hard 0fde1cf94c26ede7fa267f4b64c0efe5da81a77a) && \
+    (cd mstch && cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo . && \
+      make -j ${BUILD_JOBS} && \
+      make install && \
+      ldconfig) && \
+    rm -rf mstch
+
+# download fbthrift
+# download fbthrift
+RUN cd /opt && \
+    git clone https://github.com/facebook/fbthrift && \
+    (cd fbthrift && \
+     git reset --hard 8e1a1e1eedbf5b551b4fe4799dab8b36267638ba && \
+     cd thrift && \
+     sed 's/PKG_CHECK_MODULES.*$/true/g' -i configure.ac && \
+     sed -i '140,146d;303,316d' configure.ac && \
+     (cd compiler && ln -sf thrifty.h thrifty.hh) && \
+     autoreconf --install && \
+     CC=/usr/bin/gcc-6 CXX=/usr/bin/g++-6 \
+       CPPFLAGS="-gdwarf-2 -O3 -fno-omit-frame-pointer" \
+       ./configure && \
+     sed -i '29i#include <unistd.h>' compiler/main.cc && \
+     sed -i '16i#include <iterator>' compiler/generate/t_concat_generator.cc && \
+     cd compiler && make && make install) && \
+    rm -rf fbthrift
+###########################################################
+# end: install thfit python lib from old fbthrift version #
+###########################################################
+
+# download fbthrift
+RUN cd /opt && \
+    git clone https://github.com/facebook/fbthrift && \
+    (cd fbthrift && \
+     #git reset --hard v2019.09.23.00 && \
+     git reset --hard v2019.07.29.00 && \
+     sed -i '43,45s/false/true/' thrift/lib/cpp2/async/PcapLoggingHandler.cpp && \
+     sed -i '/Pcap/d' thrift/lib/cpp2/CMakeLists.txt && \
+     sed -i '/pcap/Id' thrift/lib/cpp2/async/Cpp2Channel.* && \
+     rm -f thrift/lib/cpp2/async/PcapLoggingHandler.cpp && \
+     rm -f thrift/lib/cpp2/async/PcapLoggingHandler.h && \
+     LDFLAGS="-ljemalloc" && \
+     CPPFLAGS="-gdwarf-2 -O3 -fno-omit-frame-pointer" && \
+     cd build && cmake -DCMAKE_CXX_STANDARD=14 -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+     -DCMAKE_CXX_FLAGS="-gdwarf-2 -O3 -fno-omit-frame-pointer" \
+     -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo .. && \
+     make -j ${BUILD_JOBS} && make install) && \
+    rm -rf fbthrift
+
+# farmhash
+RUN cd /opt && \
+    git clone https://github.com/google/farmhash.git && \
+    (cd farmhash && git reset --hard 059cf991 && \
+      autoreconf --install && \
+      ./configure CXXFLAGS="-gdwarf-2 -O3 -fno-omit-frame-pointer" && \
+      make all check && \
+      make install && \
+      ldconfig) && \
+    rm -rf farmhash
+
+# libprotobuf
+RUN cd /opt && \
+    git clone https://github.com/google/protobuf.git && \
+    (cd protobuf && \
+      git reset --hard b04e5cba356212e4e8c66c61bbe0c3a20537c5b9 && \
+      ./autogen.sh && \
+      LDFLAGS="-ljemalloc" \
+        CPPFLAGS="-gdwarf-2 -O3 -fno-omit-frame-pointer" \
+        ./configure && \
+      make -j ${BUILD_JOBS} && \
+      make install && \
+      ldconfig) && \
+    rm -rf protobuf
+
+# libbf (bloom filter)
+# remove this once we migrate to use third_party/libbf
+RUN cd /opt && \
+    git clone https://github.com/mavam/libbf.git && \
+    (cd libbf && \
+      git reset --hard f2509db1442e8fc7c3dd5117b739886f76a4eb80 && \
+      ./configure && \
+      make -j ${BUILD_JOBS} && \
+      make install && \
+      ldconfig) && \
+    rm -rf libbf
+
+# aws sdk
+RUN cd /opt && \
+    git clone https://github.com/aws/aws-sdk-cpp.git && \
+    (cd aws-sdk-cpp && \
+      git checkout 1.2.7 && \
+      mkdir build && cd build && \
+      cmake -DCMAKE_BUILD_TYPE=Release -DCUSTOM_MEMORY_MANAGEMENT=0 -DSTATIC_LINKING=1 -DBUILD_ONLY="s3" .. && \
+      make -j ${BUILD_JOBS} && \
+      make install && \
+      rm -rf /usr/local/lib/cmake/aws-cpp-* && \
+      rm -rf build && mkdir build && cd build && \
+      cmake -DCMAKE_BUILD_TYPE=Release -DCUSTOM_MEMORY_MANAGEMENT=0 -DSTATIC_LINKING=0 -DBUILD_ONLY="s3" .. && \
+      cd .. && \
+      make -j ${BUILD_JOBS} && \
+      make install && \
+      ldconfig) && \
+    rm -rf aws-sdk-cpp
+
+# yaml-cpp
+RUN cd /opt && \
+    git clone https://github.com/jbeder/yaml-cpp && \
+    (cd yaml-cpp && \
+      git reset --hard 562aefc114938e388457e6a531ed7b54d9dc1b62 && \
+      mkdir build && \
+      cd build && \
+      cmake -DBUILD_SHARED_LIBS=ON .. && \
+      make -j && \
+      make install && \
+      cmake -DBUILD_SHARED_LIBS=OFF .. && \
+      make -j ${BUILD_JOBS}&& \
+      make install && \
+      ldconfig) && \
+    rm -rf /opt/yaml-cpp
+
+# kafka
+RUN cd /opt && \
+    git clone https://github.com/edenhill/librdkafka.git && \
+    (cd librdkafka && \
+     git reset --hard v1.4.0 && \
+     ./configure && \
+     make && \
+     make install && \
+     ldconfig) && \
+    rm -rf librdkafka
+
+# rocksdb
+RUN cd /opt/ && \
+    git clone https://github.com/facebook/rocksdb.git && \
+    (cd rocksdb && \
+     git checkout -b 5.7.fb origin/5.7.fb && \
+     git reset --hard cfaeb5846bec0ac90d8da15dc11f53eafbbfd537 && \
+     #git cherry-pick c5f0c6cc660f1f4a8051db2aac3b8afc17818e70 && \
+     #git cherry-pick ba3c58cab6c691c53c7f98589651233695da1f62 && \
+     #git cherry-pick 204af1ecccb6ed8110ee04cf9130594cfcb3af27 && \
+     #sed -i -- 's/std::rindex/rindex/g' ./env/env_hdfs.cc && \
+     #sed -i -- '/"util\/string_util.h"/a #include "util\/logging.h"' ./env/env_hdfs.cc && \
+     #export CLASSPATH= && \
+     #for f in `find /usr/local/hadoop/share/hadoop | grep jar`; do export CLASSPATH=$CLASSPATH:$f; done && \
+     USE_SSE=1 \
+     USE_HDFS=0 \
+     #JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 \
+     #LD_LIBRARY_PATH=$JAVA_HOME/jre/lib/amd64/server:$JAVA_HOME/jre/lib/amd64 \
+       #JEMALLOC_LIB=" /usr/local/lib/libjemalloc.a" \
+       #JEMALLOC_INCLUDE=" -I /usr/local/include/" \
+       EXTRA_CXXFLAGS="-gdwarf-2 -std=c++1y -O3 -fno-omit-frame-pointer" \
+       #EXTRA_CXXFLAGS="-gdwarf-2 -std=c++1y -O3 -fno-omit-frame-pointer -I/usr/local/hadoop/include" \
+       #EXTRA_LDFLAGS="-L/usr/local/hadoop/lib/native" \
+       make -j ${BUILD_JOBS}  shared_lib && \
+     make install-shared && \
+     ldconfig) && \
+    rm -rf rocksdb
+
