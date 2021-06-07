@@ -1,0 +1,29 @@
+{
+  "id" : "OnlineOffline",
+  "mapFields" : {
+    "DROPPED.meta" : {
+      "count" : "-1"
+    },
+    "OFFLINE.meta" : {
+      "count" : "-1"
+    },
+    "OFFLINE.next" : {
+      "DROPPED" : "DROPPED",
+      "ONLINE" : "ONLINE"
+    },
+    "ONLINE.meta" : {
+      "count" : "R"
+    },
+    "ONLINE.next" : {
+      "DROPPED" : "OFFLINE",
+      "OFFLINE" : "OFFLINE"
+    }
+  },
+  "simpleFields" : {
+    "INITIAL_STATE" : "OFFLINE"
+  },
+  "listFields" : {
+    "STATE_PRIORITY_LIST" : [ "ONLINE", "OFFLINE", "DROPPED" ],
+    "STATE_TRANSITION_PRIORITYLIST" : [ "OFFLINE-ONLINE", "ONLINE-OFFLINE", "OFFLINE-DROPPED" ]
+  }
+}

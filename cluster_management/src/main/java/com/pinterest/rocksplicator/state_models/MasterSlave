@@ -1,0 +1,46 @@
+{
+  "id" : "MasterSlave",
+  "simpleFields" : {
+    "INITIAL_STATE" : "OFFLINE"
+  },
+  "mapFields" : {
+    "DROPPED.meta" : {
+      "count" : "-1"
+    },
+    "ERROR.meta" : {
+      "count" : "-1"
+    },
+    "ERROR.next" : {
+      "DROPPED" : "DROPPED",
+      "OFFLINE" : "OFFLINE"
+    },
+    "MASTER.meta" : {
+      "count" : "1"
+    },
+    "MASTER.next" : {
+      "SLAVE" : "SLAVE",
+      "DROPPED" : "SLAVE",
+      "OFFLINE" : "SLAVE"
+    },
+    "OFFLINE.meta" : {
+      "count" : "-1"
+    },
+    "OFFLINE.next" : {
+      "SLAVE" : "SLAVE",
+      "MASTER" : "SLAVE",
+      "DROPPED" : "DROPPED"
+    },
+    "SLAVE.meta" : {
+      "count" : "R"
+    },
+    "SLAVE.next" : {
+      "MASTER" : "MASTER",
+      "DROPPED" : "OFFLINE",
+      "OFFLINE" : "OFFLINE"
+    }
+  },
+  "listFields" : {
+    "STATE_PRIORITY_LIST" : [ "MASTER", "SLAVE", "OFFLINE", "DROPPED", "ERROR" ],
+    "STATE_TRANSITION_PRIORITYLIST" : [ "MASTER-SLAVE", "SLAVE-MASTER", "OFFLINE-SLAVE", "SLAVE-OFFLINE", "OFFLINE-DROPPED" ]
+  }
+}
