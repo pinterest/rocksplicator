@@ -637,15 +637,15 @@ public class Utils {
       final String cluster,
       final String resourceName,
       final int max_retries) throws Exception {
-    String resourceMetaCfg = "";
+    String metaResourceCfg = "";
     try {
-      resourceMetaCfg =
+      metaResourceCfg =
           getResourceInfo(zkClient, cluster, resourceName, "resource_configs", max_retries);
     } catch (KeeperException.NoNodeException exp) {
       LOG.error(
           "resource_configs at metadata no exist; return empty String");
     }
-    return resourceMetaCfg;
+    return metaResourceCfg;
   }
 
   public static String getMetaData(
