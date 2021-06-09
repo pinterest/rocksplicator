@@ -444,22 +444,20 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
             Utils.changeDBRoleAndUpStream(LOCAL_HOST_IP, adminPort, dbName, "SLAVE",
                 upstreamHost, upstreamPort);
 
-            String
-                resourceMetaCfg =
+            String metaResourceCfg =
                 Utils.getMetaResourceConfigs(zkClient, cluster, resourceName, MAX_ZK_RETRIES);
-            if (resourceMetaCfg.isEmpty()) {
+            if (metaResourceCfg.isEmpty()) {
               LOG.error("resource_configs from metadata is not set. Skip setting and return OK");
             } else {
-              JsonObject resCfg = new JsonParser().parse(resourceMetaCfg).getAsJsonObject();
+              JsonObject resCfg = new JsonParser().parse(metaResourceCfg).getAsJsonObject();
               Map<String, String> dbOptions = new HashMap<>();
 
-              JsonElement disableAutoCompactionsEl = resCfg.get(
-                  Utils.ResourceConfigProperty.DISABLE_AUTO_COMPACTIONS.name().toLowerCase());
+              String disableAutoCompactionsName =
+                  Utils.ResourceConfigProperty.DISABLE_AUTO_COMPACTIONS.name().toLowerCase();
+              JsonElement disableAutoCompactionsEl = resCfg.get(disableAutoCompactionsName);
               if (disableAutoCompactionsEl != null) {
                 String dbOptionsDisableAutoCompactions = disableAutoCompactionsEl.getAsString();
-                dbOptions.put(
-                    Utils.ResourceConfigProperty.DISABLE_AUTO_COMPACTIONS.name().toLowerCase(),
-                    dbOptionsDisableAutoCompactions);
+                dbOptions.put(disableAutoCompactionsName, dbOptionsDisableAutoCompactions);
               }
 
               Utils.setDBOptions(LOCAL_HOST_IP, adminPort, dbName, dbOptions);
