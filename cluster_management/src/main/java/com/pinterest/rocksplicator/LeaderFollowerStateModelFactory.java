@@ -447,6 +447,14 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
             Utils.changeDBRoleAndUpStream(LOCAL_HOST_IP, adminPort, dbName, "FOLLOWER",
                 upstreamHost, upstreamPort);
 
+            // Reset RocksDB options based on resource_configs stored on zk.
+            // At service restart, db options are created fresh from code&GFlags and overwrite
+            // the existing db OPTIONS at disk, which will erase any options changes made by
+            // AdminHandler's setDBOptions API. Thus, to inherit those options changes, user also
+            // need to store those options-changes at zk path as json string:
+            // metadata/<cluster>/<seg>/resource_configs. Upon service reload DBs at restart, the
+            // DB will always goes through Offline->follower, then following logic will set
+            // options changes based on resource_configs from zk.
             String metaResourceCfg =
                 Utils.getMetaResourceConfigs(zkClient, cluster, resourceName, MAX_ZK_RETRIES);
             if (metaResourceCfg.isEmpty()) {

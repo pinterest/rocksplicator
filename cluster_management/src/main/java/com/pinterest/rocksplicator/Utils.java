@@ -57,6 +57,8 @@ public class Utils {
 
   private static final Logger LOG = LoggerFactory.getLogger(Utils.class);
   private static final String LOCAL_HOST_IP = "127.0.0.1";
+  private static final String RESOURCE_INFO_META_SUFFIX = "resource_meta";
+  private static final String RESOURCE_INFO_CONFIGS_SUFFIX = "resource_configs";
 
   /**
    * Build a thrift client to local adminPort
@@ -574,8 +576,11 @@ public class Utils {
     return getMetaParentClusterLocation(cluster) + "/" + resourceName;
   }
 
+  /** User getResourceInfoLocation to get path to zk path: /metadata/<cluster>/<segment>/<suffix>
+   */
+  @Deprecated
   public static String getMetaLocation(String cluster, String resourceName) {
-    return getMetaParentResourceLocation(cluster, resourceName) + "/resource_meta";
+    return getMetaParentResourceLocation(cluster, resourceName) + "/" + RESOURCE_INFO_META_SUFFIX;
   }
 
   public static String getResourceInfoLocation(String cluster, String resourceName,
@@ -641,7 +646,8 @@ public class Utils {
     String metaResourceCfg = "";
     try {
       metaResourceCfg =
-          getResourceInfo(zkClient, cluster, resourceName, "resource_configs", max_retries);
+          getResourceInfo(zkClient, cluster, resourceName, RESOURCE_INFO_CONFIGS_SUFFIX,
+              max_retries);
     } catch (KeeperException.NoNodeException exp) {
       LOG.error(
           "resource_configs at metadata no exist; return empty String");
@@ -654,7 +660,7 @@ public class Utils {
       final String cluster,
       final String resourceName,
       final int max_retries) throws Exception {
-    return getResourceInfo(zkClient, cluster, resourceName, "resource_meta", max_retries);
+    return getResourceInfo(zkClient, cluster, resourceName, RESOURCE_INFO_META_SUFFIX, max_retries);
   }
 
   // partition name is in format: test_0
