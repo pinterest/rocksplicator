@@ -496,7 +496,8 @@ public class Utils {
   public static void setDBOptions(String host, int adminPort, String dbName,
                                   Map<String, String> options) throws RuntimeException {
     LOG.error(String
-        .format("setDBOptions for partition: %s, host: %s, port: %s", dbName, host, adminPort));
+        .format("setDBOptions for partition: %s, host: %s, port: %s, with options: %s", dbName,
+            host, adminPort, options.toString()));
     try {
       Admin.Client client = getAdminClient(host, adminPort);
       SetDBOptionsRequest req = new SetDBOptionsRequest(options, dbName);
