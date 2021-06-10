@@ -35,6 +35,7 @@ import com.pinterest.rocksdb_admin.thrift.GetSequenceNumberRequest;
 import com.pinterest.rocksdb_admin.thrift.GetSequenceNumberResponse;
 import com.pinterest.rocksdb_admin.thrift.RestoreDBFromS3Request;
 import com.pinterest.rocksdb_admin.thrift.RestoreDBRequest;
+import com.pinterest.rocksdb_admin.thrift.SetDBOptionsRequest;
 
 import org.apache.curator.RetryLoop;
 import org.apache.curator.framework.CuratorFramework;
@@ -48,6 +49,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -55,6 +57,8 @@ public class Utils {
 
   private static final Logger LOG = LoggerFactory.getLogger(Utils.class);
   private static final String LOCAL_HOST_IP = "127.0.0.1";
+  private static final String RESOURCE_INFO_META_SUFFIX = "resource_meta";
+  private static final String RESOURCE_INFO_CONFIGS_SUFFIX = "resource_configs";
 
   /**
    * Build a thrift client to local adminPort
@@ -491,6 +495,21 @@ public class Utils {
     }
   }
 
+  public static void setDBOptions(String host, int adminPort, String dbName,
+                                  Map<String, String> options) throws RuntimeException {
+    LOG.error(String
+        .format("setDBOptions for partition: %s, host: %s, port: %s, with options: %s", dbName,
+            host, adminPort, options.toString()));
+    try {
+      Admin.Client client = getAdminClient(host, adminPort);
+      SetDBOptionsRequest req = new SetDBOptionsRequest(options, dbName);
+      client.setDBOptions(req);
+    } catch (TException e) {
+      LOG.error("Failed to setDBOptions for DB: ", e);
+      throw new RuntimeException(e);
+    }
+  }
+
   /**
    * Check if the DB on host:adminPort is Master. If the CheckDBRequest request fails, return false.
    * @param host
@@ -557,18 +576,26 @@ public class Utils {
     return getMetaParentClusterLocation(cluster) + "/" + resourceName;
   }
 
+  /** User getResourceInfoLocation to get path to zk path: /metadata/<cluster>/<segment>/<suffix>
+   */
+  @Deprecated
   public static String getMetaLocation(String cluster, String resourceName) {
-    return getMetaParentResourceLocation(cluster, resourceName) + "/resource_meta";
+    return getMetaParentResourceLocation(cluster, resourceName) + "/" + RESOURCE_INFO_META_SUFFIX;
   }
 
-  public static String getMetaData(
-      final CuratorFramework zkClient,
-      final String cluster,
-      final String resourceName,
-      final int max_retries) throws Exception {
+  public static String getResourceInfoLocation(String cluster, String resourceName,
+                                               String infoSuffix) {
+    return getMetaParentResourceLocation(cluster, resourceName) + "/" + infoSuffix;
+  }
+
+  private static String getResourceInfo(final CuratorFramework zkClient,
+                                        final String cluster,
+                                        final String resourceName,
+                                        final String infoSuffix,
+                                        final int max_retries) throws Exception {
     final String clusterMetaPath = Utils.getMetaParentClusterLocation(cluster);
     final String resourceMetaPath = Utils.getMetaParentResourceLocation(cluster, resourceName);
-    final String metadataPath = Utils.getMetaLocation(cluster, resourceName);
+    final String infoPath = Utils.getResourceInfoLocation(cluster, resourceName, infoSuffix);
 
     final AtomicInteger retryCount = new AtomicInteger(0);
     return RetryLoop.callWithRetry(zkClient.getZookeeperClient(), new Callable<String>() {
@@ -585,18 +612,19 @@ public class Utils {
                   resourceMetaPath));
           zkClient.sync().forPath(resourceMetaPath);
           LOG.info(String
-              .format("Trying (try no = %d), sync from metadata zk path: %s", retryCount.get(),
-                  metadataPath));
-          zkClient.sync().forPath(metadataPath);
+              .format("Trying (try no = %d), sync from resourceInfo zk path: %s", retryCount.get(),
+                  infoPath));
+          zkClient.sync().forPath(infoPath);
           LOG.info(String
-              .format("Trying (try no = %d), getData from metadata zk path: %s", retryCount.get(),
-                  metadataPath));
-          String metaData = new String(zkClient.getData().forPath(metadataPath));
-          LOG.info(String.format("get_meta Retrieved : %s", metaData));
-          return metaData;
+              .format("Trying (try no = %d), getData from resourceInfo zk path: %s",
+                  retryCount.get(),
+                  infoPath));
+          String infoData = new String(zkClient.getData().forPath(infoPath));
+          LOG.info(String.format("getResourceInfo Retrieved : %s", infoData));
+          return infoData;
         } catch (KeeperException.NoNodeException exp) {
           LOG.error(String.format(
-              "MetaDataPath (%s) not visible or doesn't exist yet: ", metadataPath), exp);
+              "ResourceInfoPath (%s) not visible or doesn't exist yet: ", infoPath), exp);
           // By throwing the OperationTimeoutException, we force the retry, as NoNode exception is
           // not retryable.
           if (retryCount.get() < max_retries) {
@@ -610,6 +638,30 @@ public class Utils {
     });
   }
 
+  public static String getMetaResourceConfigs(
+      final CuratorFramework zkClient,
+      final String cluster,
+      final String resourceName,
+      final int max_retries) throws Exception {
+    String metaResourceCfg = "";
+    try {
+      metaResourceCfg =
+          getResourceInfo(zkClient, cluster, resourceName, RESOURCE_INFO_CONFIGS_SUFFIX,
+              max_retries);
+    } catch (KeeperException.NoNodeException exp) {
+      LOG.error(
+          "resource_configs at metadata no exist; return empty String");
+    }
+    return metaResourceCfg;
+  }
+
+  public static String getMetaData(
+      final CuratorFramework zkClient,
+      final String cluster,
+      final String resourceName,
+      final int max_retries) throws Exception {
+    return getResourceInfo(zkClient, cluster, resourceName, RESOURCE_INFO_META_SUFFIX, max_retries);
+  }
 
   // partition name is in format: test_0
   // S3 part prefix is in format: part-00000-
@@ -617,4 +669,9 @@ public class Utils {
     String[] parts = partitionName.split("_");
     return String.format("part-%05d-", Integer.parseInt(parts[parts.length - 1]));
   }
+
+  public enum ResourceConfigProperty {
+    DISABLE_AUTO_COMPACTIONS,
+  }
+
 }

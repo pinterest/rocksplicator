@@ -23,6 +23,9 @@ import com.pinterest.rocksplicator.eventstore.LeaderEventsCollector;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEventType;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.framework.recipes.locks.InterProcessMutex;
@@ -90,6 +93,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
   private static final Logger LOG = LoggerFactory.getLogger(MasterSlaveStateModelFactory.class);
   private static final String LOCAL_HOST_IP = "127.0.0.1";
   private static final int MASTER_CATCH_UP_THRESHOLD = 100;
+  private static final int MAX_ZK_RETRIES = 3;
 
   private final String host;
   private final int adminPort;
@@ -439,6 +443,26 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
           if (!needRebuild) {
             Utils.changeDBRoleAndUpStream(LOCAL_HOST_IP, adminPort, dbName, "SLAVE",
                 upstreamHost, upstreamPort);
+
+            String metaResourceCfg =
+                Utils.getMetaResourceConfigs(zkClient, cluster, resourceName, MAX_ZK_RETRIES);
+            if (metaResourceCfg.isEmpty()) {
+              LOG.error("resource_configs from metadata is not set. Skip setting and return OK");
+            } else {
+              JsonObject resCfg = new JsonParser().parse(metaResourceCfg).getAsJsonObject();
+              Map<String, String> dbOptions = new HashMap<>();
+
+              String disableAutoCompactionsName =
+                  Utils.ResourceConfigProperty.DISABLE_AUTO_COMPACTIONS.name().toLowerCase();
+              JsonElement disableAutoCompactionsEl = resCfg.get(disableAutoCompactionsName);
+              if (disableAutoCompactionsEl != null) {
+                String dbOptionsDisableAutoCompactions = disableAutoCompactionsEl.getAsString();
+                dbOptions.put(disableAutoCompactionsName, dbOptionsDisableAutoCompactions);
+              }
+
+              Utils.setDBOptions(LOCAL_HOST_IP, adminPort, dbName, dbOptions);
+            }
+
             Utils.logTransitionCompletionMessage(message);
             return;
           }
