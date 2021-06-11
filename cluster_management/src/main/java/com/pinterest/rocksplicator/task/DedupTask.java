@@ -114,7 +114,7 @@ public class DedupTask extends UserContentStore implements Task {
       LOG.error("compactDB is done");
       if (useS3Store) {
         Utils.backupDBToS3WithLimit("127.0.0.1", adminPort, dbName, backupLimitMbs, s3Bucket,
-            destStorePath);
+            destStorePath, shareFilesWithChecksum);
       } else {
         Utils.backupDBWithLimit("127.0.0.1", adminPort, dbName, destStorePath, backupLimitMbs,
             shareFilesWithChecksum);

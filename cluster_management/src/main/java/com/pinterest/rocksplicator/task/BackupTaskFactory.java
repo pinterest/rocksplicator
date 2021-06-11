@@ -74,7 +74,7 @@ public class BackupTaskFactory implements TaskFactory {
     String storePathPrefix = "";
     long resourceVersion = jobCreationTime;
     int backupLimitMbs = DEFAULT_BACKUP_LIMIT_MBS;
-    boolean shareFilesWithChecksum = true;
+    boolean shareFilesWithChecksum = false;
 
     try {
       Map<String, String> jobCmdMap = jobConfig.getJobCommandConfigMap();
