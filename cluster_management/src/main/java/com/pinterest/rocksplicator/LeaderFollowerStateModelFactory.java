@@ -22,6 +22,9 @@ import com.pinterest.rocksdb_admin.thrift.CheckDBResponse;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsCollector;
 import com.pinterest.rocksplicator.eventstore.LeaderEventsLogger;
 import com.pinterest.rocksplicator.thrift.eventhistory.LeaderEventType;
+import com.pinterest.rocksplicator.utils.PartitionState;
+import com.pinterest.rocksplicator.utils.PartitionStateManager;
+import com.pinterest.rocksplicator.utils.PartitionStateUpdater;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -104,6 +107,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
   private final boolean useS3Backup;
   private final String s3Bucket;
   private final LeaderEventsLogger leaderEventsLogger;
+  public final PartitionStateUpdater partitionStateUpdater;
 
   public LeaderFollowerStateModelFactory(
       final String host,
@@ -122,6 +126,8 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
         new ExponentialBackoffRetry(1000, 3));
     zkClient.start();
     this.leaderEventsLogger = leaderEventsLogger;
+    this.partitionStateUpdater = new PartitionStateUpdater(this.zkClient, this.cluster, this.adminPort);
+    this.partitionStateUpdater.start();
   }
 
   @Override
@@ -136,9 +142,9 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
         zkClient,
         useS3Backup,
         s3Bucket,
-        leaderEventsLogger);
+        leaderEventsLogger,
+        partitionStateUpdater);
   }
-
 
   public static class LeaderFollowerStateModel extends StateModel {
 
@@ -154,7 +160,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
     private final String s3Bucket;
     private InterProcessMutex partitionMutex;
     private final LeaderEventsLogger leaderEventsLogger;
-
+    public final PartitionStateUpdater partitionStateUpdater;
 
     /**
      * State model that handles the state machine of a single replica
@@ -168,7 +174,8 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
         final CuratorFramework zkClient,
         final boolean useS3Backup,
         final String s3Bucket,
-        final LeaderEventsLogger leaderEventsLogger) {
+        final LeaderEventsLogger leaderEventsLogger,
+        PartitionStateUpdater partitionStateUpdater) {
       this.resourceName = resourceName;
       this.partitionName = partitionName;
       this.host = host;
@@ -180,6 +187,8 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
       this.partitionMutex = new InterProcessMutex(zkClient,
           getLockPath(cluster, resourceName, partitionName));
       this.leaderEventsLogger = leaderEventsLogger;
+      this.partitionStateUpdater = partitionStateUpdater;
+      LOG.error("LeaderFollowerStateModel has been instantiated [" + partitionName + "]");
     }
 
     /**
@@ -193,6 +202,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
 
       Utils.logTransitionMessage(message);
       final String dbName = Utils.getDbName(partitionName);
+      PartitionStateManager stateManager = new PartitionStateManager(cluster, resourceName, partitionName, zkClient);
 
       try (Locker locker = new Locker(partitionMutex)) {
         HelixAdmin admin = context.getManager().getClusterManagmentTool();
@@ -220,6 +230,8 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
         long localSeq = Utils.getLocalLatestSequenceNumber(dbName, adminPort);
         String hostWithHighestSeq = null;
         long highestSeq = localSeq;
+        long numActiveReplicas = 1;
+        long totalReplicas = stateMap.keySet().size();
         for (String instanceName : stateMap.keySet()) {
           String hostName = instanceName.split("_")[0];
           int port = Integer.parseInt(instanceName.split("_")[1]);
@@ -233,6 +245,9 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
             LOG.error("Failed to get latest sequence number from " + hostName + " for " + dbName);
             continue;
           }
+
+          numActiveReplicas++;
+
           if (highestSeq < seq) {
             highestSeq = seq;
             hostWithHighestSeq = hostName;
@@ -266,9 +281,31 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           }
         }
 
+        LOG.error("local.seq:" + localSeq + " replica:[" + numActiveReplicas + "/"+ totalReplicas + "]");
+        // 3-Node failure case
+        if (localSeq <= 0) {
+          PartitionState lastState = stateManager.getState();
+          if (!lastState.isValid()) {
+            LOG.error("Invalid last state [part: " + partitionName + "] State:" + lastState.toString());
+          } else {
+            double tolerance = 0.5; 
+            if (localSeq >= (tolerance * lastState.seqNum)) {
+              LOG.error(String.format("OK [last.seq:%d curr.seq:%d]", lastState.seqNum, localSeq));
+            } else {
+              String errorString = String.format("Cannot Transition [last.seq:%d curr.seq:%d]", lastState.seqNum, localSeq);
+              LOG.error(errorString);
+              throw new RuntimeException(errorString);
+            }
+          }
+        }
+
         // changeDBRoleAndUpStream(me, "Leader")
         Utils.changeDBRoleAndUpStream(LOCAL_HOST_IP, adminPort, dbName, "LEADER",
             "", adminPort);
+
+        partitionStateUpdater.addLeader(resourceName, partitionName);
+        // store the latest seqNum as last state
+        stateManager.saveSeqNum(localSeq);
 
         // Get the latest external view and state map
         LOG.error("[" + dbName + "] Getting external view");
@@ -340,6 +377,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
         leaderEventsCollector.commit();
       }
       Utils.logTransitionCompletionMessage(message);
+      partitionStateUpdater.removeLeader(resourceName, partitionName);
     }
 
     public Map<String, String> getLiveHostAndRole(NotificationContext context, String dbName) {
@@ -629,6 +667,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           }
         }
 
+        partitionStateUpdater.removeLeader(resourceName, partitionName);
         // close DB
         Utils.closeDB(dbName, adminPort);
       } catch (Exception e) {
