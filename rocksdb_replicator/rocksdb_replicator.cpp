@@ -23,6 +23,7 @@
 #include <string>
 
 #include "rocksdb_replicator/replicator_handler.h"
+#include "rocksdb_replicator/rocksdb_wrapper.h"
 #if __GNUC__ >= 8
 #include "folly/executors/CPUThreadPoolExecutor.h"
 #include "folly/executors/IOThreadPoolExecutor.h"
@@ -97,8 +98,11 @@ ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
                                     const DBRole role,
                                     const folly::SocketAddress& upstream_addr,
                                     ReplicatedDB** replicated_db) {
+  std::shared_ptr<DbWrapper> db_wrapper(
+    new RocksDbWrapper(db_name, std::move(db))
+  );
   std::shared_ptr<ReplicatedDB> new_db(
-    new ReplicatedDB(db_name, std::move(db), executor_.get(),
+    new ReplicatedDB(db_name, db_wrapper, executor_.get(),
                      role, upstream_addr, &client_pool_));
 
   if (!db_map_.add(db_name, new_db)) {
