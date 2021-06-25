@@ -165,7 +165,7 @@ import java.util.stream.Collectors;
  */
 
 public class ConfigGenerator extends RoutingTableProvider implements CustomCodeCallbackHandler,
-                                                                     Closeable {
+                                                                     ConfigGeneratorIface {
 
   private static final Logger LOG = LoggerFactory.getLogger(ConfigGenerator.class);
 
