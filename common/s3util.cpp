@@ -81,8 +81,22 @@ namespace {
 
 namespace common {
 
-std::mutex S3Util::counter_mutex_;
-std::uint32_t S3Util::instance_counter_(0);
+std::atomic<size_t> Initialize::mCount(0);
+Initialize::Initialize() {
+  const size_t origCount = mCount++;
+  if (origCount == 0) {
+    Aws::InitAPI(mOptions);
+  }
+}
+
+Initialize::~Initialize(){
+  const size_t newCount = --mCount;
+  if (newCount == 0) {
+    Aws::ShutdownAPI(mOptions);
+  }
+}
+
+
 const uint32_t kPageSize = getpagesize();
 
 DirectIOWritableFile::DirectIOWritableFile(const string& file_path)
@@ -491,6 +505,126 @@ shared_ptr<S3Util> S3Util::BuildS3Util(
   SDKOptions options;
   return std::shared_ptr<S3Util>(
       new S3Util(bucket, aws_config, options, read_ratelimit_mb, write_ratelimit_mb));
+}
+
+
+S3Concurrent::S3Concurrent(const string &bucket, const int upload_MBps)
+  : bucket_(bucket),
+    upload_MBps_(upload_MBps),
+    executor_(2),  // n_threads
+    transfer_config_(&executor_) {
+
+  const uint64_t MiB = 1024*1024;
+  const uint64_t max_heap_size = 400 * MiB;
+  const uint64_t buffer_size = 25 * MiB;
+  int max_connections = 16; // upper limit, good for 10Gbps.
+
+  // throttle concurrency according to desired rate.
+  // 2 threads allows for some file interleaving.
+  // approx 70 MB/sec speed per connection.
+  if (upload_MBps_ != 0) {
+    max_connections = std::min(max_connections, std::max(1, (int)(upload_MBps_/70)));
+  }
+  LOG(INFO) << "S3Concurrent() upload_MBps: " << upload_MBps_
+            << " max_connections: " << max_connections
+            << " max_heap_size MiB: " << max_heap_size / MiB
+            << " buffer_size MiB: " << buffer_size / MiB;
+  int socket_timeout_ms = 3000;
+  client_config_.connectTimeoutMs = socket_timeout_ms;
+  client_config_.requestTimeoutMs = socket_timeout_ms;
+  client_config_.maxConnections = max_connections;
+  client_config_.region = "us-east-1";
+
+  if(s3_client_)
+    s3_client_.reset();
+  s3_client_ = std::make_shared<Aws::S3::S3Client>(client_config_);
+  transfer_config_.s3Client = s3_client_;
+  transfer_config_.transferBufferMaxHeapSize = max_heap_size;
+  transfer_config_.bufferSize = buffer_size;
+  transfer_config_.transferInitiatedCallback =
+    [](const Aws::Transfer::TransferManager*,
+       const std::shared_ptr<const Aws::Transfer::TransferHandle>& th) {
+      LOG(INFO) << "Transfer Status = " << static_cast<int>(th->GetStatus())
+                << ", File Path: " << th->GetTargetFilePath() << "\n";
+    };
+
+  transfer_config_.errorCallback =
+    [](const Aws::Transfer::TransferManager*,
+       const std::shared_ptr<const Aws::Transfer::TransferHandle>& th,
+       const Aws::Client::AWSError<Aws::S3::S3Errors>& error) {
+      LOG(ERROR)
+        << "Failed to download file. s3 bucket: "  << th->GetBucketName()
+        << ", s3 key: " << th->GetKey()
+        << ", target_path: " << th->GetTargetFilePath()
+        << ", error: " << th->GetLastError().GetMessage();
+    };
+  if(context_)
+    context_.reset();
+  context_ = Aws::MakeShared<Aws::Client::AsyncCallerContext>("upload");
+  if(transfer_manager_)
+    transfer_manager_.reset();
+  transfer_manager_ = Aws::Transfer::TransferManager::Create(transfer_config_);
+}
+
+S3Concurrent::~S3Concurrent() {
+}
+
+bool S3Concurrent::enqueuePutObject(const string& key, const string& local_path,
+                                    const string& sync_group_id){
+  LOG(INFO) << "enqueuePutObject " << local_path << " to " << key;
+  {
+    std::lock_guard<std::mutex> lock(handles_mutex_);
+    auto sync_collection_ptr = handles_.find(sync_group_id);
+    if (sync_collection_ptr == handles_.end()) {
+      handles_[sync_group_id] = vector<std::shared_ptr<Aws::Transfer::TransferHandle>>();
+    }
+    handles_[sync_group_id].push_back(
+        std::move(transfer_manager_->UploadFile(local_path,
+                                                bucket_,
+                                                key,
+                                                "application/octet-stream",
+                                                Aws::Map<Aws::String, Aws::String>(),
+                                                context_)));
+  }
+  return true;
+}
+
+bool S3Concurrent::Sync(const string&sync_group_id) {
+  uint64_t num_files_transferred = 0;
+  uint64_t num_bytes_transferred = 0;
+  uint64_t num_failures = 0;
+  vector<std::shared_ptr<Aws::Transfer::TransferHandle>> sync_group;
+  {
+    std::lock_guard<std::mutex> lock(handles_mutex_);
+    auto sync_group_ptr = handles_.find(sync_group_id);
+    if (sync_group_ptr == handles_.end()) {
+      return true;
+    }
+    sync_group.swap(sync_group_ptr->second);
+    handles_.erase(sync_group_ptr);
+  }
+
+  for(auto &h: sync_group){
+    h->WaitUntilFinished();
+    if (h->GetStatus() == Aws::Transfer::TransferStatus::COMPLETED) {
+      //LOG(INFO) << "S3Concurrent transfer success: " << h->GetTargetFilePath();
+      Stats::get()->Incr(kS3PutObject);
+      num_bytes_transferred += h->GetBytesTransferred();
+      num_files_transferred ++;
+    } else {
+      LOG(ERROR) << "S3Concurrent transfer fail: " << h->GetTargetFilePath();
+      failures_.push_back(h);
+      num_failures++;
+      LOG(ERROR)
+        << "Error happened when uploading files from checkpoint to S3: "
+        << h->GetLastError();
+    }
+  }
+
+  LOG(INFO) << "S3Concurrent sync: " << sync_group_id
+            << " transferred: " << num_files_transferred
+            << " failures: " << num_failures;
+  return num_files_transferred == sync_group.size();
 }
 
 }  // namespace common
