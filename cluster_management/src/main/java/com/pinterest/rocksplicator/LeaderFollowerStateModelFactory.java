@@ -188,7 +188,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           getLockPath(cluster, resourceName, partitionName));
       this.leaderEventsLogger = leaderEventsLogger;
       this.partitionStateUpdater = partitionStateUpdater;
-      LOG.error("prem: LeaderFollowerStateModel has been instantiated [" + partitionName + "]");
+      LOG.error("LeaderFollowerStateModel has been instantiated [" + partitionName + "]");
     }
 
     /**
@@ -202,7 +202,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
 
       Utils.logTransitionMessage(message);
       final String dbName = Utils.getDbName(partitionName);
-      PartitionStateManager stateManager = new PartitionStateManager(cluster,resourceName, partitionName, zkClient);
+      PartitionStateManager stateManager = new PartitionStateManager(cluster, resourceName, partitionName, zkClient);
 
       try (Locker locker = new Locker(partitionMutex)) {
         HelixAdmin admin = context.getManager().getClusterManagmentTool();
@@ -281,18 +281,18 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           }
         }
 
-        LOG.error("prem: local.seq:" + localSeq + " replica:[" + numActiveReplicas + "/"+ totalReplicas + "]");
+        LOG.error("local.seq:" + localSeq + " replica:[" + numActiveReplicas + "/"+ totalReplicas + "]");
         // 3-Node failure case
-        if (localSeq <= 0 || numActiveReplicas < totalReplicas/2) {
+        if (localSeq <= 0) {
           PartitionState lastState = stateManager.getState();
           if (!lastState.isValid()) {
-            LOG.error("prem:Invalid last state [part: " + partitionName + "] State:" + lastState.toString());
+            LOG.error("Invalid last state [part: " + partitionName + "] State:" + lastState.toString());
           } else {
             double tolerance = 0.5; 
             if (localSeq >= (tolerance * lastState.seqNum)) {
-              LOG.error(String.format("prem:OK [last.seq:%d curr.seq:%d]", lastState.seqNum, localSeq));
+              LOG.error(String.format("OK [last.seq:%d curr.seq:%d]", lastState.seqNum, localSeq));
             } else {
-              String errorString = String.format("prem:Cannot Transition [last.seq:%d curr.seq:%d]", lastState.seqNum, localSeq);
+              String errorString = String.format("Cannot Transition [last.seq:%d curr.seq:%d]", lastState.seqNum, localSeq);
               LOG.error(errorString);
               throw new RuntimeException(errorString);
             }

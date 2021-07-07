@@ -52,7 +52,7 @@ public class PartitionState {
 
   @Override
   public String toString() {
-    return String.format("[seq.num=%d lastmod=%d]", seqNum, lastMod);
+    return String.format("[seqnum=%d lastmod=%d]", seqNum, lastMod);
   }
 
   public String serialize() {
@@ -70,10 +70,10 @@ public class PartitionState {
       JSONParser parser = new JSONParser();
       try {
           JSONObject obj = (JSONObject) parser.parse(serializedData);
-          seqNum = ((Long)obj.get("seqnum")).intValue();
-          lastMod = ((Long)obj.get("lastmod")).intValue();
+          seqNum = ((Long)obj.get("seqnum")).longValue();
+          lastMod = ((Long)obj.get("lastmod")).longValue();
       } catch (ParseException e) {
-        LOG.error("prem: parse ex" + e );
+        LOG.error("json parse ex" + e );
         e.printStackTrace();
       }
     }

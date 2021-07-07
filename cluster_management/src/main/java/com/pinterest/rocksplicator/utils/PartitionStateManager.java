@@ -50,13 +50,13 @@ public class PartitionStateManager {
     }
 
     public String getStatePath() {
-      return String.format("/pstate/%s/%s/%s",cluster,resourceName,partitionName);
+      return String.format("/partitionstate/%s/%s/%s",cluster,resourceName,partitionName);
     }
 
     public PartitionState getState()  throws Exception {
       final int max_retries = 3;
       final AtomicInteger retryCount = new AtomicInteger(0);
-      LOG.error("prem:get.state : " + oldState.toString() );
+      LOG.error("get.state : " + oldState.toString() );
       String statePath = getStatePath();
       return RetryLoop.callWithRetry(zkClient.getZookeeperClient(), new Callable<PartitionState>() {
           @Override
@@ -72,12 +72,12 @@ public class PartitionStateManager {
               return oldState;
 
             } catch (KeeperException.NoNodeException ex) {
-              LOG.error(String.format("Path (%s) doesn't exist yet: ", statePath));
               // By throwing the OperationTimeoutException, we force the retry, as NoNode exception is
               // not retryable.
               if (retryCount.get() < max_retries) {
                 throw new KeeperException.OperationTimeoutException();
               } else {
+                LOG.error(String.format("Path (%s) doesn't exist yet: ", statePath));
                 oldState.clear();
                 LOG.error("unable to fetch state: " + oldState);
                 return oldState;
@@ -95,7 +95,7 @@ public class PartitionStateManager {
     }
 
     public boolean saveState(PartitionState state)  throws Exception {
-      LOG.error("prem:save.state : " + state + " = " + state.serialize());
+      LOG.error("save.state : " + state + " = " + state.serialize());
       final int max_retries = 3;
       final AtomicInteger retryCount = new AtomicInteger(0);
       byte[] bytes = state.serialize().getBytes();
@@ -105,7 +105,7 @@ public class PartitionStateManager {
           public Boolean call() throws Exception {
             retryCount.incrementAndGet();
             try {
-              LOG.error(String.format("Attempt (%d) to save state: %s", retryCount.get(), statePath));
+              // LOG.error(String.format("Attempt (%d) to save state: %s", retryCount.get(), statePath));
               if (zkClient.checkExists().forPath(statePath) == null) {
                   zkClient.create().creatingParentsIfNeeded().forPath(statePath, bytes);
                 } else {
@@ -115,12 +115,13 @@ public class PartitionStateManager {
               return true;
 
             } catch (KeeperException.NoNodeException ex) {
-              LOG.error(String.format("Path (%s) doesn't exist yet", statePath));
+              // LOG.error(String.format("Path (%s) doesn't exist yet", statePath));
               // By throwing the OperationTimeoutException, we force the retry, as NoNode exception is
               // not retryable.
               if (retryCount.get() < max_retries) {
                 throw new KeeperException.OperationTimeoutException();
               } else {
+                  LOG.error(String.format("Path (%s) doesn't exist yet", statePath));
                   return false;
               }
             }
