@@ -14,7 +14,7 @@ public:
   rocksdb::Status GetUpdatesFromLeader(
       rocksdb::SequenceNumber seq_number,
       std::unique_ptr<rocksdb::TransactionLogIterator>* iter) override;
-  bool HandleReplicateResponse(Update update) override;
+  bool HandleReplicateResponse(Update* update) override;
   RocksDbWrapper(const std::string& db_name, std::shared_ptr<rocksdb::DB> db);
 
 private:

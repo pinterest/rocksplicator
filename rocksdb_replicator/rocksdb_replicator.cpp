@@ -102,7 +102,7 @@ ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
     new RocksDbWrapper(db_name, std::move(db))
   );
   std::shared_ptr<ReplicatedDB> new_db(
-    new ReplicatedDB(db_name, db_wrapper, executor_.get(),
+    new ReplicatedDB(db_name, std::move(db_wrapper), executor_.get(),
                      role, upstream_addr, &client_pool_));
 
   if (!db_map_.add(db_name, new_db)) {

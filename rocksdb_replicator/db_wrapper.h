@@ -11,6 +11,6 @@ public:
       rocksdb::SequenceNumber seq_number,
       std::unique_ptr<rocksdb::TransactionLogIterator>* iter) = 0;
   virtual uint64_t LatestSequenceNumber() = 0;
-  virtual bool HandleReplicateResponse(Update update) = 0;
+  virtual bool HandleReplicateResponse(Update* update) = 0;
 };
 }  // namespace replicator

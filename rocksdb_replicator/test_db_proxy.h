@@ -13,7 +13,7 @@ public:
   rocksdb::Status GetUpdatesFromLeader(
       rocksdb::SequenceNumber seq_number,
       std::unique_ptr<rocksdb::TransactionLogIterator>* iter) override;
-  bool HandleReplicateResponse(Update update) override;
+  bool HandleReplicateResponse(Update* update) override;
   TestDBProxy(const std::string& db_name, rocksdb::SequenceNumber seq_no = 0);
 
 private:

@@ -10,14 +10,14 @@ rocksdb::Status RocksDbWrapper::GetUpdatesFromLeader(
     rocksdb::SequenceNumber seq_number, std::unique_ptr<rocksdb::TransactionLogIterator>* iter) {
   return db_->GetUpdatesSince(seq_number, iter);
 }
-bool RocksDbWrapper::HandleReplicateResponse(Update update) {
+bool RocksDbWrapper::HandleReplicateResponse(Update* update) {
   // Is this bad for perf?
   // If so pass in the IOBuf returned by coalesce separately
-  auto byteRange = update.raw_data.coalesce();
+  auto byteRange = update->raw_data.coalesce();
   rocksdb::WriteBatch write_batch(
       std::string(reinterpret_cast<const char*>(byteRange.data()), byteRange.size()));
   write_batch.PutLogData(
-      rocksdb::Slice(reinterpret_cast<const char*>(&update.timestamp), sizeof(update.timestamp)));
+      rocksdb::Slice(reinterpret_cast<const char*>(&update->timestamp), sizeof(update->timestamp)));
 
   auto status = db_->Write(write_options_, &write_batch);
   bool ret_status = status.ok();

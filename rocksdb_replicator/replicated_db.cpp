@@ -128,7 +128,7 @@ RocksDBReplicator::ReplicatedDB::ReplicatedDB(
     const folly::SocketAddress& upstream_addr,
     common::ThriftClientPool<ReplicatorAsyncClient>* client_pool)
     : db_name_(db_name)
-    , db_wrapper_(std::move(db_wrapper_))
+    , db_wrapper_(std::move(db_wrapper))
     , executor_(executor)
     , role_(role)
     , upstream_addr_(upstream_addr)
@@ -242,7 +242,7 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
 
             auto byteRange = update.raw_data.coalesce();
             write_bytes += byteRange.size();
-            if (!db->db_wrapper_->HandleReplicateResponse(update)) {
+            if (!db->db_wrapper_->HandleReplicateResponse(&update)) {
               delay_next_pull = true;
               break;
             }
