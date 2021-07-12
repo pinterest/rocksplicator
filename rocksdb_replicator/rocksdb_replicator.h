@@ -32,6 +32,7 @@
 #include "rocksdb_replicator/fast_read_map.h"
 #include "rocksdb_replicator/max_number_box.h"
 #include "rocksdb_replicator/non_blocking_condition_variable.h"
+#include "rocksdb_replicator/db_wrapper.h"
 #include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 #include "folly/SocketAddress.h"
 #include "rocksdb/db.h"
@@ -104,7 +105,7 @@ class RocksDBReplicator {
 
    private:
     ReplicatedDB(const std::string& db_name,
-                 std::shared_ptr<rocksdb::DB> db,
+                 std::shared_ptr<DbWrapper> db_wrapper,
                  folly::Executor* executor,
                  const DBRole role,
                  const folly::SocketAddress& upstream_addr
@@ -125,7 +126,6 @@ class RocksDBReplicator {
     void cleanIdleCachedIters();
 
     const std::string db_name_;
-    std::shared_ptr<rocksdb::DB> db_;
     folly::Executor* const executor_;
     const DBRole role_;
     folly::SocketAddress upstream_addr_;
@@ -139,6 +139,7 @@ class RocksDBReplicator {
                 uint64_t>> cached_iters_;
     std::mutex cached_iters_mutex_;
     detail::MaxNumberBox max_seq_no_acked_;
+    std::shared_ptr<replicator::DbWrapper> db_wrapper_;
 
     friend class ReplicatorHandler;
     friend class RocksDBReplicator;

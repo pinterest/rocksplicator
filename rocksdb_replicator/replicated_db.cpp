@@ -87,7 +87,7 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
   updates->PutLogData(rocksdb::Slice(reinterpret_cast<const char*>(&ms),
                                      sizeof(ms)));
   auto start = GetCurrentTimeMs();
-  auto status = db_->Write(options, updates);
+  auto status = db_wrapper_->WriteToLeader(options, updates);
   auto end = GetCurrentTimeMs();
   logMetric(kReplicatorWriteMs, start < end ? end - start : 0, db_name_);
   if (status.ok()) {
@@ -95,7 +95,7 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
 
     // TODO(bol): change it once RocksDB guarantees the sequence number is in
     // the write batch.
-    auto cur_seq_no = db_->GetLatestSequenceNumber();
+    auto cur_seq_no = db_wrapper_->LatestSequenceNumber();
     if (seq_no) {
       *seq_no = cur_seq_no;
     }
@@ -122,13 +122,13 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
 
 RocksDBReplicator::ReplicatedDB::ReplicatedDB(
     const std::string& db_name,
-    std::shared_ptr<rocksdb::DB> db,
+    std::shared_ptr<DbWrapper> db_wrapper,
     folly::Executor* executor,
     const DBRole role,
     const folly::SocketAddress& upstream_addr,
     common::ThriftClientPool<ReplicatorAsyncClient>* client_pool)
     : db_name_(db_name)
-    , db_(std::move(db))
+    , db_wrapper_(std::move(db_wrapper))
     , executor_(executor)
     , role_(role)
     , upstream_addr_(upstream_addr)
@@ -190,7 +190,7 @@ void RocksDBReplicator::ReplicatedDB::resetUpstream() {
 void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
   CHECK(role_ == DBRole::SLAVE);
   ReplicateRequest req;
-  req.seq_no = db_->GetLatestSequenceNumber();
+  req.seq_no = db_wrapper_->LatestSequenceNumber();
   req.db_name = db_name_;
   req.max_wait_ms = FLAGS_replicator_max_server_wait_time_ms;
   req.max_updates = FLAGS_replicator_max_updates_per_response;
@@ -242,17 +242,7 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
 
             auto byteRange = update.raw_data.coalesce();
             write_bytes += byteRange.size();
-            rocksdb::WriteBatch write_batch(
-                std::string(reinterpret_cast<const char*>(byteRange.data()),
-                            byteRange.size()));
-            write_batch.PutLogData(
-              rocksdb::Slice(reinterpret_cast<const char*>(&update.timestamp),
-                             sizeof(update.timestamp)));
-
-            auto status = db->db_->Write(db->write_options_, &write_batch);
-            if (!status.ok()) {
-              LOG(ERROR) << "Failed to apply updates to SLAVE " << db->db_name_
-                         << " " << status.ToString();
+            if (!db->db_wrapper_->HandleReplicateResponse(&update)) {
               delay_next_pull = true;
               break;
             }
@@ -297,7 +287,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
   auto seq_no = static_cast<rocksdb::SequenceNumber>(request->seq_no);
 
   // Inverse of predicate below: if requested sequence number is HIGHER than latest sequence number on leader, emit a stat)
-  auto leaderSeqNum = db->db_->GetLatestSequenceNumber();
+  auto leaderSeqNum = db->db_wrapper_->LatestSequenceNumber();
   if (FLAGS_emit_stat_for_leader_behind && leaderSeqNum < seq_no) {
     logMetric(kReplicatorLeaderSequenceNumbersBehind, seq_no - leaderSeqNum, db ->db_name_);
   }
@@ -341,7 +331,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
         bool use_cached_iter = (iter != nullptr);
         if (!use_cached_iter) {
           auto start = GetCurrentTimeMs();
-          status = db->db_->GetUpdatesSince(expected_seq_no, &iter);
+          status = db->db_wrapper_->GetUpdatesFromLeader(expected_seq_no, &iter);
           auto end = GetCurrentTimeMs();
           logMetric(kReplicatorGetUpdatesSinceMs, start < end ? end - start : 0,
                     db->db_name_);
@@ -393,7 +383,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
       },
       // Predicate
       [db = std::move(db), seq_no] {
-        return db->db_->GetLatestSequenceNumber() > seq_no;
+        return db->db_wrapper_->LatestSequenceNumber() > seq_no;
       },
       // timeout
       timeout);

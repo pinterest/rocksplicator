@@ -67,7 +67,7 @@ DECLARE_int32(rocksdb_replicator_port);
 
 bool notFinished(const vector<RocksDBReplicator::ReplicatedDB*>& dbs) {
   for (auto& db : dbs) {
-    if (static_cast<int64_t>(db->db_->GetLatestSequenceNumber()) <
+    if (static_cast<int64_t>(db->db_wrapper_->LatestSequenceNumber()) <
         FLAGS_num_write_threads * FLAGS_num_keys_per_shard_thread) {
       return true;
     }
@@ -166,6 +166,9 @@ int main(int argc, char** argv) {
     LOG(INFO) << common::Stats::get()->DumpStatsAsText();
 
     if (FLAGS_verify_data) {
+      LOG(INFO) << "Not suppoorted right now";
+      LOG(INFO) << "If this is needed, it will require a rewrite of line 184";
+      /*
       LOG(INFO) << "Starting verifying threads...";
       vector<thread> threads(FLAGS_num_write_threads);
       for (int i = 0; i < FLAGS_num_write_threads; ++i) {
@@ -178,8 +181,8 @@ int main(int argc, char** argv) {
                 to_string(n);
               for (auto db : dbs) {
                 string value;
-                auto status = db->db_->Get(options, key, &value);
-                CHECK(status.ok()) << key << " " << status.ToString();
+                // auto status = db->db_->Get(options, key, &value);
+                // CHECK(status.ok()) << key << " " << status.ToString();
                 CHECK(value == dummy_data) << key << " " << value.size() << " "
                                            << dummy_data.size();
               }
@@ -190,9 +193,10 @@ int main(int argc, char** argv) {
       for (auto& thread : threads) {
         thread.join();
       }
+          */
 
       for (auto db : dbs) {
-        CHECK(static_cast<int64_t>(db->db_->GetLatestSequenceNumber()) ==
+        CHECK(static_cast<int64_t>(db->db_wrapper_->LatestSequenceNumber()) ==
               FLAGS_num_write_threads * FLAGS_num_keys_per_shard_thread);
       }
     }
