@@ -14,12 +14,7 @@
 
 #pragma once
 
-#include <string>
-
 #include "cdc_admin/cdc_application_db_manager.h"
-#include "folly/SocketAddress.h"
-#include "rocksdb_replicator/db_wrapper.h"
-#include "rocksdb_replicator/rocksdb_replicator.h"
 
 namespace cdc_admin {
 
@@ -52,11 +47,10 @@ public:
 
 private:
   const std::string db_name_;
-
-  std::unique_ptr<folly::SocketAddress> upstream_addr_;
-  const replicator::DBRole role_;
-  replicator::RocksDBReplicator::ReplicatedDB* replicated_db_;
   std::shared_ptr<replicator::DbWrapper> db_;
+  const replicator::DBRole role_;
+  std::unique_ptr<folly::SocketAddress> upstream_addr_;
+  replicator::RocksDBReplicator::ReplicatedDB* replicated_db_;
 
   friend class CDCApplicationDBManager<CDCApplicationDB, replicator::DbWrapper>;
 };

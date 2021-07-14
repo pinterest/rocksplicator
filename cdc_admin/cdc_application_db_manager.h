@@ -14,12 +14,9 @@
 
 #pragma once
 
-#include <map>
 #include <shared_mutex>
-#include <string>
 
 #include "common/segment_utils.h"
-#include "rocksdb/db.h"
 #include "rocksdb_admin/application_db.h"
 
 namespace cdc_admin {

@@ -14,13 +14,6 @@
 
 #include "cdc_admin/cdc_application_db.h"
 
-#include <string>
-
-#include "common/stats/stats.h"
-#include "common/timer.h"
-#include "folly/Conv.h"
-#include "rocksdb/convenience.h"
-
 namespace cdc_admin {
 
 CDCApplicationDB::CDCApplicationDB(const std::string& db_name,

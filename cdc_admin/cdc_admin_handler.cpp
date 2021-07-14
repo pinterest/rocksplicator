@@ -18,61 +18,12 @@
 
 #include "cdc_admin/cdc_admin_handler.h"
 
-#include <chrono>
-#include <map>
-#include <memory>
-#include <mutex>
-#include <string>
-#include <thread>
-#include <unordered_set>
-#include <vector>
-
-#include "boost/filesystem.hpp"
-#include "common/file_util.h"
-#include "common/network_util.h"
-#include "common/rocksdb_glogger/rocksdb_glogger.h"
-#include "common/segment_utils.h"
-#include "common/stats/stats.h"
-#include "common/thrift_router.h"
-#include "common/timer.h"
-#include "common/timeutil.h"
-#include "folly/FileUtil.h"
-#include "folly/MoveWrapper.h"
-#include "folly/ScopeGuard.h"
-#include "folly/String.h"
-#include "folly/futures/Future.h"
-#include "rocksdb/env.h"
-#include "rocksdb/options.h"
-#include "rocksdb/utilities/backupable_db.h"
-#include "rocksdb/utilities/checkpoint.h"
-#include "rocksdb_admin/utils.h"
-#include "rocksdb_replicator/rocksdb_replicator.h"
 #include "rocksdb_replicator/test_db_proxy.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
-#if __GNUC__ >= 8
-#include "folly/executors/CPUThreadPoolExecutor.h"
-#include "folly/system/ThreadName.h"
-#else
-#include "wangle/concurrent/CPUThreadPoolExecutor.h"
-#endif
 
 DEFINE_string(rocksdb_dir, "/tmp/", "The dir for local rocksdb instances");
 
-DECLARE_int32(port);
-
-DEFINE_string(shard_config_path, "", "Local path of file storing shard mapping for Aperture");
-
 DECLARE_int32(rocksdb_replicator_port);
-
-#if __GNUC__ >= 8
-using folly::CPUThreadPoolExecutor;
-using folly::LifoSemMPMCQueue;
-using folly::QueueBehaviorIfFull;
-#else
-using wangle::CPUThreadPoolExecutor;
-using wangle::LifoSemMPMCQueue;
-using wangle::QueueBehaviorIfFull;
-#endif
 
 namespace {
 

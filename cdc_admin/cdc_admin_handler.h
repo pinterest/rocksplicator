@@ -19,26 +19,14 @@
 
 #pragma once
 
-#include <atomic>
-#include <functional>
-#include <memory>
-#include <mutex>
-#include <string>
-#include <thread>
-#include <unordered_set>
-
 #include "cdc_admin/cdc_application_db.h"
-#include "cdc_admin/cdc_application_db_manager.h"
 #include "common/object_lock.h"
-#include "common/s3util.h"
-#include "folly/SocketAddress.h"
 #ifdef PINTEREST_INTERNAL
 // NEVER SET THIS UNLESS PINTEREST INTERNAL USAGE.
 #include "schemas/gen-cpp2/Admin.h"
 #else
 #include "cdc_admin/gen-cpp2/CdcAdmin.h"
 #endif
-#include "rocksdb/status.h"
 
 namespace cdc_admin {
 
