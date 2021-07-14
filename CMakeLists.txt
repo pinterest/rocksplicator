@@ -20,6 +20,7 @@ add_subdirectory(googletest)
 
 # Sub-projects
 add_subdirectory(common)
+add_subdirectory(cdc_admin)
 add_subdirectory(examples)
 add_subdirectory(rocksdb_admin)
 add_subdirectory(rocksdb_replicator)
