@@ -16,19 +16,19 @@
 // @author bol (bol@pinterest.com)
 //
 
-
 #include "cdc_admin/cdc_admin_handler.h"
 
 #include <chrono>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_set>
 #include <vector>
-#include <map>
 
 #include "boost/filesystem.hpp"
+#include "common/file_util.h"
 #include "common/identical_name_thread_factory.h"
 #include "common/network_util.h"
 #include "common/rocksdb_env_s3.h"
@@ -38,12 +38,11 @@
 #include "common/thrift_router.h"
 #include "common/timer.h"
 #include "common/timeutil.h"
-#include "common/file_util.h"
-#include "folly/futures/Future.h"
 #include "folly/FileUtil.h"
 #include "folly/MoveWrapper.h"
 #include "folly/ScopeGuard.h"
 #include "folly/String.h"
+#include "folly/futures/Future.h"
 #include "librdkafka/rdkafkacpp.h"
 #include "rocksdb/env.h"
 #include "rocksdb/options.h"
@@ -51,8 +50,8 @@
 #include "rocksdb/utilities/checkpoint.h"
 #include "rocksdb_admin/detail/kafka_broker_file_watcher_manager.h"
 #include "rocksdb_admin/utils.h"
-#include "rocksdb_replicator/test_db_proxy.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
+#include "rocksdb_replicator/test_db_proxy.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
 #if __GNUC__ >= 8
 #include "folly/executors/CPUThreadPoolExecutor.h"
@@ -61,13 +60,11 @@
 #include "wangle/concurrent/CPUThreadPoolExecutor.h"
 #endif
 
-DEFINE_string(rocksdb_dir, "/tmp/",
-              "The dir for local rocksdb instances");
+DEFINE_string(rocksdb_dir, "/tmp/", "The dir for local rocksdb instances");
 
 DECLARE_int32(port);
 
-DEFINE_string(shard_config_path, "",
-             "Local path of file storing shard mapping for Aperture");
+DEFINE_string(shard_config_path, "", "Local path of file storing shard mapping for Aperture");
 
 DECLARE_int32(rocksdb_replicator_port);
 
@@ -91,12 +88,13 @@ rocksdb::DB* OpenMetaDB() {
   options.create_if_missing = true;
   rocksdb::DB* db;
   auto s = rocksdb::DB::Open(options, FLAGS_rocksdb_dir + "meta_db", &db);
-  CHECK(s.ok()) << "Failed to open meta DB" << " with error " << s.ToString();
+  CHECK(s.ok()) << "Failed to open meta DB"
+                << " with error " << s.ToString();
 
   return db;
 }
 
-template<typename T>
+template <typename T>
 void SetException(const std::string& message,
                   const ::cdc_admin::AdminErrorCode code,
                   std::unique_ptr<T>* callback) {
@@ -106,7 +104,7 @@ void SetException(const std::string& message,
   callback->release()->exceptionInThread(std::move(e));
 }
 
-template<typename T>
+template <typename T>
 bool SetAddressOrException(const std::string& ip,
                            const uint16_t port,
                            folly::SocketAddress* addr,
@@ -129,17 +127,12 @@ namespace cdc_admin {
 
 CdcAdminHandler::CdcAdminHandler(
     std::unique_ptr<CDCApplicationDBManager<CDCApplicationDB, replicator::DbWrapper>> db_manager)
-  : db_admin_lock_()
-  , db_manager_(std::move(db_manager))
-  , meta_db_(OpenMetaDB()) {
-}
+    : db_admin_lock_(), db_manager_(std::move(db_manager)), meta_db_(OpenMetaDB()) {}
 
-CdcAdminHandler::~CdcAdminHandler() {
-}
+CdcAdminHandler::~CdcAdminHandler() {}
 
-std::shared_ptr<CDCApplicationDB> CdcAdminHandler::getDB(
-    const std::string& db_name,
-    CDCAdminException* ex) {
+std::shared_ptr<CDCApplicationDB> CdcAdminHandler::getDB(const std::string& db_name,
+                                                         CDCAdminException* ex) {
   std::string err_msg;
   auto db = db_manager_->getDB(db_name, &err_msg);
   if (db == nullptr && ex) {
@@ -150,9 +143,8 @@ std::shared_ptr<CDCApplicationDB> CdcAdminHandler::getDB(
   return db;
 }
 
-std::unique_ptr<replicator::DbWrapper> CdcAdminHandler::removeDB(
-    const std::string& db_name,
-    CDCAdminException* ex) {
+std::unique_ptr<replicator::DbWrapper> CdcAdminHandler::removeDB(const std::string& db_name,
+                                                                 CDCAdminException* ex) {
   std::string err_msg;
   auto db = db_manager_->removeDB(db_name, &err_msg);
   if (db == nullptr && ex) {
@@ -184,11 +176,10 @@ bool CdcAdminHandler::clearMetaData(const std::string& db_name) {
   return s.ok();
 }
 
-bool CdcAdminHandler::writeMetaData(
-    const std::string& db_name,
-    const std::string& s3_bucket,
-    const std::string& s3_path,
-    const int64_t last_kafka_msg_timestamp_ms) {
+bool CdcAdminHandler::writeMetaData(const std::string& db_name,
+                                    const std::string& s3_bucket,
+                                    const std::string& s3_path,
+                                    const int64_t last_kafka_msg_timestamp_ms) {
   DBMetaData meta;
   meta.db_name = db_name;
   meta.set_s3_bucket(s3_bucket);
@@ -205,9 +196,8 @@ bool CdcAdminHandler::writeMetaData(
 }
 
 void CdcAdminHandler::async_tm_addDB(
-      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-          AddDBResponse>>> callback,
-      std::unique_ptr<AddDBRequest> request) {
+    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<AddDBResponse>>> callback,
+    std::unique_ptr<AddDBRequest> request) {
   db_admin_lock_.Lock(request->db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
@@ -222,10 +212,8 @@ void CdcAdminHandler::async_tm_addDB(
 
   // Get the upstream for the db to be added
   auto upstream_addr = std::make_unique<folly::SocketAddress>();
-  if (!SetAddressOrException(request->upstream_ip,
-                             FLAGS_rocksdb_replicator_port,
-                             upstream_addr.get(),
-                             &callback)) {
+  if (!SetAddressOrException(
+          request->upstream_ip, FLAGS_rocksdb_replicator_port, upstream_addr.get(), &callback)) {
     return;
   }
 
@@ -255,8 +243,7 @@ void CdcAdminHandler::async_tm_addDB(
     LOG(INFO) << "No previous meta exist, write a fresh meta to metadb for db: "
               << request->db_name;
     if (!writeMetaData(request->db_name, "", "")) {
-      std::string errMsg =
-          "AddDB failed to write initial DBMetaData for " + request->db_name;
+      std::string errMsg = "AddDB failed to write initial DBMetaData for " + request->db_name;
       SetException(errMsg, cdc_admin::AdminErrorCode::DB_ADMIN_ERROR, &callback);
       LOG(ERROR) << errMsg;
       return;
@@ -264,29 +251,26 @@ void CdcAdminHandler::async_tm_addDB(
   }
 
   // TODO(indy): Read sequence # from kafka
-  std::unique_ptr<replicator::TestDBProxy> db_wrapper = std::make_unique<replicator::TestDBProxy>(request->db_name, 0);
-  if (!db_manager_->addDB(request->db_name,
-                          std::move(db_wrapper),
-                          role, std::move(upstream_addr),
-                          &err_msg)) {
+  std::unique_ptr<replicator::TestDBProxy> db_wrapper =
+      std::make_unique<replicator::TestDBProxy>(request->db_name, 0);
+  if (!db_manager_->addDB(
+          request->db_name, std::move(db_wrapper), role, std::move(upstream_addr), &err_msg)) {
     e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
     e.message = std::move(err_msg);
     callback.release()->exceptionInThread(std::move(e));
     return;
   }
-  // :+1: 
+  // :+1:
   callback->result(AddDBResponse());
 }
 
 void CdcAdminHandler::async_tm_ping(
     std::unique_ptr<apache::thrift::HandlerCallback<void>> callback) {
-    callback->done();
+  callback->done();
 }
 
-
 void CdcAdminHandler::async_tm_checkDB(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      CheckDBResponse>>> callback,
+    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<CheckDBResponse>>> callback,
     std::unique_ptr<CheckDBRequest> request) {
   CDCAdminException e;
   auto db = getDB(request->db_name, &e);
@@ -303,8 +287,7 @@ void CdcAdminHandler::async_tm_checkDB(
 }
 
 void CdcAdminHandler::async_tm_closeDB(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      CloseDBResponse>>> callback,
+    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<CloseDBResponse>>> callback,
     std::unique_ptr<CloseDBRequest> request) {
   db_admin_lock_.Lock(request->db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
@@ -319,8 +302,8 @@ void CdcAdminHandler::async_tm_closeDB(
 }
 
 void CdcAdminHandler::async_tm_changeDBRoleAndUpStream(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      ChangeDBRoleAndUpstreamResponse>>> callback,
+    std::unique_ptr<
+        apache::thrift::HandlerCallback<std::unique_ptr<ChangeDBRoleAndUpstreamResponse>>> callback,
     std::unique_ptr<ChangeDBRoleAndUpstreamRequest> request) {
   db_admin_lock_.Lock(request->db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
@@ -339,14 +322,11 @@ void CdcAdminHandler::async_tm_changeDBRoleAndUpStream(
   }
 
   std::unique_ptr<folly::SocketAddress> upstream_addr(nullptr);
-  if (new_role == replicator::DBRole::SLAVE &&
-      request->__isset.upstream_ip &&
+  if (new_role == replicator::DBRole::SLAVE && request->__isset.upstream_ip &&
       request->__isset.upstream_port) {
     upstream_addr = std::make_unique<folly::SocketAddress>();
-    if (!SetAddressOrException(request->upstream_ip,
-                               FLAGS_rocksdb_replicator_port,
-                               upstream_addr.get(),
-                               &callback)) {
+    if (!SetAddressOrException(
+            request->upstream_ip, FLAGS_rocksdb_replicator_port, upstream_addr.get(), &callback)) {
       return;
     }
   }
@@ -358,8 +338,8 @@ void CdcAdminHandler::async_tm_changeDBRoleAndUpStream(
   }
 
   std::string err_msg;
-  if (!db_manager_->addDB(request->db_name, std::move(db), new_role,
-                          std::move(upstream_addr), &err_msg)) {
+  if (!db_manager_->addDB(
+          request->db_name, std::move(db), new_role, std::move(upstream_addr), &err_msg)) {
     e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
     e.message = std::move(err_msg);
     callback.release()->exceptionInThread(std::move(e));
@@ -370,8 +350,8 @@ void CdcAdminHandler::async_tm_changeDBRoleAndUpStream(
 }
 
 void CdcAdminHandler::async_tm_getSequenceNumber(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
-      GetSequenceNumberResponse>>> callback,
+    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<GetSequenceNumberResponse>>>
+        callback,
     std::unique_ptr<GetSequenceNumberRequest> request) {
   CDCAdminException e;
   std::shared_ptr<CDCApplicationDB> db = getDB(request->db_name, &e);
@@ -384,12 +364,8 @@ void CdcAdminHandler::async_tm_getSequenceNumber(
   callback->result(response);
 }
 
-std::string CdcAdminHandler::DumpDBStatsAsText() const {
-  return db_manager_->DumpDBStatsAsText();
-}
+std::string CdcAdminHandler::DumpDBStatsAsText() const { return db_manager_->DumpDBStatsAsText(); }
 
-std::vector<std::string> CdcAdminHandler::getAllDBNames() {
-    return db_manager_->getAllDBNames();
-}
+std::vector<std::string> CdcAdminHandler::getAllDBNames() { return db_manager_->getAllDBNames(); }
 
 }  // namespace cdc_admin

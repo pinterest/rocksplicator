@@ -12,7 +12,6 @@
 /// See the License for the specific language governing permissions and
 /// limitations under the License.
 
-
 #pragma once
 
 #include <map>
@@ -25,16 +24,17 @@
 
 namespace cdc_admin {
 
-template <typename ApplicationDBType, typename UnderlyingDbType> class CDCApplicationDBManager;
+template <typename ApplicationDBType, typename UnderlyingDbType>
+class CDCApplicationDBManager;
 
 const int kRemoveDBRefWaitMilliSec = 200;
 // This class manages application rocksdb instances, it offers functionality to
 // add/remove/get application rocksdb instance.
 // Note: this class is thread-safe.
-template <typename ApplicationDBType, typename UnderlyingDbType> class CDCApplicationDBManager{
- public:
-  CDCApplicationDBManager(): dbs_()
-    , dbs_lock_() {}
+template <typename ApplicationDBType, typename UnderlyingDbType>
+class CDCApplicationDBManager {
+public:
+  CDCApplicationDBManager() : dbs_(), dbs_lock_() {}
 
   // Add a db instance into db manager.
   // db_name:        (IN) Name of the associated underlying db instance
@@ -49,21 +49,21 @@ template <typename ApplicationDBType, typename UnderlyingDbType> class CDCApplic
              replicator::DBRole role,
              std::unique_ptr<folly::SocketAddress> upstream_addr,
              std::string* error_message) {
-  std::unique_lock<std::shared_mutex> lock(dbs_lock_);
-  if (dbs_.find(db_name) != dbs_.end()) {
-    if (error_message) {
-      *error_message = db_name + " has already been added";
+    std::unique_lock<std::shared_mutex> lock(dbs_lock_);
+    if (dbs_.find(db_name) != dbs_.end()) {
+      if (error_message) {
+        *error_message = db_name + " has already been added";
+      }
+      return false;
     }
-    return false;
-  }
-  auto underlying_db_ptr = std::shared_ptr<UnderlyingDbType>(db.release(),
-    [](UnderlyingDbType* db){});
-  auto application_db_ptr = std::make_shared<ApplicationDBType>(db_name,
-    std::move(underlying_db_ptr), role, std::move(upstream_addr));
+    auto underlying_db_ptr =
+        std::shared_ptr<UnderlyingDbType>(db.release(), [](UnderlyingDbType* db) {});
+    auto application_db_ptr = std::make_shared<ApplicationDBType>(
+        db_name, std::move(underlying_db_ptr), role, std::move(upstream_addr));
 
-  dbs_.emplace(db_name, std::move(application_db_ptr));
-  return true;
-}
+    dbs_.emplace(db_name, std::move(application_db_ptr));
+    return true;
+  }
 
   // Get ApplicationDB instance of the given name
   // Returned db is not supposed to be long held by client
@@ -72,31 +72,8 @@ template <typename ApplicationDBType, typename UnderlyingDbType> class CDCApplic
   //
   // Return non-null pointer on success
   const std::shared_ptr<ApplicationDBType> getDB(const std::string& db_name,
-                                             std::string* error_message) {
-
-  std::shared_lock<std::shared_mutex> lock(dbs_lock_);
-  auto itor = dbs_.find(db_name);
-  if (itor == dbs_.end()) {
-    if (error_message) {
-      *error_message = db_name + " does not exist";
-    }
-    return nullptr;
-  }
-  return itor -> second;
-}
-
-  // Remove ApplicationDB instance of the given name
-  // db_name:        (IN) Name of the ApplicationDB instance to be removed
-  // error_message: (OUT) This field will be set if something goes wrong
-  //
-  // Return non-null pointer on success
-  std::unique_ptr<UnderlyingDbType> removeDB(const std::string& db_name,
-                                        std::string* error_message) {
-
-  std::shared_ptr<ApplicationDBType> ret;
-
-  {
-    std::unique_lock<std::shared_mutex> lock(dbs_lock_);
+                                                 std::string* error_message) {
+    std::shared_lock<std::shared_mutex> lock(dbs_lock_);
     auto itor = dbs_.find(db_name);
     if (itor == dbs_.end()) {
       if (error_message) {
@@ -104,14 +81,35 @@ template <typename ApplicationDBType, typename UnderlyingDbType> class CDCApplic
       }
       return nullptr;
     }
-  
-    ret = std::move(itor->second);
-    dbs_.erase(itor);
+    return itor->second;
   }
 
-  waitOnApplicationDBRef(ret);
-  return std::unique_ptr<UnderlyingDbType>(ret->db_.get());
-                                        }
+  // Remove ApplicationDB instance of the given name
+  // db_name:        (IN) Name of the ApplicationDB instance to be removed
+  // error_message: (OUT) This field will be set if something goes wrong
+  //
+  // Return non-null pointer on success
+  std::unique_ptr<UnderlyingDbType> removeDB(const std::string& db_name,
+                                             std::string* error_message) {
+    std::shared_ptr<ApplicationDBType> ret;
+
+    {
+      std::unique_lock<std::shared_mutex> lock(dbs_lock_);
+      auto itor = dbs_.find(db_name);
+      if (itor == dbs_.end()) {
+        if (error_message) {
+          *error_message = db_name + " does not exist";
+        }
+        return nullptr;
+      }
+
+      ret = std::move(itor->second);
+      dbs_.erase(itor);
+    }
+
+    waitOnApplicationDBRef(ret);
+    return std::unique_ptr<UnderlyingDbType>(ret->db_.get());
+  }
 
   // Dump stats for all DBs as a text string
   std::string DumpDBStatsAsText() {
@@ -119,14 +117,13 @@ template <typename ApplicationDBType, typename UnderlyingDbType> class CDCApplic
     // For now just return the DB names
     const auto db_names = getAllDBNames();
 
-  std::string stats;
-  for (const auto& db_name : db_names) {
-    stats += folly::stringPrintf(
-        "  segment=%s db=%s\n",
-        common::DbNameToSegment(db_name).c_str(), db_name.c_str());
-  }
+    std::string stats;
+    for (const auto& db_name : db_names) {
+      stats += folly::stringPrintf(
+          "  segment=%s db=%s\n", common::DbNameToSegment(db_name).c_str(), db_name.c_str());
+    }
 
-  return stats;
+    return stats;
   }
 
   // Get the names of all DBs currently held by the CDCApplicationDBManager
@@ -137,35 +134,33 @@ template <typename ApplicationDBType, typename UnderlyingDbType> class CDCApplic
     std::shared_lock<std::shared_mutex> lock(dbs_lock_);
     db_names.reserve(dbs_.size());
     for (const auto& db : dbs_) {
-        db_names.push_back(db.first);
+      db_names.push_back(db.first);
     }
     return db_names;
   }
 
   ~CDCApplicationDBManager() {
-  auto itor = dbs_.begin();
-  while (itor != dbs_.end()) {
-    waitOnApplicationDBRef(itor->second);
-    // we want to first remove the ApplicationDB and then release the RocksDB
-    // it contains.
-    auto tmp = std::unique_ptr<UnderlyingDbType>(itor->second->db_.get());
-    itor = dbs_.erase(itor);
-  }
+    auto itor = dbs_.begin();
+    while (itor != dbs_.end()) {
+      waitOnApplicationDBRef(itor->second);
+      // we want to first remove the ApplicationDB and then release the RocksDB
+      // it contains.
+      auto tmp = std::unique_ptr<UnderlyingDbType>(itor->second->db_.get());
+      itor = dbs_.erase(itor);
+    }
   }
 
- private:
+private:
   std::unordered_map<std::string, std::shared_ptr<ApplicationDBType>> dbs_;
   mutable std::shared_mutex dbs_lock_;
 
   void waitOnApplicationDBRef(const std::shared_ptr<ApplicationDBType>& db) {
-  while (db.use_count() > 1) {
-    LOG(INFO) << db->db_name() << " is still holding by others, wait "
-      << kRemoveDBRefWaitMilliSec << " milliseconds";
-    std::this_thread::sleep_for(
-      std::chrono::milliseconds(kRemoveDBRefWaitMilliSec));
-  }
-
-};
+    while (db.use_count() > 1) {
+      LOG(INFO) << db->db_name() << " is still holding by others, wait " << kRemoveDBRefWaitMilliSec
+                << " milliseconds";
+      std::this_thread::sleep_for(std::chrono::milliseconds(kRemoveDBRefWaitMilliSec));
+    }
+  };
 };
 
 }  // namespace cdc_admin

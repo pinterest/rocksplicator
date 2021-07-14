@@ -16,47 +16,41 @@
 
 #include <string>
 
+#include "cdc_admin/cdc_application_db_manager.h"
 #include "folly/SocketAddress.h"
 #include "rocksdb_replicator/db_wrapper.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
-#include "cdc_admin/cdc_application_db_manager.h"
 
 namespace cdc_admin {
 
 // This class is the wrapper of the replicator
 class CDCApplicationDB {
- public:
-
+public:
   // Create a CDCApplicationDB instance
   // db_name:       (IN) name of this db instance
   // db_wrapper:    (IN) shared pointer of rocksdb instance
   // role:          (IN) replication role of this db
   // upstream_addr: (IN) upstream address if applicable
   CDCApplicationDB(const std::string& db_name,
-                std::shared_ptr<replicator::DbWrapper> db_wrapper,
-                replicator::DBRole role,
-                std::unique_ptr<folly::SocketAddress> upstream_addr);
+                   std::shared_ptr<replicator::DbWrapper> db_wrapper,
+                   replicator::DBRole role,
+                   std::unique_ptr<folly::SocketAddress> upstream_addr);
 
   // Name of this db
   const std::string& db_name() const { return db_name_; }
-  
+
   const bool IsFollower() const { return role_ == replicator::DBRole::SLAVE; }
 
   // Return a raw pointer to the underlying db wrapper object. We don't return a
   // shared_ptr here to indicate that we must hold the outer object while using
   // the returned pointer
-  replicator::DbWrapper* dbWrapper() const {
-    return db_.get();
-  }
+  replicator::DbWrapper* dbWrapper() const { return db_.get(); }
 
-  folly::SocketAddress* upstream_addr() const {
-    return upstream_addr_.get();
-  }
+  folly::SocketAddress* upstream_addr() const { return upstream_addr_.get(); }
 
   ~CDCApplicationDB();
 
- private:
-
+private:
   const std::string db_name_;
 
   std::unique_ptr<folly::SocketAddress> upstream_addr_;
