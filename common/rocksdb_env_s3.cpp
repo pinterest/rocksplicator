@@ -421,7 +421,7 @@ Status S3Env::RenameFile(const std::string& src, const std::string& target) {
         continue;
       }
       if (s3_conc_) {
-        s3_conc_->enqueuePutObject(target + file, local_target_path + file, sync_group_id_);
+        s3_conc_->enqueuePutObject(s3_bucket_, target + file, local_target_path + file, sync_group_id_);
       } else {
         auto copy_resp = s3_util_->putObject(target + file, local_target_path + file);
         if (!copy_resp.Error().empty()) {
@@ -432,7 +432,7 @@ Status S3Env::RenameFile(const std::string& src, const std::string& target) {
     }
   } else {
     if (s3_conc_) {
-      s3_conc_->enqueuePutObject(target, local_target_path, sync_group_id_);
+      s3_conc_->enqueuePutObject(s3_bucket_, target, local_target_path, sync_group_id_);
     } else {
       auto copy_resp = s3_util_->putObject(target, local_target_path);
       if (!copy_resp.Error().empty()) {

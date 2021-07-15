@@ -484,8 +484,8 @@ AdminHandler::AdminHandler(
     });
   }
 
-  int upload_MBps = 600; // set as fixed for now.
-  s3_conc_ = std::make_shared<common::S3Concurrent>("pinterest-jackson", upload_MBps); 
+  const int upload_MBps = 600; // fixed upper bw limit for now.
+  s3_conc_ = std::make_shared<common::S3Concurrent>(upload_MBps); 
 }
 
 AdminHandler::~AdminHandler() {
@@ -983,14 +983,13 @@ if (FLAGS_enable_checkpoint_backup) {
     auto local_s3_util = createLocalS3Util(request->limit_mbs, request->s3_bucket);
     std::string formatted_s3_dir_path = ensure_ends_with_pathsep(request->s3_backup_dir);
     std::string formatted_checkpoint_local_path = ensure_ends_with_pathsep(checkpoint_local_path);
-
+    s3_conc_->setUploadMBps(request->limit_mbs);
     for (const auto& file : checkpoint_files) {
       if (file == "." || file == "..") {
         continue;
       }
-      s3_conc_->enqueuePutObject(formatted_s3_dir_path + file,
+      s3_conc_->enqueuePutObject(request->s3_bucket, formatted_s3_dir_path + file,
                                  formatted_checkpoint_local_path + file,
-                                 //request->s3_bucket,
                                  sync_group_id);
     }
 
@@ -1008,9 +1007,7 @@ if (FLAGS_enable_checkpoint_backup) {
         common::Stats::get()->Incr(kS3BackupFailure);
         return;
       }
-      s3_conc_->enqueuePutObject(formatted_s3_dir_path + kMetaFilename, dbmeta_path,
-                                 //request->s3_bucket,
-                                 sync_group_id);
+      s3_conc_->enqueuePutObject(request->s3_bucket, formatted_s3_dir_path + kMetaFilename, dbmeta_path, sync_group_id);
     }
     if (!s3_conc_->Sync(formatted_s3_dir_path)) {
       SetException("Failed to sync all files to s3", AdminErrorCode::DB_ADMIN_ERROR, &callback);

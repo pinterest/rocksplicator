@@ -508,35 +508,32 @@ shared_ptr<S3Util> S3Util::BuildS3Util(
 }
 
 
-S3Concurrent::S3Concurrent(const string &bucket, const int upload_MBps)
-  : bucket_(bucket),
-    upload_MBps_(upload_MBps),
-    executor_(2),  // n_threads
+S3Concurrent::S3Concurrent(const int upload_MBps)
+  : executor_(2),  // n_threads
     transfer_config_(&executor_) {
 
-  const uint64_t MiB = 1024*1024;
-  const uint64_t max_heap_size = 400 * MiB;
-  const uint64_t buffer_size = 25 * MiB;
-  int max_connections = 16; // upper limit, good for 10Gbps.
-
+  const uint64_t MB = 1000*1000;
+  const uint64_t max_heap_size = 400 * MB;
+  const uint64_t buffer_size = 25 * MB;
+  int max_connections = 16; // reasonable upper limit, good for 10Gbps.
   // throttle concurrency according to desired rate.
-  // 2 threads allows for some file interleaving.
-  // approx 70 MB/sec speed per connection.
-  if (upload_MBps_ != 0) {
-    max_connections = std::min(max_connections, std::max(1, (int)(upload_MBps_/70)));
+  // 2 threads allows for some file interleaving while limiting cpu exposure.
+  if (upload_MBps != 0) {
+    const int MBps_per_connection_est = 70;
+    max_connections = std::min(max_connections, std::max(1, (int)(upload_MBps/MBps_per_connection_est)));
+    rate_limiter_ = Aws::MakeShared<Aws::Utils::RateLimits::DefaultRateLimiter<>>("S3Concurrent", upload_MBps * MB);
+    client_config_.writeRateLimiter = rate_limiter_;
   }
-  LOG(INFO) << "S3Concurrent() upload_MBps: " << upload_MBps_
+  LOG(INFO) << "S3Concurrent() upload_MBps: " << upload_MBps
             << " max_connections: " << max_connections
-            << " max_heap_size MiB: " << max_heap_size / MiB
-            << " buffer_size MiB: " << buffer_size / MiB;
+            << " max_heap_size MB: " << max_heap_size / MB
+            << " buffer_size MB: " << buffer_size / MB;
   int socket_timeout_ms = 3000;
   client_config_.connectTimeoutMs = socket_timeout_ms;
   client_config_.requestTimeoutMs = socket_timeout_ms;
   client_config_.maxConnections = max_connections;
   client_config_.region = "us-east-1";
 
-  if(s3_client_)
-    s3_client_.reset();
   s3_client_ = std::make_shared<Aws::S3::S3Client>(client_config_);
   transfer_config_.s3Client = s3_client_;
   transfer_config_.transferBufferMaxHeapSize = max_heap_size;
@@ -558,19 +555,23 @@ S3Concurrent::S3Concurrent(const string &bucket, const int upload_MBps)
         << ", target_path: " << th->GetTargetFilePath()
         << ", error: " << th->GetLastError().GetMessage();
     };
-  if(context_)
-    context_.reset();
   context_ = Aws::MakeShared<Aws::Client::AsyncCallerContext>("upload");
-  if(transfer_manager_)
-    transfer_manager_.reset();
   transfer_manager_ = Aws::Transfer::TransferManager::Create(transfer_config_);
 }
 
-S3Concurrent::~S3Concurrent() {
+
+bool S3Concurrent::setUploadMBps(uint64_t upload_MBps) {
+  const uint64_t MB = 1000*1000;
+  // only useful for restricting rate below initial rate
+  if (rate_limiter_) {
+    rate_limiter_->SetRate(upload_MBps * MB); // is lock guarded internally
+    return true;
+  }
+  return false;
 }
 
-bool S3Concurrent::enqueuePutObject(const string& key, const string& local_path,
-                                    const string& sync_group_id){
+bool S3Concurrent::enqueuePutObject(const string& s3_bucket, const string& key,
+                                    const string& local_path, const string& sync_group_id){
   LOG(INFO) << "enqueuePutObject " << local_path << " to " << key;
   {
     std::lock_guard<std::mutex> lock(handles_mutex_);
@@ -580,7 +581,7 @@ bool S3Concurrent::enqueuePutObject(const string& key, const string& local_path,
     }
     handles_[sync_group_id].push_back(
         std::move(transfer_manager_->UploadFile(local_path,
-                                                bucket_,
+                                                s3_bucket,
                                                 key,
                                                 "application/octet-stream",
                                                 Aws::Map<Aws::String, Aws::String>(),
@@ -589,7 +590,7 @@ bool S3Concurrent::enqueuePutObject(const string& key, const string& local_path,
   return true;
 }
 
-bool S3Concurrent::Sync(const string&sync_group_id) {
+bool S3Concurrent::Sync(const string& sync_group_id) {
   uint64_t num_files_transferred = 0;
   uint64_t num_bytes_transferred = 0;
   uint64_t num_failures = 0;
@@ -627,4 +628,7 @@ bool S3Concurrent::Sync(const string&sync_group_id) {
   return num_files_transferred == sync_group.size();
 }
 
+void S3Concurrent::clearFailures() {
+  failures_.clear();
+}
 }  // namespace common

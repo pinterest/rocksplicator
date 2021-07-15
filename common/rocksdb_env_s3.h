@@ -199,7 +199,7 @@ class S3Env : public Env {
   const std::string s3_key_prefix_;
   // Local directory to temporarily store the files downloaded from/uploading to S3
   const std::string local_directory_;
-
+  // string common to all files in a db backup operation
   const std::string sync_group_id_;
 
   // S3 util used for accessing AWS S3

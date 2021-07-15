@@ -26,7 +26,9 @@
 #include <aws/core/http/HttpResponse.h>
 #include <aws/core/utils/memory/stl/AWSStringStream.h>
 #include <aws/core/utils/Outcome.h>
+#include "aws/core/utils/ratelimiter/DefaultRateLimiter.h"
 #include <aws/transfer/TransferManager.h>
+
 #include <boost/iostreams/categories.hpp>
 
 #include <iosfwd>
@@ -236,7 +238,6 @@ class S3Util {
   // parameters. (For example, "Key1=Value1")
   PutObjectResponse putObject(const string& key, const string& local_path, const string& tags="");
 
-
   // Upload a local file to S3 in async mode and return a future to the operation.
   Aws::S3::Model::PutObjectOutcomeCallable
   putObjectCallable(const string& key, const string& local_path);
@@ -293,7 +294,7 @@ class S3Util {
   void listObjectsHelper(const string& prefix, const string& delimiter,
                          const string& marker, vector<string>* objects,
                          string* next_marker, string* error_message);
- 
+
   const string bucket_;
   // S3Client is thread safe:
   // https://github.com/aws/aws-sdk-cpp/issues/166
@@ -306,25 +307,24 @@ class S3Util {
 
 class S3Concurrent {
  public:
-  S3Concurrent(const string& bucket, const int upload_MBps);
-  ~S3Concurrent();
-  bool enqueuePutObject(const string& local_path, const string& key,
+  S3Concurrent(const int upload_MBps);
+  bool enqueuePutObject(const string& s3_bucket,
+                        const string& local_path,
+                        const string& key,
                         const string& sync_group_id);
   bool Sync(const string&sync_group_id);
-  uint64_t getUploadMBps() { return upload_MBps_; }
+  bool setUploadMBps(uint64_t upload_MBps);
+  void clearFailures();
 
 private:
-  const uint64_t upload_MBps_;
-  const string bucket_;
   Aws::Client::ClientConfiguration client_config_;
   Aws::Utils::Threading::PooledThreadExecutor executor_;
   Aws::Transfer::TransferManagerConfiguration transfer_config_;
   std::shared_ptr<Aws::Transfer::TransferManager> transfer_manager_;
   std::shared_ptr<Aws::Client::AsyncCallerContext> context_;
-
   std::shared_ptr<Aws::S3::S3Client> s3_client_;
+  std::shared_ptr<Aws::Utils::RateLimits::DefaultRateLimiter<>> rate_limiter_;
   std::mutex handles_mutex_;
-  
   map<string, vector<std::shared_ptr<Aws::Transfer::TransferHandle>>> handles_;
   vector<std::shared_ptr<Aws::Transfer::TransferHandle>> failures_;
 };
