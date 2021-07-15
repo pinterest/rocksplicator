@@ -39,22 +39,22 @@ public:
 
   void async_tm_ping(std::unique_ptr<apache::thrift::HandlerCallback<void>> callback) override;
 
-  void async_tm_addDB(
-      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<AddDBResponse>>> callback,
-      std::unique_ptr<AddDBRequest> request) override;
+  void async_tm_addObserver(
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<AddObserverResponse>>> callback,
+      std::unique_ptr<AddObserverRequest> request) override;
 
-  void async_tm_checkDB(
-      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<CheckDBResponse>>> callback,
-      std::unique_ptr<CheckDBRequest> request) override;
+  void async_tm_checkObserver(
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<CheckObserverResponse>>> callback,
+      std::unique_ptr<CheckObserverRequest> request) override;
 
-  void async_tm_closeDB(
-      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<CloseDBResponse>>> callback,
-      std::unique_ptr<CloseDBRequest> request) override;
+  void async_tm_removeObserver(
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<RemoveObserverResponse>>> callback,
+      std::unique_ptr<RemoveObserverRequest> request) override;
 
-  void async_tm_changeDBRoleAndUpStream(
+  void async_tm_changeObserverRoleAndUpStream(
       std::unique_ptr<apache::thrift::HandlerCallback<
-          std::unique_ptr<ChangeDBRoleAndUpstreamResponse>>> callback,
-      std::unique_ptr<ChangeDBRoleAndUpstreamRequest> request) override;
+          std::unique_ptr<ChangeObserverRoleAndUpstreamResponse>>> callback,
+      std::unique_ptr<ChangeObserverRoleAndUpstreamRequest> request) override;
 
   void async_tm_getSequenceNumber(
       std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<GetSequenceNumberResponse>>>
@@ -78,16 +78,8 @@ protected:
 private:
   std::unique_ptr<replicator::DbWrapper> removeDB(const std::string& db_name,
                                                   CDCAdminException* ex);
-  DBMetaData getMetaData(const std::string& db_name);
-  bool clearMetaData(const std::string& db_name);
-  bool writeMetaData(const std::string& db_name,
-                     const std::string& s3_bucket,
-                     const std::string& s3_path,
-                     const int64_t last_kafka_msg_timestamp_ms = -1);
 
   std::unique_ptr<CDCApplicationDBManager<CDCApplicationDB, replicator::DbWrapper>> db_manager_;
-  // db that contains meta data
-  std::unique_ptr<rocksdb::DB> meta_db_;
 };
 
 }  // namespace cdc_admin
