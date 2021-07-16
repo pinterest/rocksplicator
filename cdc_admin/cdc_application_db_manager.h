@@ -25,8 +25,8 @@ template <typename ApplicationDBType, typename UnderlyingDbType>
 class CDCApplicationDBManager;
 
 const int kRemoveDBRefWaitMilliSec = 200;
-// This class manages application rocksdb instances, it offers functionality to
-// add/remove/get application rocksdb instance.
+// This class manages application DB instances, it offers functionality to
+// add/remove/get application db instance.
 // Note: this class is thread-safe.
 template <typename ApplicationDBType, typename UnderlyingDbType>
 class CDCApplicationDBManager {
@@ -124,8 +124,6 @@ public:
   }
 
   // Get the names of all DBs currently held by the CDCApplicationDBManager
-  // This can be used if some service wants to perform some action such
-  // as compaction across all dbs currently maintained.
   std::vector<std::string> getAllDBNames() {
     std::vector<std::string> db_names;
     std::shared_lock<std::shared_mutex> lock(dbs_lock_);
@@ -140,7 +138,7 @@ public:
     auto itor = dbs_.begin();
     while (itor != dbs_.end()) {
       waitOnApplicationDBRef(itor->second);
-      // we want to first remove the ApplicationDB and then release the RocksDB
+      // we want to first remove the ApplicationDB and then release the db
       // it contains.
       auto tmp = std::unique_ptr<UnderlyingDbType>(itor->second->db_.get());
       itor = dbs_.erase(itor);

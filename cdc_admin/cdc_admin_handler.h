@@ -40,21 +40,19 @@ public:
   void async_tm_ping(std::unique_ptr<apache::thrift::HandlerCallback<void>> callback) override;
 
   void async_tm_addObserver(
-      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<AddObserverResponse>>> callback,
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<AddObserverResponse>>>
+          callback,
       std::unique_ptr<AddObserverRequest> request) override;
 
   void async_tm_checkObserver(
-      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<CheckObserverResponse>>> callback,
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<CheckObserverResponse>>>
+          callback,
       std::unique_ptr<CheckObserverRequest> request) override;
 
   void async_tm_removeObserver(
-      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<RemoveObserverResponse>>> callback,
+      std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<RemoveObserverResponse>>>
+          callback,
       std::unique_ptr<RemoveObserverRequest> request) override;
-
-  void async_tm_changeObserverRoleAndUpStream(
-      std::unique_ptr<apache::thrift::HandlerCallback<
-          std::unique_ptr<ChangeObserverRoleAndUpstreamResponse>>> callback,
-      std::unique_ptr<ChangeObserverRoleAndUpstreamRequest> request) override;
 
   void async_tm_getSequenceNumber(
       std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<GetSequenceNumberResponse>>>

@@ -22,23 +22,21 @@ CDCApplicationDB::CDCApplicationDB(const std::string& db_name,
                                    std::unique_ptr<folly::SocketAddress> upstream_addr)
     : db_name_(db_name),
       db_(std::move(db_wrapper)),
-      role_(role),
       upstream_addr_(std::move(upstream_addr)),
       replicated_db_(nullptr) {
-  if (role_ == replicator::DBRole::SLAVE) {
+  if (role == replicator::DBRole::SLAVE) {
     CHECK(upstream_addr_);
     auto ret = replicator::RocksDBReplicator::instance()->addDB(
         db_name_,
         db_,
-        role_,
+        role,
         upstream_addr_ ? *upstream_addr_ : folly::SocketAddress(),
         &replicated_db_);
     if (ret != replicator::ReturnCode::OK) {
       throw ret;
     }
-  } else {
-    // For NOOP, do not need to initialize the replicator, just standby
   }
+  // SLAVE should be the only role we use for CDC
 }
 
 CDCApplicationDB::~CDCApplicationDB() {

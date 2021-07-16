@@ -34,8 +34,6 @@ struct AddObserverRequest {
   # if this db is already being observed, an ALREADY_EXIST error is thrown
   1: required string db_name,
   2: required string upstream_ip,
-  # add the observer to the db_manager with the specified role. one of LEADER, STANDBY
-  3: optional string db_role = "STANDBY",
 }
 
 struct AddObserverResponse {
@@ -59,22 +57,6 @@ struct CheckObserverRequest {
 struct CheckObserverResponse {
   # the largest sequence number that has been published for this segment
   1: optional i64 seq_num = 0,
-  # if the observer is Leader or Standby
-  2: optional bool is_leader = false,
-}
-
-struct ChangeObserverRoleAndUpstreamRequest {
-  # the db to change the observer for
-  1: required string db_name,
-  # the role to change to, only "LEADER" and "STANDBY" are supported
-  2: required string new_role,
-  # the new upstream to pull updates from
-  3: optional string upstream_ip,
-  4: optional i16 upstream_port,
-}
-
-struct ChangeObserverRoleAndUpstreamResponse {
-  # for future use
 }
 
 struct GetSequenceNumberRequest {
@@ -109,13 +91,6 @@ CheckObserverResponse checkObserver(1: CheckObserverRequest request)
  * Remove an observer for a DB
  */
 RemoveObserverResponse removeObserver(1:RemoveObserverRequest request)
-  throws (1:CDCAdminException e)
-
-/*
- * Change the role and the upstream for the specified db
- */
-ChangeObserverRoleAndUpstreamResponse changeObserverRoleAndUpStream(
-    1:ChangeObserverRoleAndUpstreamRequest request)
   throws (1:CDCAdminException e)
 
 /*

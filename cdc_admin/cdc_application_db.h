@@ -23,9 +23,10 @@ class CDCApplicationDB {
 public:
   // Create a CDCApplicationDB instance
   // db_name:       (IN) name of this db instance
-  // db_wrapper:    (IN) shared pointer of rocksdb instance
+  // db_wrapper:    (IN) shared pointer of db wrapper instance
   // role:          (IN) replication role of this db
-  // upstream_addr: (IN) upstream address if applicable
+  // NOTE: This should always be the follower role, but it is taken in here to maintain consistency
+  // with the API upstream_addr: (IN) upstream address if applicable
   CDCApplicationDB(const std::string& db_name,
                    std::shared_ptr<replicator::DbWrapper> db_wrapper,
                    replicator::DBRole role,
@@ -33,8 +34,6 @@ public:
 
   // Name of this db
   const std::string& db_name() const { return db_name_; }
-
-  const bool IsFollower() const { return role_ == replicator::DBRole::SLAVE; }
 
   // Return a raw pointer to the underlying db wrapper object. We don't return a
   // shared_ptr here to indicate that we must hold the outer object while using
@@ -48,7 +47,6 @@ public:
 private:
   const std::string db_name_;
   std::shared_ptr<replicator::DbWrapper> db_;
-  const replicator::DBRole role_;
   std::unique_ptr<folly::SocketAddress> upstream_addr_;
   replicator::RocksDBReplicator::ReplicatedDB* replicated_db_;
 

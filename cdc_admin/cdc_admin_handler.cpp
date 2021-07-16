@@ -91,7 +91,6 @@ std::unique_ptr<replicator::DbWrapper> CdcAdminHandler::removeDB(const std::stri
   return db;
 }
 
-
 void CdcAdminHandler::async_tm_addObserver(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<AddObserverResponse>>> callback,
     std::unique_ptr<AddObserverRequest> request) {
@@ -114,26 +113,12 @@ void CdcAdminHandler::async_tm_addObserver(
     return;
   }
 
-  auto segment = common::DbNameToSegment(request->db_name);
-  auto db_path = FLAGS_rocksdb_dir + request->db_name;
-
   // add the db to db_manager
   std::string err_msg;
   replicator::DBRole role = replicator::DBRole::SLAVE;
-  if (request->__isset.db_role) {
-    if (request->db_role == "LEADER") {
-      role = replicator::DBRole::SLAVE;
-    } else if (request->db_role == "STANDBY") {
-      role = replicator::DBRole::NOOP;
-    } else {
-      e.errorCode = CDCAdminErrorCode::INVALID_ROLE;
-      e.message = std::move(request->db_role);
-      callback.release()->exceptionInThread(std::move(e));
-      return;
-    }
-  }
 
   // TODO(indy): Read sequence # from kafka
+  // And create a db wrapper based on the internal producer
   std::unique_ptr<replicator::TestDBProxy> db_wrapper =
       std::make_unique<replicator::TestDBProxy>(request->db_name, 0);
   if (!db_manager_->addDB(
@@ -152,7 +137,8 @@ void CdcAdminHandler::async_tm_ping(
 }
 
 void CdcAdminHandler::async_tm_checkObserver(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<CheckObserverResponse>>> callback,
+    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<CheckObserverResponse>>>
+        callback,
     std::unique_ptr<CheckObserverRequest> request) {
   CDCAdminException e;
   auto db = getDB(request->db_name, &e);
@@ -163,13 +149,13 @@ void CdcAdminHandler::async_tm_checkObserver(
 
   CheckObserverResponse response;
   response.set_seq_num(db->dbWrapper()->LatestSequenceNumber());
-  response.set_is_leader(db->IsFollower());
 
   callback->result(response);
 }
 
 void CdcAdminHandler::async_tm_removeObserver(
-    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<RemoveObserverResponse>>> callback,
+    std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<RemoveObserverResponse>>>
+        callback,
     std::unique_ptr<RemoveObserverRequest> request) {
   db_admin_lock_.Lock(request->db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
@@ -181,54 +167,6 @@ void CdcAdminHandler::async_tm_removeObserver(
   }
 
   callback->result(RemoveObserverResponse());
-}
-
-void CdcAdminHandler::async_tm_changeObserverRoleAndUpStream(
-    std::unique_ptr<
-        apache::thrift::HandlerCallback<std::unique_ptr<ChangeObserverRoleAndUpstreamResponse>>> callback,
-    std::unique_ptr<ChangeObserverRoleAndUpstreamRequest> request) {
-  db_admin_lock_.Lock(request->db_name);
-  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
-
-  CDCAdminException e;
-  replicator::DBRole new_role;
-  if (request->new_role == "STANDBY") {
-    new_role = replicator::DBRole::NOOP;
-  } else if (request->new_role == "LEADER") {
-    new_role = replicator::DBRole::SLAVE;
-  } else {
-    e.errorCode = CDCAdminErrorCode::INVALID_ROLE;
-    e.message = std::move(request->new_role);
-    callback.release()->exceptionInThread(std::move(e));
-    return;
-  }
-
-  std::unique_ptr<folly::SocketAddress> upstream_addr(nullptr);
-  if (new_role == replicator::DBRole::SLAVE && request->__isset.upstream_ip &&
-      request->__isset.upstream_port) {
-    upstream_addr = std::make_unique<folly::SocketAddress>();
-    if (!SetAddressOrException(
-            request->upstream_ip, FLAGS_rocksdb_replicator_port, upstream_addr.get(), &callback)) {
-      return;
-    }
-  }
-
-  auto db = removeDB(request->db_name, &e);
-  if (db == nullptr) {
-    callback.release()->exceptionInThread(std::move(e));
-    return;
-  }
-
-  std::string err_msg;
-  if (!db_manager_->addDB(
-          request->db_name, std::move(db), new_role, std::move(upstream_addr), &err_msg)) {
-    e.errorCode = CDCAdminErrorCode::ADMIN_ERROR;
-    e.message = std::move(err_msg);
-    callback.release()->exceptionInThread(std::move(e));
-    return;
-  }
-
-  callback->result(ChangeObserverRoleAndUpstreamResponse());
 }
 
 void CdcAdminHandler::async_tm_getSequenceNumber(
