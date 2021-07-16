@@ -21,14 +21,14 @@
 
 namespace cdc_admin {
 
-template <typename ApplicationDBType, typename UnderlyingDbType>
+template <typename ApplicationDBType, typename UnderlyingDBType>
 class CDCApplicationDBManager;
 
 const int kRemoveDBRefWaitMilliSec = 200;
 // This class manages application DB instances, it offers functionality to
 // add/remove/get application db instance.
 // Note: this class is thread-safe.
-template <typename ApplicationDBType, typename UnderlyingDbType>
+template <typename ApplicationDBType, typename UnderlyingDBType>
 class CDCApplicationDBManager {
 public:
   CDCApplicationDBManager() : dbs_(), dbs_lock_() {}
@@ -42,7 +42,7 @@ public:
   //
   // Return true on success
   bool addDB(const std::string& db_name,
-             std::unique_ptr<UnderlyingDbType> db,
+             std::unique_ptr<UnderlyingDBType> db,
              replicator::DBRole role,
              std::unique_ptr<folly::SocketAddress> upstream_addr,
              std::string* error_message) {
@@ -54,7 +54,7 @@ public:
       return false;
     }
     auto underlying_db_ptr =
-        std::shared_ptr<UnderlyingDbType>(db.release(), [](UnderlyingDbType* db) {});
+        std::shared_ptr<UnderlyingDBType>(db.release(), [](UnderlyingDBType* db) {});
     auto application_db_ptr = std::make_shared<ApplicationDBType>(
         db_name, std::move(underlying_db_ptr), role, std::move(upstream_addr));
 
@@ -86,7 +86,7 @@ public:
   // error_message: (OUT) This field will be set if something goes wrong
   //
   // Return non-null pointer on success
-  std::unique_ptr<UnderlyingDbType> removeDB(const std::string& db_name,
+  std::unique_ptr<UnderlyingDBType> removeDB(const std::string& db_name,
                                              std::string* error_message) {
     std::shared_ptr<ApplicationDBType> ret;
 
@@ -105,7 +105,7 @@ public:
     }
 
     waitOnApplicationDBRef(ret);
-    return std::unique_ptr<UnderlyingDbType>(ret->db_.get());
+    return std::unique_ptr<UnderlyingDBType>(ret->db_.get());
   }
 
   // Dump stats for all DBs as a text string
@@ -140,7 +140,7 @@ public:
       waitOnApplicationDBRef(itor->second);
       // we want to first remove the ApplicationDB and then release the db
       // it contains.
-      auto tmp = std::unique_ptr<UnderlyingDbType>(itor->second->db_.get());
+      auto tmp = std::unique_ptr<UnderlyingDBType>(itor->second->db_.get());
       itor = dbs_.erase(itor);
     }
   }

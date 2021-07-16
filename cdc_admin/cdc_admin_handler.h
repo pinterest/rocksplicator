@@ -30,12 +30,12 @@
 
 namespace cdc_admin {
 
-class CdcAdminHandler : virtual public CdcAdminSvIf {
+class CDCAdminHandler : virtual public CdcAdminSvIf {
 public:
-  CdcAdminHandler(
+  CDCAdminHandler(
       std::unique_ptr<CDCApplicationDBManager<CDCApplicationDB, replicator::DbWrapper>> db_manager);
 
-  virtual ~CdcAdminHandler();
+  virtual ~CDCAdminHandler();
 
   void async_tm_ping(std::unique_ptr<apache::thrift::HandlerCallback<void>> callback) override;
 
