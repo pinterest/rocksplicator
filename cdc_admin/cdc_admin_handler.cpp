@@ -13,7 +13,7 @@
 /// limitations under the License.
 
 //
-// @author bol (bol@pinterest.com)
+// @author indy (indy@pinterest.com)
 //
 
 #include "cdc_admin/cdc_admin_handler.h"
@@ -61,13 +61,13 @@ bool SetAddressOrException(const std::string& ip,
 
 namespace cdc_admin {
 
-CdcAdminHandler::CdcAdminHandler(
+CDCAdminHandler::CDCAdminHandler(
     std::unique_ptr<CDCApplicationDBManager<CDCApplicationDB, replicator::DbWrapper>> db_manager)
     : db_admin_lock_(), db_manager_(std::move(db_manager)) {}
 
-CdcAdminHandler::~CdcAdminHandler() {}
+CDCAdminHandler::~CDCAdminHandler() {}
 
-std::shared_ptr<CDCApplicationDB> CdcAdminHandler::getDB(const std::string& db_name,
+std::shared_ptr<CDCApplicationDB> CDCAdminHandler::getDB(const std::string& db_name,
                                                          CDCAdminException* ex) {
   std::string err_msg;
   auto db = db_manager_->getDB(db_name, &err_msg);
@@ -79,7 +79,7 @@ std::shared_ptr<CDCApplicationDB> CdcAdminHandler::getDB(const std::string& db_n
   return db;
 }
 
-std::unique_ptr<replicator::DbWrapper> CdcAdminHandler::removeDB(const std::string& db_name,
+std::unique_ptr<replicator::DbWrapper> CDCAdminHandler::removeDB(const std::string& db_name,
                                                                  CDCAdminException* ex) {
   std::string err_msg;
   auto db = db_manager_->removeDB(db_name, &err_msg);
@@ -91,7 +91,7 @@ std::unique_ptr<replicator::DbWrapper> CdcAdminHandler::removeDB(const std::stri
   return db;
 }
 
-void CdcAdminHandler::async_tm_addObserver(
+void CDCAdminHandler::async_tm_addObserver(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<AddObserverResponse>>> callback,
     std::unique_ptr<AddObserverRequest> request) {
   db_admin_lock_.Lock(request->db_name);
@@ -131,12 +131,12 @@ void CdcAdminHandler::async_tm_addObserver(
   callback->result(AddObserverResponse());
 }
 
-void CdcAdminHandler::async_tm_ping(
+void CDCAdminHandler::async_tm_ping(
     std::unique_ptr<apache::thrift::HandlerCallback<void>> callback) {
   callback->done();
 }
 
-void CdcAdminHandler::async_tm_checkObserver(
+void CDCAdminHandler::async_tm_checkObserver(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<CheckObserverResponse>>>
         callback,
     std::unique_ptr<CheckObserverRequest> request) {
@@ -153,7 +153,7 @@ void CdcAdminHandler::async_tm_checkObserver(
   callback->result(response);
 }
 
-void CdcAdminHandler::async_tm_removeObserver(
+void CDCAdminHandler::async_tm_removeObserver(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<RemoveObserverResponse>>>
         callback,
     std::unique_ptr<RemoveObserverRequest> request) {
@@ -169,7 +169,7 @@ void CdcAdminHandler::async_tm_removeObserver(
   callback->result(RemoveObserverResponse());
 }
 
-void CdcAdminHandler::async_tm_getSequenceNumber(
+void CDCAdminHandler::async_tm_getSequenceNumber(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<GetSequenceNumberResponse>>>
         callback,
     std::unique_ptr<GetSequenceNumberRequest> request) {
@@ -181,11 +181,12 @@ void CdcAdminHandler::async_tm_getSequenceNumber(
   }
 
   GetSequenceNumberResponse response;
+  response.seq_num = db->dbWrapper()->LatestSequenceNumber();
   callback->result(response);
 }
 
-std::string CdcAdminHandler::DumpDBStatsAsText() const { return db_manager_->DumpDBStatsAsText(); }
+std::string CDCAdminHandler::DumpDBStatsAsText() const { return db_manager_->DumpDBStatsAsText(); }
 
-std::vector<std::string> CdcAdminHandler::getAllDBNames() { return db_manager_->getAllDBNames(); }
+std::vector<std::string> CDCAdminHandler::getAllDBNames() { return db_manager_->getAllDBNames(); }
 
 }  // namespace cdc_admin
