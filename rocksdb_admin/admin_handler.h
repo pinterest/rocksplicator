@@ -162,8 +162,6 @@ class AdminHandler : virtual public AdminSvIf {
   std::unique_ptr<ApplicationDBManager> db_manager_;
   RocksDBOptionsGeneratorType rocksdb_options_;
 
-  // handles aws sdk init
-  common::Initialize aws_init;
   // S3 util used for download
   std::shared_ptr<common::S3Util> s3_util_;
   // Lock for protecting the s3 util

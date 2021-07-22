@@ -59,16 +59,6 @@ DECLARE_int32(direct_io_buffer_n_pages);
 
 namespace common {
 
-class Initialize{
-public:
-  Initialize();
-  ~Initialize();
-  Initialize(const Initialize& ) = delete;
-  Initialize& operator=(const Initialize& ) = delete;
-private:
-  const Aws::SDKOptions mOptions;
-  static std::atomic<size_t> mCount;
-};
 
 template <class T>
 class S3UtilResponse {
@@ -188,6 +178,7 @@ class S3Util {
   };
 
   ~S3Util() {
+    TryAwsShutdownAPI();
   }
   // Download an S3 Object to a local file
   GetObjectResponse getObject(const string& key, const string& local_path,
@@ -273,12 +264,14 @@ class S3Util {
  private:
   explicit S3Util(const string& bucket,
                   const ClientConfiguration& client_config,
-                  const SDKOptions& options,
                   const uint32_t read_ratelimit_mb,
                   const uint32_t write_ratelimit_mb) :
-      bucket_(std::move(bucket)), options_(options),
+      bucket_(std::move(bucket)),
       read_ratelimit_mb_(read_ratelimit_mb),
       write_ratelimit_mb_(write_ratelimit_mb) {
+    TryAwsInitAPI();
+    // s3Client initialization must happen AFTER TryAwsInitAPI(), otherwise
+    // core dump may happen.
     s3Client = std::make_unique<CutomizedS3Client>(client_config);
     Aws::StringStream ss;
     ss << Aws::Http::SchemeMapper::ToString(client_config.scheme) << "://";
@@ -295,19 +288,29 @@ class S3Util {
                          const string& marker, vector<string>* objects,
                          string* next_marker, string* error_message);
 
+  // When there is no other S3Util instances, call Aws::InitAPI() to initialize
+  // aws environment.
+  static void TryAwsInitAPI();
+  // When there is no other S3Util instance left, shutdown/cleanup aws
+  // environment.
+  static void TryAwsShutdownAPI();
+  static std::mutex counter_mutex_;
+  static uint32_t instance_counter_;
+  static SDKOptions options_;
   const string bucket_;
   // S3Client is thread safe:
   // https://github.com/aws/aws-sdk-cpp/issues/166
   std::unique_ptr<CutomizedS3Client> s3Client;
-  SDKOptions options_;
   std::string uri_;
   const uint32_t read_ratelimit_mb_;
   const uint32_t write_ratelimit_mb_;
+  friend class S3Concurrent; // for access to init/shutdown api
 };
 
 class S3Concurrent {
  public:
   S3Concurrent(const int upload_MBps);
+  ~S3Concurrent();
   bool enqueuePutObject(const string& s3_bucket,
                         const string& local_path,
                         const string& key,

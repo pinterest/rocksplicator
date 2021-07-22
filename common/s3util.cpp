@@ -81,23 +81,10 @@ namespace {
 
 namespace common {
 
-std::atomic<size_t> Initialize::mCount(0);
-Initialize::Initialize() {
-  const size_t origCount = mCount++;
-  if (origCount == 0) {
-    Aws::InitAPI(mOptions);
-  }
-}
-
-Initialize::~Initialize(){
-  const size_t newCount = --mCount;
-  if (newCount == 0) {
-    Aws::ShutdownAPI(mOptions);
-  }
-}
-
-
+std::mutex S3Util::counter_mutex_;
+std::uint32_t S3Util::instance_counter_(0);
 const uint32_t kPageSize = getpagesize();
+SDKOptions S3Util::options_;
 
 DirectIOWritableFile::DirectIOWritableFile(const string& file_path)
     : fd_(-1)
@@ -502,16 +489,33 @@ shared_ptr<S3Util> S3Util::BuildS3Util(
         std::make_shared<AwsS3RateLimiter>(
             write_ratelimit_mb * 1024 * 1024);
   }
-  SDKOptions options;
   return std::shared_ptr<S3Util>(
-      new S3Util(bucket, aws_config, options, read_ratelimit_mb, write_ratelimit_mb));
+      new S3Util(bucket, aws_config, read_ratelimit_mb, write_ratelimit_mb));
+}
+
+void S3Util::TryAwsInitAPI() {
+  std::lock_guard<std::mutex> guard(counter_mutex_);
+  if (instance_counter_ == 0) {
+    LOG(INFO) << "Aws::InitAPI";
+    Aws::InitAPI(options_);
+  }
+  ++instance_counter_;
+}
+
+void S3Util::TryAwsShutdownAPI() {
+  std::lock_guard<std::mutex> guard(counter_mutex_);
+  --instance_counter_;
+  if (instance_counter_ == 0) {
+    LOG(INFO) << "Aws::ShutdownAPI";
+    Aws::ShutdownAPI(options_);
+  }
 }
 
 
 S3Concurrent::S3Concurrent(const int upload_MBps)
   : executor_(2),  // n_threads
     transfer_config_(&executor_) {
-
+  S3Util::TryAwsInitAPI();
   const uint64_t MB = 1000*1000;
   const uint64_t max_heap_size = 400 * MB;
   const uint64_t buffer_size = 25 * MB;
@@ -559,6 +563,9 @@ S3Concurrent::S3Concurrent(const int upload_MBps)
   transfer_manager_ = Aws::Transfer::TransferManager::Create(transfer_config_);
 }
 
+S3Concurrent::~S3Concurrent() {
+    S3Util::TryAwsShutdownAPI();
+}
 
 bool S3Concurrent::setUploadMBps(uint64_t upload_MBps) {
   const uint64_t MB = 1000*1000;
