@@ -52,7 +52,7 @@ std::string ParseKafkaBrokerList(const std::string& content) {
 KafkaBrokerFileWatcher::KafkaBrokerFileWatcher(std::string local_serverset_path)
     : local_serverset_path_(std::move(local_serverset_path)) {
   // Add file watcher for Kafka serverset.
-  CHECK(common::FileWatcher::Instance()->AddFile(
+  if (!common::FileWatcher::Instance()->AddFile(
       local_serverset_path_, [this](std::string content) {
         const auto new_kafka_broker_list = ParseKafkaBrokerList(content);
         if (new_kafka_broker_list.empty()) {
@@ -68,7 +68,9 @@ KafkaBrokerFileWatcher::KafkaBrokerFileWatcher(std::string local_serverset_path)
               kafka_broker_list_rw_lock_);
           kafka_broker_list_ = new_kafka_broker_list;
         }
-      })) << "Failed to add file watcher to " << local_serverset_path_;
+      })) {
+        throw std::runtime_error("Failed to add file watcher to " + local_serverset_path_);
+  }
 }
 
 KafkaBrokerFileWatcher::~KafkaBrokerFileWatcher() {
