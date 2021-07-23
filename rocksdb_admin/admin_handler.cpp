@@ -1863,8 +1863,16 @@ void AdminHandler::async_tm_startMessageIngestion(
 
   const std::unordered_set<uint32_t> partition_ids_set({partition_id});
 
-  auto kafka_broker_file_watcher = detail::KafkaBrokerFileWatcherManager
+  std::shared_ptr<::kafka::KafkaBrokerFileWatcher> kafka_broker_file_watcher;
+  try {
+    kafka_broker_file_watcher = detail::KafkaBrokerFileWatcherManager
       ::getInstance().getFileWatcher(kafka_broker_serverset_path);
+  } catch (std::exception& ex) {
+    e.message = "Failed to start kafka watcher: " + db_name + " " + ex.what();
+    callback.release()->exceptionInThread(std::move(e));
+    LOG(ERROR) << "Failed to start kafka watcher: " << db_name << " " << ex.what();
+    return;
+  }
 
   const auto kafka_consumer_pool = std::make_shared<::kafka::KafkaConsumerPool>(
       kKafkaConsumerPoolSize,
