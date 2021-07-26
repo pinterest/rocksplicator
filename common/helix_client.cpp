@@ -306,4 +306,35 @@ std::string GetLeaderInstanceId(
     return JStringToString(env, jstr);
 }
 
+void PingJVM() {
+    auto env = getRunningVM();
+
+    if (env == nullptr) {
+        LOG(ERROR) << "Failed to get env";
+        return;
+    }
+
+    jclass ParticipantClass;
+    jmethodID pingMethod;
+
+    ParticipantClass = env->FindClass("com/pinterest/rocksplicator/Participant");
+    if (!ParticipantClass) {
+        env->ExceptionDescribe();
+        LOG(ERROR) << "Failed to find Participant class";
+        return;
+    }
+
+    pingMethod = env->GetStaticMethodID(ParticipantClass,
+                                        "ping",
+                                        "()V");
+    if (!pingMethod) {
+        LOG(ERROR) << "Failed to GetStaticMethodID";
+        env->ExceptionDescribe();
+        return;
+    }
+
+    LOG(INFO) << "Calling ping method in JVM";
+    env->CallStaticVoidMethod(ParticipantClass, pingMethod);
+}
+
 }  // namespace common

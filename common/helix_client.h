@@ -57,4 +57,6 @@ std::string GetLeaderInstanceId(
   const std::string& resource,
   const std::string& partition);
 
+void PingJVM();
+
 }  // namespace common
