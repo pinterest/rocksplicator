@@ -23,7 +23,7 @@
 #include "common/object_lock.h"
 #ifdef PINTEREST_INTERNAL
 // NEVER SET THIS UNLESS PINTEREST INTERNAL USAGE.
-#include "schemas/gen-cpp2/Admin.h"
+#include "schemas/gen-cpp2/CdcAdmin.h"
 #else
 #include "cdc_admin/gen-cpp2/CdcAdmin.h"
 #endif
