@@ -514,7 +514,9 @@ void S3Util::TryAwsShutdownAPI() {
 
 S3Concurrent::S3Concurrent(const int upload_MBps)
   : executor_(2),  // n_threads
-    transfer_config_(&executor_) {
+    transfer_config_(&executor_),
+    default_s3_upload_MBps(upload_MBps)
+{
   S3Util::TryAwsInitAPI();
   const uint64_t MB = 1000*1000;
   const uint64_t max_heap_size = 400 * MB;
@@ -568,10 +570,14 @@ S3Concurrent::~S3Concurrent() {
 }
 
 bool S3Concurrent::setUploadMBps(uint64_t upload_MBps) {
+  // rate limiter is currently setup only with creation of
+  // S3Concurrent object.  rate limit changes via this function only
+  // serve to adjust rate if an initial non-zero rate was set (the
+  // default case).
   const uint64_t MB = 1000*1000;
-  // only useful for restricting rate below initial rate
-  if (rate_limiter_) {
-    rate_limiter_->SetRate(upload_MBps * MB); // is lock guarded internally
+  if (rate_limiter_){
+    uint64_t new_rate_MB = (upload_MBps > 0)? upload_MBps: default_s3_upload_MBps;
+    rate_limiter_->SetRate(new_rate_MB * MB);
     return true;
   }
   return false;
@@ -579,7 +585,7 @@ bool S3Concurrent::setUploadMBps(uint64_t upload_MBps) {
 
 bool S3Concurrent::enqueuePutObject(const string& s3_bucket, const string& key,
                                     const string& local_path, const string& sync_group_id){
-  LOG(INFO) << "enqueuePutObject " << local_path << " to " << key;
+  LOG(INFO) << "S3Concurrent::enqueuePutObject sync_group_id: "<< sync_group_id << " local_path: "  << local_path << " key: " << key;
   {
     std::lock_guard<std::mutex> lock(handles_mutex_);
     auto sync_collection_ptr = handles_.find(sync_group_id);
@@ -601,6 +607,7 @@ bool S3Concurrent::Sync(const string& sync_group_id) {
   uint64_t num_files_transferred = 0;
   uint64_t num_bytes_transferred = 0;
   uint64_t num_failures = 0;
+  LOG(INFO) << "S3Concurrent::Sync sync_group: " << sync_group_id;
   vector<std::shared_ptr<Aws::Transfer::TransferHandle>> sync_group;
   {
     std::lock_guard<std::mutex> lock(handles_mutex_);
@@ -611,16 +618,16 @@ bool S3Concurrent::Sync(const string& sync_group_id) {
     sync_group.swap(sync_group_ptr->second);
     handles_.erase(sync_group_ptr);
   }
-
+  
   for(auto &h: sync_group){
     h->WaitUntilFinished();
     if (h->GetStatus() == Aws::Transfer::TransferStatus::COMPLETED) {
-      //LOG(INFO) << "S3Concurrent transfer success: " << h->GetTargetFilePath();
+      LOG(INFO) << "S3Concurrent::Sync sync_group: " << sync_group_id << " transfer success: " << h->GetTargetFilePath();
       Stats::get()->Incr(kS3PutObject);
       num_bytes_transferred += h->GetBytesTransferred();
       num_files_transferred ++;
     } else {
-      LOG(ERROR) << "S3Concurrent transfer fail: " << h->GetTargetFilePath();
+      LOG(ERROR) << "S3Concurrent::Sync sync_group: " << sync_group_id << " transfer fail: " << h->GetTargetFilePath();
       failures_.push_back(h);
       num_failures++;
       LOG(ERROR)
@@ -629,7 +636,7 @@ bool S3Concurrent::Sync(const string& sync_group_id) {
     }
   }
 
-  LOG(INFO) << "S3Concurrent sync: " << sync_group_id
+  LOG(INFO) << "S3Concurrent sync_group: " << sync_group_id
             << " transferred: " << num_files_transferred
             << " failures: " << num_failures;
   return num_files_transferred == sync_group.size();

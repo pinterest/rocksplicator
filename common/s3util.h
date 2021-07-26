@@ -330,6 +330,7 @@ private:
   std::mutex handles_mutex_;
   map<string, vector<std::shared_ptr<Aws::Transfer::TransferHandle>>> handles_;
   vector<std::shared_ptr<Aws::Transfer::TransferHandle>> failures_;
+  const int default_s3_upload_MBps;
 };
 
 }  // namespace common
