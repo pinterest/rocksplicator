@@ -315,7 +315,7 @@ class S3Concurrent {
                         const string& local_path,
                         const string& key,
                         const string& sync_group_id);
-  bool Sync(const string&sync_group_id);
+  bool Sync(const string& sync_group_id);
   bool setUploadMBps(uint64_t upload_MBps);
   void clearFailures();
 
