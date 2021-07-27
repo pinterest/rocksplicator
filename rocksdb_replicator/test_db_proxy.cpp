@@ -2,7 +2,7 @@
 
 namespace replicator {
 uint64_t TestDBProxy::LatestSequenceNumber() { return seq_no_; }
-rocksdb::Status WriteToLeader(const rocksdb::WriteOptions& options, rocksdb::WriteBatch* updates) {
+rocksdb::Status TestDBProxy::WriteToLeader(const rocksdb::WriteOptions& options, rocksdb::WriteBatch* updates) {
   throw ReturnCode::WRITE_TO_SLAVE;
 }
 rocksdb::Status TestDBProxy::GetUpdatesFromLeader(
