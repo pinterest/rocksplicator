@@ -169,6 +169,16 @@ class RocksDBReplicator {
                    ReplicatedDB** replicated_db = nullptr);
 
   /*
+   * Same as above, but takes in DB Wrapper directly instead of rocksdb instance
+   */
+  ReturnCode addDB(const std::string& db_name,
+                   std::shared_ptr<DbWrapper> db_wrapper,
+                   const DBRole role,
+                   const folly::SocketAddress& upstream_addr
+                   = folly::SocketAddress(),
+                   ReplicatedDB** replicated_db = nullptr);
+
+  /*
    * Remove a db from the library.
    * Return DB_NOT_FOUND if the library is not managing this db.
    * Otherwise, OK is returned.

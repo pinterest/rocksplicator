@@ -101,6 +101,19 @@ ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
   std::shared_ptr<DbWrapper> db_wrapper(
     new RocksDbWrapper(db_name, std::move(db))
   );
+  return addDB(db_name, db_wrapper, role, upstream_addr, replicated_db);
+}
+
+ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
+                                    std::shared_ptr<DbWrapper> db_wrapper,
+                                    const DBRole role,
+                                    const folly::SocketAddress& upstream_addr,
+                                    ReplicatedDB** replicated_db) {
+  // Change this
+  // Oh you already did :) 
+  // Well sort of
+  // Make it so you pass in the wrapper
+  // OR can pass in the db and then you make it # overloading # c++ # expert
   std::shared_ptr<ReplicatedDB> new_db(
     new ReplicatedDB(db_name, std::move(db_wrapper), executor_.get(),
                      role, upstream_addr, &client_pool_));
