@@ -8,10 +8,32 @@ import org.apache.helix.participant.statemachine.StateModelFactory;
 import org.apache.helix.participant.statemachine.StateModelInfo;
 
 
+/*
+ * FROM PARENT CLASS:
+ * Generic leader-standby state model impl for helix services. It requires implementing
+ * service-specific o->s, s->l, l->s, s->o, and reset methods, and provides
+ * default impl for the reset
+ *
+ * @StateModelInfo(initialState = "OFFLINE", states = {
+ *     "LEADER", "STANDBY"
+ * })
+ */
 public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateModel> {
-  public CdcLeaderStandbyStateModelFactory() {
+  final String zkConnectString;
 
+  public CdcLeaderStandbyStateModelFactory(final String zkConnectString) {
+    this.zkConnectString = zkConnectString
   }
+
+  @Override
+  public StateModel createNewStateModel(String resourceName, String partitionName) {
+    LOG.error("Create a new state for " + partitionName);
+    return new CdcLeaderStandbyStateModel(
+        resourceName,
+        zkConnectString,
+        partitionName);
+  }
+
 
   public static class CdcLeaderStandbyStateModel extends AbstractHelixLeaderStandbyStateModel  {
     private final String resourceName;
