@@ -67,21 +67,22 @@ public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateMo
       Utils.logTransitionCompletionMessage(message);
     }
 
-
     @Override
-    public void onBecomeOfflineFromDropped(
-        Message message, NotificationContext context) {
-  	  super(message, context);
-      reset();
-      logStateTransition("DROPPED", "OFFLINE", message == null ? "" : message.getPartitionName(),
-          message == null ? "" : message.getTgtName());
+    public void onBecomeOfflineFromDropped(Message message, NotificationContext context) {
+  	  super.onBecomeOfflineFromDropped(message, context);
+      Utils.checkStateTransitions("DROPPED", "OFFLINE", message, resourceName, partitionName);
+      Utils.logTransitionMessage(message);
+
+      Utils.logTransitionCompletionMessage(message);
     }
   
     @Override
     public void onBecomeOfflineFromError(Message message, NotificationContext context) {
-      reset();
-      logStateTransition("ERROR", "OFFLINE", message == null ? "" : message.getPartitionName(),
-          message == null ? "" : message.getTgtName());
+  	  super.onBecomeOfflineFromError(message, context);
+      Utils.checkStateTransitions("ERROR", "OFFLINE", message, resourceName, partitionName);
+      Utils.logTransitionMessage(message);
+
+      Utils.logTransitionCompletionMessage(message);
     }
 
     @Override
