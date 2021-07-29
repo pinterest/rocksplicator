@@ -585,7 +585,7 @@ bool S3Concurrent::setUploadMBps(uint64_t upload_MBps) {
 
 bool S3Concurrent::enqueuePutObject(const string& s3_bucket, const string& key,
                                     const string& local_path, const string& sync_group_id){
-  LOG(INFO) << "S3Concurrent::enqueuePutObject sync_group_id: "<< sync_group_id << " local_path: "  << local_path << " key: " << key;
+  LOG(INFO) << "S3Concurrent::enqueuePutObject" << " key: " << key;
   {
     std::lock_guard<std::mutex> lock(handles_mutex_);
     auto sync_collection_ptr = handles_.find(sync_group_id);
@@ -607,7 +607,7 @@ bool S3Concurrent::Sync(const string& sync_group_id) {
   uint64_t num_files_transferred = 0;
   uint64_t num_bytes_transferred = 0;
   uint64_t num_failures = 0;
-  LOG(INFO) << "S3Concurrent::Sync sync_group: " << sync_group_id;
+  LOG(INFO) << "S3Concurrent::Sync()";
   vector<std::shared_ptr<Aws::Transfer::TransferHandle>> sync_group;
   {
     std::lock_guard<std::mutex> lock(handles_mutex_);
@@ -622,12 +622,12 @@ bool S3Concurrent::Sync(const string& sync_group_id) {
   for(auto &h: sync_group){
     h->WaitUntilFinished();
     if (h->GetStatus() == Aws::Transfer::TransferStatus::COMPLETED) {
-      LOG(INFO) << "S3Concurrent::Sync sync_group: " << sync_group_id << " transfer success: " << h->GetTargetFilePath();
+      LOG(INFO) << "S3Concurrent::Sync success: " << h->GetTargetFilePath();
       Stats::get()->Incr(kS3PutObject);
       num_bytes_transferred += h->GetBytesTransferred();
       num_files_transferred ++;
     } else {
-      LOG(ERROR) << "S3Concurrent::Sync sync_group: " << sync_group_id << " transfer fail: " << h->GetTargetFilePath();
+      LOG(INFO) << "S3Concurrent::Sync fail "<< h->GetTargetFilePath();
       failures_.push_back(h);
       num_failures++;
       LOG(ERROR)
@@ -636,7 +636,7 @@ bool S3Concurrent::Sync(const string& sync_group_id) {
     }
   }
 
-  LOG(INFO) << "S3Concurrent sync_group: " << sync_group_id
+  LOG(INFO) << "S3Concurrent::Sync complete "
             << " transferred: " << num_files_transferred
             << " failures: " << num_failures;
   return num_files_transferred == sync_group.size();

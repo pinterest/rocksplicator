@@ -1009,7 +1009,7 @@ if (FLAGS_enable_checkpoint_backup) {
       }
       s3_conc_->enqueuePutObject(request->s3_bucket, formatted_s3_dir_path + kMetaFilename, dbmeta_path, sync_group_id);
     }
-    if (!s3_conc_->Sync(formatted_s3_dir_path)) {
+    if (!s3_conc_->Sync(sync_group_id)) {
       SetException("Failed to sync all files to s3", AdminErrorCode::DB_ADMIN_ERROR, &callback);
       common::Stats::get()->Incr(kS3BackupFailure);
     }
