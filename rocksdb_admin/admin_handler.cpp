@@ -98,7 +98,7 @@ DEFINE_int32(max_s3_sst_loading_concurrency, 999,
              "Max S3 SST loading concurrency");
 
 DEFINE_int32(s3_download_limit_mb, 0, "S3 download sst bandwidth");
-DEFINE_int32(s3_upload_limit_mb, 600, "S3 upload sst bandwidth");
+DEFINE_int32(s3_upload_limit_mb, 450, "S3 upload sst bandwidth");
 
 DEFINE_int32(kafka_ts_update_interval, 1000, "Number of kafka messages consumed"
                                              " before updating meta_db");
