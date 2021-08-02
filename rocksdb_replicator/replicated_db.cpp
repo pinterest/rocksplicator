@@ -107,7 +107,9 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
       // consider having a dedicated set of worker threads for admin requests,
       // and/or provide async write API when this turns out to be a problem.
       if (!max_seq_no_acked_.wait(cur_seq_no, FLAGS_replicator_timeout_ms)) {
-        throw ReturnCode::WAIT_SLAVE_TIMEOUT;
+        incCounter(kReplicatorTimedOut, 1, db_name_);
+        LOG(ERROR) << "Failed to receive ack from follower, timing out for " << db_name_;
+        return rocksdb::Status::TimedOut("Failed to receive ack from follower");
       }
       break;
     default:
