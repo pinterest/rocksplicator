@@ -59,12 +59,19 @@ class S3FatalException : public std::exception {
 class S3Env : public Env {
 
  public:
-  explicit S3Env(const std::string& s3_key_prefix,
+  explicit S3Env(const std::string& s3_bucket,
+                 const std::string& s3_key_prefix,
                  const std::string& local_directory,
-                 std::shared_ptr<common::S3Util> s3_util) :
+                 std::shared_ptr<common::S3Util> s3_util,
+                 common::S3Concurrent* const s3_conc,
+                 const std::string& sync_group_id) :
+      s3_bucket_(s3_bucket),
       s3_key_prefix_(s3_key_prefix),
       local_directory_(local_directory),
-      s3_util_(std::move(s3_util)) {
+      s3_util_(std::move(s3_util)),
+      s3_conc_(s3_conc),
+      sync_group_id_(sync_group_id)
+  {
     posix_env_ = Env::Default();
   }
 
@@ -186,12 +193,18 @@ class S3Env : public Env {
   Env* GetBaseEnv() { return posix_env_; }
 
  private:
+  // s3 bucket
+  const std::string s3_bucket_;
   // s3 object key prefix
   const std::string s3_key_prefix_;
   // Local directory to temporarily store the files downloaded from/uploading to S3
   const std::string local_directory_;
+  // string common to all files in a db backup operation
+  const std::string sync_group_id_;
+
   // S3 util used for accessing AWS S3
   std::shared_ptr<common::S3Util> s3_util_;
+  common::S3Concurrent* s3_conc_{};
   // This object is derived from Env, but not from
   // posixEnv. We have posixEnv as an encapsulated
   // object here so that we can use posix timers,
