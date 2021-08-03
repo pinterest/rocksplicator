@@ -922,6 +922,7 @@ void AdminHandler::async_tm_backupDBToS3(
     num_current_s3_sst_uploadings_.fetch_sub(1);
   };
   common::Timer timer(kS3BackupMs);
+  LOG(INFO) << "S3 Backup " << request->db_name << " to " << request->s3_backup_dir;
 
   auto ts = common::timeutil::GetCurrentTimestamp();
   auto local_path = folly::stringPrintf("%ss3_tmp/%s%d/", FLAGS_rocksdb_dir.c_str(), request->db_name.c_str(), ts);
@@ -1041,7 +1042,7 @@ if (FLAGS_enable_checkpoint_backup) {
     return;
   }
   LOG(INFO) << "S3 Backup is done for " << request->db_name
-            << " with latency(ms)" << timer.getElapsedTimeMs();
+            << " with latency(ms) " << timer.getElapsedTimeMs();
   common::Stats::get()->Incr(kS3BackupSuccess);
   callback->result(BackupDBToS3Response());
 }

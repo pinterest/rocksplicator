@@ -625,7 +625,7 @@ bool S3Concurrent::Sync(const string& sync_group_id) {
       LOG(INFO) << "S3Concurrent::Sync success: " << h->GetTargetFilePath();
       Stats::get()->Incr(kS3PutObject);
       num_bytes_transferred += h->GetBytesTransferred();
-      num_files_transferred ++;
+      num_files_transferred++;
     } else {
       LOG(INFO) << "S3Concurrent::Sync fail "<< h->GetTargetFilePath();
       failures_.push_back(h);
