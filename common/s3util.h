@@ -26,6 +26,9 @@
 #include <aws/core/http/HttpResponse.h>
 #include <aws/core/utils/memory/stl/AWSStringStream.h>
 #include <aws/core/utils/Outcome.h>
+#include "aws/core/utils/ratelimiter/DefaultRateLimiter.h"
+#include <aws/transfer/TransferManager.h>
+
 #include <boost/iostreams/categories.hpp>
 
 #include <iosfwd>
@@ -55,6 +58,7 @@ using Aws::S3::S3Endpoint::ForRegion;
 DECLARE_int32(direct_io_buffer_n_pages);
 
 namespace common {
+
 
 template <class T>
 class S3UtilResponse {
@@ -174,7 +178,7 @@ class S3Util {
   };
 
   ~S3Util() {
-    TryAwsShutdownAPI(options_);
+    TryAwsShutdownAPI();
   }
   // Download an S3 Object to a local file
   GetObjectResponse getObject(const string& key, const string& local_path,
@@ -260,15 +264,14 @@ class S3Util {
  private:
   explicit S3Util(const string& bucket,
                   const ClientConfiguration& client_config,
-                  const SDKOptions& options,
                   const uint32_t read_ratelimit_mb,
                   const uint32_t write_ratelimit_mb) :
-      bucket_(std::move(bucket)), options_(options),
+      bucket_(std::move(bucket)),
       read_ratelimit_mb_(read_ratelimit_mb),
       write_ratelimit_mb_(write_ratelimit_mb) {
-    TryAwsInitAPI(options);
+    TryAwsInitAPI();
     // s3Client initialization must happen AFTER TryAwsInitAPI(), otherwise
-    // core dump may happen. 
+    // core dump may happen.
     s3Client = std::make_unique<CutomizedS3Client>(client_config);
     Aws::StringStream ss;
     ss << Aws::Http::SchemeMapper::ToString(client_config.scheme) << "://";
@@ -287,35 +290,47 @@ class S3Util {
 
   // When there is no other S3Util instances, call Aws::InitAPI() to initialize
   // aws environment.
-  static void TryAwsInitAPI(const SDKOptions& options) {
-    std::lock_guard<std::mutex> guard(counter_mutex_);
-    if (instance_counter_ == 0) {
-      Aws::InitAPI(options);
-    }
-    ++instance_counter_;
-  }
+  static void TryAwsInitAPI();
   // When there is no other S3Util instance left, shutdown/cleanup aws
   // environment.
-  static void TryAwsShutdownAPI(const SDKOptions& options) {
-    std::lock_guard<std::mutex> guard(counter_mutex_);
-    --instance_counter_;
-    if (instance_counter_ == 0) {
-      Aws::ShutdownAPI(options);
-    }
-  }
-
+  static void TryAwsShutdownAPI();
+  static std::mutex counter_mutex_;
+  static uint32_t instance_counter_;
+  static SDKOptions options_;
   const string bucket_;
   // S3Client is thread safe:
   // https://github.com/aws/aws-sdk-cpp/issues/166
   std::unique_ptr<CutomizedS3Client> s3Client;
-  SDKOptions options_;
   std::string uri_;
   const uint32_t read_ratelimit_mb_;
   const uint32_t write_ratelimit_mb_;
-  // To track the number of S3Util instances. Only call Aws::ShutdownAPI() when
-  // there is no other instance exists.
-  static std::mutex counter_mutex_;
-  static uint32_t instance_counter_;
+  friend class S3Concurrent; // for access to init/shutdown api
+};
+
+class S3Concurrent {
+ public:
+  S3Concurrent(const int upload_MBps);
+  ~S3Concurrent();
+  bool enqueuePutObject(const string& s3_bucket,
+                        const string& local_path,
+                        const string& key,
+                        const string& sync_group_id);
+  bool Sync(const string& sync_group_id);
+  bool setUploadMBps(uint64_t upload_MBps);
+  void clearFailures();
+
+private:
+  Aws::Client::ClientConfiguration client_config_;
+  Aws::Utils::Threading::PooledThreadExecutor executor_;
+  Aws::Transfer::TransferManagerConfiguration transfer_config_;
+  std::shared_ptr<Aws::Transfer::TransferManager> transfer_manager_;
+  std::shared_ptr<Aws::Client::AsyncCallerContext> context_;
+  std::shared_ptr<Aws::S3::S3Client> s3_client_;
+  std::shared_ptr<Aws::Utils::RateLimits::DefaultRateLimiter<>> rate_limiter_;
+  std::mutex handles_mutex_;
+  map<string, vector<std::shared_ptr<Aws::Transfer::TransferHandle>>> handles_;
+  vector<std::shared_ptr<Aws::Transfer::TransferHandle>> failures_;
+  const int default_s3_upload_MBps;
 };
 
 }  // namespace common
