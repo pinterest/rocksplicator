@@ -98,6 +98,7 @@ DEFINE_int32(max_s3_sst_loading_concurrency, 999,
              "Max S3 SST loading concurrency");
 
 DEFINE_int32(s3_download_limit_mb, 0, "S3 download sst bandwidth");
+DEFINE_int32(s3_upload_limit_mb, 450, "S3 upload sst bandwidth");
 
 DEFINE_int32(kafka_ts_update_interval, 1000, "Number of kafka messages consumed"
                                              " before updating meta_db");
@@ -483,6 +484,8 @@ AdminHandler::AdminHandler(
       LOG(INFO) << "Stopping DB deletioin thread ...";
     });
   }
+
+  s3_conc_ = std::make_shared<common::S3Concurrent>(FLAGS_s3_upload_limit_mb);
 }
 
 AdminHandler::~AdminHandler() {
@@ -725,7 +728,7 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
   assert(env_holder != nullptr);
   db_admin_lock_.Lock(db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
-
+  
   auto db = db_manager_->getDB(db_name, nullptr);
   if (db) {
     e->errorCode = AdminErrorCode::DB_EXIST;
@@ -911,38 +914,33 @@ void AdminHandler::async_tm_backupDBToS3(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       BackupDBToS3Response>>> callback,
     std::unique_ptr<BackupDBToS3Request> request) {
+  LOG(INFO) << "S3 Backup " << request->db_name << " to " << request->s3_backup_dir;
+
   AdminException e;
   const auto n = num_current_s3_sst_uploadings_.fetch_add(1);
   SCOPE_EXIT {
     num_current_s3_sst_uploadings_.fetch_sub(1);
   };
-
-  if (n >= FLAGS_max_s3_sst_loading_concurrency) {
-    auto err_str =
-        folly::stringPrintf("Concurrent uploading/downloading limit hits %d by %s",
-                            n, request->db_name.c_str());
-    SetException(err_str, AdminErrorCode::DB_ADMIN_ERROR, &callback);
-    LOG(ERROR) << err_str;
-    common::Stats::get()->Incr(kS3BackupFailure);
-    return;
-  }
-
   common::Timer timer(kS3BackupMs);
   LOG(INFO) << "S3 Backup " << request->db_name << " to " << request->s3_backup_dir;
+
   auto ts = common::timeutil::GetCurrentTimestamp();
   auto local_path = folly::stringPrintf("%ss3_tmp/%s%d/", FLAGS_rocksdb_dir.c_str(), request->db_name.c_str(), ts);
+  const std::string sync_group_id = request->s3_backup_dir;
+  
   boost::system::error_code remove_err;
   boost::system::error_code create_err;
   boost::filesystem::remove_all(local_path, remove_err);
   boost::filesystem::create_directories(local_path, create_err);
+
   SCOPE_EXIT { boost::filesystem::remove_all(local_path, remove_err); };
   if (remove_err || create_err) {
     SetException("Cannot remove/create dir for backup: " + local_path, AdminErrorCode::DB_ADMIN_ERROR, &callback);
     common::Stats::get()->Incr(kS3BackupFailure);
     return;
   }
-
-  if (FLAGS_enable_checkpoint_backup) {
+  
+if (FLAGS_enable_checkpoint_backup) {
     db_admin_lock_.Lock(request->db_name);
     SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
@@ -986,70 +984,14 @@ void AdminHandler::async_tm_backupDBToS3(
     auto local_s3_util = createLocalS3Util(request->limit_mbs, request->s3_bucket);
     std::string formatted_s3_dir_path = ensure_ends_with_pathsep(request->s3_backup_dir);
     std::string formatted_checkpoint_local_path = ensure_ends_with_pathsep(checkpoint_local_path);
-    auto upload_func = [&](const std::string& dest, const std::string& source) {
-      LOG(INFO) << "Copying " << source << " to " << dest;
-      auto copy_resp = local_s3_util->putObject(dest, source);
-      if (!copy_resp.Error().empty()) {
-        LOG(ERROR)
-            << "Error happened when uploading files from checkpoint to S3: "
-            << copy_resp.Error();
-        return false;
+    s3_conc_->setUploadMBps(request->limit_mbs);
+    for (const auto& file : checkpoint_files) {
+      if (file == "." || file == "..") {
+        continue;
       }
-      return true;
-    };
-
-    if (FLAGS_checkpoint_backup_batch_num_upload > 1) {
-      // Upload checkpoint files to s3 in parallel
-      std::vector<std::vector<std::string>> file_batches(FLAGS_checkpoint_backup_batch_num_upload);
-      for (size_t i = 0; i < checkpoint_files.size(); ++i) {
-        auto& file = checkpoint_files[i];
-        if (file == "." || file == "..") {
-          continue;
-        }
-        file_batches[i%FLAGS_checkpoint_backup_batch_num_upload].push_back(file);
-      }
-
-      std::vector<folly::Future<bool>> futures;
-      for (auto& files : file_batches) {
-        auto p = folly::Promise<bool>();
-        futures.push_back(p.getFuture());
-
-        S3UploadAndDownloadExecutor()->add(
-            [&, files = std::move(files), p = std::move(p)]() mutable {
-              for (const auto& file : files) {
-                if (!upload_func(formatted_s3_dir_path + file, formatted_checkpoint_local_path + file)) {
-                  p.setValue(false);
-                  return;
-                }
-              }
-              p.setValue(true);
-            });
-      }
-
-      for (auto& f : futures) {
-        auto res = std::move(f).get();
-        if (!res) {
-          SetException("Error happened when uploading files from checkpoint to S3",
-                       AdminErrorCode::DB_ADMIN_ERROR,
-                       &callback);
-          common::Stats::get()->Incr(kS3BackupFailure);
-          return;
-        }
-      }
-    } else {
-      for (const auto& file : checkpoint_files) {
-        if (file == "." || file == "..") {
-          continue;
-        }
-        if (!upload_func(formatted_s3_dir_path + file, formatted_checkpoint_local_path + file)) {
-          // If there is error in one file uploading, then we fail the whole backup process
-          SetException("Error happened when uploading files from checkpoint to S3",
-                       AdminErrorCode::DB_ADMIN_ERROR,
-                       &callback);
-          common::Stats::get()->Incr(kS3BackupFailure);
-          return;
-        }
-      }
+      s3_conc_->enqueuePutObject(request->s3_bucket, formatted_s3_dir_path + file,
+                                 formatted_checkpoint_local_path + file,
+                                 sync_group_id);
     }
 
     if (request->__isset.include_meta && request->include_meta) {
@@ -1066,20 +1008,19 @@ void AdminHandler::async_tm_backupDBToS3(
         common::Stats::get()->Incr(kS3BackupFailure);
         return;
       }
-      if (!upload_func(formatted_s3_dir_path + kMetaFilename, dbmeta_path)) {
-        SetException("Error happened when upload meta from checkpoint to S3",
-                     AdminErrorCode::DB_ADMIN_ERROR, &callback);
-        common::Stats::get()->Incr(kS3BackupFailure);
-        return;
-      }
+      s3_conc_->enqueuePutObject(request->s3_bucket, formatted_s3_dir_path + kMetaFilename, dbmeta_path, sync_group_id);
     }
-
+    if (!s3_conc_->Sync(sync_group_id)) {
+      SetException("Failed to sync all files to s3", AdminErrorCode::DB_ADMIN_ERROR, &callback);
+      common::Stats::get()->Incr(kS3BackupFailure);
+    }
     // Delete the directory to remove the snapshot.
     boost::filesystem::remove_all(local_path);
+
   } else {
     auto local_s3_util = createLocalS3Util(request->limit_mbs, request->s3_bucket);
     std::string formatted_s3_dir_path = rtrim(request->s3_backup_dir, '/');
-    rocksdb::Env* s3_env = new rocksdb::S3Env(formatted_s3_dir_path, local_path, std::move(local_s3_util));
+    rocksdb::Env* s3_env = new rocksdb::S3Env(request->s3_bucket, formatted_s3_dir_path, local_path, std::move(local_s3_util), s3_conc_.get(), sync_group_id);
     const bool share_files_with_checksum = request->__isset.share_files_with_checksum && request->share_files_with_checksum;
     const bool include_meta = request->__isset.include_meta && request->include_meta;
     if (!backupDBHelper(request->db_name,
@@ -1095,7 +1036,11 @@ void AdminHandler::async_tm_backupDBToS3(
       return;
     }
   }
-
+  if (!s3_conc_->Sync(sync_group_id)) {
+    callback.release()->exceptionInThread(std::move(e));
+    common::Stats::get()->Incr(kS3BackupFailure);
+    return;
+  }
   LOG(INFO) << "S3 Backup is done for " << request->db_name
             << " with latency(ms) " << timer.getElapsedTimeMs();
   common::Stats::get()->Incr(kS3BackupSuccess);
@@ -1125,6 +1070,7 @@ void AdminHandler::async_tm_restoreDBFromS3(
   auto ts = common::timeutil::GetCurrentTimestamp();
   auto local_path = FLAGS_enable_checkpoint_backup ? FLAGS_rocksdb_dir + request->db_name :
                     folly::stringPrintf("%ss3_tmp/%s%d/", FLAGS_rocksdb_dir.c_str(), request->db_name.c_str(), ts);
+  const std::string sync_group_id = request->s3_backup_dir;
   boost::system::error_code remove_err;
   boost::system::error_code create_err;
   boost::filesystem::remove_all(local_path, remove_err);
@@ -1275,8 +1221,8 @@ void AdminHandler::async_tm_restoreDBFromS3(
     }
   } else {
     std::string formatted_s3_dir_path = rtrim(request->s3_backup_dir, '/');
-    rocksdb::Env* s3_env = new rocksdb::S3Env(
-        formatted_s3_dir_path, std::move(local_path), std::move(local_s3_util));
+    rocksdb::Env* s3_env = new rocksdb::S3Env(request->s3_bucket, formatted_s3_dir_path, std::move(local_path),
+                                              std::move(local_s3_util), s3_conc_.get(), sync_group_id);
 
     if (!restoreDBHelper(request->db_name,
                          formatted_s3_dir_path,
@@ -1339,7 +1285,7 @@ void AdminHandler::async_tm_checkDB(
     }
   }
 
-  if (request->__isset.include_meta) {
+  if (request->__isset.include_meta && request->include_meta) {
     auto meta = getMetaData(request->db_name);
     std::map<std::string, std::string> metas;
     metas["s3_bucket"] = meta.s3_bucket;
@@ -1586,7 +1532,6 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     std::unique_ptr<AddS3SstFilesToDBRequest> request) {
   admin::AdminException e;
   e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
-
   db_admin_lock_.Lock(request->db_name);
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
