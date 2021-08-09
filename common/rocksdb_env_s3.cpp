@@ -420,27 +420,22 @@ Status S3Env::RenameFile(const std::string& src, const std::string& target) {
       if (file == "." || file == "..") {
         continue;
       }
-      if (s3_conc_) {
-        s3_conc_->enqueuePutObject(s3_bucket_, target + file, local_target_path + file, sync_group_id_);
-      } else {
-        auto copy_resp = s3_util_->putObject(target + file, local_target_path + file);
-        if (!copy_resp.Error().empty()) {
-          LOG(ERROR) << "Error happened when uploading file to S3: " << copy_resp.Error();
-          return Status::IOError();
-        }
-      }
-    }
-  } else {
-    if (s3_conc_) {
-      s3_conc_->enqueuePutObject(s3_bucket_, target, local_target_path, sync_group_id_);
-    } else {
-      auto copy_resp = s3_util_->putObject(target, local_target_path);
+      auto copy_resp = s3_util_->putObject(target + file, local_target_path + file);
       if (!copy_resp.Error().empty()) {
-        LOG(ERROR) << "Error happened when uploading file to S3: " << copy_resp.Error();
+        LOG(ERROR) << "Error happened when uploading file to S3: "
+                   << copy_resp.Error();
         return Status::IOError();
       }
     }
+  } else {
+    auto copy_resp = s3_util_->putObject(target, local_target_path);
+    if (!copy_resp.Error().empty()) {
+      LOG(ERROR) << "Error happened when uploading file to S3: "
+                 << copy_resp.Error();
+      return Status::IOError();
+    }
   }
+
   return Status::OK();
 }
 
