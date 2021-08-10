@@ -76,6 +76,7 @@ namespace replicator {
 rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
     const rocksdb::WriteOptions& options,
     rocksdb::WriteBatch* updates,
+    const common::Config& config,
     rocksdb::SequenceNumber* seq_no) {
   if (role_ == DBRole::SLAVE) {
     throw ReturnCode::WRITE_TO_SLAVE;
@@ -90,6 +91,11 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
   auto status = db_wrapper_->WriteToLeader(options, updates);
   auto end = GetCurrentTimeMs();
   logMetric(kReplicatorWriteMs, start < end ? end - start : 0, db_name_);
+  
+  // for now we have to support both till all clusters are migrated
+  auto replication_mode =  config.replication_mode > FLAGS_replicator_replication_mode ? 
+                            config.replication_mode :  FLAGS_replicator_replication_mode;
+
   if (status.ok()) {
     cond_var_.notifyAll();
 
@@ -100,7 +106,7 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
       *seq_no = cur_seq_no;
     }
 
-    switch (FLAGS_replicator_replication_mode) {
+    switch (replication_mode) {
     case 1:
     case 2:
       // TODO(bol): This potentially could block all worker threads. We may
@@ -113,8 +119,8 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
       }
       break;
     default:
-      CHECK(FLAGS_replicator_replication_mode == 0)
-        << "Invalid replicaton mode " << FLAGS_replicator_replication_mode;
+      CHECK(replication_mode == 0)
+        << "Invalid replicaton mode " << replication_mode;
     }
   }
 
@@ -281,7 +287,8 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
 
 void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
     std::unique_ptr<CallbackType> callback,
-    std::unique_ptr<ReplicateRequest> request) {
+    std::unique_ptr<ReplicateRequest> request,
+    const common::Config& config) {
   CHECK(request->db_name == db_name_);
 
   auto db = shared_from_this();
@@ -294,8 +301,8 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
     logMetric(kReplicatorLeaderSequenceNumbersBehind, seq_no - leaderSeqNum, db ->db_name_);
   }
 
-  if (FLAGS_replicator_replication_mode == 1 ||
-      FLAGS_replicator_replication_mode == 2) {
+  auto replication_mode =  config.replication_mode > FLAGS_replicator_replication_mode ? config.replication_mode :  FLAGS_replicator_replication_mode;
+  if (replication_mode == 1 || replication_mode == 2) {
     // post the largest sequence number the Slave has committed
     max_seq_no_acked_.post(seq_no);
   }
@@ -304,6 +311,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
   cond_var_.runIfConditionOrWaitForNotify(
       // Operation
       [weak_db = std::move(weak_db),
+      replication_mode,
        // TODO(bol) remove folly::makeMoveWrapper() when move to gcc 5.1
        request = folly::makeMoveWrapper(std::move(request)),
        callback = folly::makeMoveWrapper(std::move(callback))] () mutable {
@@ -364,7 +372,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
           }
 
           (*callback).release()->resultInThread(std::move(response));
-          if (FLAGS_replicator_replication_mode == 1) {
+          if (replication_mode == 1) {
             // post the largest sequence number we have written to the Slave.
             db->max_seq_no_acked_.post(next_seq_no - 1);
           }
