@@ -483,6 +483,10 @@ AdminHandler::AdminHandler(
       LOG(INFO) << "Stopping DB deletioin thread ...";
     });
   }
+
+  // Initialize the atomic int variables
+  num_current_s3_sst_downloadings_.store(0);
+  num_current_s3_sst_uploadings_.store(0);
 }
 
 AdminHandler::~AdminHandler() {
