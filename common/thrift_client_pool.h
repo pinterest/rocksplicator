@@ -126,8 +126,8 @@ class ThriftClientPool {
 
     void connectError(const apache::thrift::transport::TTransportException& ex)
         noexcept override {
-      LOG(ERROR) << peer_addr << " ConnectError: " << ex.what()
-                 << " after " << elapsedTime() << " seconds";
+      LOG_EVERY_N(ERROR, FLAGS_thrift_client_pool_log_frequency) << peer_addr <<
+        " ConnectError: " << ex.what() << " after " << elapsedTime() << " seconds";
 
       is_good.store(false);
     }
