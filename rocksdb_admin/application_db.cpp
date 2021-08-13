@@ -120,12 +120,13 @@ std::vector<rocksdb::Status> ApplicationDB::MultiGet(
 }
 
 rocksdb::Status ApplicationDB::Write(const rocksdb::WriteOptions& options,
-    rocksdb::WriteBatch* write_batch) {
+    rocksdb::WriteBatch* write_batch,
+    const common::Config& config) {
   common::Stats::get()->Incr(kRocksdbWrite);
   common::Stats::get()->Incr(kRocksdbWriteBytes, write_batch->GetDataSize());
   common::Timer timer(kRocksdbWriteMs);
   if (replicated_db_) {
-    return replicated_db_->Write(options, write_batch);
+    return replicated_db_->Write(options, write_batch, config);
   } else {
     // ApplicationDBManager can be use to manage rocksdb instance lifecycle
     // without replication. In this case, ApplicationDB has the replicator::DBRole

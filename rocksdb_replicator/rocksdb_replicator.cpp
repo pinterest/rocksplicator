@@ -159,6 +159,7 @@ ReturnCode RocksDBReplicator::removeDB(const std::string& db_name) {
 ReturnCode RocksDBReplicator::write(const std::string& db_name,
                                     const rocksdb::WriteOptions& options,
                                     rocksdb::WriteBatch* updates,
+                                    const common::Config& config,
                                     rocksdb::SequenceNumber* seq_no) {
   std::shared_ptr<ReplicatedDB> db;
   if (!db_map_.get(db_name, &db)) {
@@ -166,7 +167,7 @@ ReturnCode RocksDBReplicator::write(const std::string& db_name,
   }
 
   try {
-    auto status = db->Write(options, updates, seq_no);
+    auto status = db->Write(options, updates, config, seq_no);
     return status.ok() ? ReturnCode::OK : ReturnCode::WRITE_ERROR;
   } catch (const ReturnCode code) {
     return code;
