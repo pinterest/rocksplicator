@@ -147,6 +147,7 @@ class AdminHandler : virtual public AdminSvIf {
   // Put db_admin_lock in protected to provide flexibility
   // of overriding some admin functions
   common::ObjectLock<std::string> db_admin_lock_;
+  RocksDBOptionsGeneratorType rocksdb_options_;
 
  private:
   std::unique_ptr<rocksdb::DB> removeDB(const std::string& db_name,
@@ -160,7 +161,6 @@ class AdminHandler : virtual public AdminSvIf {
                      const int64_t last_kafka_msg_timestamp_ms = -1);
 
   std::unique_ptr<ApplicationDBManager> db_manager_;
-  RocksDBOptionsGeneratorType rocksdb_options_;
   // S3 util used for download
   std::shared_ptr<common::S3Util> s3_util_;
   // Lock for protecting the s3 util
