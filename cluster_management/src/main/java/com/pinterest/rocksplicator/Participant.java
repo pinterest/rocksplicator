@@ -388,6 +388,9 @@ public class Participant {
     } else if (stateModelType.equals("Task")) {
       taskFactoryRegistry
           .put("Dedup", new DedupTaskFactory(clusterName, port, useS3Backup, s3BucketName));
+    } else if (stateModelType.equals("CdcLeaderStandby")) {
+      stateModelFactory = new CdcLeaderStandbyStateModelFactory(
+          zkConnectString);
     } else {
       LOG.error("Unknown state model: " + stateModelType);
     }
