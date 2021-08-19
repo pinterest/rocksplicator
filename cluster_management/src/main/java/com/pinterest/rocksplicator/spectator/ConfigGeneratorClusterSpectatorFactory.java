@@ -23,14 +23,17 @@ public class ConfigGeneratorClusterSpectatorFactory implements ClusterSpectatorF
   private final String configPostUriPattern;
   private final String zkShardMapConnectString;
   private final String shardMapDownloadDir;
+  private final boolean enableCurrentStatesRouter;
 
   public ConfigGeneratorClusterSpectatorFactory(
       final String configPostUriPattern,
       final String zkShardMapConnectString,
-      final String shardMapDownloadDir) {
+      final String shardMapDownloadDir,
+      final boolean enableCurrentStatesRouter) {
     this.configPostUriPattern = configPostUriPattern;
     this.zkShardMapConnectString = zkShardMapConnectString;
     this.shardMapDownloadDir = shardMapDownloadDir;
+    this.enableCurrentStatesRouter = enableCurrentStatesRouter;
   }
 
   private String getConfigPostUri(String participantClusterName) {
@@ -52,6 +55,7 @@ public class ConfigGeneratorClusterSpectatorFactory implements ClusterSpectatorF
         myInstanceName,
         getConfigPostUri(participantClusterName),
         this.zkShardMapConnectString,
-        this.shardMapDownloadDir);
+        this.shardMapDownloadDir,
+        this.enableCurrentStatesRouter);
   }
 }
