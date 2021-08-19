@@ -9,6 +9,7 @@ import org.apache.helix.participant.AbstractHelixLeaderStandbyStateModel;
 import org.apache.helix.participant.statemachine.StateModel;
 import org.apache.helix.participant.statemachine.StateModelFactory;
 import org.apache.helix.participant.statemachine.StateModelInfo;
+import com.pinterest.rocksplicator.helix_client.HelixClient;
 
 
 /*
@@ -30,11 +31,9 @@ import org.apache.helix.participant.statemachine.StateModelInfo;
  *                         2           4        7 \  6  / 8
  *                                                 ERROR
  *
- * 1) Standby to Leader
- *    TODO(indy): Add observer
+ * 1) Standby to Leader: Add observer
  *
- * 2) Leader to Standby
- *    TODO(indy): Remove observer
+ * 2) Leader to Standby: Remove observer
  *
  * 3) Offline to Standby
  *
@@ -51,32 +50,44 @@ import org.apache.helix.participant.statemachine.StateModelInfo;
 public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateModel> {
   private static final Logger LOG = LoggerFactory.getLogger(CdcLeaderStandbyStateModelFactory.class);
   final String zkConnectString;
+  final int adminPort;
+  final String upstreamClusterConnectString;
+  final String upstreamClusterName;
 
-  public CdcLeaderStandbyStateModelFactory(final String zkConnectString) {
+  public CdcLeaderStandbyStateModelFactory(final String zkConnectString, final int adminPort, final String upstreamClusterConnectString, final String upstreamClusterName) {
+    this.adminPort = adminPort;
     this.zkConnectString = zkConnectString;
+    this.upstreamClusterConnectString = upstreamClusterConnectString;
+    this.upstreamClusterName = upstreamClusterName;
   }
 
   @Override
   public StateModel createNewStateModel(String resourceName, String partitionName) {
     LOG.error("Create a new state for " + partitionName);
     return new CdcLeaderStandbyStateModel(
-        resourceName,
+        resourceName, adminPort,
         zkConnectString,
-        partitionName);
+        partitionName, upstreamClusterConnectString, upstreamClusterName);
   }
 
 
   public static class CdcLeaderStandbyStateModel extends AbstractHelixLeaderStandbyStateModel  {
     private final String resourceName;
+    private final int adminPort;
     private final String partitionName;
+    private final String upstreamClusterConnectString;
+    private final String upstreamClusterName;
 
     @StateModelInfo(initialState = "OFFLINE", states = {
         "LEADER", "STANDBY"
     })
-    public CdcLeaderStandbyStateModel(String resourceName, final String zkConnectString, String partitionName) {
+    public CdcLeaderStandbyStateModel(final String resourceName, final int adminPort, final String zkConnectString, final String partitionName, final String upstreamClusterConnectString, final String upstreamClusterName) {
       super(zkConnectString);
       this.partitionName = partitionName;
+      this.adminPort = adminPort;
       this.resourceName = resourceName;
+      this.upstreamClusterConnectString = upstreamClusterConnectString;
+      this.upstreamClusterName = upstreamClusterName;
     }
 
     @Override
@@ -86,7 +97,10 @@ public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateMo
     public void onBecomeLeaderFromStandby(Message message, NotificationContext context) {
       Utils.checkStateTransitions("STANDBY", "LEADER", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
-      // Add observer
+      // DB name = partition name padded with 0s
+      String dbName = Utils.getDbName(this.partitionName);
+      String hostport = HelixClient.getleaderInstanceId(upstreamClusterConnectString, upstreamClusterName, this.resourceName, this.partitionName);
+      CdcUtils.addObserver(dbName, hostport, this.adminPort);
       Utils.logTransitionCompletionMessage(message);
     }
 
@@ -98,7 +112,7 @@ public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateMo
       Utils.checkStateTransitions("LEADER", "STANDBY", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
         String dbName = Utils.getDbName(this.partitionName);
-      // Remove observer
+      CdcUtils.removeObserver(dbName, adminPort);
       Utils.logTransitionCompletionMessage(message);
     }
 
