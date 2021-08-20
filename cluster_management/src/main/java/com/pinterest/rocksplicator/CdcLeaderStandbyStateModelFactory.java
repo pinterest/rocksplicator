@@ -1,5 +1,11 @@
 package com.pinterest.rocksplicator;
 
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.curator.framework.CuratorFrameworkFactory;
+import org.apache.curator.retry.ExponentialBackoffRetry;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -10,6 +16,7 @@ import org.apache.helix.participant.statemachine.StateModel;
 import org.apache.helix.participant.statemachine.StateModelFactory;
 import org.apache.helix.participant.statemachine.StateModelInfo;
 import com.pinterest.rocksplicator.helix_client.HelixClient;
+import com.pinterest.rocksplicator.utils.ZkPathUtils;
 
 
 /*
@@ -51,14 +58,10 @@ public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateMo
   private static final Logger LOG = LoggerFactory.getLogger(CdcLeaderStandbyStateModelFactory.class);
   final String zkConnectString;
   final int adminPort;
-  final String upstreamClusterConnectString;
-  final String upstreamClusterName;
 
-  public CdcLeaderStandbyStateModelFactory(final String zkConnectString, final int adminPort, final String upstreamClusterConnectString, final String upstreamClusterName) {
+  public CdcLeaderStandbyStateModelFactory(final String zkConnectString, final int adminPort) {
     this.adminPort = adminPort;
     this.zkConnectString = zkConnectString;
-    this.upstreamClusterConnectString = upstreamClusterConnectString;
-    this.upstreamClusterName = upstreamClusterName;
   }
 
   @Override
@@ -67,7 +70,7 @@ public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateMo
     return new CdcLeaderStandbyStateModel(
         resourceName, adminPort,
         zkConnectString,
-        partitionName, upstreamClusterConnectString, upstreamClusterName);
+        partitionName);
   }
 
 
@@ -81,13 +84,32 @@ public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateMo
     @StateModelInfo(initialState = "OFFLINE", states = {
         "LEADER", "STANDBY"
     })
-    public CdcLeaderStandbyStateModel(final String resourceName, final int adminPort, final String zkConnectString, final String partitionName, final String upstreamClusterConnectString, final String upstreamClusterName) {
+    public CdcLeaderStandbyStateModel(final String resourceName, final int adminPort, final String zkConnectString, final String partitionName) {
       super(zkConnectString);
       this.partitionName = partitionName;
       this.adminPort = adminPort;
       this.resourceName = resourceName;
-      this.upstreamClusterConnectString = upstreamClusterConnectString;
-      this.upstreamClusterName = upstreamClusterName;
+      String rocksObserverMetadataPath = ZkPathUtils.getRocksObserverMetadataPath(resourceName);
+      CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString,
+          new ExponentialBackoffRetry(1000, 3));
+      try {
+        zkClient.sync().forPath(rocksObserverMetadataPath);
+        String resourceMetadata = new String(zkClient.getData().forPath(rocksObserverMetadataPath));
+        JSONParser parser = new JSONParser();
+        try {
+          JSONObject obj = (JSONObject) parser.parse(resourceMetadata);
+          if (!obj.containsKey("resource_zk") || !obj.containsKey("resource_cluster")) {
+            throw new RuntimeException("Missing resource_zk or resource_cluster key in " + rocksObserverMetadataPath);
+          }
+          this.upstreamClusterConnectString = (String)obj.get("resource_zk");
+          this.upstreamClusterName = (String)obj.get("resource_cluster");
+        } catch (ParseException e) {
+          LOG.error("json parse ex for rocksobserver metadata " + e );
+          throw new RuntimeException(e);
+        }
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
     }
 
     @Override

@@ -49,8 +49,6 @@ DEFINE_string(handoff_client_event_history_json_shard_map_path,
   "",
   "[Optional]: path of shard_map generated from spectator in json format");
 
-DEFINE_string(upstream_cluster_zk_connect_string, "", "[Optional] ZK cluster to use for upstream for rocksobserver");
-DEFINE_string(upstream_cluster_name, "", "[Optional] cluster name to use for upstream for rocksobserver");
 
 namespace {
 
@@ -177,14 +175,6 @@ void invokeClass(JNIEnv* env,
   if (!FLAGS_handoff_client_event_history_json_shard_map_path.empty()) {
     arguments.push_back(std::string("--handoffClientEventHistoryJsonShardMapPath"));
     arguments.push_back(std::string(FLAGS_handoff_client_event_history_json_shard_map_path));
-  }
-  if (!FLAGS_upstream_cluster_zk_connect_string.empty()) {
-    arguments.push_back(std::string("--upstreamClusterConnectString"));
-    arguments.push_back(std::string(FLAGS_upstream_cluster_zk_connect_string));
-  }
-  if (!FLAGS_upstream_cluster_name.empty()) {
-    arguments.push_back(std::string("--upstreamClusterName"));
-    arguments.push_back(std::string(FLAGS_upstream_cluster_name));
   }
 
 
