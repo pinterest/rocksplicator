@@ -39,7 +39,8 @@ public class CdcUtils {
    * @return a client object
    * @throws TTransportException
    */
-  public static CdcAdmin.Client getCdcAdminClient(String host, int adminPort) throws TTransportException {
+  public static CdcAdmin.Client getCdcAdminClient(String host, int adminPort)
+      throws TTransportException {
     TSocket sock = new TSocket(host, adminPort);
     sock.open();
     return new CdcAdmin.Client(new TBinaryProtocol(sock));
@@ -47,18 +48,17 @@ public class CdcUtils {
 
 
   /**
-   * Add a DB as a Slave, and set it upstream to be itself. Do nothing if the DB already exists
-   * @param dbName
-   * @param adminPort
+   * Add an observer for a db
+   * @param dbName The name of the partition to observe
+   * @param upstreamAddr The upstream address of the leader for the partition
+   * @param adminPort the port to make the request on
    */
   public static AddObserverResponse addObserver(String dbName, String upstreamAddr, int adminPort) {
-    // TODO(indy): Error checking/handling here?
     try {
-
-    LOG.error("Add observer for: " + dbName);
-    CdcAdmin.Client client = getLocalCdcAdminClient(adminPort);
-    AddObserverRequest req = new AddObserverRequest(dbName, upstreamAddr);
-    return client.addObserver(req);
+      LOG.error("Add observer for: " + dbName);
+      CdcAdmin.Client client = getLocalCdcAdminClient(adminPort);
+      AddObserverRequest req = new AddObserverRequest(dbName, upstreamAddr);
+      return client.addObserver(req);
     } catch (CDCAdminException e) {
       LOG.error("Cdc admin exception when adding observer for " + dbName);
       throw new RuntimeException(e);
@@ -72,16 +72,16 @@ public class CdcUtils {
   }
 
   /**
-   * Close a DB
-   * @param dbName
-   * @param adminPort
+   * Remove an observer
+   * @param dbName the name of the db to remove the observer of
+   * @param adminPort the port to make the request on
    */
   public static RemoveObserverResponse removeObserver(String dbName, int adminPort) {
     try {
-    LOG.error("Remove observer for: " + dbName);
-    CdcAdmin.Client client = getLocalCdcAdminClient(adminPort);
-    RemoveObserverRequest req = new RemoveObserverRequest(dbName);
-    return client.removeObserver(req);
+      LOG.error("Remove observer for: " + dbName);
+      CdcAdmin.Client client = getLocalCdcAdminClient(adminPort);
+      RemoveObserverRequest req = new RemoveObserverRequest(dbName);
+      return client.removeObserver(req);
     } catch (CDCAdminException e) {
       LOG.error(dbName + " doesn't exist", e);
       throw new RuntimeException(e);

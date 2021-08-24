@@ -1,5 +1,8 @@
 package com.pinterest.rocksplicator;
 
+import com.pinterest.rocksplicator.helix_client.HelixClient;
+import com.pinterest.rocksplicator.utils.ZkPathUtils;
+
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
 import org.apache.curator.retry.ExponentialBackoffRetry;
@@ -15,8 +18,6 @@ import org.apache.helix.participant.AbstractHelixLeaderStandbyStateModel;
 import org.apache.helix.participant.statemachine.StateModel;
 import org.apache.helix.participant.statemachine.StateModelFactory;
 import org.apache.helix.participant.statemachine.StateModelInfo;
-import com.pinterest.rocksplicator.helix_client.HelixClient;
-import com.pinterest.rocksplicator.utils.ZkPathUtils;
 
 
 /*
@@ -121,8 +122,8 @@ public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateMo
       Utils.logTransitionMessage(message);
       // DB name = partition name padded with 0s
       String dbName = Utils.getDbName(this.partitionName);
-      String hostport = HelixClient.getleaderInstanceId(upstreamClusterConnectString, upstreamClusterName, this.resourceName, this.partitionName);
-      CdcUtils.addObserver(dbName, hostport, this.adminPort);
+      String hostPort = HelixClient.getleaderInstanceId(upstreamClusterConnectString, upstreamClusterName, this.resourceName, this.partitionName);
+      CdcUtils.addObserver(dbName, hostPort, this.adminPort);
       Utils.logTransitionCompletionMessage(message);
     }
 
@@ -133,7 +134,7 @@ public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateMo
     public void onBecomeStandbyFromLeader(Message message, NotificationContext context) {
       Utils.checkStateTransitions("LEADER", "STANDBY", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
-        String dbName = Utils.getDbName(this.partitionName);
+      String dbName = Utils.getDbName(this.partitionName);
       CdcUtils.removeObserver(dbName, adminPort);
       Utils.logTransitionCompletionMessage(message);
     }
@@ -176,7 +177,7 @@ public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateMo
      * 6) Dropped to Offline
      */
     public void onBecomeOfflineFromDropped(Message message, NotificationContext context) {
-  	  super.onBecomeOfflineFromDropped(message, context);
+      super.onBecomeOfflineFromDropped(message, context);
       Utils.checkStateTransitions("DROPPED", "OFFLINE", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
@@ -188,7 +189,7 @@ public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateMo
      * 7) Error to Offline
      */
     public void onBecomeOfflineFromError(Message message, NotificationContext context) {
-  	  super.onBecomeOfflineFromError(message, context);
+      super.onBecomeOfflineFromError(message, context);
       Utils.checkStateTransitions("ERROR", "OFFLINE", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
@@ -200,7 +201,7 @@ public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateMo
      * 8) Error to Dropped
      */
     public void onBecomeDroppedFromError(Message message, NotificationContext context) throws Exception {
-  	  super.onBecomeDroppedFromError(message, context);
+      super.onBecomeDroppedFromError(message, context);
       Utils.checkStateTransitions("ERROR", "DROPPED", message, resourceName, partitionName);
       Utils.logTransitionMessage(message);
 
@@ -212,5 +213,5 @@ public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateMo
     public void reset() {
     }
 
-    }
+  }
 }
