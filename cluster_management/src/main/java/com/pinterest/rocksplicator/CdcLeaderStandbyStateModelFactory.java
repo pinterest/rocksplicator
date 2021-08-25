@@ -93,6 +93,7 @@ public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateMo
       String rocksObserverMetadataPath = ZkPathUtils.getRocksObserverMetadataPath(resourceName);
       CuratorFramework zkClient = CuratorFrameworkFactory.newClient(zkConnectString,
           new ExponentialBackoffRetry(1000, 3));
+      zkClient.start();
       try {
         zkClient.sync().forPath(rocksObserverMetadataPath);
         String resourceMetadata = new String(zkClient.getData().forPath(rocksObserverMetadataPath));
@@ -123,7 +124,8 @@ public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateMo
       // DB name = partition name padded with 0s
       String dbName = Utils.getDbName(this.partitionName);
       String hostPort = HelixClient.getleaderInstanceId(upstreamClusterConnectString, upstreamClusterName, this.resourceName, this.partitionName);
-      CdcUtils.addObserver(dbName, hostPort, this.adminPort);
+      String ip = hostPort.split("_")[0];
+      CdcUtils.addObserver(dbName, ip, this.adminPort);
       Utils.logTransitionCompletionMessage(message);
     }
 
