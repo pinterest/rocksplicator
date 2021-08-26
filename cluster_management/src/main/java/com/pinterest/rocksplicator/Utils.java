@@ -56,7 +56,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class Utils {
 
   private static final Logger LOG = LoggerFactory.getLogger(Utils.class);
-  private static final String LOCAL_HOST_IP = "127.0.0.1";
+  static final String LOCAL_HOST_IP = "127.0.0.1";
   private static final String RESOURCE_INFO_META_SUFFIX = "resource_meta";
   private static final String RESOURCE_INFO_CONFIGS_SUFFIX = "resource_configs";
 

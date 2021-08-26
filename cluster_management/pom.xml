@@ -30,6 +30,16 @@
             </configuration>
           </execution>
           <execution>
+            <id>thrift-sources-cdc_admin</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>compile</goal>
+            </goals>
+            <configuration>
+              <thriftSourceRoot>${basedir}/../cdc_admin</thriftSourceRoot>
+            </configuration>
+          </execution>
+          <execution>
             <id>thrift-sources-events</id>
             <phase>generate-sources</phase>
             <goals>
@@ -207,6 +217,11 @@
       <artifactId>mockito-core</artifactId>
       <version>3.7.0</version>
       <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>javax.annotation</groupId>
+      <artifactId>javax.annotation-api</artifactId>
+      <version>1.2</version>
     </dependency>
   </dependencies>
 
