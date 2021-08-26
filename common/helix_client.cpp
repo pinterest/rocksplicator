@@ -49,7 +49,6 @@ DEFINE_string(handoff_client_event_history_json_shard_map_path,
   "",
   "[Optional]: path of shard_map generated from spectator in json format");
 
-
 namespace {
 
 JNIEnv* createVM(const std::string& class_path) {
