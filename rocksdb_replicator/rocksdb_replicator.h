@@ -113,7 +113,9 @@ class RocksDBReplicator {
                  const folly::SocketAddress& upstream_addr
                  = folly::SocketAddress(),
                  common::ThriftClientPool<ReplicatorAsyncClient>* client_pool
-                 = nullptr);
+                 = nullptr,
+                 const std::string& replicator_zk_cluster = "",
+                 const std::string& replicator_helix_cluster = "");
 
     void pullFromUpstream();
     void resetUpstream();
@@ -143,6 +145,8 @@ class RocksDBReplicator {
     std::mutex cached_iters_mutex_;
     detail::MaxNumberBox max_seq_no_acked_;
     std::shared_ptr<replicator::DbWrapper> db_wrapper_;
+    std::string replicator_zk_cluster_;
+    std::string replicator_helix_cluster_;
 
     friend class ReplicatorHandler;
     friend class RocksDBReplicator;
@@ -179,7 +183,10 @@ class RocksDBReplicator {
                    const DBRole role,
                    const folly::SocketAddress& upstream_addr
                    = folly::SocketAddress(),
-                   ReplicatedDB** replicated_db = nullptr);
+                   ReplicatedDB** replicated_db = nullptr,
+                   const std::string& replicator_zk_cluster = "",
+                   const std::string& replicator_helix_cluster = "");
+
 
   /*
    * Remove a db from the library.

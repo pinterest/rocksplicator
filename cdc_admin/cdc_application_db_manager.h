@@ -45,6 +45,8 @@ public:
              std::unique_ptr<UnderlyingDBType> db,
              replicator::DBRole role,
              std::unique_ptr<folly::SocketAddress> upstream_addr,
+             const std::string& replicator_zk_cluster,
+             const std::string& replicator_helix_cluster,
              std::string* error_message) {
     std::unique_lock<std::shared_mutex> lock(dbs_lock_);
     if (dbs_.find(db_name) != dbs_.end()) {
@@ -56,7 +58,8 @@ public:
     auto underlying_db_ptr =
         std::shared_ptr<UnderlyingDBType>(db.release(), [](UnderlyingDBType* db) {});
     auto application_db_ptr = std::make_shared<ApplicationDBType>(
-        db_name, std::move(underlying_db_ptr), role, std::move(upstream_addr));
+        db_name, std::move(underlying_db_ptr), role, std::move(upstream_addr),
+        replicator_zk_cluster, replicator_helix_cluster);
 
     dbs_.emplace(db_name, std::move(application_db_ptr));
     return true;

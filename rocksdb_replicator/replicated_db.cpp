@@ -134,13 +134,17 @@ RocksDBReplicator::ReplicatedDB::ReplicatedDB(
     folly::Executor* executor,
     const DBRole role,
     const folly::SocketAddress& upstream_addr,
-    common::ThriftClientPool<ReplicatorAsyncClient>* client_pool)
+    common::ThriftClientPool<ReplicatorAsyncClient>* client_pool,
+    const std::string& replicator_zk_cluster,
+    const std::string& replicator_helix_cluster)
     : db_name_(db_name)
     , db_wrapper_(std::move(db_wrapper))
     , executor_(executor)
     , role_(role)
     , upstream_addr_(upstream_addr)
     , client_pool_(client_pool)
+    , replicator_zk_cluster_(replicator_zk_cluster)
+    , replicator_helix_cluster_(replicator_helix_cluster)
     , client_()
     , cond_var_(executor)
     , rpc_options_()
@@ -149,6 +153,14 @@ RocksDBReplicator::ReplicatedDB::ReplicatedDB(
     , cached_iters_mutex_() {
   if (role == DBRole::SLAVE) {
     client_ = client_pool_->getClient(upstream_addr);
+  }
+
+  if (replicator_zk_cluster_.empty()) {
+    replicator_zk_cluster_ = FLAGS_replicator_zk_cluster;
+  }
+
+  if (replicator_helix_cluster_.empty()) {
+    replicator_helix_cluster_ = FLAGS_replicator_helix_cluster;
   }
 
   rpc_options_.setTimeout(
@@ -161,7 +173,7 @@ RocksDBReplicator::ReplicatedDB::ReplicatedDB(
  * Helper function to reset the upstream IP after querying for latest leader from helix.
  */
 void RocksDBReplicator::ReplicatedDB::resetUpstream() {
-  if (FLAGS_replicator_zk_cluster.empty() || FLAGS_replicator_helix_cluster.empty()) {
+  if (replicator_zk_cluster_.empty() || replicator_helix_cluster_.empty()) {
     LOG(ERROR) << "[resetUpstream] ZK cluster or helix cluster name not provided.";
     return;
   }
@@ -175,11 +187,11 @@ void RocksDBReplicator::ReplicatedDB::resetUpstream() {
 
   auto segment_name = common::DbNameToSegment(db_name_);
   auto helix_partition_name = common::DbNameToHelixPartitionName(db_name_);
-  LOG(ERROR) << "[resetUpstream] Zookeeper: " << FLAGS_replicator_zk_cluster << " cluster: " <<
-    FLAGS_replicator_helix_cluster << " segment: " << segment_name
+  LOG(ERROR) << "[resetUpstream] Zookeeper: " << replicator_zk_cluster_ << " cluster: " <<
+    replicator_helix_cluster_ << " segment: " << segment_name
      << " helix_partition_name: " << helix_partition_name;
   auto leader_id = common::GetLeaderInstanceId(
-    FLAGS_replicator_zk_cluster, FLAGS_replicator_helix_cluster, segment_name, helix_partition_name);
+    replicator_zk_cluster_, replicator_helix_cluster_, segment_name, helix_partition_name);
   LOG(ERROR) << "[resetUpstream] Leader for " << helix_partition_name << " is " << leader_id;
 
   if (!leader_id.empty()) {

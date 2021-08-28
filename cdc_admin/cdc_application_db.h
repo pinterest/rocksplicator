@@ -30,7 +30,9 @@ public:
   CDCApplicationDB(const std::string& db_name,
                    std::shared_ptr<replicator::DbWrapper> db_wrapper,
                    replicator::DBRole role,
-                   std::unique_ptr<folly::SocketAddress> upstream_addr);
+                   std::unique_ptr<folly::SocketAddress> upstream_addr,
+                   const std::string& replicator_zk_cluster,
+                   const std::string& replicator_helix_cluster);
 
   // Name of this db
   const std::string& db_name() const { return db_name_; }
