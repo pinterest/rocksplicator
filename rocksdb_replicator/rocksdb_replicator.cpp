@@ -109,8 +109,8 @@ ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
                                     const DBRole role,
                                     const folly::SocketAddress& upstream_addr,
                                     ReplicatedDB** replicated_db,
-                   const std::string& replicator_zk_cluster,
-                   const std::string& replicator_helix_cluster) {
+                                    const std::string& replicator_zk_cluster,
+                                    const std::string& replicator_helix_cluster) {
   std::shared_ptr<ReplicatedDB> new_db(
     new ReplicatedDB(db_name, std::move(db_wrapper), executor_.get(),
                      role, upstream_addr, &client_pool_, replicator_zk_cluster, replicator_helix_cluster));

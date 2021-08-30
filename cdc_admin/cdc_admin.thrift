@@ -34,7 +34,7 @@ struct AddObserverRequest {
   # if this db is already being observed, an ALREADY_EXIST error is thrown
   1: required string db_name,
   2: required string upstream_ip,
-  # The following are needed if the replicator zk and helix cluster will not be provided via command-line args
+  # provide the upstream replicator's zk and helix cluster through request instead of command-line args
   3: optional string replicator_zk_cluster,
   4: optional string replicator_helix_cluster,
 }
