@@ -101,7 +101,7 @@ ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
   std::shared_ptr<DbWrapper> db_wrapper(
     new RocksDbWrapper(db_name, std::move(db))
   );
-  return addDB(db_name, db_wrapper, role, upstream_addr, replicated_db = replicated_db);
+  return addDB(db_name, db_wrapper, role, upstream_addr, replicated_db);
 }
 
 ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
