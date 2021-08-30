@@ -60,6 +60,8 @@ DEFINE_string(replicator_zk_cluster, "", "Zookeeper cluster");
 DEFINE_string(replicator_helix_cluster, "", "Helix cluster");
 DEFINE_int32(replication_error_reset_upstream_percentage, 10,
              "what percentage of replication errors should query helix for the latest leader");
+DEFINE_bool(reset_upstream_on_std_exception, false, 
+            "Flag to control whether to reset the upstream address for a generic exception in replication");
 DECLARE_int32(rocksdb_replicator_port);
 
 
@@ -235,6 +237,9 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
           } catch (const std::exception& ex) {
             LOG(ERROR) << "std::exception: " << ex.what();
             incCounter(kReplicatorConnectionErrors, 1, db->db_name_);
+            if (FLAGS_reset_upstream_on_std_exception) {
+              db->resetUpstream();
+            }
             db->client_ = db->client_pool_->getClient(db->upstream_addr_);
           }
         } else {
