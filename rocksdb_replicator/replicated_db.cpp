@@ -235,6 +235,7 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
           } catch (const std::exception& ex) {
             LOG(ERROR) << "std::exception: " << ex.what();
             incCounter(kReplicatorConnectionErrors, 1, db->db_name_);
+            db->resetUpstream();
             db->client_ = db->client_pool_->getClient(db->upstream_addr_);
           }
         } else {
