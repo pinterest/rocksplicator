@@ -125,7 +125,7 @@ public class CdcLeaderStandbyStateModelFactory extends StateModelFactory<StateMo
       String dbName = Utils.getDbName(this.partitionName);
       String hostPort = HelixClient.getleaderInstanceId(upstreamClusterConnectString, upstreamClusterName, this.resourceName, this.partitionName);
       String ip = hostPort.split("_")[0];
-      CdcUtils.addObserver(dbName, ip, this.adminPort);
+      CdcUtils.addObserver(dbName, ip, this.adminPort, upstreamClusterConnectString, upstreamClusterName);
       Utils.logTransitionCompletionMessage(message);
     }
 

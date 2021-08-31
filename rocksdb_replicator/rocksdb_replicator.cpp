@@ -108,15 +108,12 @@ ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
                                     std::shared_ptr<DbWrapper> db_wrapper,
                                     const DBRole role,
                                     const folly::SocketAddress& upstream_addr,
-                                    ReplicatedDB** replicated_db) {
-  // Change this
-  // Oh you already did :) 
-  // Well sort of
-  // Make it so you pass in the wrapper
-  // OR can pass in the db and then you make it # overloading # c++ # expert
+                                    ReplicatedDB** replicated_db,
+                                    const std::string& replicator_zk_cluster,
+                                    const std::string& replicator_helix_cluster) {
   std::shared_ptr<ReplicatedDB> new_db(
     new ReplicatedDB(db_name, std::move(db_wrapper), executor_.get(),
-                     role, upstream_addr, &client_pool_));
+                     role, upstream_addr, &client_pool_, replicator_zk_cluster, replicator_helix_cluster));
 
   if (!db_map_.add(db_name, new_db)) {
     return ReturnCode::DB_PRE_EXIST;

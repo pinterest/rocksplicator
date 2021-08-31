@@ -53,11 +53,13 @@ public class CdcUtils {
    * @param upstreamAddr The upstream address of the leader for the partition
    * @param adminPort the port to make the request on
    */
-  public static AddObserverResponse addObserver(String dbName, String upstreamAddr, int adminPort) {
+  public static AddObserverResponse addObserver(String dbName, String upstreamAddr, int adminPort, String upstreamZk, String upstreamClusterName) {
     try {
       LOG.error("Add observer for: " + dbName);
       CdcAdmin.Client client = getLocalCdcAdminClient(adminPort);
       AddObserverRequest req = new AddObserverRequest(dbName, upstreamAddr);
+      req.setReplicator_zk_cluster(upstreamZk);
+      req.setReplicator_helix_cluster(upstreamClusterName);
       return client.addObserver(req);
     } catch (CDCAdminException e) {
       LOG.error("Cdc admin exception when adding observer for " + dbName);
