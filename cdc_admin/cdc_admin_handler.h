@@ -74,7 +74,7 @@ protected:
   // of overriding some admin functions
   common::ObjectLock<std::string> db_admin_lock_;
 
-  virtual std::unique_ptr<replicator::DbWrapper> getDbWrapper(std::string db_name) {
+  virtual std::unique_ptr<replicator::DbWrapper> getDbWrapper(const std::string& db_name) {
       return std::make_unique<replicator::TestDBProxy>(db_name, 0);
   }
 
