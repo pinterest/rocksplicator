@@ -75,9 +75,7 @@ protected:
   common::ObjectLock<std::string> db_admin_lock_;
 
   virtual std::unique_ptr<replicator::DbWrapper> getDbWrapper(std::string db_name) {
-      std::unique_ptr<replicator::TestDBProxy> db_wrapper =
-          std::make_unique<replicator::TestDBProxy>(db_name, 0);
-      return db_wrapper;
+      return std::make_unique<replicator::TestDBProxy>(db_name, 0);
   }
 
 private:
