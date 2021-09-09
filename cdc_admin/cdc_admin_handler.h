@@ -27,6 +27,7 @@
 #else
 #include "cdc_admin/gen-cpp2/CdcAdmin.h"
 #endif
+#include "rocksdb_replicator/test_db_proxy.h"
 
 namespace cdc_admin {
 
@@ -72,6 +73,10 @@ protected:
   // Put db_admin_lock in protected to provide flexibility
   // of overriding some admin functions
   common::ObjectLock<std::string> db_admin_lock_;
+
+  virtual std::unique_ptr<replicator::DbWrapper> getDbWrapper(const std::string& db_name) {
+      return std::make_unique<replicator::TestDBProxy>(db_name, 0);
+  }
 
 private:
   std::unique_ptr<replicator::DbWrapper> removeDB(const std::string& db_name,

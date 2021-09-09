@@ -1,3 +1,4 @@
+#pragma once
 
 #include "rocksdb_replicator/db_wrapper.h"
 #include "rocksdb_replicator/replicator_stats.h"

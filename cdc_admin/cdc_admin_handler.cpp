@@ -124,8 +124,7 @@ void CDCAdminHandler::async_tm_addObserver(
 
   // TODO(indy): Read sequence # from kafka
   // And create a db wrapper based on the internal producer
-  std::unique_ptr<replicator::TestDBProxy> db_wrapper =
-      std::make_unique<replicator::TestDBProxy>(request->db_name, 0);
+  std::unique_ptr<replicator::DbWrapper> db_wrapper = getDbWrapper(request->db_name);
   if (!db_manager_->addDB(request->db_name,
                           std::move(db_wrapper),
                           role,
