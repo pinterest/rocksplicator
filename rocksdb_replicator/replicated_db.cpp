@@ -363,7 +363,6 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
           logMetric(kReplicatorGetUpdatesSinceMs, start < end ? end - start : 0,
                     db->db_name_);
         }
-
         if (use_cached_iter || status.ok() || status.IsNotFound()) {
           ReplicateResponse response;
           uint64_t read_bytes = 0;
@@ -372,6 +371,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
                ++i, iter->Next()) {
             auto result = iter->GetBatch();
             Update update;
+            update.set_seq_no(result.sequence);
             next_seq_no += result.writeBatchPtr->Count();
             const auto& str = result.writeBatchPtr->Data();
             read_bytes += str.size();

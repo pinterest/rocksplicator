@@ -48,6 +48,9 @@ struct Update {
   # When this update was first applied to the Master.
   # A value of 0 means it is unavilable
   2: required i64 timestamp,
+
+  # The sequence number of this update on the leader
+  3: optional i64 seq_no,
 }
 
 struct ReplicateResponse {
