@@ -122,20 +122,21 @@ void CDCAdminHandler::async_tm_addObserver(
                                                    ? request->replicator_helix_cluster
                                                    : std::string("");
 
-  // TODO(indy): Read sequence # from kafka
-  // And create a db wrapper based on the internal producer
-  std::unique_ptr<replicator::DbWrapper> db_wrapper = getDbWrapper(request->db_name);
-  if (!db_manager_->addDB(request->db_name,
-                          std::move(db_wrapper),
-                          role,
-                          std::move(upstream_addr),
-                          replicator_zk_cluster,
-                          replicator_helix_cluster,
-                          &err_msg)) {
-    e.errorCode = CDCAdminErrorCode::ADMIN_ERROR;
-    e.message = std::move(err_msg);
-    callback.release()->exceptionInThread(std::move(e));
-    return;
+  try {
+    std::unique_ptr<replicator::DbWrapper> db_wrapper = getDbWrapper(request->db_name);
+    if (!db_manager_->addDB(request->db_name,
+                            std::move(db_wrapper),
+                            role,
+                            std::move(upstream_addr),
+                            replicator_zk_cluster,
+                            replicator_helix_cluster,
+                            &err_msg)) {
+      e.errorCode = CDCAdminErrorCode::ADMIN_ERROR;
+      e.message = std::move(err_msg);
+      callback.release()->exceptionInThread(std::move(e));
+    }
+  } catch (CDCAdminException& ex) {
+    callback.release()->exceptionInThread(std::move(ex));
   }
   callback->result(AddObserverResponse());
 }
