@@ -133,7 +133,7 @@ void CDCAdminHandler::async_tm_addObserver(
                             &err_msg)) {
       e.errorCode = CDCAdminErrorCode::ADMIN_ERROR;
       e.message = std::move(err_msg);
-      throw e;
+      callback.release()->exceptionInThread(std::move(e));
     }
   } catch (CDCAdminException& ex) {
     callback.release()->exceptionInThread(std::move(ex));
