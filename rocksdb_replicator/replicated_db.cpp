@@ -383,7 +383,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
               update.timestamp = extractor.ms;
             } else {
               update.timestamp = 0;
-              LOG(ERROR) << "Failed to extract timestamp for " << db->db_name_;
+              LOG(WARNING) << "Failed to extract timestamp for " << db->db_name_;
             }
             response.updates.emplace_back(std::move(update));
           }
