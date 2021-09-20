@@ -59,8 +59,9 @@ namespace replicator {
 struct LogExtractor : public rocksdb::WriteBatch::Handler {
  public:
   void LogData(const rocksdb::Slice& blob) override {
-    CHECK(blob.size() == sizeof(ms));
-    memcpy(&ms, blob.data(), sizeof(ms));
+    if (blob.size() == sizeof(ms)) {
+      memcpy(&ms, blob.data(), sizeof(ms));
+    }
   }
 
   uint64_t ms;
