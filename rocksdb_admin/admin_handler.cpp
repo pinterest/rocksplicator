@@ -703,20 +703,35 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
   }
   std::unique_ptr<rocksdb::BackupEngine> backup_engine_holder(backup_engine);
 
-  if (include_meta) {
-    std::string db_meta;
-    const auto meta = getMetaData(db_name);
-    if (!EncodeThriftStruct(meta, &db_meta)) {
+  if (!include_meta) {
+    auto status = backup_engine->CreateNewBackup(db->rocksdb());
+    if (!status.ok()) {
       e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
-      e->message = "Failed to encode DBMetaData";
+      e->message = "Failed to CreateNewBackup: " + status.ToString();
+      LOG(ERROR) << "Error happened when creating new backup: " << e->message;
       return false;
-    } else {
-      LOG(INFO) << "Create new backup with encoded meta: " << db_meta;
-      return backup_engine->CreateNewBackupWithMetadata(db->rocksdb(), db_meta).ok();
     }
-  } else {
-    return backup_engine->CreateNewBackup(db->rocksdb()).ok();
-  }  
+    return true;
+  }
+
+  std::string db_meta;
+  const auto meta = getMetaData(db_name);
+  if (!EncodeThriftStruct(meta, &db_meta)) {
+    e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+    e->message = "Failed to encode DBMetaData";
+    LOG(ERROR) << "Error happened when encoding DBMetaData";
+    return false;
+  }
+
+  LOG(INFO) << "Create new backup with encoded meta: " << db_meta;
+  status = backup_engine->CreateNewBackupWithMetadata(db->rocksdb(), db_meta);
+  if (!status.ok()) {
+    e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
+    e->message = "Failed to CreateNewBackupWithMetadata: " + status.ToString();
+    LOG(ERROR) << "Error happened when creating new backup with metadata: " << e->message;
+    return false;
+  }
+  return true;
 }
 
 bool AdminHandler::restoreDBHelper(const std::string& db_name,

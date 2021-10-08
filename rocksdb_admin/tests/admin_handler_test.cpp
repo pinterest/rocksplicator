@@ -578,6 +578,18 @@ TEST_F(AdminHandlerTestBase, AdminAPIsWithWriteMeta) {
       auto meta_after_restore = handler_->getMetaData(testdb);
       verifyMeta(meta_after_restore, testdb, true, "", "");
 
+      // verify backup & restore with meta for checkpoint
+      handler_->writeMetaData(testdb, "fakes3bucket", "fakes3path");
+      backup_req.set_include_meta(true);
+      EXPECT_NO_THROW(backup_resp =
+                          client_->future_backupDBToS3(backup_req).get());
+      close_resp = client_->future_closeDB(close_req).get();
+      EXPECT_NO_THROW(restore_resp =
+                          client_->future_restoreDBFromS3(restore_req).get());
+      meta_after_restore = handler_->getMetaData(testdb);
+      verifyMeta(meta_after_restore, testdb, true, "fakes3bucket",
+                 "fakes3path");
+
       // Verify: clearDB with reopen will have a DBMetaData with init val
       EXPECT_TRUE(handler_->clearMetaData(testdb));
       clearDB(testdb);
@@ -602,6 +614,22 @@ TEST_F(AdminHandlerTestBase, AdminAPIsWithWriteMeta) {
     }
 
     // Skip Verify: startMessageIngestion with updated meta
+  }
+}
+
+TEST_F(AdminHandlerTestBase, AdminAPIsBackupDBError) {
+  // backup an un-initialized DB should error out
+  const string testdb = generateDBName();
+  if (FLAGS_enable_integration_test) {
+    {
+      BackupDBToS3Request backup_req;
+      backup_req.db_name = testdb;
+      backup_req.s3_bucket = FLAGS_s3_bucket;
+      backup_req.s3_backup_dir = FLAGS_s3_backup_prefix + testdb;
+      BackupDBToS3Response backup_resp;
+      EXPECT_THROW(backup_resp =
+                          client_->future_backupDBToS3(backup_req).get(), AdminException);
+    }
   }
 }
 
