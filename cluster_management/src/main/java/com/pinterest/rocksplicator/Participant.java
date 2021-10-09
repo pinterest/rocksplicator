@@ -116,7 +116,7 @@ public class Participant {
         OptionBuilder.withLongOpt(hostAddress).withDescription("Provide host name").create();
     hostOption.setArgs(1);
     hostOption.setRequired(true);
-    hostOption.setArgName("Host name (Required)");
+    hostOption.setArgName("Host ip (Required)");
 
     Option portOption =
         OptionBuilder.withLongOpt(hostPort).withDescription("Provide host port").create();

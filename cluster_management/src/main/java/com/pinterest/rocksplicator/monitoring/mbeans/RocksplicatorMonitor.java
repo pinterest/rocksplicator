@@ -4,6 +4,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.management.ManagementFactory;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import javax.management.MBeanServer;
 import javax.management.MalformedObjectNameException;
 import javax.management.ObjectName;
@@ -24,7 +26,12 @@ public class RocksplicatorMonitor {
   public RocksplicatorMonitor(String clusterName, String instanceName) {
     this.beanServer = ManagementFactory.getPlatformMBeanServer();
     this.cluster = clusterName;
-    this.instanceName = instanceName;
+    try {
+      this.instanceName = InetAddress.getByName(instanceName.split("_")[0]).getHostName();
+    } catch (UnknownHostException e) {
+      LOG.error("Error getting hostname, continue to use: " + instanceName, e);
+      this.instanceName = instanceName;
+    }
 
     try {
       spectatorStatsMonitor = new RocksplicatorSpectatorMonitor(this.instanceName);
