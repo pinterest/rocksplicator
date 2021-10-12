@@ -28,6 +28,7 @@ public class RocksplicatorMonitor {
     this.cluster = clusterName;
     try {
       this.instanceName = InetAddress.getByName(instanceName.split("_")[0]).getHostName();
+      LOG.info("Create " +  this.toString() + " for instance name: " + this.instanceName);
     } catch (UnknownHostException e) {
       LOG.error("Error getting hostname, continue to use: " + instanceName, e);
       this.instanceName = instanceName;
@@ -36,7 +37,7 @@ public class RocksplicatorMonitor {
     try {
       spectatorStatsMonitor = new RocksplicatorSpectatorMonitor(this.instanceName);
 
-      register(spectatorStatsMonitor, getObjectName(getInstanceBeanName(instanceName)));
+      register(spectatorStatsMonitor, getObjectName(getInstanceBeanName(this.instanceName)));
     } catch (Exception e) {
       LOG.warn(e.toString());
       e.printStackTrace();
