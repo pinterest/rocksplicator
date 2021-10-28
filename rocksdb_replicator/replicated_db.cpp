@@ -95,8 +95,13 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
   logMetric(kReplicatorWriteMs, start < end ? end - start : 0, db_name_);
   
   // for now we have to support both till all clusters are migrated
-  auto replication_mode =  config.replication_mode > FLAGS_replicator_replication_mode ? 
-                            config.replication_mode :  FLAGS_replicator_replication_mode;
+  auto rep_mode = config.replication_mode > FLAGS_replicator_replication_mode ? 
+                      config.replication_mode :  FLAGS_replicator_replication_mode;
+
+  if (replication_mode_.load() != rep_mode) {
+    replication_mode_.store(rep_mode);
+    LOG(ERROR) << "replication mode set : " << rep_mode << " - " << db_name_;
+  }
 
   if (status.ok()) {
     cond_var_.notifyAll();
@@ -108,7 +113,7 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
       *seq_no = cur_seq_no;
     }
 
-    switch (replication_mode) {
+    switch (rep_mode) {
     case 1:
     case 2:
       // TODO(bol): This potentially could block all worker threads. We may
@@ -121,8 +126,8 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
       }
       break;
     default:
-      CHECK(replication_mode == 0)
-        << "Invalid replicaton mode " << replication_mode;
+      CHECK(rep_mode == 0)
+        << "Invalid replicaton mode " << rep_mode;
     }
   }
 
@@ -152,7 +157,8 @@ RocksDBReplicator::ReplicatedDB::ReplicatedDB(
     , rpc_options_()
     , write_options_()
     , cached_iters_()
-    , cached_iters_mutex_() {
+    , cached_iters_mutex_()
+    , replication_mode_(0) {
   if (role == DBRole::SLAVE) {
     client_ = client_pool_->getClient(upstream_addr);
   }
@@ -318,7 +324,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
     logMetric(kReplicatorLeaderSequenceNumbersBehind, seq_no - leaderSeqNum, db ->db_name_);
   }
 
-  auto replication_mode =  config.replication_mode > FLAGS_replicator_replication_mode ? config.replication_mode :  FLAGS_replicator_replication_mode;
+  auto replication_mode =  db->replication_mode_.load();
   if (replication_mode == 1 || replication_mode == 2) {
     // post the largest sequence number the Slave has committed
     max_seq_no_acked_.post(seq_no);
@@ -328,7 +334,6 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
   cond_var_.runIfConditionOrWaitForNotify(
       // Operation
       [weak_db = std::move(weak_db),
-      replication_mode,
        // TODO(bol) remove folly::makeMoveWrapper() when move to gcc 5.1
        request = folly::makeMoveWrapper(std::move(request)),
        callback = folly::makeMoveWrapper(std::move(callback))] () mutable {
@@ -389,7 +394,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
           }
 
           (*callback).release()->resultInThread(std::move(response));
-          if (replication_mode == 1) {
+          if (db->replication_mode_.load() == 1) {
             // post the largest sequence number we have written to the Slave.
             db->max_seq_no_acked_.post(next_seq_no - 1);
           }

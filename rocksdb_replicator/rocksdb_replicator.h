@@ -20,6 +20,7 @@
 
 #include <folly/io/async/EventBase.h>
 
+#include <atomic>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -148,6 +149,7 @@ class RocksDBReplicator {
     std::shared_ptr<replicator::DbWrapper> db_wrapper_;
     std::string replicator_zk_cluster_;
     std::string replicator_helix_cluster_;
+    std::atomic<uint32_t> replication_mode_;
 
     friend class ReplicatorHandler;
     friend class RocksDBReplicator;
