@@ -59,6 +59,8 @@ struct Host {
   folly::SocketAddress addr;
   // The hosts' longest common prefix length with local group
   std::unordered_map<std::string, uint16_t> groups_prefix_lengths;
+  // AZ of the host
+  std::string az;
 };
 
 struct SegmentInfo {
@@ -190,10 +192,11 @@ class ThriftRouter {
       const Role role,
       const Quantity quantity,
       std::map<ShardID, std::vector<std::shared_ptr<ClientType>>>*
-        shard_to_clients) {
+        shard_to_clients,
+      const std::string& specific_az = "") {
     updateClusterLayout();
     return local_client_map_.getClientsFor(segment, role, quantity,
-                                           shard_to_clients);
+                                           shard_to_clients, specific_az);
   }
 
   uint32_t getShardNumberFor(const std::string& segment) {
@@ -267,7 +270,8 @@ class ThriftRouter {
         const Role role,
         const Quantity quantity,
         std::map<ShardID, std::vector<std::shared_ptr<ClientType>>>*
-          shard_to_clients) {
+          shard_to_clients,
+        const std::string& specific_az = "") {
       auto& segments = (*local_cluster_layout_)->segments;
       auto itor = segments.find(segment);
       if (itor == segments.end()) {
@@ -298,7 +302,7 @@ class ThriftRouter {
           shrink_target = FLAGS_thrift_router_max_num_hosts_to_consider;
         }
         auto hosts_for_shard = filterByRoleAndSortByPreferenceAndShrinkTo(
-          shard_to_hosts[shard], role, rotation_counter, segment, shrink_target);
+          shard_to_hosts[shard], role, rotation_counter, segment, shrink_target, specific_az);
         if (hosts_for_shard.empty()) {
           LOG_EVERY_N(ERROR, FLAGS_thrift_router_log_frequency)
             << "Could not find hosts for shard " << shard;
@@ -367,6 +371,7 @@ class ThriftRouter {
      * hosts first by
      * (1) Prefer master to slave, then (2) Prefer local to non-local.
      *
+     * Otherwise, if az is specified by caller, return hosts belonging to that az
      * Otherwise, we sort them by (2) only
      *
      * If two hosts equal according to the sorting criteria, we randomly order
@@ -377,7 +382,8 @@ class ThriftRouter {
         const Role role,
         const unsigned rotation_counter,
         const std::string& segment,
-        const int shrink_target) {
+        const int shrink_target,
+        const std::string& specific_az) {
       std::vector<const Host*> v;
       if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
         // prefer MASTER, then prefer groups with longer common prefix length
@@ -392,6 +398,16 @@ class ThriftRouter {
         RankHostsByGroupPrefixLengthAndShrinkTo(&v, rotation_counter, segment, shrink_target);
         RankHostsByGroupPrefixLengthAndShrinkTo(&v_s, rotation_counter, segment, shrink_target);
         v.insert(v.end(), v_s.begin(), v_s.end());
+        if (shrink_target < v.size()) {
+          v.resize(shrink_target);
+        }
+      } else if (specific_az != "") {
+        // if az is specified by caller, return hosts belong only to that az.
+        for (const auto& hi : host_info) {
+          if (hi.first->az.find(specific_az, 0) != std::string::npos) {
+            v.push_back(hi.first);
+          }
+        }
         if (shrink_target < v.size()) {
           v.resize(shrink_target);
         }

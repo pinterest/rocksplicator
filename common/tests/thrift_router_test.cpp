@@ -496,6 +496,63 @@ TEST(ThriftRouterTest, LocalAzTest) {
   }
 }
 
+TEST(ThriftRouterTest, SpecificAzTest) {
+  FLAGS_always_prefer_local_host = true;
+  updateConfigFile(g_config_v1az);
+  ThriftRouter<DummyServiceAsyncClient> router(
+    "us-east-1a", g_config_path, common::parseConfig);
+
+  std::vector<shared_ptr<DummyServiceAsyncClient>> v;
+  shared_ptr<DummyServiceTestHandler> handlers[3];
+  shared_ptr<ThriftServer> servers[3];
+  unique_ptr<thread> thrs[3];
+
+  tie(handlers[0], servers[0], thrs[0]) = makeServer(8090);
+  tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
+  tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
+  sleep(1);
+
+  EXPECT_EQ(router.getShardNumberFor("user_pins"), 3);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 3);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 3);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 2), 3);
+
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::ANY, Quantity::ALL, 2, &v),
+    ReturnCode::OK);
+  EXPECT_EQ(v.size(), 3);
+  for (auto client : v) {
+    EXPECT_NO_THROW(client->future_ping().get());
+  }
+  for (const auto& h : handlers) {
+    EXPECT_EQ(h->nPings_.load(), 1);
+  }
+
+  // Get the client from local az
+  // All requests should hit the local az handler
+  for (int i = 0; i < 100; i ++) {
+    std::map<uint32_t, std::vector<std::shared_ptr<DummyServiceAsyncClient>>> m;
+    m[2];
+    EXPECT_EQ(
+        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, &m, "us-east-1c"),
+        ReturnCode::OK);
+    EXPECT_EQ(m.size(), 1);
+    EXPECT_EQ(m[2].size(), 1);
+    m[2][0]->future_ping().get();
+  }
+  EXPECT_EQ(handlers[1]->nPings_.load(), 101);
+
+  // stop all servers
+  for (auto& s : servers) {
+    s->stop();
+  }
+
+  for (auto& t : thrs) {
+    t->join();
+  }
+  FLAGS_always_prefer_local_host = false;
+}
+
 TEST(ThriftRouterTest, ForeignAzTest) {
   updateConfigFile(g_config_v1az);
   ThriftRouter<DummyServiceAsyncClient> router(

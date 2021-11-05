@@ -51,6 +51,7 @@ bool parseHost(const std::string& str, common::detail::Host* host,
     return false;
   }
   auto group = (tokens.size() == 3 ? tokens[2] : "");
+  host->az = group;
   host->groups_prefix_lengths[segment] =
     std::distance(group.begin(), std::mismatch(group.begin(), group.end(),
                   local_group.begin(), local_group.end()).first);
