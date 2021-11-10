@@ -385,7 +385,17 @@ class ThriftRouter {
         const int shrink_target,
         const std::string& specific_az) {
       std::vector<const Host*> v;
-      if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
+      if (specific_az != "") {
+        // if az is specified by caller, return hosts belong only to that az.
+        for (const auto& hi : host_info) {
+          if (hi.first->az.compare(specific_az) == 0) {
+            v.push_back(hi.first);
+          }
+        }
+        if (shrink_target < v.size()) {
+          v.resize(shrink_target);
+        }
+      } else if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
         // prefer MASTER, then prefer groups with longer common prefix length
         std::vector<const Host*> v_s;
         for (const auto& hi : host_info) {
@@ -398,16 +408,6 @@ class ThriftRouter {
         RankHostsByGroupPrefixLengthAndShrinkTo(&v, rotation_counter, segment, shrink_target);
         RankHostsByGroupPrefixLengthAndShrinkTo(&v_s, rotation_counter, segment, shrink_target);
         v.insert(v.end(), v_s.begin(), v_s.end());
-        if (shrink_target < v.size()) {
-          v.resize(shrink_target);
-        }
-      } else if (specific_az != "") {
-        // if az is specified by caller, return hosts belong only to that az.
-        for (const auto& hi : host_info) {
-          if (hi.first->az.find(specific_az, 0) != std::string::npos) {
-            v.push_back(hi.first);
-          }
-        }
         if (shrink_target < v.size()) {
           v.resize(shrink_target);
         }
