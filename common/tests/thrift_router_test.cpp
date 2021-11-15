@@ -517,6 +517,13 @@ TEST(ThriftRouterTest, SpecificAzTest) {
   EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 3);
   EXPECT_EQ(router.getHostNumberFor("user_pins", 2), 3);
 
+  // no hosts in the az specified
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::ANY, Quantity::ALL, 2, &v, "us-east-1f"),
+    ReturnCode::NOT_FOUND);
+  EXPECT_EQ(v.size(), 0);
+
+  // code works without az specified
   EXPECT_EQ(
     router.getClientsFor("user_pins", Role::ANY, Quantity::ALL, 2, &v),
     ReturnCode::OK);

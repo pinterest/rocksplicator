@@ -138,39 +138,41 @@ class ThriftRouter {
    * Get clients pointing to the server(s) matching the request conditions.
    * @note It is encouraged and performance-wise OK to call getClientsFor() for
    *       every RPC.
-   * @param segment   The requested segment
-   * @param role      The requested server role.
-   * @param quantity  The number of servers requested.
-   *                  Return NOT_FOUND if could not find any server matching the
-   *                  conditions.
-   *                  For ONE and TWO, return BAD_HOST if could not find ANY
-   *                  good host matching the conditions (we may return one
-   *                  server for TWO if only one found).
-   *                  For ALL, return BAD_HOST if there exists any bad server
-   *                  matching the conditions.
-   * @param shard     The requested shard
-   * @param clients   The out parameter for returned clients, the clients will be
-   *                  sorted according to the criteria below.
+   * @param segment     The requested segment
+   * @param role        The requested server role.
+   * @param quantity    The number of servers requested.
+   *                    Return NOT_FOUND if could not find any server matching the
+   *                    conditions.
+   *                    For ONE and TWO, return BAD_HOST if could not find ANY
+   *                    good host matching the conditions (we may return one
+   *                    server for TWO if only one found).
+   *                    For ALL, return BAD_HOST if there exists any bad server
+   *                    matching the conditions.
+   * @param shard       The requested shard
+   * @param clients     The out parameter for returned clients, the clients will be
+   *                    sorted according to the criteria below.
+   * @param specific_az if az specified by caller, return clients only in that az.
    *
-   *                  If role == ANY && !FLAGS_always_prefer_local_host, we sort
-   *                  the returned hosts first by
-   *                  (1) Prefer master to slave, then (2) Prefer local to
-   *                  non-local.
+   *                    If role == ANY && !FLAGS_always_prefer_local_host, we sort
+   *                    the returned hosts first by
+   *                    (1) Prefer master to slave, then (2) Prefer local to
+   *                    non-local.
    *
-   *                  Otherwise, we sort them by (2) only
+   *                    Otherwise, we sort them by (2) only
    *
-   *                  If two hosts equal according to the sorting criteria, we
-   *                  randomly order them
+   *                    If two hosts equal according to the sorting criteria, we
+   *                    randomly order them
    */
   ReturnCode getClientsFor(const std::string& segment,
                            const Role role,
                            const Quantity quantity,
                            const ShardID shard,
-                           std::vector<std::shared_ptr<ClientType>>* clients) {
+                           std::vector<std::shared_ptr<ClientType>>* clients,
+                           const std::string& specific_az = "") {
     std::map<ShardID, std::vector<std::shared_ptr<ClientType>>>
       shard_to_clients;
     shard_to_clients[shard];
-    auto ret = getClientsFor(segment, role, quantity, &shard_to_clients);
+    auto ret = getClientsFor(segment, role, quantity, &shard_to_clients, specific_az);
     *clients = std::move(shard_to_clients[shard]);
     return ret;
   }
@@ -367,12 +369,11 @@ class ThriftRouter {
     /*
      * Filter hosts by role, and then sort them according to the following rules
      *
-     * If role == ANY && !FLAGS_always_prefer_local_host, we sort the returned
-     * hosts first by
-     * (1) Prefer master to slave, then (2) Prefer local to non-local.
-     *
-     * Otherwise, if az is specified by caller, return hosts belonging to that az
-     * Otherwise, we sort them by (2) only
+     * if az is specified by caller, return hosts belonging to that az
+     * else if role == ANY && !FLAGS_always_prefer_local_host, we sort the returned
+     *  hosts first by
+     *  (1) Prefer master to slave, then (2) Prefer local to non-local.
+     * for everything else, prefer local to non local.
      *
      * If two hosts equal according to the sorting criteria, we randomly order
      * them
