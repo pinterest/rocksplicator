@@ -387,15 +387,15 @@ class ThriftRouter {
         const std::string& specific_az) {
       std::vector<const Host*> v;
       if (specific_az != "") {
+        v.reserve(host_info.size());
         // if az is specified by caller, return hosts belong only to that az.
         for (const auto& hi : host_info) {
           if (hi.first->az.compare(specific_az) == 0) {
             v.push_back(hi.first);
           }
         }
-        if (shrink_target < v.size()) {
-          v.resize(shrink_target);
-        }
+        // although hosts belong to same az, they will be selected by virtue of the rotation counter.
+        RankHostsByGroupPrefixLengthAndShrinkTo(&v, rotation_counter, segment, shrink_target);
       } else if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
         // prefer MASTER, then prefer groups with longer common prefix length
         std::vector<const Host*> v_s;
