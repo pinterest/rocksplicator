@@ -151,7 +151,9 @@ class ThriftRouter {
    * @param shard       The requested shard
    * @param clients     The out parameter for returned clients, the clients will be
    *                    sorted according to the criteria below.
-   * @param specific_az if az specified by caller, return clients only in that az.
+   * @param specific_az if az specified by caller, return clients only in that az. we sort
+   *                    the returned hosts by
+   *                    (1) Prefer master to slave
    *
    *                    If role == ANY && !FLAGS_always_prefer_local_host, we sort
    *                    the returned hosts first by
@@ -369,7 +371,9 @@ class ThriftRouter {
     /*
      * Filter hosts by role, and then sort them according to the following rules
      *
-     * if az is specified by caller, return hosts belonging to that az
+     * if az is specified by caller, return hosts belonging to that az, we sort the returned
+     * hosts by
+     *  (1) Prefer master to slave
      * else if role == ANY && !FLAGS_always_prefer_local_host, we sort the returned
      *  hosts first by
      *  (1) Prefer master to slave, then (2) Prefer local to non-local.
@@ -388,14 +392,24 @@ class ThriftRouter {
       std::vector<const Host*> v;
       if (specific_az != "") {
         v.reserve(host_info.size());
+        std::vector<const Host*> v_s;
         // if az is specified by caller, return hosts belong only to that az.
         for (const auto& hi : host_info) {
           if (hi.first->az.compare(specific_az) == 0) {
-            v.push_back(hi.first);
+            if ((role == Role::ANY && hi.second == Role::MASTER) || role == hi.second) {
+              v.push_back(hi.first);
+            } else {
+              v_s.push_back(hi.first);
+            }
           }
         }
         // although hosts belong to same az, they will be selected by virtue of the rotation counter.
         RankHostsByGroupPrefixLengthAndShrinkTo(&v, rotation_counter, segment, shrink_target);
+        RankHostsByGroupPrefixLengthAndShrinkTo(&v_s, rotation_counter, segment, shrink_target);
+        v.insert(v.end(), v_s.begin(), v_s.end());
+        if (shrink_target < v.size()) {
+          v.resize(shrink_target);
+        }
       } else if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
         // prefer MASTER, then prefer groups with longer common prefix length
         std::vector<const Host*> v_s;

@@ -572,6 +572,70 @@ TEST(ThriftRouterTest, SpecificAzTest) {
   FLAGS_always_prefer_local_host = false;
 }
 
+TEST(ThriftRouterTest, SpecificAzMasterSlaveTest) {
+  FLAGS_always_prefer_local_host = true;
+  updateConfigFile(g_config_v4);
+  ThriftRouter<DummyServiceAsyncClient> router(
+    "us-east-1a", g_config_path, common::parseConfig);
+
+  std::vector<shared_ptr<DummyServiceAsyncClient>> v;
+  shared_ptr<DummyServiceTestHandler> handlers[4];
+  shared_ptr<ThriftServer> servers[4];
+  unique_ptr<thread> thrs[4];
+
+  tie(handlers[0], servers[0], thrs[0]) = makeServer(8090);
+  tie(handlers[1], servers[1], thrs[1]) = makeServer(8091);
+  tie(handlers[2], servers[2], thrs[2]) = makeServer(8092);
+  tie(handlers[3], servers[3], thrs[3]) = makeServer(8093);
+  sleep(1);
+
+  EXPECT_EQ(router.getShardNumberFor("user_pins"), 4);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 0), 4);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 1), 4);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 2), 4);
+  EXPECT_EQ(router.getHostNumberFor("user_pins", 3), 4);
+
+  // no hosts in the az specified
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::ANY, Quantity::ALL, 2, &v, "us-east-1f"),
+    ReturnCode::NOT_FOUND);
+  EXPECT_EQ(v.size(), 0);
+
+  // Get the client from local az for specific shard
+  // All requests should hit the local az handler
+  for (int i = 0; i < 100; i ++) {
+    v.clear();
+    EXPECT_EQ(
+        router.getClientsFor("user_pins", Role::ANY, Quantity::ONE, 2, &v, "us-east-1b"),
+        ReturnCode::OK);
+    EXPECT_EQ(v.size(), 1);
+    v[0]->future_ping().get();
+  }
+  EXPECT_EQ(handlers[2]->nPings_.load(), 100);
+
+  // Get the client from local az
+  // All requests should hit the local az handler
+  for (int i = 0; i < 100; i ++) {
+    v.clear();
+    EXPECT_EQ(
+        router.getClientsFor("user_pins", Role::SLAVE, Quantity::ONE, 2, &v, "us-east-1b"),
+        ReturnCode::OK);
+    EXPECT_EQ(v.size(), 1);
+    v[0]->future_ping().get();
+  }
+  EXPECT_EQ(handlers[3]->nPings_.load(), 100);
+
+  // stop all servers
+  for (auto& s : servers) {
+    s->stop();
+  }
+
+  for (auto& t : thrs) {
+    t->join();
+  }
+  FLAGS_always_prefer_local_host = false;
+}
+
 TEST(ThriftRouterTest, ForeignAzTest) {
   updateConfigFile(g_config_v1az);
   ThriftRouter<DummyServiceAsyncClient> router(

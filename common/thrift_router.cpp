@@ -51,6 +51,9 @@ bool parseHost(const std::string& str, common::detail::Host* host,
     return false;
   }
   auto group = (tokens.size() == 3 ? tokens[2] : "");
+  // Based on format of generated shard config which is
+  //    ${ip_address}:${thrift_service_port}:${az}_${pg}
+  // as specified in ConfigGenerator.java, we try to cache the az information.
   auto pos = group.find("_");
   host->az = (pos != 0 && pos != std::string::npos) ? group.substr(0, pos) : group;
   host->groups_prefix_lengths[segment] =
