@@ -535,6 +535,18 @@ TEST(ThriftRouterTest, SpecificAzTest) {
     EXPECT_EQ(h->nPings_.load(), 1);
   }
 
+  // Get the client from local az for specific shard
+  // All requests should hit the local az handler
+  for (int i = 0; i < 100; i ++) {
+    v.clear();
+    EXPECT_EQ(
+        router.getClientsFor("user_pins", Role::ANY, Quantity::ALL, 2, &v, "us-east-1c"),
+        ReturnCode::OK);
+    EXPECT_EQ(v.size(), 1);
+    v[0]->future_ping().get();
+  }
+  EXPECT_EQ(handlers[1]->nPings_.load(), 101);
+
   // Get the client from local az
   // All requests should hit the local az handler
   for (int i = 0; i < 100; i ++) {
@@ -547,7 +559,7 @@ TEST(ThriftRouterTest, SpecificAzTest) {
     EXPECT_EQ(m[2].size(), 1);
     m[2][0]->future_ping().get();
   }
-  EXPECT_EQ(handlers[1]->nPings_.load(), 101);
+  EXPECT_EQ(handlers[1]->nPings_.load(), 201);
 
   // stop all servers
   for (auto& s : servers) {
