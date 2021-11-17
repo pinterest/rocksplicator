@@ -392,11 +392,12 @@ class ThriftRouter {
         // prefer MASTER, then prefer groups with longer common prefix length
         std::vector<const Host*> v_s;
         for (const auto& hi : host_info) {
-          if (hi.second == Role::SLAVE &&
-              (specific_az == "" || hi.first->az.compare(specific_az) == 0)) {
+          if (!matchAZ(hi.first->az, specific_az)) {
+            continue;
+          }
+          if (hi.second == Role::SLAVE) {
             v_s.push_back(hi.first);
-          } else if (hi.second == Role::MASTER
-                     && (specific_az == "" || hi.first->az.compare(specific_az) == 0)) {
+          } else if (hi.second == Role::MASTER) {
             v.push_back(hi.first);
           }
         }
@@ -410,8 +411,10 @@ class ThriftRouter {
         // prefer local
         v.reserve(host_info.size());
         for (const auto& hi : host_info) {
-          if ((role == Role::ANY || hi.second == role) &&
-              (specific_az == "" || hi.first->az.compare(specific_az) == 0)) {
+          if (!matchAZ(hi.first->az, specific_az)) {
+            continue;
+          }
+          if (role == Role::ANY || hi.second == role) {
             v.push_back(hi.first);
           }
         }
@@ -491,6 +494,10 @@ class ThriftRouter {
                                             false /* aggressively */);
         cs.create_time = now();
       }
+    }
+
+    bool matchAZ(const std::string& host_az, const std::string& specific_az) {
+       return (specific_az == "" || host_az.compare(specific_az) == 0);
     }
 
     static uint64_t now() {
