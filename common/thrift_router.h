@@ -151,16 +151,15 @@ class ThriftRouter {
    * @param shard       The requested shard
    * @param clients     The out parameter for returned clients, the clients will be
    *                    sorted according to the criteria below.
-   * @param specific_az if az specified by caller, return clients only in that az. we sort
-   *                    the returned hosts by
-   *                    (1) Prefer master to slave
+   * @param specific_az az specified by caller
    *
    *                    If role == ANY && !FLAGS_always_prefer_local_host, we sort
    *                    the returned hosts first by
    *                    (1) Prefer master to slave, then (2) Prefer local to
    *                    non-local.
-   *
    *                    Otherwise, we sort them by (2) only
+   *                    In all of the cases above, if client has specified an az using
+   *                    specific_az, only clients in that specific_az will be returned.
    *
    *                    If two hosts equal according to the sorting criteria, we
    *                    randomly order them
@@ -371,16 +370,15 @@ class ThriftRouter {
     /*
      * Filter and return hosts by role according to the following rules:
      *
-     * if az is specified by caller, return hosts belonging to that az, we sort the returned
-     * hosts by
-     *  (1) Prefer master to slave
-     * else if role == ANY && !FLAGS_always_prefer_local_host, we sort the returned
+     * if role == ANY && !FLAGS_always_prefer_local_host, we sort the returned
      *  hosts first by
      *  (1) Prefer master to slave, then (2) Prefer local to non-local.
      * for everything else, prefer local to non local.
-     *
      * If two hosts equal according to the sorting criteria, we randomly order
      * them
+     *
+     * In all of the above cases, if user has specified an az in "specific_az" parameter,
+     * it will be strictly followed and no hosts will be returned if none in that az.
      */
     auto filterByRoleAndSortByPreferenceAndShrinkTo(
         const std::vector<std::pair<const Host*, Role>>& host_info,
@@ -390,33 +388,15 @@ class ThriftRouter {
         const int shrink_target,
         const std::string& specific_az) {
       std::vector<const Host*> v;
-      if (specific_az != "") {
-        v.reserve(host_info.size());
-        std::vector<const Host*> v_s;
-        // if az is specified by caller, return hosts belong only to that az.
-        for (const auto& hi : host_info) {
-          if (hi.first->az.compare(specific_az) == 0) {
-            if ((role == Role::ANY && hi.second == Role::MASTER) || role == hi.second) {
-              v.push_back(hi.first);
-            } else {
-              v_s.push_back(hi.first);
-            }
-          }
-        }
-        // although hosts belong to same az, they will be selected by virtue of the rotation counter.
-        RankHostsByGroupPrefixLengthAndShrinkTo(&v, rotation_counter, segment, shrink_target);
-        RankHostsByGroupPrefixLengthAndShrinkTo(&v_s, rotation_counter, segment, shrink_target);
-        v.insert(v.end(), v_s.begin(), v_s.end());
-        if (shrink_target < v.size()) {
-          v.resize(shrink_target);
-        }
-      } else if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
+      if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
         // prefer MASTER, then prefer groups with longer common prefix length
         std::vector<const Host*> v_s;
         for (const auto& hi : host_info) {
-          if (hi.second == Role::SLAVE) {
+          if (hi.second == Role::SLAVE &&
+              (specific_az == "" || hi.first->az.compare(specific_az) == 0)) {
             v_s.push_back(hi.first);
-          } else if (hi.second == Role::MASTER) {
+          } else if (hi.second == Role::MASTER
+                     && (specific_az == "" || hi.first->az.compare(specific_az) == 0)) {
             v.push_back(hi.first);
           }
         }
@@ -430,7 +410,8 @@ class ThriftRouter {
         // prefer local
         v.reserve(host_info.size());
         for (const auto& hi : host_info) {
-          if (role == Role::ANY || hi.second == role) {
+          if ((role == Role::ANY || hi.second == role) &&
+              (specific_az == "" || hi.first->az.compare(specific_az) == 0)) {
             v.push_back(hi.first);
           }
         }

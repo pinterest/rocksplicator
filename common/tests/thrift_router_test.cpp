@@ -535,8 +535,7 @@ TEST(ThriftRouterTest, SpecificAzTest) {
     EXPECT_EQ(h->nPings_.load(), 1);
   }
 
-  // Get the client from local az for specific shard
-  // All requests should hit the local az handler
+  // Get the client from specified az for specific shard
   for (int i = 0; i < 100; i ++) {
     v.clear();
     EXPECT_EQ(
@@ -547,8 +546,7 @@ TEST(ThriftRouterTest, SpecificAzTest) {
   }
   EXPECT_EQ(handlers[1]->nPings_.load(), 101);
 
-  // Get the client from local az
-  // All requests should hit the local az handler
+  // Get the client from specified az
   for (int i = 0; i < 100; i ++) {
     std::map<uint32_t, std::vector<std::shared_ptr<DummyServiceAsyncClient>>> m;
     m[2];
@@ -573,7 +571,6 @@ TEST(ThriftRouterTest, SpecificAzTest) {
 }
 
 TEST(ThriftRouterTest, SpecificAzMasterSlaveTest) {
-  FLAGS_always_prefer_local_host = true;
   updateConfigFile(g_config_v4);
   ThriftRouter<DummyServiceAsyncClient> router(
     "us-east-1a", g_config_path, common::parseConfig);
@@ -613,8 +610,7 @@ TEST(ThriftRouterTest, SpecificAzMasterSlaveTest) {
   }
   EXPECT_EQ(handlers[2]->nPings_.load(), 100);
 
-  // Get the client from local az
-  // All requests should hit the local az handler
+  // Get the client from host which is slave in the specified az
   for (int i = 0; i < 100; i ++) {
     v.clear();
     EXPECT_EQ(
@@ -625,6 +621,23 @@ TEST(ThriftRouterTest, SpecificAzMasterSlaveTest) {
   }
   EXPECT_EQ(handlers[3]->nPings_.load(), 100);
 
+  // Get the client from host which is master in the specified az
+  for (int i = 0; i < 100; i ++) {
+    v.clear();
+    EXPECT_EQ(
+        router.getClientsFor("user_pins", Role::MASTER, Quantity::ONE, 2, &v, "us-east-1b"),
+        ReturnCode::OK);
+    EXPECT_EQ(v.size(), 1);
+    v[0]->future_ping().get();
+  }
+  EXPECT_EQ(handlers[2]->nPings_.load(), 200);
+
+  // no hosts with the role in the az specified
+  EXPECT_EQ(
+    router.getClientsFor("user_pins", Role::MASTER, Quantity::ONE, 2, &v, "us-east-1a"),
+    ReturnCode::NOT_FOUND);
+  EXPECT_EQ(v.size(), 0);
+
   // stop all servers
   for (auto& s : servers) {
     s->stop();
@@ -633,7 +646,6 @@ TEST(ThriftRouterTest, SpecificAzMasterSlaveTest) {
   for (auto& t : thrs) {
     t->join();
   }
-  FLAGS_always_prefer_local_host = false;
 }
 
 TEST(ThriftRouterTest, ForeignAzTest) {
