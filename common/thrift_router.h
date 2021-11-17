@@ -369,7 +369,7 @@ class ThriftRouter {
 
    private:
     /*
-     * Filter hosts by role, and then sort them according to the following rules
+     * Filter and return hosts by role according to the following rules:
      *
      * if az is specified by caller, return hosts belonging to that az, we sort the returned
      * hosts by
