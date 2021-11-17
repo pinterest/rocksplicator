@@ -40,6 +40,9 @@ namespace {
 bool parseHost(const std::string& str, common::detail::Host* host,
                const std::string& segment, const std::string& local_group) {
   std::vector<std::string> tokens;
+  // Based on format of generated shard config which is
+  //    ${ip_address}:${thrift_service_port}:${az}_${pg}
+  // as specified in ConfigGenerator.java
   folly::split(":", str, tokens);
   if (tokens.size() < 2 || tokens.size() > 3) {
     return false;
@@ -51,6 +54,9 @@ bool parseHost(const std::string& str, common::detail::Host* host,
     return false;
   }
   auto group = (tokens.size() == 3 ? tokens[2] : "");
+  // we try to cache the az information.
+  auto pos = group.find("_");
+  host->az = (pos != 0 && pos != std::string::npos) ? group.substr(0, pos) : group;
   host->groups_prefix_lengths[segment] =
     std::distance(group.begin(), std::mismatch(group.begin(), group.end(),
                   local_group.begin(), local_group.end()).first);

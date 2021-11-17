@@ -59,6 +59,8 @@ struct Host {
   folly::SocketAddress addr;
   // The hosts' longest common prefix length with local group
   std::unordered_map<std::string, uint16_t> groups_prefix_lengths;
+  // AZ of the host
+  std::string az;
 };
 
 struct SegmentInfo {
@@ -136,39 +138,42 @@ class ThriftRouter {
    * Get clients pointing to the server(s) matching the request conditions.
    * @note It is encouraged and performance-wise OK to call getClientsFor() for
    *       every RPC.
-   * @param segment   The requested segment
-   * @param role      The requested server role.
-   * @param quantity  The number of servers requested.
-   *                  Return NOT_FOUND if could not find any server matching the
-   *                  conditions.
-   *                  For ONE and TWO, return BAD_HOST if could not find ANY
-   *                  good host matching the conditions (we may return one
-   *                  server for TWO if only one found).
-   *                  For ALL, return BAD_HOST if there exists any bad server
-   *                  matching the conditions.
-   * @param shard     The requested shard
-   * @param clients   The out parameter for returned clients, the clients will be
-   *                  sorted according to the criteria below.
+   * @param segment     The requested segment
+   * @param role        The requested server role.
+   * @param quantity    The number of servers requested.
+   *                    Return NOT_FOUND if could not find any server matching the
+   *                    conditions.
+   *                    For ONE and TWO, return BAD_HOST if could not find ANY
+   *                    good host matching the conditions (we may return one
+   *                    server for TWO if only one found).
+   *                    For ALL, return BAD_HOST if there exists any bad server
+   *                    matching the conditions.
+   * @param shard       The requested shard
+   * @param clients     The out parameter for returned clients, the clients will be
+   *                    sorted according to the criteria below.
+   * @param specific_az az specified by caller
    *
-   *                  If role == ANY && !FLAGS_always_prefer_local_host, we sort
-   *                  the returned hosts first by
-   *                  (1) Prefer master to slave, then (2) Prefer local to
-   *                  non-local.
+   *                    If role == ANY && !FLAGS_always_prefer_local_host, we sort
+   *                    the returned hosts first by
+   *                    (1) Prefer master to slave, then (2) Prefer local to
+   *                    non-local.
+   *                    Otherwise, we sort them by (2) only
+   *                    In all of the cases above, if client has specified an az using
+   *                    specific_az, only clients in that specific_az will be returned.
    *
-   *                  Otherwise, we sort them by (2) only
-   *
-   *                  If two hosts equal according to the sorting criteria, we
-   *                  randomly order them
+   *                    If two hosts equal according to the sorting criteria, we
+   *                    randomly order them
    */
   ReturnCode getClientsFor(const std::string& segment,
                            const Role role,
                            const Quantity quantity,
                            const ShardID shard,
-                           std::vector<std::shared_ptr<ClientType>>* clients) {
+                           std::vector<std::shared_ptr<ClientType>>* clients,
+                           const std::string& specific_az = "") {
     std::map<ShardID, std::vector<std::shared_ptr<ClientType>>>
       shard_to_clients;
     shard_to_clients[shard];
-    auto ret = getClientsFor(segment, role, quantity, &shard_to_clients);
+    auto ret = getClientsFor(segment, role, quantity, &shard_to_clients, specific_az);
     *clients = std::move(shard_to_clients[shard]);
     return ret;
   }
@@ -190,10 +195,11 @@ class ThriftRouter {
       const Role role,
       const Quantity quantity,
       std::map<ShardID, std::vector<std::shared_ptr<ClientType>>>*
-        shard_to_clients) {
+        shard_to_clients,
+      const std::string& specific_az = "") {
     updateClusterLayout();
     return local_client_map_.getClientsFor(segment, role, quantity,
-                                           shard_to_clients);
+                                           shard_to_clients, specific_az);
   }
 
   uint32_t getShardNumberFor(const std::string& segment) {
@@ -267,7 +273,8 @@ class ThriftRouter {
         const Role role,
         const Quantity quantity,
         std::map<ShardID, std::vector<std::shared_ptr<ClientType>>>*
-          shard_to_clients) {
+          shard_to_clients,
+        const std::string& specific_az = "") {
       auto& segments = (*local_cluster_layout_)->segments;
       auto itor = segments.find(segment);
       if (itor == segments.end()) {
@@ -298,7 +305,7 @@ class ThriftRouter {
           shrink_target = FLAGS_thrift_router_max_num_hosts_to_consider;
         }
         auto hosts_for_shard = filterByRoleAndSortByPreferenceAndShrinkTo(
-          shard_to_hosts[shard], role, rotation_counter, segment, shrink_target);
+          shard_to_hosts[shard], role, rotation_counter, segment, shrink_target, specific_az);
         if (hosts_for_shard.empty()) {
           LOG_EVERY_N(ERROR, FLAGS_thrift_router_log_frequency)
             << "Could not find hosts for shard " << shard;
@@ -361,28 +368,33 @@ class ThriftRouter {
 
    private:
     /*
-     * Filter hosts by role, and then sort them according to the following rules
+     * Filter and return hosts by role according to the following rules:
      *
-     * If role == ANY && !FLAGS_always_prefer_local_host, we sort the returned
-     * hosts first by
-     * (1) Prefer master to slave, then (2) Prefer local to non-local.
-     *
-     * Otherwise, we sort them by (2) only
-     *
+     * if role == ANY && !FLAGS_always_prefer_local_host, we sort the returned
+     *  hosts first by
+     *  (1) Prefer master to slave, then (2) Prefer local to non-local.
+     * for everything else, prefer local to non local.
      * If two hosts equal according to the sorting criteria, we randomly order
      * them
+     *
+     * In all of the above cases, if user has specified an az in "specific_az" parameter,
+     * it will be strictly followed and no hosts will be returned if none in that az.
      */
     auto filterByRoleAndSortByPreferenceAndShrinkTo(
         const std::vector<std::pair<const Host*, Role>>& host_info,
         const Role role,
         const unsigned rotation_counter,
         const std::string& segment,
-        const int shrink_target) {
+        const int shrink_target,
+        const std::string& specific_az) {
       std::vector<const Host*> v;
       if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
         // prefer MASTER, then prefer groups with longer common prefix length
         std::vector<const Host*> v_s;
         for (const auto& hi : host_info) {
+          if (!matchAZ(hi.first->az, specific_az)) {
+            continue;
+          }
           if (hi.second == Role::SLAVE) {
             v_s.push_back(hi.first);
           } else if (hi.second == Role::MASTER) {
@@ -399,6 +411,9 @@ class ThriftRouter {
         // prefer local
         v.reserve(host_info.size());
         for (const auto& hi : host_info) {
+          if (!matchAZ(hi.first->az, specific_az)) {
+            continue;
+          }
           if (role == Role::ANY || hi.second == role) {
             v.push_back(hi.first);
           }
@@ -479,6 +494,10 @@ class ThriftRouter {
                                             false /* aggressively */);
         cs.create_time = now();
       }
+    }
+
+    bool matchAZ(const std::string& host_az, const std::string& specific_az) {
+       return (specific_az == "" || host_az.compare(specific_az) == 0);
     }
 
     static uint64_t now() {
