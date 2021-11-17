@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "common/dbconfig.h"
 #include "common/helix_client.h"
 #include "common/segment_utils.h"
 #include "folly/MoveWrapper.h"
@@ -78,7 +79,7 @@ namespace replicator {
 rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
     const rocksdb::WriteOptions& options,
     rocksdb::WriteBatch* updates,
-    const common::Config& config,
+    const common::Config& , // TODO(prem) : remove this arg soon
     rocksdb::SequenceNumber* seq_no) {
   if (role_ == DBRole::SLAVE) {
     throw ReturnCode::WRITE_TO_SLAVE;
@@ -94,10 +95,12 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
   auto end = GetCurrentTimeMs();
   logMetric(kReplicatorWriteMs, start < end ? end - start : 0, db_name_);
   
+  auto replication_mode =  common::DBConfigManager::get()->getReplicationMode(db_name_);
+  // TODO(prem) : remove support for gflags soon
   // for now we have to support both till all clusters are migrated
-  auto replication_mode =  config.replication_mode > FLAGS_replicator_replication_mode ? 
-                            config.replication_mode :  FLAGS_replicator_replication_mode;
-
+  if (FLAGS_replicator_replication_mode > replication_mode) {
+    replication_mode = FLAGS_replicator_replication_mode;
+  }
   if (status.ok()) {
     cond_var_.notifyAll();
 
@@ -305,7 +308,7 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
 void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
     std::unique_ptr<CallbackType> callback,
     std::unique_ptr<ReplicateRequest> request,
-    const common::Config& config) {
+    const common::Config&) { // TODO(prem) : remove this arg soon
   CHECK(request->db_name == db_name_);
 
   auto db = shared_from_this();
@@ -318,7 +321,11 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
     logMetric(kReplicatorLeaderSequenceNumbersBehind, seq_no - leaderSeqNum, db ->db_name_);
   }
 
-  auto replication_mode =  config.replication_mode > FLAGS_replicator_replication_mode ? config.replication_mode :  FLAGS_replicator_replication_mode;
+  auto replication_mode =  common::DBConfigManager::get()->getReplicationMode(db_name_);
+  // for now we have to support both till all clusters are migrated
+  if (FLAGS_replicator_replication_mode > replication_mode) {
+    replication_mode = FLAGS_replicator_replication_mode;
+  }
   if (replication_mode == 1 || replication_mode == 2) {
     // post the largest sequence number the Slave has committed
     max_seq_no_acked_.post(seq_no);
