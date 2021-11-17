@@ -23,6 +23,8 @@
 #include <stddef.h>
 
 #include <folly/Uri.h>
+#include <folly/FileUtil.h>
+#include <folly/Format.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <microhttpd.h>
@@ -122,8 +124,21 @@ StatusServer::StatusServer(uint16_t port, EndPointToOPMap op_map,
   // dump_heap
   op_map_.emplace("/dump_heap",
                   [] (const Arguments*) {
-                    auto ret = mallctl("prof.dump", nullptr, nullptr, nullptr, 0);
-                    return strerror(ret);
+                    static const char* kMallctlProfDumpNamespace = "prof.dump";
+                    static const std::string kHeapTmpFileTemplate = "/tmp/pprof.heap.{}";
+
+                    std::string tmp_file = folly::sformat(kHeapTmpFileTemplate, static_cast<int>(getpid()));
+                    const char* tmp_file_c_str = tmp_file.c_str();
+                    auto ret = mallctl(kMallctlProfDumpNamespace, nullptr, nullptr, &tmp_file_c_str, sizeof(const char*));
+                    if (ret) {
+                      return std::string(strerror(ret));
+                    }
+
+                    LOG(INFO) << "Heap dump succeeded via mallctl! : " << tmp_file;
+                    std::string prof;
+                    folly::readFile(tmp_file.c_str(), prof);
+                    std::remove(tmp_file.c_str());
+                    return prof;
                   });
 
   op_map_.emplace("/gflags.txt",
