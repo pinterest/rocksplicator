@@ -304,7 +304,7 @@ class ThriftRouter {
             FLAGS_thrift_router_max_num_hosts_to_consider < shrink_target) {
           shrink_target = FLAGS_thrift_router_max_num_hosts_to_consider;
         }
-        auto hosts_for_shard = filterByRoleAndSortByPreferenceAndShrinkTo(
+        auto hosts_for_shard = selectHostsForShard(
           shard_to_hosts[shard], role, rotation_counter, segment, shrink_target, specific_az);
         if (hosts_for_shard.empty()) {
           LOG_EVERY_N(ERROR, FLAGS_thrift_router_log_frequency)
@@ -368,69 +368,71 @@ class ThriftRouter {
 
    private:
     /*
-     * Filter and return hosts by role according to the following rules:
+     * selectHostsForShard selects hosts based on the filter rules (role & AZ),
+     * and sort them based on preferences (role & locality).
      *
-     * if role == ANY && !FLAGS_always_prefer_local_host, we sort the returned
-     *  hosts first by
-     *  (1) Prefer master to slave, then (2) Prefer local to non-local.
-     * for everything else, prefer local to non local.
-     * If two hosts equal according to the sorting criteria, we randomly order
-     * them
+     * In particular, it filters the hosts by:
+     * - AZ (if input specific_az is not empty)
+     * - Role (if input role is not Role::ANY)
      *
-     * In all of the above cases, if user has specified an az in "specific_az" parameter,
-     * it will be strictly followed and no hosts will be returned if none in that az.
+     * Then, sort hosts by:
+     * if role == ANY && !FLAGS_always_prefer_local_host
+     * - (1) prefer master to slave
+     * - (2) prefer local to non-local.
+     * for everything else, simply prefer local to non local.
+     * If two hosts equal according to the sorting criteria, we randomly order them.
      */
-    auto filterByRoleAndSortByPreferenceAndShrinkTo(
+    auto selectHostsForShard(
         const std::vector<std::pair<const Host*, Role>>& host_info,
         const Role role,
         const unsigned rotation_counter,
         const std::string& segment,
         const int shrink_target,
         const std::string& specific_az) {
-      std::vector<const Host*> v;
-      if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
-        // prefer MASTER, then prefer groups with longer common prefix length
-        std::vector<const Host*> v_s;
-        for (const auto& hi : host_info) {
-          if (!matchAZ(hi.first->az, specific_az)) {
-            continue;
-          }
-          if (hi.second == Role::SLAVE) {
-            v_s.push_back(hi.first);
-          } else if (hi.second == Role::MASTER) {
+          std::vector<const Host*> v;
+          std::unordered_map<const Host*, Role> hostToRole;
+          v.reserve(host_info.size());
+          hostToRole.reserve(host_info.size());
+          for (const auto& hi : host_info) {
+            // filter by AZ
+            if (specific_az != "" && hi.first->az.compare(specific_az) != 0) {
+              continue;
+            }
+            // filter by role
+            if (role != Role::ANY && hi.second != role){
+              continue;
+            }
             v.push_back(hi.first);
+            hostToRole[hi.first] = hi.second;
           }
-        }
-        RankHostsByGroupPrefixLengthAndShrinkTo(&v, rotation_counter, segment, shrink_target);
-        RankHostsByGroupPrefixLengthAndShrinkTo(&v_s, rotation_counter, segment, shrink_target);
-        v.insert(v.end(), v_s.begin(), v_s.end());
-        if (shrink_target < v.size()) {
-          v.resize(shrink_target);
-        }
-      } else {
-        // prefer local
-        v.reserve(host_info.size());
-        for (const auto& hi : host_info) {
-          if (!matchAZ(hi.first->az, specific_az)) {
-            continue;
+          if (v.empty()) {
+            return v;
           }
-          if (role == Role::ANY || hi.second == role) {
-            v.push_back(hi.first);
-          }
-        }
-        RankHostsByGroupPrefixLengthAndShrinkTo(&v, rotation_counter, segment, shrink_target);
-      }
-      return v;
+
+          sortAndShrinkHosts(&v, hostToRole, rotation_counter, role, segment, shrink_target);
+          return v;
     }
 
-    void RankHostsByGroupPrefixLengthAndShrinkTo(
-        std::vector<const Host*>* v,
-        const unsigned rotation_counter,
-        const std::string& segment,
-        const int shrink_target) {
-      auto comparator = [this, &segment, rotation_counter]
+    void sortAndShrinkHosts(
+      std::vector<const Host*>* v,
+      const std::unordered_map<const Host*, Role>& hostToRole,
+      const unsigned rotation_counter,
+      const Role role,
+      const std::string& segment,
+      const int shrink_target) {
+        auto comparator = [this, hostToRole, role, &segment, rotation_counter]
         (const Host* h1, const Host* h2) -> bool {
-        // Descending order
+        // prefer master to slave
+        if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
+          // "hostToRole" must contain all the hosts specified in "v"
+          // (see how hosts are filtered in selectHostsForShard),
+          // therefore we don't check key existance here for simplity.
+          if (hostToRole.at(h1) != hostToRole.at(h2)) {
+            return hostToRole.at(h1) == Role::MASTER;
+          }
+        }
+
+        // prefer local, in descending order of group prefix length
         const auto s1 = h1->groups_prefix_lengths.at(segment);
         const auto s2 = h2->groups_prefix_lengths.at(segment);
         if (s1 == s2) {
@@ -443,6 +445,7 @@ class ThriftRouter {
           return s1 > s2;
         }
       };
+      
       if (shrink_target < v->size()) {
         std::partial_sort(v->begin(), v->begin() + shrink_target, v->end(),
             comparator);
@@ -494,10 +497,6 @@ class ThriftRouter {
                                             false /* aggressively */);
         cs.create_time = now();
       }
-    }
-
-    bool matchAZ(const std::string& host_az, const std::string& specific_az) {
-       return (specific_az == "" || host_az.compare(specific_az) == 0);
     }
 
     static uint64_t now() {
