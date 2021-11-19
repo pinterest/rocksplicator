@@ -304,7 +304,7 @@ class ThriftRouter {
             FLAGS_thrift_router_max_num_hosts_to_consider < shrink_target) {
           shrink_target = FLAGS_thrift_router_max_num_hosts_to_consider;
         }
-        auto hosts_for_shard = selectHostsForShard(
+        auto hosts_for_shard = selectHosts(
           shard_to_hosts[shard], role, rotation_counter, segment, shrink_target, specific_az);
         if (hosts_for_shard.empty()) {
           LOG_EVERY_N(ERROR, FLAGS_thrift_router_log_frequency)
@@ -368,10 +368,9 @@ class ThriftRouter {
 
    private:
     /*
-     * selectHostsForShard selects hosts based on the filter rules (role & AZ),
-     * and sort them based on preferences (role & locality).
+     * selectHosts filters and sorts hosts based on the host properties.
      *
-     * In particular, it filters the hosts by:
+     * In particular, it firstly filters the hosts by:
      * - AZ (if input specific_az is not empty)
      * - Role (if input role is not Role::ANY)
      *
@@ -382,7 +381,7 @@ class ThriftRouter {
      * for everything else, simply prefer local to non local.
      * If two hosts equal according to the sorting criteria, we randomly order them.
      */
-    auto selectHostsForShard(
+    auto selectHosts(
         const std::vector<std::pair<const Host*, Role>>& host_info,
         const Role role,
         const unsigned rotation_counter,
@@ -425,8 +424,8 @@ class ThriftRouter {
         // prefer master to slave
         if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
           // "hostToRole" must contain all the hosts specified in "v"
-          // (see how hosts are filtered in selectHostsForShard),
-          // therefore we don't check key existance here for simplity.
+          // (see how hosts are filtered in selectHosts),
+          // therefore we don't check key existance here for simplicity.
           if (hostToRole.at(h1) != hostToRole.at(h2)) {
             return hostToRole.at(h1) == Role::MASTER;
           }
@@ -445,7 +444,7 @@ class ThriftRouter {
           return s1 > s2;
         }
       };
-      
+
       if (shrink_target < v->size()) {
         std::partial_sort(v->begin(), v->begin() + shrink_target, v->end(),
             comparator);
