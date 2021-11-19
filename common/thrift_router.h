@@ -419,7 +419,7 @@ class ThriftRouter {
       const Role role,
       const std::string& segment,
       const int shrink_target) {
-        auto comparator = [this, hostToRole, role, &segment, rotation_counter]
+        auto comparator = [this, &hostToRole, role, &segment, rotation_counter]
         (const Host* h1, const Host* h2) -> bool {
         // prefer master to slave
         if (role == Role::ANY && !FLAGS_always_prefer_local_host) {
