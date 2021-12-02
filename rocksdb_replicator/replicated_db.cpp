@@ -202,11 +202,21 @@ void RocksDBReplicator::ReplicatedDB::resetUpstream() {
     if (tokens.size() == 2 && tokens[0] != upstream_addr_.getAddressStr()) {
       incCounter(kReplicatorLeaderReset, 1, db_name_);
       LOG(ERROR) << "[resetUpstream] Resetting upstream for " << db_name_ << " to " << tokens[0];
-      upstream_addr_.setFromIpPort(tokens[0], FLAGS_rocksdb_replicator_port);
-      // Update client with new upstream address.
-      client_ = client_pool_->getClient(upstream_addr_);
+      folly::SocketAddress addr;
+      addr.setFromIpPort(tokens[0], FLAGS_rocksdb_replicator_port);
+      resetUpstream(addr);
     }
   }
+}
+
+void RocksDBReplicator::ReplicatedDB::resetUpstream(folly::SocketAddress addr) {
+  
+  // force port
+  addr.setPort(FLAGS_rocksdb_replicator_port);
+  upstream_addr_ = addr;
+  
+  // Update client with new upstream address.
+  client_ = client_pool_->getClient(upstream_addr_);
 }
 
 void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {

@@ -53,7 +53,8 @@ RocksDBReplicator::RocksDBReplicator()
     , server_("disabled", false)
 #endif
     , thread_()
-    , cleaner_() {
+    , cleaner_()
+    , upstreamValidator_() {
 #if __GNUC__ >= 8
   executor_ = std::make_unique<folly::CPUThreadPoolExecutor>(
 #else
@@ -88,6 +89,7 @@ RocksDBReplicator::RocksDBReplicator()
 
 RocksDBReplicator::~RocksDBReplicator() {
   db_map_.clear();
+  upstreamValidator_.stopAndWait();
   cleaner_.stopAndWait();
   server_.stop();
   thread_.join();
@@ -174,6 +176,10 @@ ReturnCode RocksDBReplicator::write(const std::string& db_name,
 std::string RocksDBReplicator::getTextStats() {
   // TODO(bol) add stats
   return "TBD";
+}
+
+void RocksDBReplicator::setShardMapPath(const std::string& path) {
+  strShardMapPath = path;
 }
 
 }  // namespace replicator

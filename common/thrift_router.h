@@ -73,6 +73,9 @@ struct SegmentInfo {
 struct ClusterLayout {
   std::map<SegmentName, SegmentInfo> segments;
   std::set<Host> all_hosts;
+
+  folly::SocketAddress getLeader(const std::string segment, uint shardid) const;
+  void dump() const;
 };
 
 }  // namespace detail

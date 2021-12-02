@@ -1069,6 +1069,24 @@ TEST(ThriftRouterTest, UnreachableHost) {
     ReturnCode::BAD_HOST);
 }
 
+TEST(ThriftRouterTest, GetLeader) {
+  // load the cluster info
+  std::string content = g_config_v3;
+  auto cluster = common::parseConfig(content, "");
+
+  std::string segment = "user_pins";
+
+  auto leader = cluster->getLeader(segment, 5);
+  EXPECT_TRUE(leader.empty());
+
+  leader = cluster->getLeader(segment, 0);
+  EXPECT_EQ(leader.getHostStr(), "localhost");
+  EXPECT_EQ(leader.getPort(), 8092);
+
+  leader = cluster->getLeader(segment, 2);
+  EXPECT_EQ(leader.getPort(), 8090);
+
+}
 int main(int argc, char** argv) {
   FLAGS_always_prefer_local_host = false;
   ::testing::InitGoogleTest(&argc, argv);

@@ -128,6 +128,10 @@ class ApplicationDB {
     return upstream_addr_.get();
   }
 
+  uint64_t getLatestSequenceNumber() const {
+    return db_->GetLatestSequenceNumber();
+  }
+
   ~ApplicationDB();
 
  private:

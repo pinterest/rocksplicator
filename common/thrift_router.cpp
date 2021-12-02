@@ -166,4 +166,44 @@ std::unique_ptr<const detail::ClusterLayout> parseConfig(
   return std::unique_ptr<const detail::ClusterLayout>(std::move(cl));
 }
 
+namespace detail {
+  folly::SocketAddress ClusterLayout::getLeader(const std::string segment, uint shardid) const {
+    folly::SocketAddress emptyaddr;
+
+    const auto& segiter = segments.find(segment);
+    if (segiter == segments.end()) {
+      // segment not found..
+      return emptyaddr;
+    }
+
+    if (segiter->second.shard_to_hosts.size() < shardid) {
+      // invalid shardid
+      return emptyaddr;
+    }
+
+    for (const auto& hostinfo : segiter->second.shard_to_hosts[shardid]) {
+      if (hostinfo.second == Role::MASTER) {
+        return hostinfo.first->addr;
+      }
+    }
+
+    return emptyaddr;
+  }
+
+  void ClusterLayout::dump() const {
+    for (const auto& segment : segments) {
+      const auto& name = segment.first;
+      const auto& shards = segment.second.shard_to_hosts;
+      for (size_t i = 0 ; i < shards.size() ; i++) {
+        for (const auto& host : shards[i]) {
+          LOG(INFO) << name << ":" << i << ":" 
+                    << host.first->addr.getHostStr() << ":" << host.first->addr.getPort()
+                    << ":" << (int)host.second;
+        }
+      }
+    }
+  }
+
+}  // namespace detail
+
 }  // namespace common

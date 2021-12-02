@@ -35,6 +35,7 @@
 #include "rocksdb_replicator/non_blocking_condition_variable.h"
 #include "rocksdb_replicator/db_wrapper.h"
 #include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
+#include "rocksdb_replicator/upstream_validator.h"
 #include "folly/SocketAddress.h"
 #include "rocksdb/db.h"
 #include "thrift/lib/cpp2/server/ThriftServer.h"
@@ -120,6 +121,7 @@ class RocksDBReplicator {
 
     void pullFromUpstream();
     void resetUpstream();
+    void resetUpstream(folly::SocketAddress addr);
     using CallbackType =
       apache::thrift::HandlerCallback<std::unique_ptr<ReplicateResponse>>;
     void handleReplicateRequest(std::unique_ptr<CallbackType> callback,
@@ -152,6 +154,7 @@ class RocksDBReplicator {
     friend class ReplicatorHandler;
     friend class RocksDBReplicator;
     friend class CachedIterCleaner;
+    friend class UpstreamValidator;
   };
 
   static RocksDBReplicator* instance() {
@@ -223,6 +226,8 @@ class RocksDBReplicator {
   RocksDBReplicator(const RocksDBReplicator&) = delete;
   RocksDBReplicator& operator=(const RocksDBReplicator&) = delete;
 
+  void setShardMapPath(const std::string& path);
+
  private:
   class CachedIterCleaner {
    public:
@@ -257,6 +262,12 @@ class RocksDBReplicator {
   std::thread thread_;
 
   CachedIterCleaner cleaner_;
+
+  // TODO(prem) : move to DBConfig
+  std::string strShardMapPath;
+  UpstreamValidator upstreamValidator_;
+
+  friend class UpstreamValidator;
 };
 
 }  // namespace replicator
