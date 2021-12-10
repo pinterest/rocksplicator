@@ -307,24 +307,30 @@ class ThriftClientPool {
     }
 
     void cleanupStaleChannels(const folly::SocketAddress& addr) {
-      // cleanup stale entries if it hasn't been done for a period of time.
       auto now = time(nullptr);
-      if (last_cleanup_time_ + FLAGS_channel_cleanup_min_interval_seconds
-          < now) {
-        last_cleanup_time_ = now;
-        auto itor = channels_.find(addr);
-        int n = 0;
-        while (itor != channels_.end() &&
-               n++ < FLAGS_channel_max_checking_size) {
-          // We don't cleanup !good() live channels here. Otherwise we
-          // will need to upgrade it to a shared_ptr. We expect clients
-          // won't keep a !good() channels for a long period of time.
-          if (itor->second.first.use_count() == 0) {
-            itor = channels_.erase(itor);
-          } else {
-            ++itor;
-          }
-        }
+      // skip cleanup if it was done recently
+      if (now < last_cleanup_time_ + FLAGS_channel_cleanup_min_interval_seconds) {
+	return;
+      }
+
+      last_cleanup_time_ = now;
+      auto itor = channels_.find(addr);
+      int n = 0;
+      while (itor != channels_.end() &&
+	     n++ < FLAGS_channel_max_checking_size) {
+	auto c = itor->second.first.lock();
+	// the channel has been released
+	if (!c) {
+	  itor = channels_.erase(itor);
+	  continue;
+	}
+
+	// the channel is bad
+	if (!itor->second.second->is_good.load()) {
+	  c->closeNow(); // close the connection to avoid accumulating CLOSE_WAIT
+	}
+
+	++itor;
       }
     }
 
