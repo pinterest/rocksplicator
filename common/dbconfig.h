@@ -12,6 +12,7 @@
 
 #include "common/config.h"
 #include "common/jsoncpp/include/json/json.h"
+#include <folly/SharedMutex.h>
 
 /**
  * {
@@ -28,9 +29,10 @@ namespace common {
 
 struct DBConfig {
   std::unordered_map<std::string, ConfigPtr> dataSetConfigMap;
+  using uptr  = std::unique_ptr<const DBConfig>;
 };
 
-using DBConfigPtr  = std::shared_ptr<const DBConfig>;
+
 
 /**
  * DBConfigManager manages the per-dataset and service level
@@ -70,9 +72,10 @@ public:
 private:
   /* No direct instantiation. Use the global static via ::get()*/
   DBConfigManager();
-  DBConfigPtr dbConfig_;
+  DBConfig::uptr dbConfig_;
   ConfigPtr getConfig(const std::string& dbName) const;
-  DBConfigPtr parseConfig(const Json::Value& root);
+  DBConfig::uptr parseConfig(const Json::Value& root);
   std::atomic<bool> fDataLoaded_;
+  mutable folly::SharedMutex lock;
 };
 }  // namespace common

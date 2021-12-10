@@ -41,8 +41,12 @@ bool DBConfigManager::loadJsonObject(const Json::Value& root) {
     }
 
     LOG(INFO) << "Successfully updated config";
-    std::atomic_exchange_explicit(&dbConfig_, newConfig, std::memory_order_release);
-    fDataLoaded_.store(true);
+    {
+      folly::SharedMutex::WriteHolder holder(lock);
+      dbConfig_.reset();
+      dbConfig_.swap(newConfig);
+      fDataLoaded_.store(true);
+    }
     return true;
   } catch (std::exception& ex) {
     LOG(ERROR) << "Exception from parseConfig: " << ex.what();
@@ -50,11 +54,15 @@ bool DBConfigManager::loadJsonObject(const Json::Value& root) {
   }
 }
 
-DBConfigPtr DBConfigManager::parseConfig(const Json::Value& root) {
+DBConfig::uptr DBConfigManager::parseConfig(const Json::Value& root) {
   static const std::string ACK_MODE = "ack_mode";
   static const std::string DATASET = "dataset";
 
-  DBConfig newDBConfig;
+  // invalid content
+  if (!root.isObject()) {
+    return nullptr;
+  }
+  std::unique_ptr<DBConfig> newDBConfig(new DBConfig());
 
   if (root.isMember(DATASET)) {
     // parse dataset specific config
@@ -71,22 +79,22 @@ DBConfigPtr DBConfigManager::parseConfig(const Json::Value& root) {
       }
 
       if (isSet) {
-        newDBConfig.dataSetConfigMap[dataset] = config;
+        newDBConfig->dataSetConfigMap[dataset] = config;
       }
     }
   }
-  if (newDBConfig.dataSetConfigMap.size() == 0) {
-    // no data was loaded..
-    return nullptr;
+  if (newDBConfig->dataSetConfigMap.size() == 0) {
+    // if the json file is empty, then all settings go to 
+    // default. 
   }
-  return std::make_shared<const DBConfig>(std::move(newDBConfig));
+  return newDBConfig;
 }
 
 /* conf getter functions */
 ConfigPtr DBConfigManager::getConfig(const std::string& dbName) const {
+  folly::SharedMutex::ReadHolder holder(lock);
   auto dsName = DbNameToSegment(dbName);
-  const auto dbconfigbak = std::atomic_load_explicit(&dbConfig_, std::memory_order_acquire);
-  const auto& dsConfigMap = dbconfigbak->dataSetConfigMap;
+  const auto& dsConfigMap = dbConfig_->dataSetConfigMap;
   const auto dsIter = dsConfigMap.find(dsName);
   if (dsIter == dsConfigMap.end()) {
     return nullptr;
