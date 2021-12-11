@@ -229,7 +229,7 @@ class ThriftClientPool {
         should_new_channel = true;
       } else {
         channel = itor->second.first.lock();
-        const bool channel_good = (channel && channel->getTransport()->good());
+        const bool   = (channel && channel->getTransport()->good());
         const bool too_soon =
           (itor->second.second->create_time +
            FLAGS_min_channel_create_interval_seconds > time(nullptr));
@@ -237,6 +237,13 @@ class ThriftClientPool {
         // good for use and it's not too soon to create a new one or we want to
         // be aggressive
         if (!channel_good && (!too_soon || aggressively)) {
+          // close the bad channel before establising a new one.
+          // This is to avoid potentially accumulating CLOSE_WAIT on the client side.
+          if (channel) {
+            LOG(INFO) << "close bad channel for " << addr;
+            channel->closeNow();
+          }
+          LOG(INFO) << "should create new channel for " << addr;
           should_new_channel = true;
         }
       }
