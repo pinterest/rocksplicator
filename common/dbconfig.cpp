@@ -54,6 +54,10 @@ DBConfigPtr DBConfigManager::parseConfig(const Json::Value& root) {
   static const std::string ACK_MODE = "ack_mode";
   static const std::string DATASET = "dataset";
 
+  if (!root.isObject()) {
+    return nullptr;
+  }
+
   DBConfig newDBConfig;
 
   if (root.isMember(DATASET)) {
@@ -75,10 +79,7 @@ DBConfigPtr DBConfigManager::parseConfig(const Json::Value& root) {
       }
     }
   }
-  if (newDBConfig.dataSetConfigMap.size() == 0) {
-    // no data was loaded..
-    return nullptr;
-  }
+
   return std::make_shared<const DBConfig>(std::move(newDBConfig));
 }
 

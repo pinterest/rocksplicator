@@ -61,8 +61,7 @@ TEST(DBConfigTest, BasicFromObject) {
 
 TEST(DBConfigTest, InvalidContent) {
   auto cfgMgr = DBConfigManager::get();
-  std::string content = R"({
-  })";
+  std::string content = R"()";
 
   Json::Value root;
   Json::Reader reader;
@@ -75,7 +74,7 @@ TEST(DBConfigTest, InvalidContent) {
 
 TEST(DBConfigTest, EmptyContent) {
   auto cfgMgr = DBConfigManager::get();
-  std::string content = R"()";
+  std::string content = R"({})";
 
   Json::Value root;
   Json::Reader reader;
@@ -83,7 +82,7 @@ TEST(DBConfigTest, EmptyContent) {
     LOG(ERROR) << "Could not parse json config :" << content;
   }
 
-  EXPECT_FALSE(cfgMgr->loadJsonObject(root));
+  EXPECT_TRUE(cfgMgr->loadJsonObject(root));
 }
 
 }  // namespace common
