@@ -224,10 +224,12 @@ class ThriftClientPool {
       auto itor = channels_.find(addr);
       bool should_new_channel = false;
 
+      std::thread::id this_id = std::this_thread::get_id();
+
       if (itor == channels_.end()) {
         // no such channel yet
         should_new_channel = true;
-        LOG(INFO) << "no channel found, create new channel for " << addr;
+        LOG(INFO) << "JZ " << "thread " << this_id << ", no channel found, create new channel for " << addr;
       } else {
         channel = itor->second.first.lock();
         const bool channel_good  = (channel && channel->getTransport()->good());
@@ -241,10 +243,10 @@ class ThriftClientPool {
           // close the bad channel before establising a new one.
           // This is to avoid potentially accumulating CLOSE_WAIT on the client side.
           if (channel) {
-            LOG(INFO) << "close bad channel for " << addr;
+            LOG(INFO) << "JZ " << "thread " << this_id << ", close bad channel for " << addr;
             channel->closeNow();
           }
-          LOG(INFO) << "existing channel is bad, should create new channel for " << addr;
+          LOG(INFO) << "JZ " << "thread " << this_id << ", existing channel is bad, should create new channel for " << addr;
           should_new_channel = true;
         }
       }
