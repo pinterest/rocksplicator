@@ -230,7 +230,7 @@ class ThriftClientPool {
         LOG(INFO) << "no channel found, create new channel for " << addr;
       } else {
         channel = itor->second.first.lock();
-        const bool   = (channel && channel->getTransport()->good());
+        const bool channel_good  = (channel && channel->getTransport()->good());
         const bool too_soon =
           (itor->second.second->create_time +
            FLAGS_min_channel_create_interval_seconds > time(nullptr));
