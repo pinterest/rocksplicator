@@ -227,6 +227,7 @@ class ThriftClientPool {
       if (itor == channels_.end()) {
         // no such channel yet
         should_new_channel = true;
+        LOG(INFO) << "no channel found, create new channel for " << addr;
       } else {
         channel = itor->second.first.lock();
         const bool   = (channel && channel->getTransport()->good());
@@ -243,7 +244,7 @@ class ThriftClientPool {
             LOG(INFO) << "close bad channel for " << addr;
             channel->closeNow();
           }
-          LOG(INFO) << "should create new channel for " << addr;
+          LOG(INFO) << "existing channel is bad, should create new channel for " << addr;
           should_new_channel = true;
         }
       }

@@ -18,7 +18,6 @@
 
 #pragma once
 #include <cstdint>
-#include <memory>
 
 namespace common {
   struct Config {
@@ -36,7 +35,4 @@ namespace common {
       return c;
     }
   };
-
-  using ConfigPtr = std::shared_ptr<const Config>;
-
 } //  namespace common
