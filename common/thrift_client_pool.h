@@ -229,7 +229,6 @@ class ThriftClientPool {
       if (itor == channels_.end()) {
         // no such channel yet
         should_new_channel = true;
-        LOG(INFO) << "JZ " << "thread " << this_id << ", no channel found, create new channel for " << addr;
       } else {
         channel = itor->second.first.lock();
         const bool channel_good  = (channel && channel->getTransport()->good());
@@ -240,13 +239,6 @@ class ThriftClientPool {
         // good for use and it's not too soon to create a new one or we want to
         // be aggressive
         if (!channel_good && (!too_soon || aggressively)) {
-          // close the bad channel before establising a new one.
-          // This is to avoid potentially accumulating CLOSE_WAIT on the client side.
-          if (channel) {
-            LOG(INFO) << "JZ " << "thread " << this_id << ", close bad channel for " << addr;
-            channel->closeNow();
-          }
-          LOG(INFO) << "JZ " << "thread " << this_id << ", existing channel is bad, should create new channel for " << addr;
           should_new_channel = true;
         }
       }
@@ -319,22 +311,30 @@ class ThriftClientPool {
     void cleanupStaleChannels(const folly::SocketAddress& addr) {
       // cleanup stale entries if it hasn't been done for a period of time.
       auto now = time(nullptr);
-      if (last_cleanup_time_ + FLAGS_channel_cleanup_min_interval_seconds
-          < now) {
-        last_cleanup_time_ = now;
-        auto itor = channels_.find(addr);
-        int n = 0;
-        while (itor != channels_.end() &&
-               n++ < FLAGS_channel_max_checking_size) {
-          // We don't cleanup !good() live channels here. Otherwise we
-          // will need to upgrade it to a shared_ptr. We expect clients
-          // won't keep a !good() channels for a long period of time.
-          if (itor->second.first.use_count() == 0) {
-            itor = channels_.erase(itor);
-          } else {
-            ++itor;
-          }
-        }
+      // skip cleanup if it was done recently
+      if (now < last_cleanup_time_ + FLAGS_channel_cleanup_min_interval_seconds) {
+		return;
+      }
+
+      last_cleanup_time_ = now;
+      auto itor = channels_.find(addr);
+      int n = 0;
+      while (itor != channels_.end() &&
+	     n++ < FLAGS_channel_max_checking_size) {
+		auto c = itor->second.first.lock();
+		// the channel has been released
+		if (!c) {
+		  itor = channels_.erase(itor);
+		  continue;
+		}
+
+		// the channel is bad
+		if (!itor->second.second->is_good.load()) {
+		  LOG(INFO) << "JZ: close channel for " << itor->first;
+		  c->closeNow(); // close the connection to avoid accumulating CLOSE_WAIT
+		}
+
+		++itor;
       }
     }
 
