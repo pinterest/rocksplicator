@@ -233,15 +233,16 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
         long numActiveReplicas = 1;
         long totalReplicas = stateMap.keySet().size();
         for (String instanceName : stateMap.keySet()) {
-          String hostName = instanceName.split("_")[0];
-          int port = Integer.parseInt(instanceName.split("_")[1]);
+          String[] hostPort = instanceName.split("_");
+          String hostName = hostPort[0];
+          int port = Integer.parseInt(hostPort[1]);
           if (this.host.equals(hostName)) {
             // myself
             continue;
           }
 
           long seq = Utils.getLatestSequenceNumber(dbName, hostName, port);
-          if (seq == -1) {
+          if (seq < 0) {
             LOG.error("Failed to get latest sequence number from " + hostName + " for " + dbName);
             continue;
           }
@@ -260,7 +261,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           Utils.changeDBRoleAndUpStream(
               LOCAL_HOST_IP, adminPort, dbName, "FOLLOWER", hostWithHighestSeq, adminPort);
 
-          // wait for up to 10 mins
+          // wait for up to 10 mins to catch up to at least highestSeq
           for (int i = 0; i < 600; ++i) {
             TimeUnit.SECONDS.sleep(1);
             long newLocalSeq = Utils.getLocalLatestSequenceNumber(dbName, adminPort);
@@ -281,7 +282,10 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           }
         }
 
+        // At this point, this replica has caught up to have the highest sequence number, except the replicas
+        // it failed to contact with.
         LOG.error("local.seq:" + localSeq + " replica:[" + numActiveReplicas + "/"+ totalReplicas + "]");
+
         // 3-Node failure case
         if (localSeq <= 0) {
           PartitionState lastState = stateManager.getState();
@@ -289,7 +293,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
             LOG.error("Invalid last state [part: " + partitionName + "] State:" + lastState.toString());
           } else {
             double tolerance = 0.5; 
-            if (localSeq >= (tolerance * lastState.seqNum)) {
+            if (localSeq >= (tolerance * lastState.seqNum)) { // FIXME(KV-5087): it seems this is never true since localSeq <= 0
               LOG.error(String.format("OK [last.seq:%d curr.seq:%d]", lastState.seqNum, localSeq));
             } else {
               String errorString = String.format("Cannot Transition [last.seq:%d curr.seq:%d]", lastState.seqNum, localSeq);
@@ -314,8 +318,9 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
         stateMap = view.getStateMap(partitionName);
         // changeDBRoleAndUpStream(all_other_followers_or_offlines, "Follower", "my_ip_port")
         for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
-          String hostName = instanceNameAndRole.getKey().split("_")[0];
-          int port = Integer.parseInt(instanceNameAndRole.getKey().split("_")[1]);
+          String[] hostPort = instanceNameAndRole.getKey().split("_");
+          String hostName = hostPort[0];
+          int port = Integer.parseInt(hostPort[1]);
           if (this.host.equals(hostName)) {
             // myself
             continue;
@@ -330,7 +335,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
               LOG.error("[" + dbName + "] Done calling changeDBRoleAndUpStream");
             }
           } catch (RuntimeException e) {
-            LOG.error("Failed to set upstream for " + dbName + " on " + hostName + e.toString());
+            LOG.error("Failed to changeDBRoleAndUpStream for " + dbName + " on " + hostName + e.toString());
           }
         }
         leaderEventsCollector
@@ -395,9 +400,10 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           continue;
         }
 
-        String hostPort = instanceNameAndRole.getKey();
-        String host = hostPort.split("_")[0];
-        int port = Integer.parseInt(hostPort.split("_")[1]);
+        String instanceName = instanceNameAndRole.getKey();
+        String[] hostPort = instanceName.split("_");
+        String host = hostPort[0];
+        int port = Integer.parseInt(hostPort[1]);
 
         if (this.host.equals(host)) {
           // myself
@@ -405,7 +411,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
         }
 
         if (Utils.getLatestSequenceNumber(dbName, host, port) != -1) {
-          liveHostAndRole.put(hostPort, role);
+          liveHostAndRole.put(instanceName, role);
         }
       }
       return liveHostAndRole;
@@ -618,9 +624,10 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
         String upstream = null;
         String dbName = Utils.getDbName(partitionName);
         for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
-          String hostPort = instanceNameAndRole.getKey();
-          String hostName = hostPort.split("_")[0];
-          int port = Integer.parseInt(hostPort.split("_")[1]);
+          String instanceName = instanceNameAndRole.getKey();
+          String[] hostPort = instanceName.split("_");
+          String hostName = hostPort[0];
+          int port = Integer.parseInt(hostPort[1]);
           if (this.host.equals(hostName) ||
               Utils.getLatestSequenceNumber(dbName, hostName, port) == -1) {
             // myself or dead
@@ -629,12 +636,12 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
 
           String role = instanceNameAndRole.getValue();
           if (role.equalsIgnoreCase("LEADER")) {
-            upstream = hostPort;
+            upstream = instanceName;
             break;
           }
 
           if (role.equalsIgnoreCase("FOLLOWER")) {
-            upstream = hostPort;
+            upstream = instanceName;
             if (Utils.isLeaderReplica(hostName, port, dbName)) {
               break;
             }
@@ -643,13 +650,15 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
 
         if (upstream != null) {
           // setup upstream for all other followers and offlines
-          String upstreamName = upstream.split("_")[0];
-          int upstreamPort = Integer.parseInt(upstream.split("_")[1]);
+          String[] upstreamHostPort = upstream.split("_");
+          String upstreamHost = upstreamHostPort[0];
+          int upstreamPort = Integer.parseInt(upstreamHostPort[1]);
 
           for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
-            String hostName = instanceNameAndRole.getKey().split("_")[0];
-            int port = Integer.parseInt(instanceNameAndRole.getKey().split("_")[1]);
-            if (this.host.equals(hostName) || upstreamName.equals(hostName)) {
+            String[] hostPort = instanceNameAndRole.getKey().split("_");
+            String hostName = hostPort[0];
+            int port = Integer.parseInt(ihostPort[1]);
+            if (this.host.equals(hostName) || upstreamHost.equals(hostName)) {
               //  mysel or upstream
               continue;
             }
@@ -659,7 +668,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
               if (instanceNameAndRole.getValue().equalsIgnoreCase("FOLLOWER") ||
                   instanceNameAndRole.getValue().equalsIgnoreCase("OFFLINE")) {
                 Utils.changeDBRoleAndUpStream(
-                    hostName, port, dbName, "FOLLOWER", upstreamName, upstreamPort);
+                    hostName, port, dbName, "FOLLOWER", upstreamHost, upstreamPort);
               }
             } catch (RuntimeException e) {
               LOG.error("Failed to set upstream for " + dbName + " on " + hostName + e.toString());
