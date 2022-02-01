@@ -79,7 +79,6 @@ namespace replicator {
 rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
     const rocksdb::WriteOptions& options,
     rocksdb::WriteBatch* updates,
-    const common::Config& , // TODO(prem) : remove this arg soon
     rocksdb::SequenceNumber* seq_no) {
   if (role_ == DBRole::SLAVE) {
     throw ReturnCode::WRITE_TO_SLAVE;
@@ -307,8 +306,7 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
 
 void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
     std::unique_ptr<CallbackType> callback,
-    std::unique_ptr<ReplicateRequest> request,
-    const common::Config&) { // TODO(prem) : remove this arg soon
+    std::unique_ptr<ReplicateRequest> request) {
   CHECK(request->db_name == db_name_);
 
   auto db = shared_from_this();
