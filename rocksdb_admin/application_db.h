@@ -17,7 +17,6 @@
 #include <string>
 
 #include "folly/SocketAddress.h"
-#include "common/config.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/write_batch.h"
@@ -87,8 +86,7 @@ class ApplicationDB {
   //
   // Return rocksdb::Status::ok on success
   rocksdb::Status Write(const rocksdb::WriteOptions& options,
-                        rocksdb::WriteBatch* write_batch,
-                        const common::Config& config = common::Config::getDefault());
+                        rocksdb::WriteBatch* write_batch);
 
   // Compact the db.
   // options:     (IN) CompactRange options

@@ -28,7 +28,6 @@
 #include <unordered_map>
 #include <utility>
 
-#include "common/config.h"
 #include "common/thrift_client_pool.h"
 #include "rocksdb_replicator/fast_read_map.h"
 #include "rocksdb_replicator/max_number_box.h"
@@ -100,7 +99,6 @@ class RocksDBReplicator {
     // the update.
     rocksdb::Status Write(const rocksdb::WriteOptions& options,
                           rocksdb::WriteBatch* updates,
-                          const common::Config& config = common::Config::getDefault(),
                           rocksdb::SequenceNumber* seq_no = nullptr);
 
     // read APIs may be added later on demand. They can be simply implmented by
@@ -123,8 +121,7 @@ class RocksDBReplicator {
     using CallbackType =
       apache::thrift::HandlerCallback<std::unique_ptr<ReplicateResponse>>;
     void handleReplicateRequest(std::unique_ptr<CallbackType> callback,
-                                std::unique_ptr<ReplicateRequest> request,
-                                const common::Config& config = common::Config::getDefault());
+                                std::unique_ptr<ReplicateRequest> request);
     std::unique_ptr<rocksdb::TransactionLogIterator> getCachedIter(
         rocksdb::SequenceNumber seq_no);
     void putCachedIter(rocksdb::SequenceNumber seq_no,
@@ -210,7 +207,6 @@ class RocksDBReplicator {
   ReturnCode write(const std::string& db_name,
                    const rocksdb::WriteOptions& options,
                    rocksdb::WriteBatch* updates,
-                   const common::Config& config = common::Config::getDefault(),
                    rocksdb::SequenceNumber* seq_no = nullptr);
 
   /*
