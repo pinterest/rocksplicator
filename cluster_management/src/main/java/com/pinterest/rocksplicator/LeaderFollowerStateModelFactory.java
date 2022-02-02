@@ -657,7 +657,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
             String[] hostPort = instanceNameAndRole.getKey().split("_");
             String hostName = hostPort[0];
-            int port = Integer.parseInt(ihostPort[1]);
+            int port = Integer.parseInt(hostPort[1]);
             if (this.host.equals(hostName) || upstreamHost.equals(hostName)) {
               //  mysel or upstream
               continue;
