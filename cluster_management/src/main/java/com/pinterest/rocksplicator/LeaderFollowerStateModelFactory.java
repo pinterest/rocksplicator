@@ -588,9 +588,8 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
 
     // rebuild the replica if there is at least one live replica to rebuild from AND it meets either of TWO conditions:
     // Case 1. DB local meta is different from upstream
-    // Case 2. DB local meta is the same as upstream, but:
-    //   - latest local data update is too old (WAL TTL expired)
-    //   - sequence number is not the same as upstream (otherwise no need to rebuild)
+    // Case 2. DB local meta is the same as upstream, but latest local data update is too old (WAL TTL expired).
+    //         However, skip rebuild if sequence number is the same as upstream (nothing to rebuild from).
     private boolean needRebuildDB(String dbName, CheckDBResponse upstreamStatus, CheckDBResponse localStatus, Map<String, String> liveHostAndRole, String upstreamHost, int upstreamPort) {
       if (liveHostAndRole.isEmpty()) {
         LOG.error("No other live replicas, skip rebuild " + dbName);
@@ -598,7 +597,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
       } 
 
       // check DB meta first before checking replication lag & sequence number, since it's possible
-      // a leader replica has ingested new data offline without updating its sequence number.
+      // an upstream replica has ingested new data offline without updating its sequence number.
       if (upstreamStatus != null && upstreamStatus.isSetDb_metas() && !upstreamStatus.db_metas
           .equals(localStatus.db_metas)) {
         LOG.error(String.format(
