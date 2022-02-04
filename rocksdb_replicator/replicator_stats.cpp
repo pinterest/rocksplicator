@@ -46,7 +46,10 @@ const std::string kReplicatorGetUpdatesSinceMs =
   "replicator_get_update_since_ms";
 const std::string kReplicatorWriteMs = "replicator_write_ms";
 const std::string kReplicatorLeaderSequenceNumbersBehind = "replicator_leader_sequence_numbers_behind";
-
+const std::string kReplicatorPullRequests = "replicator_pull_requests";
+const std::string kReplicatorPullRequestsSuccess = "replicator_pull_requests_success";
+const std::string kReplicatorPullRequestsFailure = "replicator_pull_requests_failure";
+const std::string kReplicatorPullLatency = "replicator_pull_latency";
 
 void logMetric(const std::string& metric_name, int64_t value,
                const std::string& db_name) {

@@ -25,6 +25,7 @@
 #include "common/dbconfig.h"
 #include "common/helix_client.h"
 #include "common/segment_utils.h"
+#include "common/timer.h"
 #include "folly/MoveWrapper.h"
 #include "folly/Random.h"
 #include "rocksdb_replicator/replicator_stats.h"
@@ -219,17 +220,20 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
   req.max_wait_ms = FLAGS_replicator_max_server_wait_time_ms;
   req.max_updates = FLAGS_replicator_max_updates_per_response;
 
+  incCounter(kReplicatorPullRequests, 1, db_name_);
+
   std::weak_ptr<ReplicatedDB> weak_db = shared_from_this();
   auto options = rpc_options_;
+  common::Timer timer(kReplicatorPullLatency);
   client_->future_replicate(options, req).via(executor_)
-    .then([weak_db = std::move(weak_db)] (folly::Try<ReplicateResponse>&& t) {
+    .then([weak_db = std::move(weak_db), timer = std::move(timer)] (folly::Try<ReplicateResponse>&& t) {
         auto db = weak_db.lock();
         if (db == nullptr) {
           return;
         }
-
         bool delay_next_pull = false;
         if (t.hasException()) {
+          incCounter(kReplicatorPullRequestsFailure, 1, db->db_name_);
           delay_next_pull = true;
           try {
 #if __GNUC__ >= 8
@@ -257,6 +261,7 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
             db->client_ = db->client_pool_->getClient(db->upstream_addr_);
           }
         } else {
+          incCounter(kReplicatorPullRequestsSuccess, 1, db->db_name_);
           auto& response = t.value();
           uint64_t write_bytes = 0;
           const auto now = GetCurrentTimeMs();
