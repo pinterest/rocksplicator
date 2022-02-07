@@ -324,15 +324,15 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
     logMetric(kReplicatorLeaderSequenceNumbersBehind, seq_no - leaderSeqNum, db ->db_name_);
   }
 
+  // post the largest sequence number the Slave has committed
+  max_seq_no_acked_.post(seq_no);
+
   auto replication_mode =  common::DBConfigManager::get()->getReplicationMode(db_name_);
   // for now we have to support both till all clusters are migrated
   if (FLAGS_replicator_replication_mode > replication_mode) {
     replication_mode = FLAGS_replicator_replication_mode;
   }
-  if (replication_mode == 1 || replication_mode == 2) {
-    // post the largest sequence number the Slave has committed
-    max_seq_no_acked_.post(seq_no);
-  }
+
   auto timeout = request->max_wait_ms;
 
   cond_var_.runIfConditionOrWaitForNotify(
