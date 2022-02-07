@@ -463,28 +463,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
                 Utils.checkRemoteOrLocalDB(upstreamHost, upstreamPort, dbName, true, null, null);
           }
 
-          boolean needRebuild = true;
-          if (upstreamStatus != null && upstreamStatus.isSetDb_metas() && !upstreamStatus.db_metas
-              .equals(localStatus.db_metas)) {
-            LOG.error(String.format(
-                "upstreamStatus exist and differ from localStatus for %s, rebuild. "
-                    + "upstreamStatus: %s, localStatus: %s", dbName, upstreamStatus.toString(),
-                localStatus.toString()));
-          } else if (liveHostAndRole.isEmpty()) {
-            LOG.error("No other live replicas, skip rebuild " + dbName);
-            needRebuild = false;
-          } else if (System.currentTimeMillis() <
-              localStatus.last_update_timestamp_ms + localStatus.wal_ttl_seconds * 1000) {
-            LOG.error("Replication lag is within the range, skip rebuild " + dbName);
-            LOG.error("Last update timestamp in ms: " + String
-                .valueOf(localStatus.last_update_timestamp_ms));
-            needRebuild = false;
-          } else if (localStatus.seq_num ==
-              Utils.getLatestSequenceNumber(dbName, upstreamHost, upstreamPort)) {
-            // this could happen if no update to the db for a long time
-            LOG.error("Upstream seq # is identical to local seq #, skip rebuild " + dbName);
-            needRebuild = false;
-          }
+          boolean needRebuild = needRebuildDB(dbName, upstreamStatus, localStatus, liveHostAndRole, upstreamHost, upstreamPort);
 
           // if rebuild is not needed, setup upstream and return
           if (!needRebuild) {
@@ -605,6 +584,45 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           LOG.error("Failed to catch up to leader after backup " + dbName, e);
         }
       }
+    }
+
+    // rebuild the replica if there is at least one live replica to rebuild from AND it meets either of TWO conditions:
+    // Case 1. DB local meta is different from upstream
+    // Case 2. DB local meta is the same as upstream, but latest local data update is too old (WAL TTL expired).
+    //         However, skip rebuild if sequence number is the same as upstream (nothing to rebuild from).
+    private boolean needRebuildDB(String dbName, CheckDBResponse upstreamStatus, CheckDBResponse localStatus, Map<String, String> liveHostAndRole, String upstreamHost, int upstreamPort) {
+      if (liveHostAndRole.isEmpty()) {
+        LOG.error("No other live replicas, skip rebuild " + dbName);
+        return false;
+      } 
+
+      // check DB meta first before checking replication lag & sequence number, since it's possible
+      // an upstream replica has ingested new data offline without updating its sequence number.
+      if (upstreamStatus != null && upstreamStatus.isSetDb_metas() && !upstreamStatus.db_metas
+          .equals(localStatus.db_metas)) {
+        LOG.error(String.format(
+            "upstreamStatus exist and differ from localStatus for %s, rebuild. "
+                + "upstreamStatus: %s, localStatus: %s", dbName, upstreamStatus.toString(),
+            localStatus.toString()));
+        return true;
+      } 
+
+      if (System.currentTimeMillis() <
+          localStatus.last_update_timestamp_ms + localStatus.wal_ttl_seconds * 1000) {
+        LOG.error("Replication lag is within the range, skip rebuild " + dbName);
+        LOG.error("Last update timestamp in ms: " + String
+            .valueOf(localStatus.last_update_timestamp_ms));
+        return false;
+      } 
+      
+      if (localStatus.seq_num ==
+          Utils.getLatestSequenceNumber(dbName, upstreamHost, upstreamPort)) {
+        // this could happen if no update to the db for a long time
+        LOG.error("Upstream seq # is identical to local seq #, skip rebuild " + dbName);
+        return false;
+      }
+
+      return true;
     }
 
     /**
