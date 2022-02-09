@@ -26,15 +26,24 @@ extern const std::string kReplicatorLatency;
 extern const std::string kReplicatorOutBytes;
 extern const std::string kReplicatorInBytes;
 extern const std::string kReplicatorWriteBytes;
+
 extern const std::string kReplicatorConnectionErrors;
 extern const std::string kReplicatorRemoteApplicationExceptions;
+extern const std::string kReplicatorRemoteApplicationExceptionsNotFound;
+
 extern const std::string kReplicatorGetUpdatesSinceErrors;
 extern const std::string kReplicatorGetUpdatesSinceMs;
-extern const std::string kReplicatorWriteMs;
+
 extern const std::string kReplicatorLeaderSequenceNumbersBehind;
 extern const std::string kReplicatorLeaderReset;
-extern const std::string kReplicatorTimedOut;
-extern const std::string kReplicatorRemoteApplicationExceptionsNotFound;
+
+extern const std::string kReplicatorWriteSuccess;
+extern const std::string kReplicatorWriteLeaderFailure;
+extern const std::string kReplicatorWriteWaitTimedOut;
+extern const std::string kReplicatorWriteToLeaderMs;
+extern const std::string kReplicatorWriteSuccessResponseTime;
+extern const std::string kReplicatorWriteFailureResponseTime;
+
 extern const std::string kReplicatorPullRequests;
 extern const std::string kReplicatorPullRequestsSuccess;
 extern const std::string kReplicatorPullRequestsFailure;

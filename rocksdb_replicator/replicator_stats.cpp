@@ -31,6 +31,7 @@ const std::string kReplicatorLatency = "replicator_latency_ms";
 const std::string kReplicatorOutBytes = "replicator_out_bytes";
 const std::string kReplicatorInBytes = "replicator_in_bytes";
 const std::string kReplicatorWriteBytes = "replicator_write_bytes";
+
 const std::string kReplicatorConnectionErrors = "replicator_connection_errors";
 const std::string kReplicatorRemoteApplicationExceptions =
   "replicator_remote_app_exceptions";
@@ -38,13 +39,22 @@ const std::string kReplicatorRemoteApplicationExceptionsNotFound =
   "replicator_remote_app_exceptions_source_not_found";
 const std::string kReplicatorLeaderReset =
   "replicator_remote_app_leader_reset";
-const std::string kReplicatorTimedOut =
-  "replicator_write_time_out";
+
 const std::string kReplicatorGetUpdatesSinceErrors =
   "replicator_get_update_since_errors";
 const std::string kReplicatorGetUpdatesSinceMs =
   "replicator_get_update_since_ms";
-const std::string kReplicatorWriteMs = "replicator_write_ms";
+
+const std::string kReplicatorWriteSuccess =
+  "replicator_write_success";
+const std::string kReplicatorWriteLeaderFailure =
+  "replicator_write_leader_failure";
+const std::string kReplicatorWriteWaitTimedOut =
+  "replicator_write_wait_time_out";
+const std::string kReplicatorWriteToLeaderMs = "replicator_write_to_leader_ms";
+const std::string kReplicatorWriteSuccessResponseTime = "replicator_write_success_response_time";
+const std::string kReplicatorWriteFailureResponseTime = "replicator_write_failure_response_time";
+
 const std::string kReplicatorLeaderSequenceNumbersBehind = "replicator_leader_sequence_numbers_behind";
 const std::string kReplicatorPullRequests = "replicator_pull_requests";
 const std::string kReplicatorPullRequestsSuccess = "replicator_pull_requests_success";
