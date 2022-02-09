@@ -101,7 +101,7 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
   if (!status.ok()) {
     incCounter(kReplicatorWriteLeaderFailure, 1, db_name_);
     auto write_failure_end = GetCurrentTimeMs();
-    logMetric(kReplicatorWriteFailureResponseTime, write_begin < write_failure_end? write_failure_end - write_begin:0, db_name_);
+    logMetric(kReplicatorWriteFailureResponseTime, write_begin < write_failure_end? write_failure_end - write_begin : 0, db_name_);
     return status;
   }
 
@@ -138,7 +138,7 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
       << "Invalid replicaton mode " << replication_mode;
   }
   auto write_success_end = GetCurrentTimeMs();
-  logMetric(kReplicatorWriteSuccessResponseTime, write_begin < write_success_end? write_success_end - write_begin:0, db_name_);
+  logMetric(kReplicatorWriteSuccessResponseTime, write_begin < write_success_end? write_success_end - write_begin : 0, db_name_);
   incCounter(kReplicatorWriteSuccess, 1, db_name_);
 
   return status;
