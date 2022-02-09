@@ -154,6 +154,22 @@ StatusServer::StatusServer(uint16_t port, EndPointToOPMap op_map,
                     return ss.str();
                   });
 
+  std::vector<std::string> all_endpoints;
+  all_endpoints.reserve(op_map_.size());
+  for (auto it = op_map_.begin(); it != op_map_.end(); ++it) {
+    all_endpoints.push_back(it->first);
+  }
+  op_map_.emplace("/",
+                  [all_endpoints] (const Arguments*) {
+                    std::stringstream ss;
+                    ss << "Registered endpoints: " << std::endl;
+                    for (const auto& e : all_endpoints) {
+                      ss << " " << e << std::endl;
+                    }
+                    return ss.str();
+                  });
+
+
   if (!this->Serve()) {
     LOG(INFO) << "Failed to start status server at " << port;
     LOG(INFO) << strerror(errno);
