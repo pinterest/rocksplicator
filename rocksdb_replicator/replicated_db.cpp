@@ -85,49 +85,61 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
     throw ReturnCode::WRITE_TO_SLAVE;
   }
 
+  auto write_begin = GetCurrentTimeMs();
+
   incCounter(kReplicatorWriteBytes, updates->GetDataSize(), db_name_);
 
   auto ms = GetCurrentTimeMs();
   updates->PutLogData(rocksdb::Slice(reinterpret_cast<const char*>(&ms),
                                      sizeof(ms)));
-  auto start = GetCurrentTimeMs();
+  auto write_leader_begin = GetCurrentTimeMs();
   auto status = db_wrapper_->WriteToLeader(options, updates);
-  auto end = GetCurrentTimeMs();
-  logMetric(kReplicatorWriteMs, start < end ? end - start : 0, db_name_);
-  
+  auto write_leader_end = GetCurrentTimeMs();
+  auto write_leader_time = write_leader_begin < write_leader_end ? write_leader_end - write_leader_begin : 0;
+  logMetric(kReplicatorWriteToLeaderMs, write_leader_time, db_name_);
+
+  if (!status.ok()) {
+    incCounter(kReplicatorWriteLeaderFailure, 1, db_name_);
+    auto write_failure_end = GetCurrentTimeMs();
+    logMetric(kReplicatorWriteFailureResponseTime, write_begin < write_failure_end? write_failure_end - write_begin : 0, db_name_);
+    return status;
+  }
+
   auto replication_mode =  common::DBConfigManager::get()->getReplicationMode(db_name_);
   // TODO(prem) : remove support for gflags soon
   // for now we have to support both till all clusters are migrated
   if (FLAGS_replicator_replication_mode > replication_mode) {
     replication_mode = FLAGS_replicator_replication_mode;
   }
-  if (status.ok()) {
-    cond_var_.notifyAll();
 
-    // TODO(bol): change it once RocksDB guarantees the sequence number is in
-    // the write batch.
-    auto cur_seq_no = db_wrapper_->LatestSequenceNumber();
-    if (seq_no) {
-      *seq_no = cur_seq_no;
-    }
+  cond_var_.notifyAll();
 
-    switch (replication_mode) {
-    case 1:
-    case 2:
-      // TODO(bol): This potentially could block all worker threads. We may
-      // consider having a dedicated set of worker threads for admin requests,
-      // and/or provide async write API when this turns out to be a problem.
-      if (!max_seq_no_acked_.wait(cur_seq_no, FLAGS_replicator_timeout_ms)) {
-        incCounter(kReplicatorTimedOut, 1, db_name_);
-        LOG(ERROR) << "Failed to receive ack from follower, timing out for " << db_name_;
-        return rocksdb::Status::TimedOut("Failed to receive ack from follower");
-      }
-      break;
-    default:
-      CHECK(replication_mode == 0)
-        << "Invalid replicaton mode " << replication_mode;
-    }
+  // TODO(bol): change it once RocksDB guarantees the sequence number is in
+  // the write batch.
+  auto cur_seq_no = db_wrapper_->LatestSequenceNumber();
+  if (seq_no) {
+    *seq_no = cur_seq_no;
   }
+
+  switch (replication_mode) {
+  case 1:
+  case 2:
+    // TODO(bol): This potentially could block all worker threads. We may
+    // consider having a dedicated set of worker threads for admin requests,
+    // and/or provide async write API when this turns out to be a problem.
+    if (!max_seq_no_acked_.wait(cur_seq_no, FLAGS_replicator_timeout_ms)) {
+      incCounter(kReplicatorWriteWaitTimedOut, 1, db_name_);
+      LOG(ERROR) << "Failed to receive ack from follower, timing out for " << db_name_;
+      return rocksdb::Status::TimedOut("Failed to receive ack from follower");
+    }
+    break;
+  default:
+    CHECK(replication_mode == 0)
+      << "Invalid replicaton mode " << replication_mode;
+  }
+  auto write_success_end = GetCurrentTimeMs();
+  logMetric(kReplicatorWriteSuccessResponseTime, write_begin < write_success_end? write_success_end - write_begin : 0, db_name_);
+  incCounter(kReplicatorWriteSuccess, 1, db_name_);
 
   return status;
 }
