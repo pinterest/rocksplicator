@@ -209,12 +209,6 @@ class RocksDBReplicator {
                    rocksdb::WriteBatch* updates,
                    rocksdb::SequenceNumber* seq_no = nullptr);
 
-  /*
-   * Get stats of the library in the same text format as the java ostrich
-   * library.
-   */
-  std::string getTextStats();
-
   // no copy or move
   RocksDBReplicator(const RocksDBReplicator&) = delete;
   RocksDBReplicator& operator=(const RocksDBReplicator&) = delete;

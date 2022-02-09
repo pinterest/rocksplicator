@@ -170,9 +170,4 @@ ReturnCode RocksDBReplicator::write(const std::string& db_name,
   }
 }
 
-std::string RocksDBReplicator::getTextStats() {
-  // TODO(bol) add stats
-  return "TBD";
-}
-
 }  // namespace replicator
