@@ -224,4 +224,9 @@ uint32_t ApplicationDB::getHighestEmptyLevel() {
   return *empty_levels.rbegin();
 }
 
+std::string ApplicationDB::introspect() {
+  // TODO: add other useful information
+  return replicated_db_->introspect();
+}
+
 }  // namespace admin

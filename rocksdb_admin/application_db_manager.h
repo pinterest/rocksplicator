@@ -82,6 +82,9 @@ class ApplicationDBManager {
   // as compaction across all dbs currently maintained.
   std::vector<std::string> getAllDBNames();
 
+  // Introspect internal states
+  std::string introspect();
+
   ~ApplicationDBManager();
 
  private:

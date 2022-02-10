@@ -144,6 +144,19 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
   return status;
 }
 
+std::string RocksDBReplicator::ReplicatedDB::introspect() {
+  std::string role_string = "SLAVE";
+  if (role_ == DBRole::MASTER) {
+    role_string = "MASTER";
+  }
+  std::stringstream ss;
+  ss << " ReplicatedDB: " << std::endl;
+  ss << "   name: " << db_name_ << std::endl;
+  ss << "   DBRole: " << role_string << std::endl;
+  ss << "   upstream_addr_" << upstream_addr_.getAddressStr() << std::endl;
+  return ss.str();
+}
+
 
 RocksDBReplicator::ReplicatedDB::ReplicatedDB(
     const std::string& db_name,

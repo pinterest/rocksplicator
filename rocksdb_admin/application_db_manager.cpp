@@ -137,6 +137,17 @@ std::vector<std::string> ApplicationDBManager::getAllDBNames()  {
     return db_names;
 }
 
+std::string ApplicationDBManager::introspect() {
+  std::stringstream ss;
+  for (const auto& db : dbs_) {
+    // TODO: introspect each ApplicationDB
+    ss << db.first << ":" << std::endl;
+    ss << db.second->introspect() << std::endl;
+  }
+  ss << std::endl;
+  return ss.str();
+}
+
 ApplicationDBManager::~ApplicationDBManager() {
   auto itor = dbs_.begin();
   while (itor != dbs_.end()) {

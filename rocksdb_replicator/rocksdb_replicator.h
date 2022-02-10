@@ -104,6 +104,10 @@ class RocksDBReplicator {
     // read APIs may be added later on demand. They can be simply implmented by
     // delegating to the internal rocksdb::DB object.
 
+
+
+    std::string introspect();
+
    private:
     ReplicatedDB(const std::string& db_name,
                  std::shared_ptr<DbWrapper> db_wrapper,
@@ -208,6 +212,7 @@ class RocksDBReplicator {
                    const rocksdb::WriteOptions& options,
                    rocksdb::WriteBatch* updates,
                    rocksdb::SequenceNumber* seq_no = nullptr);
+
 
   // no copy or move
   RocksDBReplicator(const RocksDBReplicator&) = delete;
