@@ -508,6 +508,10 @@ std::shared_ptr<ApplicationDB> AdminHandler::getDB(
 
   return db;
 }
+std::string AdminHandler::introspectDB() {
+  return db_manager_->introspect();
+}
+
 
 std::unique_ptr<rocksdb::DB> AdminHandler::removeDB(
     const std::string& db_name,
