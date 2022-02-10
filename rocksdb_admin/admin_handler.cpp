@@ -508,8 +508,8 @@ std::shared_ptr<ApplicationDB> AdminHandler::getDB(
 
   return db;
 }
-std::string AdminHandler::introspectDB() {
-  return db_manager_->introspect();
+std::string AdminHandler::IntrospectDB() const {
+  return db_manager_->Introspect();
 }
 
 

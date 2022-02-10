@@ -24,12 +24,14 @@
 
 #include "common/dbconfig.h"
 #include "common/helix_client.h"
+#include "common/network_util.h"
 #include "common/segment_utils.h"
 #include "common/timer.h"
 #include "folly/MoveWrapper.h"
 #include "folly/Random.h"
 #include "rocksdb_replicator/replicator_stats.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
+#include "common/jsoncpp/include/json/json.h"
 
 DEFINE_int32(replicator_max_server_wait_time_ms, 10 * 1000,
              "Max wait time before an empty response is returned");
@@ -120,6 +122,7 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
   if (seq_no) {
     *seq_no = cur_seq_no;
   }
+  cur_seq_no_.store(cur_seq_no);
 
   switch (replication_mode) {
   case 1:
@@ -144,16 +147,20 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
   return status;
 }
 
-std::string RocksDBReplicator::ReplicatedDB::introspect() {
+std::string RocksDBReplicator::ReplicatedDB::Introspect() {
   std::string role_string = "SLAVE";
   if (role_ == DBRole::MASTER) {
     role_string = "MASTER";
   }
+  auto upstream_addr_str = common::getNetworkAddressStr(upstream_addr_);
+
+  // TODO: consider json output
   std::stringstream ss;
-  ss << " ReplicatedDB: " << std::endl;
-  ss << "   name: " << db_name_ << std::endl;
-  ss << "   DBRole: " << role_string << std::endl;
-  ss << "   upstream_addr_" << upstream_addr_.getAddressStr() << std::endl;
+  ss << "ReplicatedDB: " << std::endl;
+  ss << "  name: " << db_name_ << std::endl;
+  ss << "  DBRole: " << role_string << std::endl;
+  ss << "  upstream_addr: " << upstream_addr_str << std::endl;
+  ss << "  cur_seq_no: " << std::to_string(cur_seq_no_.load()) << std::endl;
   return ss.str();
 }
 

@@ -126,7 +126,7 @@ class ApplicationDB {
     return upstream_addr_.get();
   }
 
-  std::string introspect();
+  std::string Introspect();
 
   ~ApplicationDB();
 

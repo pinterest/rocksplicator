@@ -51,4 +51,14 @@ const std::string& getLocalIPAddress() {
   return local_ip;
 }
 
+std::string getNetworkAddressStr(const folly::SocketAddress& addr) noexcept {
+  std::string add_str = "unknown_addr";
+  try {
+    add_str = addr.getAddressStr();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "cannot get upstream address: " << e.what();
+  }
+  return add_str;
+}
+
 }  // namespace common

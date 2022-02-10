@@ -16,11 +16,20 @@
 
 #include <string>
 
+#include "folly/SocketAddress.h"
+
+
 namespace common {
 
 /*
  * Get the local IP address from eth0.
  */
 const std::string& getLocalIPAddress();
+
+/**
+ * Get a string representation if the provide address is IPv4 or IPv6,
+ * otherwise "unknown_addr" is returned.
+ */
+std::string getNetworkAddressStr(const folly::SocketAddress&) noexcept;
 
 }  // namespace common

@@ -22,6 +22,7 @@
 
 #include "glog/logging.h"
 #include "common/segment_utils.h"
+#include "common/jsoncpp/include/json/json.h"
 
 namespace admin {
 
@@ -137,15 +138,17 @@ std::vector<std::string> ApplicationDBManager::getAllDBNames()  {
     return db_names;
 }
 
-std::string ApplicationDBManager::introspect() {
+std::string ApplicationDBManager::Introspect() const {
+  // TODO: consider json output
   std::stringstream ss;
+  ss << "ApplicationDBManager: " << std::endl;
+  std::shared_lock<std::shared_mutex> lock(dbs_lock_);
   for (const auto& db : dbs_) {
-    // TODO: introspect each ApplicationDB
     ss << db.first << ":" << std::endl;
-    ss << db.second->introspect() << std::endl;
+    ss << " " << db.second->Introspect() << std::endl;
   }
-  ss << std::endl;
   return ss.str();
+
 }
 
 ApplicationDBManager::~ApplicationDBManager() {

@@ -106,7 +106,8 @@ class RocksDBReplicator {
 
 
 
-    std::string introspect();
+    // Introspect the internal replication state
+    std::string Introspect();
 
    private:
     ReplicatedDB(const std::string& db_name,
@@ -146,6 +147,7 @@ class RocksDBReplicator {
                 uint64_t>> cached_iters_;
     std::mutex cached_iters_mutex_;
     detail::MaxNumberBox max_seq_no_acked_;
+    std::atomic<uint64_t> cur_seq_no_{0};
     std::shared_ptr<replicator::DbWrapper> db_wrapper_;
     std::string replicator_zk_cluster_;
     std::string replicator_helix_cluster_;

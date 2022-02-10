@@ -83,7 +83,7 @@ class ApplicationDBManager {
   std::vector<std::string> getAllDBNames();
 
   // Introspect internal states
-  std::string introspect();
+  std::string Introspect() const;
 
   ~ApplicationDBManager();
 
