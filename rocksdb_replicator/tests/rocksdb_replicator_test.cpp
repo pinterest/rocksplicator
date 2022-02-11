@@ -98,6 +98,21 @@ TEST(RocksDBReplicatorTest, Basics) {
             ReturnCode::DB_NOT_FOUND);
   EXPECT_EQ(replicator->write("master", options, &updates),
             ReturnCode::DB_NOT_FOUND);
+
+  const char* expected_master_state =
+"ReplicatedDB:\n\
+  name: master\n\
+  DBRole: LEADER\n\
+  upstream_addr: unknown_addr\n\
+  cur_seq_no: 2\n";
+  const char* expected_slave_state =
+"ReplicatedDB:\n\
+  name: slave\n\
+  DBRole: FOLLOWER\n\
+  upstream_addr: 127.0.0.1\n\
+  cur_seq_no: 0\n";
+  EXPECT_EQ(replicated_db_master->Introspect(), std::string(expected_master_state));
+  EXPECT_EQ(replicated_db_slave->Introspect(), std::string(expected_slave_state));
 }
 
 struct Host {

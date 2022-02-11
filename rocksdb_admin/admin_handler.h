@@ -135,6 +135,8 @@ class AdminHandler : virtual public AdminSvIf {
 
   std::shared_ptr<ApplicationDB> getDB(const std::string& db_name,
                                        AdminException* ex);
+  // Introspect the DB manager state
+  std::string IntrospectDB() const;                                   
 
   // Dump stats for all DBs as a text string
   std::string DumpDBStatsAsText() const;

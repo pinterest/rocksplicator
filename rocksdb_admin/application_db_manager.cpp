@@ -137,6 +137,18 @@ std::vector<std::string> ApplicationDBManager::getAllDBNames()  {
     return db_names;
 }
 
+std::string ApplicationDBManager::Introspect() const {
+  // TODO(jz): consider json output
+  std::stringstream ss;
+  ss << "ApplicationDBManager:" << std::endl;
+  std::shared_lock<std::shared_mutex> lock(dbs_lock_);
+  for (const auto& db : dbs_) {
+    ss << db.first << ":" << std::endl;
+    ss << " " << db.second->Introspect() << std::endl;
+  }
+  return ss.str();
+}
+
 ApplicationDBManager::~ApplicationDBManager() {
   auto itor = dbs_.begin();
   while (itor != dbs_.end()) {

@@ -126,6 +126,8 @@ class ApplicationDB {
     return upstream_addr_.get();
   }
 
+  std::string Introspect();
+
   ~ApplicationDB();
 
  private:

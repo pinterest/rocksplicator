@@ -24,6 +24,7 @@
 
 #include "common/dbconfig.h"
 #include "common/helix_client.h"
+#include "common/network_util.h"
 #include "common/segment_utils.h"
 #include "common/timer.h"
 #include "folly/MoveWrapper.h"
@@ -142,6 +143,28 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
   incCounter(kReplicatorWriteSuccess, 1, db_name_);
 
   return status;
+}
+
+std::string RocksDBReplicator::ReplicatedDB::Introspect() {
+  // TODO(jz): extract a common function for DBRole -> string
+  std::string role_string = "__unknown_role__";
+  if (role_ == DBRole::MASTER) {
+    role_string = "LEADER";
+  } else if (role_ == DBRole::SLAVE) {
+    role_string = "FOLLOWER";
+  }
+  auto upstream_addr_str = common::getNetworkAddressStr(upstream_addr_);
+  auto cur_seq_no = db_wrapper_->LatestSequenceNumber();
+
+  // TODO(jz): consider json output
+  std::stringstream ss;
+  ss << "ReplicatedDB:" << std::endl;
+  ss << "  name: " << db_name_ << std::endl;
+  ss << "  DBRole: " << role_string << std::endl;
+  ss << "  upstream_addr: " << upstream_addr_str << std::endl;
+  ss << "  cur_seq_no: " << cur_seq_no << std::endl;
+  // TODO(jz): add max_seq_no_acked_
+  return ss.str();
 }
 
 

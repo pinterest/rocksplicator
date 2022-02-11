@@ -104,6 +104,10 @@ class RocksDBReplicator {
     // read APIs may be added later on demand. They can be simply implmented by
     // delegating to the internal rocksdb::DB object.
 
+
+    // Introspect the internal replication state
+    std::string Introspect();
+
    private:
     ReplicatedDB(const std::string& db_name,
                  std::shared_ptr<DbWrapper> db_wrapper,
