@@ -133,6 +133,7 @@ class RocksDBReplicator {
     void cleanIdleCachedIters();
 
     const std::string db_name_;
+    std::shared_ptr<replicator::DbWrapper> db_wrapper_;
     folly::Executor* const executor_;
     const DBRole role_;
     folly::SocketAddress upstream_addr_;
@@ -146,7 +147,6 @@ class RocksDBReplicator {
                 uint64_t>> cached_iters_;
     std::mutex cached_iters_mutex_;
     detail::MaxNumberBox max_seq_no_acked_;
-    std::shared_ptr<replicator::DbWrapper> db_wrapper_;
     std::string replicator_zk_cluster_;
     std::string replicator_helix_cluster_;
 

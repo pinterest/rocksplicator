@@ -18,8 +18,8 @@ public:
   RocksDbWrapper(const std::string& db_name, std::shared_ptr<rocksdb::DB> db);
 
 private:
-  std::shared_ptr<rocksdb::DB> db_;
   const std::string db_name_;
+  std::shared_ptr<rocksdb::DB> db_;
   rocksdb::WriteOptions write_options_;
 };
 

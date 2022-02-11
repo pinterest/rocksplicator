@@ -18,8 +18,8 @@ public:
   TestDBProxy(const std::string& db_name, rocksdb::SequenceNumber seq_no = 0);
 
 private:
-  rocksdb::SequenceNumber seq_no_;
   const std::string db_name_;
+  rocksdb::SequenceNumber seq_no_;
 };
 
 }  // namespace replicator
