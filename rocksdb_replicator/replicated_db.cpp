@@ -149,9 +149,9 @@ std::string RocksDBReplicator::ReplicatedDB::Introspect() {
   // TODO(jz): extract a common function for DBRole -> string
   std::string role_string = "__unknown_role__";
   if (role_ == DBRole::MASTER) {
-    role_string = "MASTER";
+    role_string = "LEADER";
   } else if (role_ == DBRole::SLAVE) {
-    role_string = "SLAVE";
+    role_string = "FOLLOWER";
   }
   auto upstream_addr_str = common::getNetworkAddressStr(upstream_addr_);
   auto cur_seq_no = db_wrapper_->LatestSequenceNumber();

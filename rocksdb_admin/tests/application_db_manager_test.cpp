@@ -58,7 +58,7 @@ TEST(ApplicationDBManagerTest, Basics) {
 test_db:\n\
  ReplicatedDB:\n\
   name: test_db\n\
-  DBRole: MASTER\n\
+  DBRole: LEADER\n\
   upstream_addr: unknown_addr\n\
   cur_seq_no: 0\n\n";
   EXPECT_EQ(db_manager.Introspect(), std::string(test_db_state));
