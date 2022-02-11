@@ -53,7 +53,14 @@ TEST(ApplicationDBManagerTest, Basics) {
     EXPECT_NE(ret_db, nullptr);
   }
 
-  const char * test_db_state =  "ApplicationDBManager: \ntest_db:\n ReplicatedDB: \n  name: test_db\n  DBRole: MASTER\n  upstream_addr: unknown_addr\n  cur_seq_no: 0\n\n";
+  const char* test_db_state = 
+"ApplicationDBManager:\n\
+test_db:\n\
+ ReplicatedDB:\n\
+  name: test_db\n\
+  DBRole: MASTER\n\
+  upstream_addr: unknown_addr\n\
+  cur_seq_no: 0\n\n";
   EXPECT_EQ(db_manager.Introspect(), std::string(test_db_state));
 
   auto ret_rocksdb = db_manager.removeDB("test_db", &error_message);
@@ -67,7 +74,10 @@ TEST(ApplicationDBManagerTest, Basics) {
     replicator::DBRole::SLAVE, &error_message);
   ASSERT_TRUE(ret);
 
-  const char* test_db1_state = "ApplicationDBManager: \ntest_db1:\n __no_replicated_db__\n";
+  const char* test_db1_state = 
+"ApplicationDBManager:\n\
+test_db1:\n\
+ __no_replicated_db__\n";
   EXPECT_EQ(db_manager.Introspect(), std::string(test_db1_state));
 }
 

@@ -105,7 +105,6 @@ class RocksDBReplicator {
     // delegating to the internal rocksdb::DB object.
 
 
-
     // Introspect the internal replication state
     std::string Introspect();
 
@@ -147,7 +146,6 @@ class RocksDBReplicator {
                 uint64_t>> cached_iters_;
     std::mutex cached_iters_mutex_;
     detail::MaxNumberBox max_seq_no_acked_;
-    std::atomic<uint64_t> cur_seq_no_{0};
     std::shared_ptr<replicator::DbWrapper> db_wrapper_;
     std::string replicator_zk_cluster_;
     std::string replicator_helix_cluster_;
@@ -214,7 +212,6 @@ class RocksDBReplicator {
                    const rocksdb::WriteOptions& options,
                    rocksdb::WriteBatch* updates,
                    rocksdb::SequenceNumber* seq_no = nullptr);
-
 
   // no copy or move
   RocksDBReplicator(const RocksDBReplicator&) = delete;

@@ -27,7 +27,7 @@ namespace common {
 const std::string& getLocalIPAddress();
 
 /**
- * Get a string representation if the provide address is IPv4 or IPv6,
+ * Get a string representation of the provide socket address if it is IPv4 or IPv6,
  * otherwise "unknown_addr" is returned.
  */
 std::string getNetworkAddressStr(const folly::SocketAddress&) noexcept;

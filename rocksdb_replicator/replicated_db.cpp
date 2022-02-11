@@ -31,7 +31,6 @@
 #include "folly/Random.h"
 #include "rocksdb_replicator/replicator_stats.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
-#include "common/jsoncpp/include/json/json.h"
 
 DEFINE_int32(replicator_max_server_wait_time_ms, 10 * 1000,
              "Max wait time before an empty response is returned");
@@ -122,7 +121,6 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
   if (seq_no) {
     *seq_no = cur_seq_no;
   }
-  cur_seq_no_.store(cur_seq_no);
 
   switch (replication_mode) {
   case 1:
@@ -148,19 +146,24 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
 }
 
 std::string RocksDBReplicator::ReplicatedDB::Introspect() {
-  std::string role_string = "SLAVE";
+  // TODO(jz): extract a common function for DBRole -> string
+  std::string role_string = "__unknown_role__";
   if (role_ == DBRole::MASTER) {
     role_string = "MASTER";
+  } else if (role_ == DBRole::SLAVE) {
+    role_string = "SLAVE";
   }
   auto upstream_addr_str = common::getNetworkAddressStr(upstream_addr_);
+  auto cur_seq_no = db_wrapper_->LatestSequenceNumber();
 
-  // TODO: consider json output
+  // TODO(jz): consider json output
   std::stringstream ss;
-  ss << "ReplicatedDB: " << std::endl;
+  ss << "ReplicatedDB:" << std::endl;
   ss << "  name: " << db_name_ << std::endl;
   ss << "  DBRole: " << role_string << std::endl;
   ss << "  upstream_addr: " << upstream_addr_str << std::endl;
-  ss << "  cur_seq_no: " << std::to_string(cur_seq_no_.load()) << std::endl;
+  ss << "  cur_seq_no: " << cur_seq_no << std::endl;
+  // TODO(jz): add max_seq_no_acked_
   return ss.str();
 }
 
