@@ -305,7 +305,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
 
         // changeDBRoleAndUpStream(me, "Leader")
         Utils.changeDBRoleAndUpStream(LOCAL_HOST_IP, adminPort, dbName, "LEADER",
-            "", adminPort);
+            this.host, adminPort);
 
         partitionStateUpdater.addLeader(resourceName, partitionName);
         // store the latest seqNum as last state

@@ -56,7 +56,7 @@ std::string getNetworkAddressStr(const folly::SocketAddress& addr) noexcept {
   try {
     add_str = addr.getAddressStr();
   } catch (const std::exception& e) {
-    LOG(ERROR) << "cannot get upstream address: " << e.what();
+    LOG(ERROR) << "cannot get upstream address from " <<  addr.describe() << ": " << e.what();
   }
   return add_str;
 }

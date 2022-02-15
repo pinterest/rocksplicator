@@ -1427,6 +1427,15 @@ void AdminHandler::async_tm_changeDBRoleAndUpStream(
   }
 
   std::unique_ptr<folly::SocketAddress> upstream_addr(nullptr);
+  if (request->__isset.upstream_ip && request->__isset.upstream_port) {
+    if (!SetAddressOrException(request->upstream_ip,
+                               FLAGS_rocksdb_replicator_port,
+                               upstream_addr.get(),
+                               &callback) && new_role == replicator::DBRole::SLAVE) {
+      return;
+    }
+  }
+  /*
   if (new_role == replicator::DBRole::SLAVE &&
       request->__isset.upstream_ip &&
       request->__isset.upstream_port) {
@@ -1437,7 +1446,7 @@ void AdminHandler::async_tm_changeDBRoleAndUpStream(
                                &callback)) {
       return;
     }
-  }
+  }*/
 
   auto db = removeDB(request->db_name, &e);
   if (db == nullptr) {
