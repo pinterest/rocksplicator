@@ -438,6 +438,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
             // post the largest sequence number we have written to the Slave.
             db->max_seq_no_acked_.post(next_seq_no - 1);
           }
+          logMetric(kReplicatorOutNumUpdates, response.updates.size(), db->db_name_);
           incCounter(kReplicatorOutBytes, read_bytes, db->db_name_);
         } else {
           LOG(ERROR) << "Failed to pull updates from " << db->db_name_
