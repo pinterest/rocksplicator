@@ -29,6 +29,7 @@ namespace replicator {
 
 const std::string kReplicatorLatency = "replicator_latency_ms";
 const std::string kReplicatorOutBytes = "replicator_out_bytes";
+const std::string kReplicatorOutNumUpdates = "replicator_out_num_updates";
 const std::string kReplicatorInBytes = "replicator_in_bytes";
 const std::string kReplicatorWriteBytes = "replicator_write_bytes";
 

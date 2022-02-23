@@ -24,6 +24,7 @@ namespace replicator {
 
 extern const std::string kReplicatorLatency;
 extern const std::string kReplicatorOutBytes;
+extern const std::string kReplicatorOutNumUpdates;
 extern const std::string kReplicatorInBytes;
 extern const std::string kReplicatorWriteBytes;
 
