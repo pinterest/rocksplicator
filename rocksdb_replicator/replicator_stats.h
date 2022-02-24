@@ -49,6 +49,7 @@ extern const std::string kReplicatorPullRequests;
 extern const std::string kReplicatorPullRequestsSuccess;
 extern const std::string kReplicatorPullRequestsFailure;
 extern const std::string kReplicatorPullLatency;
+extern const std::string kReplicatorHandleResponseFailure;
 
 // add value to metric_name. If db_name is not empty, add value to the per db
 // metric also
