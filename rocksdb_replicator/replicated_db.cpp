@@ -387,6 +387,8 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
           return;
         }
 
+        auto start_ts = GetCurrentTimeMs();
+
         const auto expected_seq_no = (*request)->seq_no + 1;
         rocksdb::SequenceNumber next_seq_no = expected_seq_no;
         auto iter = db->getCachedIter(expected_seq_no);
@@ -441,6 +443,9 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
           }
           logMetric(kReplicatorOutNumUpdates, response.updates.size(), db->db_name_);
           incCounter(kReplicatorOutBytes, read_bytes, db->db_name_);
+
+          auto end_success_ts = GetCurrentTimeMs();
+          logMetric(kReplicatorReplyUpdatesSuccessLatency, start_ts < end_success_ts ? end_success_ts - start_ts : 0, db->db_name_);
         } else {
           LOG(ERROR) << "Failed to pull updates from " << db->db_name_
                      << " with error: " << status.ToString();
@@ -449,6 +454,9 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
           e.msg = status.ToString();
           e.code = ErrorCode::SOURCE_READ_ERROR;
           (*callback).release()->exceptionInThread(std::move(e));
+
+          auto end_failure_ts = GetCurrentTimeMs();
+          logMetric(kReplicatorReplyUpdatesFailureLatency, start_ts < end_failure_ts ? end_failure_ts - start_ts : 0, db->db_name_);
         }
 
         if (iter) {

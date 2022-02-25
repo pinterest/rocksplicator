@@ -45,6 +45,10 @@ const std::string kReplicatorGetUpdatesSinceErrors =
   "replicator_get_update_since_errors";
 const std::string kReplicatorGetUpdatesSinceMs =
   "replicator_get_update_since_ms";
+const std::string kReplicatorReplyUpdatesSuccessLatency =
+  "replicator_reply_updates_success_latency";
+const std::string kReplicatorReplyUpdatesFailureLatency =
+  "replicator_reply_updates_failure_latency";
 
 const std::string kReplicatorWriteSuccess =
   "replicator_write_success";
