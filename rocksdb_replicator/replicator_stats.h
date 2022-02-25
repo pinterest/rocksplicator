@@ -34,6 +34,8 @@ extern const std::string kReplicatorRemoteApplicationExceptionsNotFound;
 
 extern const std::string kReplicatorGetUpdatesSinceErrors;
 extern const std::string kReplicatorGetUpdatesSinceMs;
+extern const std::string kReplicatorReplyUpdatesSuccessLatency;
+extern const std::string kReplicatorReplyUpdatesFailureLatency;
 
 extern const std::string kReplicatorLeaderSequenceNumbersBehind;
 extern const std::string kReplicatorLeaderReset;
