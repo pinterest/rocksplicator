@@ -310,7 +310,7 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
             auto byteRange = update.raw_data.coalesce();
             write_bytes += byteRange.size();
             if (!db->db_wrapper_->HandleReplicateResponse(&update)) {
-              incCounter(kReplicatorPullRequestsFailure, 1, db->db_name_);
+              incCounter(kReplicatorHandleResponseFailure, 1, db->db_name_);
               delay_next_pull = true;
               break;
             }
