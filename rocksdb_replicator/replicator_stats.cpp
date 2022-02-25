@@ -61,6 +61,7 @@ const std::string kReplicatorPullRequests = "replicator_pull_requests";
 const std::string kReplicatorPullRequestsSuccess = "replicator_pull_requests_success";
 const std::string kReplicatorPullRequestsFailure = "replicator_pull_requests_failure";
 const std::string kReplicatorPullLatency = "replicator_pull_latency";
+const std::string kReplicatorHandleResponseFailure = "replicator_handle_response_failure";
 
 void logMetric(const std::string& metric_name, int64_t value,
                const std::string& db_name) {
