@@ -277,8 +277,8 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
             t.exception().throwException();
 #endif
           } catch (const ReplicateException& ex) {
-            LOG(ERROR) << "ReplicateException: (upstream): " << db->upstream_addr_.getAddressStr() << " " << static_cast<int>(ex.code)
-                       << " " << ex.msg;
+            LOG(ERROR) << "ReplicateException: upstream = " << db->upstream_addr_.getAddressStr() << ", code = " << static_cast<int>(ex.code)
+                       << ", message = " << ex.msg;
             incCounter(kReplicatorRemoteApplicationExceptions, 1, db->db_name_);
             
             if (ex.code == ErrorCode::SOURCE_NOT_FOUND) {
