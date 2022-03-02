@@ -442,12 +442,14 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
             String role = instanceNameAndRole.getValue();
             if (role.equalsIgnoreCase("LEADER")) {
               upstream = instanceNameAndRole.getKey();
+              LOG.error("Found leader address for " + dbName + ": " + upstream);
               break;
             } else {
               upstream = instanceNameAndRole.getKey();
             }
           }
           String upstreamHost = (upstream == null ? LOCAL_HOST_IP : upstream.split("_")[0]);
+          LOG.error("Use " + upstreamHost + " as the upstreamHost for " + dbName);
           snapshotHost = upstreamHost;
           int upstreamPort =
               (upstream == null ? adminPort : Integer.parseInt(upstream.split("_")[1]));
