@@ -31,6 +31,7 @@ extern const std::string kReplicatorWriteBytes;
 extern const std::string kReplicatorConnectionErrors;
 extern const std::string kReplicatorRemoteApplicationExceptions;
 extern const std::string kReplicatorRemoteApplicationExceptionsNotFound;
+extern const std::string kReplicatorRemoteApplicationExceptionsNotLeader;
 
 extern const std::string kReplicatorGetUpdatesSinceErrors;
 extern const std::string kReplicatorGetUpdatesSinceMs;

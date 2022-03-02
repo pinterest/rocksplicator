@@ -38,6 +38,8 @@ const std::string kReplicatorRemoteApplicationExceptions =
   "replicator_remote_app_exceptions";
 const std::string kReplicatorRemoteApplicationExceptionsNotFound =
   "replicator_remote_app_exceptions_source_not_found";
+const std::string kReplicatorRemoteApplicationExceptionsNotLeader=
+  "replicator_remote_app_exceptions_not_leader";
 const std::string kReplicatorLeaderReset =
   "replicator_remote_app_leader_reset";
 

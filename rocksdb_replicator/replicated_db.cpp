@@ -66,7 +66,9 @@ DEFINE_int32(replication_error_reset_upstream_percentage, 10,
 DEFINE_bool(reset_upstream_on_std_exception, false, 
             "Flag to control whether to reset the upstream address for a generic exception in replication");
 DECLARE_int32(rocksdb_replicator_port);
-
+DEFINE_bool(reject_replicate_request_when_not_leader,
+            false,
+            "Flag to control whether to reject a replication request when the receiving replica is not a leader.");
 
 namespace {
 
@@ -287,6 +289,11 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
               incCounter(kReplicatorRemoteApplicationExceptionsNotFound, 1, db->db_name_);
               db->resetUpstream();
             }
+            if (ex.code == ErrorCode::NOT_LEADER) {
+              // request was sent to the wrong leader, reset it
+              incCounter(kReplicatorRemoteApplicationExceptionsNotLeader, 1, db->db_name_);
+              db->resetUpstream();
+            }
           } catch (const std::exception& ex) {
             LOG(ERROR) << "std::exception: " << ex.what();
             incCounter(kReplicatorConnectionErrors, 1, db->db_name_);
@@ -349,6 +356,18 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
     std::unique_ptr<CallbackType> callback,
     std::unique_ptr<ReplicateRequest> request) {
   CHECK(request->db_name == db_name_);
+
+  // Only leader should handle the replication request.
+  // This typically suggest the follower has a wrong leader address. Therefore returning
+  // an exception so the follower can reset its leader (aka upstream) address.
+  if (FLAGS_reject_replicate_request_when_not_leader && role_ != DBRole::MASTER) {
+    ReplicateException e;
+    std::string role_string = role_ == DBRole::SLAVE ? "follower" : "__unknown_role__";
+    e.msg = "replication request received by a non-leader replica (current role: " + role_string + ")";
+    e.code = ErrorCode::NOT_LEADER;
+    callback.release()->exceptionInThread(std::move(e));
+    return;
+  }
 
   auto db = shared_from_this();
   std::weak_ptr<ReplicatedDB> weak_db = db;

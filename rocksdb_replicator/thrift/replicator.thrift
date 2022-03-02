@@ -67,6 +67,7 @@ enum ErrorCode {
   # helix, and there is no harm if the upstream fails to distinguish between
   # SOURCE_REMOVED and SOURCE_NOT_FOUND
   SOURCE_REMOVED = 3,
+  NOT_LEADER = 4 # A non-leader replica received the replicate request
 }
 
 exception ReplicateException {
