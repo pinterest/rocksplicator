@@ -258,7 +258,7 @@ public class Utils {
           "Seq number for " + dbName + " on " + host + ": " + String.valueOf(response.seq_num));
       return response.seq_num;
     } catch (TException e) {
-      LOG.error("Failed to get sequence number", e);
+      LOG.error("Failed to get sequence number for " + dbName, e);
       return -1;
     }
   }
