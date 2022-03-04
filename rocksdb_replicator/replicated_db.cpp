@@ -31,6 +31,7 @@
 #include "folly/Random.h"
 #include "rocksdb_replicator/replicator_stats.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
+#include "rocksdb_replicator/utils.h"
 
 DEFINE_int32(replicator_max_server_wait_time_ms, 10 * 1000,
              "Max wait time before an empty response is returned");
@@ -43,6 +44,16 @@ DEFINE_int32(replicator_max_updates_per_response, 50,
 
 DEFINE_int32(replicator_pull_delay_on_error_ms, 5 * 1000,
              "How long to wait before sending the next pull request on error");
+
+// When there are no updates, it roughly takes
+// replicator_pull_delay_on_error_ms * replicator_max_consecutive_no_updates_before_upstream_reset
+// to trigger a upstream reset. (e.g. with 5s pull delay and 10 consecutive pulls, that's 50s wait in between upstreamReset)
+// Additionally resetUpstream may be skipped as controlled by replication_error_reset_upstream_percentage.
+// This is mainly a protection against checking the upstream too often (currently adds load to ZK).
+// Once we move to checking upstream based on a local shardmap file, 
+// we can check more aggressively.
+DEFINE_int32(replicator_max_consecutive_no_updates_before_upstream_reset, 10,
+             "The max number of consecutive replication responses with no updates, before a upstream reset is triggered");
 
 DEFINE_int32(replicator_replication_mode, 0,
              "Replication mode. "
@@ -65,6 +76,8 @@ DEFINE_int32(replication_error_reset_upstream_percentage, 10,
              "what percentage of replication errors should query helix for the latest leader");
 DEFINE_bool(reset_upstream_on_std_exception, false, 
             "Flag to control whether to reset the upstream address for a generic exception in replication");
+DEFINE_bool(reset_upstream_on_empty_updates_from_non_leader, false,
+            "Flag to control whether to reset the upstream address when empty updates are provided from a non-leader upstream");
 DECLARE_int32(rocksdb_replicator_port);
 
 
@@ -317,7 +330,23 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
           }
 
           if (!response.updates.empty()) {
+            db->pullFromUpstreamNoUpdates_ = 0;
             db->cond_var_.notifyAll();
+          } else {
+            incCounter(kReplicatorPullRequestsNoUpdates, 1, db->db_name_);
+            // no updates consecutively, and the upstream says it's NOT a leader.
+            // Therefore we reset upstream. 
+            db->pullFromUpstreamNoUpdates_++;
+            if (response.role != ReplicaRole::LEADER
+                && FLAGS_reset_upstream_on_empty_updates_from_non_leader
+                && db->pullFromUpstreamNoUpdates_ >= FLAGS_replicator_max_consecutive_no_updates_before_upstream_reset) {
+              LOG(ERROR) << "No updates when fetching from a non-leader upstream " + common::getNetworkAddressStr(db->upstream_addr_)
+                         << " for " << FLAGS_replicator_max_consecutive_no_updates_before_upstream_reset
+                         << " consecutive times, resetting upstream for " + db->db_name_;
+              incCounter(kReplicatorResetUpstreamOnNoUpdates, 1, db->db_name_);
+              db->resetUpstream();
+              db->pullFromUpstreamNoUpdates_ = 0;
+            }
           }
           incCounter(kReplicatorInBytes, write_bytes, db->db_name_);
         }
@@ -413,6 +442,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
         }
         if (use_cached_iter || status.ok() || status.IsNotFound()) {
           ReplicateResponse response;
+          response.role = db->role_thrift_;
           uint64_t read_bytes = 0;
           for (int32_t i = 0;
                i < (*request)->max_updates && iter && iter->Valid();

@@ -25,10 +25,12 @@
 // private
 #define private public
 #include "rocksdb_replicator/rocksdb_replicator.h"
+#include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 
 using folly::SocketAddress;
 using replicator::ReplicaRole;
 using replicator::ReturnCode;
+using replicator::ReplicaRole;
 using replicator::RocksDBReplicator;
 using rocksdb::DB;
 using rocksdb::Options;
@@ -113,6 +115,12 @@ TEST(RocksDBReplicatorTest, Basics) {
   cur_seq_no: 0\n";
   EXPECT_EQ(replicated_db_master->Introspect(), std::string(expected_master_state));
   EXPECT_EQ(replicated_db_slave->Introspect(), std::string(expected_slave_state));
+
+  EXPECT_EQ(ReplicaRole::LEADER, replicated_db_master->role_thrift_);
+  EXPECT_EQ(ReplicaRole::FOLLOWER, replicated_db_slave->role_thrift_);
+
+  EXPECT_EQ(0, replicated_db_master->pullFromUpstreamNoUpdates_);
+  EXPECT_EQ(0, replicated_db_slave->pullFromUpstreamNoUpdates_);
 }
 
 struct Host {

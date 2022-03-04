@@ -131,6 +131,7 @@ class RocksDBReplicator {
     folly::Executor* const executor_;
     const ReplicaRole role_;
     folly::SocketAddress upstream_addr_;
+    uint32_t pullFromUpstreamNoUpdates_ {0};
     common::ThriftClientPool<ReplicatorAsyncClient>* const client_pool_;
     std::shared_ptr<ReplicatorAsyncClient> client_;
     detail::NonBlockingConditionVariable cond_var_;

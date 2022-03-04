@@ -63,6 +63,8 @@ struct ReplicateResponse {
   # updates is an ordered continuous range of updates starting from the seq_no
   # specified in ReplicateRequest.
   1: required list<Update> updates,
+  // role is the replica role of the upstream that provides the updates.
+  2: optional ReplicaRole role;
 }
 
 enum ErrorCode {
