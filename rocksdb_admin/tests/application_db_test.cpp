@@ -34,6 +34,7 @@
 #undef private
 #include "rocksdb_admin/tests/test_util.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
+#include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 
 DEFINE_bool(log_to_stdout, false,
             "Enable output some assisting logs to stdout");
@@ -105,7 +106,7 @@ class ApplicationDBTestBase : public testing::Test {
     ASSERT_TRUE(status.ok()) << status.ToString();
     ASSERT_TRUE(db != nullptr);
     db_ = make_unique<ApplicationDB>(db_name_, shared_ptr<DB>(db),
-                                     replicator::DBRole::SLAVE, nullptr);
+                                     replicator::ReplicaRole::FOLLOWER, nullptr);
   }
 
   void DestroyAndReopen(const Options& options) {

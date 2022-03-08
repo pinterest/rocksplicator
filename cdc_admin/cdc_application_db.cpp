@@ -18,7 +18,7 @@ namespace cdc_admin {
 
 CDCApplicationDB::CDCApplicationDB(const std::string& db_name,
                                    std::shared_ptr<replicator::DbWrapper> db_wrapper,
-                                   replicator::DBRole role,
+                                   replicator::ReplicaRole role,
                                    std::unique_ptr<folly::SocketAddress> upstream_addr,
                                    const std::string& replicator_zk_cluster,
                                    const std::string& replicator_helix_cluster)
@@ -26,7 +26,7 @@ CDCApplicationDB::CDCApplicationDB(const std::string& db_name,
       db_(std::move(db_wrapper)),
       upstream_addr_(std::move(upstream_addr)),
       replicated_db_(nullptr) {
-  if (role == replicator::DBRole::SLAVE) {
+  if (role == replicator::ReplicaRole::FOLLOWER) {
     CHECK(upstream_addr_);
     auto ret = replicator::RocksDBReplicator::instance()->addDB(
         db_name_,

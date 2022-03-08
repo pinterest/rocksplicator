@@ -21,6 +21,7 @@
 #include "rocksdb/options.h"
 #include "rocksdb/write_batch.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
+#include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 
 namespace admin {
 
@@ -44,7 +45,7 @@ class ApplicationDB {
   // upstream_addr: (IN) upstream address if applicable
   ApplicationDB(const std::string& db_name,
                 std::shared_ptr<rocksdb::DB> db,
-                replicator::DBRole role,
+                replicator::ReplicaRole role,
                 std::unique_ptr<folly::SocketAddress> upstream_addr);
 
   // Create a rocksdb iterator based on the give options.
@@ -110,7 +111,7 @@ class ApplicationDB {
   bool DBLmaxEmpty();
 
   // Whether this db instance is slave
-  bool IsSlave() const { return role_ == replicator::DBRole::SLAVE; }
+  bool IsSlave() const { return role_ == replicator::ReplicaRole::FOLLOWER; }
 
   // Name of this db
   const std::string& db_name() const { return db_name_; }
@@ -137,7 +138,7 @@ class ApplicationDB {
   const std::string db_name_;
   std::shared_ptr<rocksdb::DB> db_;
 
-  const replicator::DBRole role_;
+  const replicator::ReplicaRole role_;
   std::unique_ptr<folly::SocketAddress> upstream_addr_;
   replicator::RocksDBReplicator::ReplicatedDB* replicated_db_;
 

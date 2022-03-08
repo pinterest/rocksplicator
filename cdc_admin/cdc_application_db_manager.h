@@ -18,6 +18,7 @@
 
 #include "common/segment_utils.h"
 #include "rocksdb_admin/application_db.h"
+#include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 
 namespace cdc_admin {
 
@@ -43,7 +44,7 @@ public:
   // Return true on success
   bool addDB(const std::string& db_name,
              std::unique_ptr<UnderlyingDBType> db,
-             replicator::DBRole role,
+             replicator::ReplicaRole role,
              std::unique_ptr<folly::SocketAddress> upstream_addr,
              const std::string& replicator_zk_cluster,
              const std::string& replicator_helix_cluster,

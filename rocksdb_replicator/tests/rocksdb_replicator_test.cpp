@@ -27,7 +27,7 @@
 #include "rocksdb_replicator/rocksdb_replicator.h"
 
 using folly::SocketAddress;
-using replicator::DBRole;
+using replicator::ReplicaRole;
 using replicator::ReturnCode;
 using replicator::RocksDBReplicator;
 using rocksdb::DB;
@@ -71,13 +71,13 @@ TEST(RocksDBReplicatorTest, Basics) {
   RocksDBReplicator::ReplicatedDB* replicated_db_slave;
   SocketAddress addr("127.0.0.1", FLAGS_rocksdb_replicator_port);
 
-  EXPECT_EQ(replicator->addDB("master", db_master, DBRole::MASTER,
+  EXPECT_EQ(replicator->addDB("master", db_master, ReplicaRole::LEADER,
                               folly::SocketAddress(),
                               &replicated_db_master), ReturnCode::OK);
-  EXPECT_EQ(replicator->addDB("master", db_master, DBRole::MASTER,
+  EXPECT_EQ(replicator->addDB("master", db_master, ReplicaRole::LEADER,
                               folly::SocketAddress(),
                               &replicated_db_master), ReturnCode::DB_PRE_EXIST);
-  EXPECT_EQ(replicator->addDB("slave", db_slave, DBRole::SLAVE,
+  EXPECT_EQ(replicator->addDB("slave", db_slave, ReplicaRole::FOLLOWER,
                               addr, &replicated_db_slave), ReturnCode::OK);
 
   Status status;
@@ -102,13 +102,13 @@ TEST(RocksDBReplicatorTest, Basics) {
   const char* expected_master_state =
 "ReplicatedDB:\n\
   name: master\n\
-  DBRole: LEADER\n\
+  ReplicaRole: LEADER\n\
   upstream_addr: unknown_addr\n\
   cur_seq_no: 2\n";
   const char* expected_slave_state =
 "ReplicatedDB:\n\
   name: slave\n\
-  DBRole: FOLLOWER\n\
+  ReplicaRole: FOLLOWER\n\
   upstream_addr: 127.0.0.1\n\
   cur_seq_no: 0\n";
   EXPECT_EQ(replicated_db_master->Introspect(), std::string(expected_master_state));
@@ -133,10 +133,10 @@ TEST(RocksDBReplicatorTest, 1_master_1_slave) {
   auto db_master = cleanAndOpenDB("/tmp/db_master");
   auto db_slave = cleanAndOpenDB("/tmp/db_slave");
 
-  EXPECT_EQ(master.replicator_->addDB("shard1", db_master, DBRole::MASTER),
+  EXPECT_EQ(master.replicator_->addDB("shard1", db_master, ReplicaRole::LEADER),
             ReturnCode::OK);
   SocketAddress addr_master("127.0.0.1", master_port);
-  EXPECT_EQ(slave.replicator_->addDB("shard1", db_slave, DBRole::SLAVE,
+  EXPECT_EQ(slave.replicator_->addDB("shard1", db_slave, ReplicaRole::FOLLOWER,
                                      addr_master),
             ReturnCode::OK);
 
@@ -200,13 +200,13 @@ TEST(RocksDBReplicatorTest, 1_master_2_slaves_tree) {
   auto db_slave_1 = cleanAndOpenDB("/tmp/db_slave_1");
   auto db_slave_2 = cleanAndOpenDB("/tmp/db_slave_2");
 
-  EXPECT_EQ(master.replicator_->addDB("shard1", db_master, DBRole::MASTER),
+  EXPECT_EQ(master.replicator_->addDB("shard1", db_master, ReplicaRole::LEADER),
             ReturnCode::OK);
   SocketAddress addr_master("127.0.0.1", master_port);
-  EXPECT_EQ(slave_1.replicator_->addDB("shard1", db_slave_1, DBRole::SLAVE,
+  EXPECT_EQ(slave_1.replicator_->addDB("shard1", db_slave_1, ReplicaRole::FOLLOWER,
                                        addr_master),
             ReturnCode::OK);
-  EXPECT_EQ(slave_2.replicator_->addDB("shard1", db_slave_2, DBRole::SLAVE,
+  EXPECT_EQ(slave_2.replicator_->addDB("shard1", db_slave_2, ReplicaRole::FOLLOWER,
                                        addr_master),
             ReturnCode::OK);
 
@@ -260,14 +260,14 @@ TEST(RocksDBReplicatorTest, 1_master_2_slaves_chain) {
   auto db_slave_1 = cleanAndOpenDB("/tmp/db_slave_1");
   auto db_slave_2 = cleanAndOpenDB("/tmp/db_slave_2");
 
-  EXPECT_EQ(master.replicator_->addDB("shard1", db_master, DBRole::MASTER),
+  EXPECT_EQ(master.replicator_->addDB("shard1", db_master, ReplicaRole::LEADER),
             ReturnCode::OK);
   SocketAddress addr_master("127.0.0.1", master_port);
-  EXPECT_EQ(slave_1.replicator_->addDB("shard1", db_slave_1, DBRole::SLAVE,
+  EXPECT_EQ(slave_1.replicator_->addDB("shard1", db_slave_1, ReplicaRole::FOLLOWER,
                                        addr_master),
             ReturnCode::OK);
   SocketAddress addr_slave_1("127.0.0.1", slave_port_1);
-  EXPECT_EQ(slave_2.replicator_->addDB("shard1", db_slave_2, DBRole::SLAVE,
+  EXPECT_EQ(slave_2.replicator_->addDB("shard1", db_slave_2, ReplicaRole::FOLLOWER,
                                        addr_slave_1),
             ReturnCode::OK);
 
@@ -323,7 +323,7 @@ TEST(RocksDBReplicatorTest, 1_master_2_slaves_chain) {
   EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), n_keys);
 
   // add the middle node back
-  EXPECT_EQ(slave_1.replicator_->addDB("shard1", db_slave_1, DBRole::SLAVE,
+  EXPECT_EQ(slave_1.replicator_->addDB("shard1", db_slave_1, ReplicaRole::FOLLOWER,
                                        addr_master),
             ReturnCode::OK);
 
@@ -379,13 +379,13 @@ TEST(RocksDBReplicatorTest, Stress) {
     int start = i % hosts.size();
 
     EXPECT_EQ(hosts[start]->replicator_->addDB(shard, db_masters[i],
-                                              DBRole::MASTER),
+                                              ReplicaRole::LEADER),
               ReturnCode::OK);
     EXPECT_EQ(hosts[(start + 1) % hosts.size()]->replicator_->addDB(
-        shard, db_slaves_1[i], DBRole::SLAVE, addresses[start]),
+        shard, db_slaves_1[i], ReplicaRole::FOLLOWER, addresses[start]),
               ReturnCode::OK);
     EXPECT_EQ(hosts[(start + 2) % hosts.size()]->replicator_->addDB(
-        shard, db_slaves_2[i], DBRole::SLAVE, addresses[start]),
+        shard, db_slaves_2[i], ReplicaRole::FOLLOWER, addresses[start]),
               ReturnCode::OK);
   }
 

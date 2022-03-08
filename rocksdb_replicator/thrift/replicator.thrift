@@ -53,6 +53,12 @@ struct Update {
   3: optional i64 seq_no,
 }
 
+enum ReplicaRole {
+  NOOP = 0, // no replication needed
+  FOLLOWER = 1,
+  LEADER = 2
+}
+
 struct ReplicateResponse {
   # updates is an ordered continuous range of updates starting from the seq_no
   # specified in ReplicateRequest.

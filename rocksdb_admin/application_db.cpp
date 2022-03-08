@@ -52,7 +52,7 @@ const std::string ApplicationDB::Properties::kHighestEmptyLevel =
 ApplicationDB::ApplicationDB(
     const std::string& db_name,
     std::shared_ptr<rocksdb::DB> db,
-    replicator::DBRole role,
+    replicator::ReplicaRole role,
     std::unique_ptr<folly::SocketAddress> upstream_addr)
     : db_name_(db_name)
     , db_(std::move(db))
@@ -128,7 +128,7 @@ rocksdb::Status ApplicationDB::Write(const rocksdb::WriteOptions& options,
     return replicated_db_->Write(options, write_batch);
   } else {
     // ApplicationDBManager can be use to manage rocksdb instance lifecycle
-    // without replication. In this case, ApplicationDB has the replicator::DBRole
+    // without replication. In this case, ApplicationDB has the replicator::ReplicaRole
     // as SLAVE and no upstream_addr. Thus the replicated_db_ is nullptr, and
     // we'll write to the local db_
     return db_->Write(options, write_batch);

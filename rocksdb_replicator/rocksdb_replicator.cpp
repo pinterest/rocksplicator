@@ -95,7 +95,7 @@ RocksDBReplicator::~RocksDBReplicator() {
 
 ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
                                     std::shared_ptr<rocksdb::DB> db,
-                                    const DBRole role,
+                                    const ReplicaRole role,
                                     const folly::SocketAddress& upstream_addr,
                                     ReplicatedDB** replicated_db) {
   std::shared_ptr<DbWrapper> db_wrapper(
@@ -106,7 +106,7 @@ ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
 
 ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
                                     std::shared_ptr<DbWrapper> db_wrapper,
-                                    const DBRole role,
+                                    const ReplicaRole role,
                                     const folly::SocketAddress& upstream_addr,
                                     ReplicatedDB** replicated_db,
                                     const std::string& replicator_zk_cluster,
@@ -123,7 +123,7 @@ ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
     *replicated_db = new_db.get();
   }
 
-  if (role == DBRole::SLAVE) {
+  if (role == ReplicaRole::FOLLOWER) {
     new_db->pullFromUpstream();
   }
 

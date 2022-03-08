@@ -82,7 +82,7 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
     const rocksdb::WriteOptions& options,
     rocksdb::WriteBatch* updates,
     rocksdb::SequenceNumber* seq_no) {
-  if (role_ == DBRole::SLAVE) {
+  if (role_ == ReplicaRole::FOLLOWER) {
     throw ReturnCode::WRITE_TO_SLAVE;
   }
 
@@ -146,11 +146,11 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
 }
 
 std::string RocksDBReplicator::ReplicatedDB::Introspect() {
-  // TODO(jz): extract a common function for DBRole -> string
+  // TODO(jz): extract a common function for ReplicaRole -> string
   std::string role_string = "__unknown_role__";
-  if (role_ == DBRole::MASTER) {
+  if (role_ == ReplicaRole::LEADER) {
     role_string = "LEADER";
-  } else if (role_ == DBRole::SLAVE) {
+  } else if (role_ == ReplicaRole::FOLLOWER) {
     role_string = "FOLLOWER";
   }
   auto upstream_addr_str = common::getNetworkAddressStr(upstream_addr_);
@@ -160,7 +160,7 @@ std::string RocksDBReplicator::ReplicatedDB::Introspect() {
   std::stringstream ss;
   ss << "ReplicatedDB:" << std::endl;
   ss << "  name: " << db_name_ << std::endl;
-  ss << "  DBRole: " << role_string << std::endl;
+  ss << "  ReplicaRole: " << role_string << std::endl;
   ss << "  upstream_addr: " << upstream_addr_str << std::endl;
   ss << "  cur_seq_no: " << cur_seq_no << std::endl;
   // TODO(jz): add max_seq_no_acked_
@@ -172,7 +172,7 @@ RocksDBReplicator::ReplicatedDB::ReplicatedDB(
     const std::string& db_name,
     std::shared_ptr<DbWrapper> db_wrapper,
     folly::Executor* executor,
-    const DBRole role,
+    const ReplicaRole role,
     const folly::SocketAddress& upstream_addr,
     common::ThriftClientPool<ReplicatorAsyncClient>* client_pool,
     const std::string& replicator_zk_cluster,
@@ -191,7 +191,7 @@ RocksDBReplicator::ReplicatedDB::ReplicatedDB(
     , write_options_()
     , cached_iters_()
     , cached_iters_mutex_() {
-  if (role == DBRole::SLAVE) {
+  if (role == ReplicaRole::FOLLOWER) {
     client_ = client_pool_->getClient(upstream_addr);
   }
 
@@ -248,7 +248,7 @@ void RocksDBReplicator::ReplicatedDB::resetUpstream() {
 }
 
 void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
-  CHECK(role_ == DBRole::SLAVE);
+  CHECK(role_ == ReplicaRole::FOLLOWER);
   ReplicateRequest req;
   req.seq_no = db_wrapper_->LatestSequenceNumber();
   req.db_name = db_name_;

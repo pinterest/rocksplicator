@@ -32,11 +32,12 @@
 #include "rocksdb/filter_policy.h"
 #include "rocksdb/rate_limiter.h"
 #include "rocksdb/table.h"
+#include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 
 
 using folly::SocketAddress;
 using common::Stats;
-using replicator::DBRole;
+using replicator::ReplicaRole;
 using replicator::ReturnCode;
 using replicator::RocksDBReplicator;
 using rocksdb::DB;
@@ -118,7 +119,7 @@ int main(int argc, char** argv) {
     auto db_name = "shard" + to_string(i);
     SocketAddress addr(FLAGS_upstream_ip, FLAGS_rocksdb_replicator_port);
     replicator->addDB(db_name, cleanAndOpenDB(FLAGS_db_path + db_name, options),
-                      FLAGS_is_master ? DBRole::MASTER : DBRole::SLAVE, addr,
+                      FLAGS_is_master ? ReplicaRole::LEADER : ReplicaRole::FOLLOWER, addr,
                       &db);
     dbs.push_back(db);
   }
