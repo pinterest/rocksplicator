@@ -132,6 +132,7 @@ class RocksDBReplicator {
     const ReplicaRole role_;
     folly::SocketAddress upstream_addr_;
     uint32_t pullFromUpstreamNoUpdates_ {0};
+    uint32_t resetUpstreamAttempts_ {0}; // currently only used for unit tests
     common::ThriftClientPool<ReplicatorAsyncClient>* const client_pool_;
     std::shared_ptr<ReplicatorAsyncClient> client_;
     detail::NonBlockingConditionVariable cond_var_;

@@ -226,6 +226,7 @@ RocksDBReplicator::ReplicatedDB::ReplicatedDB(
  * Helper function to reset the upstream IP after querying for latest leader from helix.
  */
 void RocksDBReplicator::ReplicatedDB::resetUpstream() {
+  resetUpstreamAttempts_++;
   if (replicator_zk_cluster_.empty() || replicator_helix_cluster_.empty()) {
     LOG(ERROR) << "[resetUpstream] ZK cluster or helix cluster name not provided.";
     return;

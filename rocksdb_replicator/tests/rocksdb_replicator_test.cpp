@@ -47,6 +47,11 @@ using std::unique_ptr;
 using std::vector;
 
 DECLARE_int32(replicator_pull_delay_on_error_ms);
+DECLARE_int32(replicator_max_server_wait_time_ms);
+DECLARE_int32(replicator_client_server_timeout_difference_ms);
+DECLARE_bool(reset_upstream_on_empty_updates_from_non_leader);
+DECLARE_int32(replicator_max_consecutive_no_updates_before_upstream_reset);
+
 DECLARE_int32(rocksdb_replicator_port);
 
 shared_ptr<DB> cleanAndOpenDB(const string& path) {
@@ -196,10 +201,66 @@ TEST(RocksDBReplicatorTest, 1_master_1_slave) {
   EXPECT_EQ(db_slave->GetLatestSequenceNumber(), n_keys * 2);
 }
 
-TEST(RocksDBReplicatorTest, 1_master_2_slaves_tree) {
-  int16_t master_port = 9094;
-  int16_t slave_port_1 = 9095;
-  int16_t slave_port_2 = 9096;
+TEST(RocksDBReplicatorTest, 1_master_1_slave_upstream_itself) {
+  FLAGS_replicator_max_server_wait_time_ms = 100;
+  FLAGS_replicator_client_server_timeout_difference_ms = 100;
+  FLAGS_reset_upstream_on_empty_updates_from_non_leader = true;
+  FLAGS_replicator_max_consecutive_no_updates_before_upstream_reset = 1;
+
+  int16_t master_port = 9092;
+  int16_t slave_port = 9093;
+  Host master(master_port);
+  Host slave(slave_port);
+
+  auto db_master = cleanAndOpenDB("/tmp/db_master");
+  auto db_slave = cleanAndOpenDB("/tmp/db_slave");
+
+  RocksDBReplicator::ReplicatedDB* replicated_db_master;
+  RocksDBReplicator::ReplicatedDB* replicated_db_slave;
+
+  EXPECT_EQ(master.replicator_->addDB("shard1", db_master, ReplicaRole::LEADER, folly::SocketAddress(),
+                              &replicated_db_master),
+            ReturnCode::OK);
+
+  // follower setting itself as the upstream, hence it won't receive updates from leader,
+  // unless the upstream is reset to be the leader.
+  SocketAddress addr_slave("127.0.0.1", slave_port);
+  EXPECT_EQ(slave.replicator_->addDB("shard1", db_slave, ReplicaRole::FOLLOWER,
+                                     addr_slave, &replicated_db_slave),
+            ReturnCode::OK);
+
+  EXPECT_EQ(db_master->GetLatestSequenceNumber(), 0);
+  EXPECT_EQ(db_slave->GetLatestSequenceNumber(), 0);
+
+  WriteOptions options;
+  uint32_t n_keys = 100;
+  for (uint32_t i = 0; i < n_keys; ++i) {
+    WriteBatch updates;
+    auto str = to_string(i);
+    updates.Put(str + "key", str + "value");
+    updates.Put(str + "key2", str + "value2");
+    EXPECT_EQ(master.replicator_->write("shard1", options, &updates),
+              ReturnCode::OK);
+    EXPECT_EQ(db_master->GetLatestSequenceNumber(), i * 2 + 2);
+  }
+
+  // expect follower reset upstream to be triggered
+  auto wait_check = 0;
+  while (replicated_db_slave->resetUpstreamAttempts_ == 0 && wait_check < 10) {
+    sleep_for(milliseconds(100));
+    wait_check++;
+  }
+  EXPECT_NE(replicated_db_slave->resetUpstreamAttempts_, 0);
+  EXPECT_EQ(replicated_db_master->resetUpstreamAttempts_, 0);
+
+  // we don't have helix setup in unit test, so reset won't succeed
+  EXPECT_EQ(0, db_slave->GetLatestSequenceNumber());
+}
+
+TEST(RocksDBReplicatorTest, 1_master_2_slaves_stuck) {
+  int16_t master_port = 9097;
+  int16_t slave_port_1 = 9098;
+  int16_t slave_port_2 = 9099;
   Host master(master_port);
   Host slave_1(slave_port_1);
   Host slave_2(slave_port_2);
@@ -208,14 +269,20 @@ TEST(RocksDBReplicatorTest, 1_master_2_slaves_tree) {
   auto db_slave_1 = cleanAndOpenDB("/tmp/db_slave_1");
   auto db_slave_2 = cleanAndOpenDB("/tmp/db_slave_2");
 
-  EXPECT_EQ(master.replicator_->addDB("shard1", db_master, ReplicaRole::LEADER),
+  RocksDBReplicator::ReplicatedDB* replicated_db_master;
+  RocksDBReplicator::ReplicatedDB* replicated_db_slave_1;
+  RocksDBReplicator::ReplicatedDB* replicated_db_slave_2;
+
+  EXPECT_EQ(master.replicator_->addDB("shard1", db_master, ReplicaRole::LEADER, folly::SocketAddress(),
+                              &replicated_db_master),
             ReturnCode::OK);
-  SocketAddress addr_master("127.0.0.1", master_port);
+  SocketAddress addr_slave2("127.0.0.1", slave_port_2);
   EXPECT_EQ(slave_1.replicator_->addDB("shard1", db_slave_1, ReplicaRole::FOLLOWER,
-                                       addr_master),
+                                       addr_slave2, &replicated_db_slave_1),
             ReturnCode::OK);
+  SocketAddress addr_slave_1("127.0.0.1", slave_port_1);
   EXPECT_EQ(slave_2.replicator_->addDB("shard1", db_slave_2, ReplicaRole::FOLLOWER,
-                                       addr_master),
+                                       addr_slave_1, &replicated_db_slave_2),
             ReturnCode::OK);
 
   EXPECT_EQ(db_master->GetLatestSequenceNumber(), 0);
@@ -233,27 +300,25 @@ TEST(RocksDBReplicatorTest, 1_master_2_slaves_tree) {
     EXPECT_EQ(db_master->GetLatestSequenceNumber(), i + 1);
   }
 
-  while (db_slave_1->GetLatestSequenceNumber() < n_keys ||
-         db_slave_2->GetLatestSequenceNumber() < n_keys) {
+  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), 0);
+  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), 0);
+
+  // expect followers reset upstream to be triggered
+  auto wait_check = 0;
+  while ((replicated_db_slave_1->resetUpstreamAttempts_ == 0 || replicated_db_slave_2->resetUpstreamAttempts_ == 0)
+        && wait_check < 10) {
     sleep_for(milliseconds(100));
+    wait_check++;
   }
+  EXPECT_NE(replicated_db_slave_1->resetUpstreamAttempts_, 0);
+  EXPECT_NE(replicated_db_slave_2->resetUpstreamAttempts_, 0);
 
-  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), n_keys);
-  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), n_keys);
-  ReadOptions read_options;
-  for (uint32_t i = 0; i < n_keys; ++i) {
-    auto str = to_string(i);
-    string value;
-    auto status = db_slave_1->Get(read_options, str + "key", &value);
-    EXPECT_TRUE(status.ok());
-    EXPECT_EQ(value, str + "value");
+  // no upstream reset for the leader
+  EXPECT_EQ(replicated_db_master->resetUpstreamAttempts_, 0);
 
-    status = db_slave_2->Get(read_options, str + "key", &value);
-    EXPECT_TRUE(status.ok());
-    EXPECT_EQ(value, str + "value");
-  }
-  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), n_keys);
-  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), n_keys);
+  // we don't have helix setup in unit test, so reset won't succeed
+  EXPECT_EQ(0, db_slave_1->GetLatestSequenceNumber());
+  EXPECT_EQ(0, db_slave_2->GetLatestSequenceNumber());
 }
 
 TEST(RocksDBReplicatorTest, 1_master_2_slaves_chain) {
