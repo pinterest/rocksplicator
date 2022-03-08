@@ -55,6 +55,7 @@
 #include "rocksdb_admin/detail/kafka_broker_file_watcher_manager.h"
 #include "rocksdb_admin/utils.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
+#include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
 #if __GNUC__ >= 8
 #include "folly/executors/CPUThreadPoolExecutor.h"
@@ -299,7 +300,7 @@ std::unique_ptr<::admin::ApplicationDBManager> CreateDBBasedOnConfig(
           if (my_role == common::detail::Role::MASTER) {
             LOG(ERROR) << "Hosting master " << db_name;
             CHECK(db_manager->addDB(db_name, std::move(db),
-                                    replicator::DBRole::MASTER,
+                                    replicator::ReplicaRole::LEADER,
                                     &err_msg)) << err_msg;
             return;
           }
@@ -307,7 +308,7 @@ std::unique_ptr<::admin::ApplicationDBManager> CreateDBBasedOnConfig(
           CHECK(my_role == common::detail::Role::SLAVE);
           LOG(ERROR) << "Hosting slave " << db_name;
           CHECK(db_manager->addDB(db_name, std::move(db),
-                                  replicator::DBRole::SLAVE,
+                                  replicator::ReplicaRole::FOLLOWER,
                                   std::move(*upstream_addr),
                                   &err_msg)) << err_msg;
         });
@@ -620,12 +621,12 @@ void AdminHandler::async_tm_addDB(
 
   // add the db to db_manager
   std::string err_msg;
-  replicator::DBRole role = replicator::DBRole::SLAVE;
+  replicator::ReplicaRole role = replicator::ReplicaRole::FOLLOWER;
   if (request->__isset.db_role) {
     if (request->db_role == "SLAVE" || request->db_role == "FOLLOWER") {
-      role = replicator::DBRole::SLAVE;
+      role = replicator::ReplicaRole::FOLLOWER;
     } else if (request->db_role == "NOOP") {
-      role = replicator::DBRole::NOOP;
+      role = replicator::ReplicaRole::NOOP;
     } else {
       e.errorCode = AdminErrorCode::INVALID_DB_ROLE;
       e.message = std::move(request->db_role);
@@ -826,7 +827,7 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
   std::string err_msg;
   if (!db_manager_->addDB(db_name,
                           std::unique_ptr<rocksdb::DB>(rocksdb_db),
-                          replicator::DBRole::SLAVE,
+                          replicator::ReplicaRole::FOLLOWER,
                           std::move(upstream_addr), &err_msg)) {
     e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
     e->message = std::move(err_msg);
@@ -1289,7 +1290,7 @@ void AdminHandler::async_tm_restoreDBFromS3(
     std::string err_msg;
     if (!db_manager_->addDB(request->db_name,
                             std::unique_ptr<rocksdb::DB>(restore_db),
-                            replicator::DBRole::SLAVE,
+                            replicator::ReplicaRole::FOLLOWER,
                             std::move(upstream_addr), &err_msg)) {
       LOG(ERROR) << "Error happened when adding db after restore by checkpoint: " << err_msg;
       SetException(err_msg, AdminErrorCode::DB_ADMIN_ERROR, &callback);
@@ -1414,11 +1415,11 @@ void AdminHandler::async_tm_changeDBRoleAndUpStream(
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
   AdminException e;
-  replicator::DBRole new_role;
+  replicator::ReplicaRole new_role;
   if (request->new_role == "MASTER" || request->new_role == "LEADER") {
-    new_role = replicator::DBRole::MASTER;
+    new_role = replicator::ReplicaRole::LEADER;
   } else if (request->new_role == "SLAVE" || request->new_role == "FOLLOWER") {
-    new_role = replicator::DBRole::SLAVE;
+    new_role = replicator::ReplicaRole::FOLLOWER;
   } else {
     e.errorCode = AdminErrorCode::INVALID_DB_ROLE;
     e.message = std::move(request->new_role);
@@ -1427,7 +1428,7 @@ void AdminHandler::async_tm_changeDBRoleAndUpStream(
   }
 
   std::unique_ptr<folly::SocketAddress> upstream_addr(nullptr);
-  if (new_role == replicator::DBRole::SLAVE &&
+  if (new_role == replicator::ReplicaRole::FOLLOWER &&
       request->__isset.upstream_ip &&
       request->__isset.upstream_port) {
     upstream_addr = std::make_unique<folly::SocketAddress>();
@@ -1481,14 +1482,14 @@ void AdminHandler::async_tm_clearDB(
   SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
   bool need_to_reopen = false;
-  replicator::DBRole db_role;
+  replicator::ReplicaRole db_role;
   std::unique_ptr<folly::SocketAddress> upstream_addr;
   {
     auto db = getDB(request->db_name, nullptr);
     if (db) {
       need_to_reopen = true;
-      db_role = db->IsSlave() ? replicator::DBRole::SLAVE :
-        replicator::DBRole::MASTER;
+      db_role = db->IsSlave() ? replicator::ReplicaRole::FOLLOWER :
+        replicator::ReplicaRole::LEADER;
       if (db->upstream_addr()) {
         upstream_addr =
           std::make_unique<folly::SocketAddress>(*(db->upstream_addr()));
@@ -1745,9 +1746,9 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   if (!allow_overlapping_keys) {
     // clear DB if overlapping keys are not allowed
     auto db_role = db->IsSlave() ?
-      replicator::DBRole::SLAVE : replicator::DBRole::MASTER;
+      replicator::ReplicaRole::FOLLOWER : replicator::ReplicaRole::LEADER;
     std::unique_ptr<folly::SocketAddress> upstream_addr;
-    if (db_role == replicator::DBRole::SLAVE &&
+    if (db_role == replicator::ReplicaRole::FOLLOWER &&
         db->upstream_addr() != nullptr) {
       upstream_addr.reset(new folly::SocketAddress(*db->upstream_addr()));
     }

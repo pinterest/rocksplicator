@@ -20,6 +20,7 @@
 
 #include "rocksdb_replicator/test_db_proxy.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
+#include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 
 DEFINE_string(rocksdb_dir, "/tmp/", "The dir for local rocksdb instances");
 
@@ -115,7 +116,7 @@ void CDCAdminHandler::async_tm_addObserver(
 
   // add the db to db_manager
   std::string err_msg;
-  replicator::DBRole role = replicator::DBRole::SLAVE;
+  replicator::ReplicaRole role = replicator::ReplicaRole::FOLLOWER;
   const std::string replicator_zk_cluster =
       request->__isset.replicator_zk_cluster ? request->replicator_zk_cluster : std::string("");
   const std::string replicator_helix_cluster = request->__isset.replicator_helix_cluster

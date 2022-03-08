@@ -66,12 +66,6 @@ struct LogExtractor : public rocksdb::WriteBatch::Handler {
   uint64_t ms;
 };
 
-enum class DBRole {
-  MASTER,
-  SLAVE,
-  NOOP, // Don't perform any replication with this DB
-};
-
 enum class ReturnCode {
   OK = 0,
   DB_NOT_FOUND = 1,
@@ -112,7 +106,7 @@ class RocksDBReplicator {
     ReplicatedDB(const std::string& db_name,
                  std::shared_ptr<DbWrapper> db_wrapper,
                  folly::Executor* executor,
-                 const DBRole role,
+                 const ReplicaRole role,
                  const folly::SocketAddress& upstream_addr
                  = folly::SocketAddress(),
                  common::ThriftClientPool<ReplicatorAsyncClient>* client_pool
@@ -135,7 +129,7 @@ class RocksDBReplicator {
     const std::string db_name_;
     std::shared_ptr<replicator::DbWrapper> db_wrapper_;
     folly::Executor* const executor_;
-    const DBRole role_;
+    const ReplicaRole role_;
     folly::SocketAddress upstream_addr_;
     common::ThriftClientPool<ReplicatorAsyncClient>* const client_pool_;
     std::shared_ptr<ReplicatorAsyncClient> client_;
@@ -172,7 +166,7 @@ class RocksDBReplicator {
    */
   ReturnCode addDB(const std::string& db_name,
                    std::shared_ptr<rocksdb::DB> db,
-                   const DBRole role,
+                   const ReplicaRole role,
                    const folly::SocketAddress& upstream_addr
                    = folly::SocketAddress(),
                    ReplicatedDB** replicated_db = nullptr);
@@ -182,7 +176,7 @@ class RocksDBReplicator {
    */
   ReturnCode addDB(const std::string& db_name,
                    std::shared_ptr<DbWrapper> db_wrapper,
-                   const DBRole role,
+                   const ReplicaRole role,
                    const folly::SocketAddress& upstream_addr
                    = folly::SocketAddress(),
                    ReplicatedDB** replicated_db = nullptr,

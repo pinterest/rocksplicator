@@ -15,6 +15,7 @@
 #pragma once
 
 #include "cdc_admin/cdc_application_db_manager.h"
+#include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 
 namespace cdc_admin {
 
@@ -29,7 +30,7 @@ public:
   // with the API upstream_addr: (IN) upstream address if applicable
   CDCApplicationDB(const std::string& db_name,
                    std::shared_ptr<replicator::DbWrapper> db_wrapper,
-                   replicator::DBRole role,
+                   replicator::ReplicaRole role,
                    std::unique_ptr<folly::SocketAddress> upstream_addr,
                    const std::string& replicator_zk_cluster,
                    const std::string& replicator_helix_cluster);

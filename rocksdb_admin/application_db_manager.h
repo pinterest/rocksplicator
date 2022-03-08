@@ -21,6 +21,7 @@
 
 #include "rocksdb/db.h"
 #include "rocksdb_admin/application_db.h"
+#include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 
 namespace admin {
 
@@ -40,7 +41,7 @@ class ApplicationDBManager {
   // Return true on success
   bool addDB(const std::string& db_name,
              std::unique_ptr<rocksdb::DB> db,
-             replicator::DBRole role,
+             replicator::ReplicaRole role,
              std::string* error_message);
 
   // Add a rocksdb instance into db manager.
@@ -53,7 +54,7 @@ class ApplicationDBManager {
   // Return true on success
   bool addDB(const std::string& db_name,
              std::unique_ptr<rocksdb::DB> db,
-             replicator::DBRole role,
+             replicator::ReplicaRole role,
              std::unique_ptr<folly::SocketAddress> upstream_addr,
              std::string* error_message);
 

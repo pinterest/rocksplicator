@@ -33,14 +33,14 @@ ApplicationDBManager::ApplicationDBManager()
 
 bool ApplicationDBManager::addDB(const std::string& db_name,
                                  std::unique_ptr<rocksdb::DB> db,
-                                 replicator::DBRole role,
+                                 replicator::ReplicaRole role,
                                  std::string* error_message) {
   return addDB(db_name, std::move(db), role, nullptr, error_message);
 }
 
 bool ApplicationDBManager::addDB(const std::string& db_name,
                                  std::unique_ptr<rocksdb::DB> db,
-                                 replicator::DBRole role,
+                                 replicator::ReplicaRole role,
                                  std::unique_ptr<folly::SocketAddress> up_addr,
                                  std::string* error_message) {
   std::unique_lock<std::shared_mutex> lock(dbs_lock_);

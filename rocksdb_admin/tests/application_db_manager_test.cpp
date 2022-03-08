@@ -21,6 +21,7 @@
 #include "glog/logging.h"
 #include "gtest/gtest.h"
 #include "rocksdb/db.h"
+#include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 
 std::unique_ptr<rocksdb::DB> GetTestDB(const std::string& dir) {
   EXPECT_EQ(std::system(("rm -rf " + dir).c_str()), 0);
@@ -41,11 +42,11 @@ TEST(ApplicationDBManagerTest, Basics) {
   admin::ApplicationDBManager db_manager;
   std::string error_message;
   auto ret = db_manager.addDB("test_db", std::move(test_db),
-    replicator::DBRole::MASTER, &error_message);
+    replicator::ReplicaRole::LEADER, &error_message);
   ASSERT_TRUE(ret);
 
   ret = db_manager.addDB("test_db", std::move(test_db),
-    replicator::DBRole::MASTER, &error_message);
+    replicator::ReplicaRole::LEADER, &error_message);
   ASSERT_FALSE(ret);
 
   {
@@ -58,7 +59,7 @@ TEST(ApplicationDBManagerTest, Basics) {
 test_db:\n\
  ReplicatedDB:\n\
   name: test_db\n\
-  DBRole: LEADER\n\
+  ReplicaRole: LEADER\n\
   upstream_addr: unknown_addr\n\
   cur_seq_no: 0\n\n";
   EXPECT_EQ(db_manager.Introspect(), std::string(test_db_state));
@@ -71,7 +72,7 @@ test_db:\n\
 
   auto test_db1 = GetTestDB("/tmp/application_db_manager_test_db1");
   ret = db_manager.addDB("test_db1", std::move(test_db1),
-    replicator::DBRole::SLAVE, &error_message);
+    replicator::ReplicaRole::FOLLOWER, &error_message);
   ASSERT_TRUE(ret);
 
   const char* test_db1_state = 
