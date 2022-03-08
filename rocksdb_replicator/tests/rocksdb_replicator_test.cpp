@@ -121,8 +121,8 @@ TEST(RocksDBReplicatorTest, Basics) {
   EXPECT_EQ(replicated_db_master->Introspect(), std::string(expected_master_state));
   EXPECT_EQ(replicated_db_slave->Introspect(), std::string(expected_slave_state));
 
-  EXPECT_EQ(ReplicaRole::LEADER, replicated_db_master->role_thrift_);
-  EXPECT_EQ(ReplicaRole::FOLLOWER, replicated_db_slave->role_thrift_);
+  EXPECT_EQ(ReplicaRole::LEADER, replicated_db_master->role_);
+  EXPECT_EQ(ReplicaRole::FOLLOWER, replicated_db_slave->role_);
 
   EXPECT_EQ(0, replicated_db_master->pullFromUpstreamNoUpdates_);
   EXPECT_EQ(0, replicated_db_slave->pullFromUpstreamNoUpdates_);
@@ -199,6 +199,166 @@ TEST(RocksDBReplicatorTest, 1_master_1_slave) {
     EXPECT_EQ(db_master->GetLatestSequenceNumber(), i + 1 + n_keys * 2);
   }
   EXPECT_EQ(db_slave->GetLatestSequenceNumber(), n_keys * 2);
+}
+
+TEST(RocksDBReplicatorTest, 1_master_2_slaves_tree) {
+  int16_t master_port = 9094;
+  int16_t slave_port_1 = 9095;
+  int16_t slave_port_2 = 9096;
+  Host master(master_port);
+  Host slave_1(slave_port_1);
+  Host slave_2(slave_port_2);
+
+  auto db_master = cleanAndOpenDB("/tmp/db_master");
+  auto db_slave_1 = cleanAndOpenDB("/tmp/db_slave_1");
+  auto db_slave_2 = cleanAndOpenDB("/tmp/db_slave_2");
+
+  EXPECT_EQ(master.replicator_->addDB("shard1", db_master, ReplicaRole::LEADER),
+            ReturnCode::OK);
+  SocketAddress addr_master("127.0.0.1", master_port);
+  EXPECT_EQ(slave_1.replicator_->addDB("shard1", db_slave_1, ReplicaRole::FOLLOWER,
+                                       addr_master),
+            ReturnCode::OK);
+  EXPECT_EQ(slave_2.replicator_->addDB("shard1", db_slave_2, ReplicaRole::FOLLOWER,
+                                       addr_master),
+            ReturnCode::OK);
+
+  EXPECT_EQ(db_master->GetLatestSequenceNumber(), 0);
+  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), 0);
+  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), 0);
+
+  WriteOptions options;
+  uint32_t n_keys = 100;
+  for (uint32_t i = 0; i < n_keys; ++i) {
+    WriteBatch updates;
+    auto str = to_string(i);
+    updates.Put(str + "key", str + "value");
+    EXPECT_EQ(master.replicator_->write("shard1", options, &updates),
+              ReturnCode::OK);
+    EXPECT_EQ(db_master->GetLatestSequenceNumber(), i + 1);
+  }
+
+  while (db_slave_1->GetLatestSequenceNumber() < n_keys ||
+         db_slave_2->GetLatestSequenceNumber() < n_keys) {
+    sleep_for(milliseconds(100));
+  }
+
+  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), n_keys);
+  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), n_keys);
+  ReadOptions read_options;
+  for (uint32_t i = 0; i < n_keys; ++i) {
+    auto str = to_string(i);
+    string value;
+    auto status = db_slave_1->Get(read_options, str + "key", &value);
+    EXPECT_TRUE(status.ok());
+    EXPECT_EQ(value, str + "value");
+
+    status = db_slave_2->Get(read_options, str + "key", &value);
+    EXPECT_TRUE(status.ok());
+    EXPECT_EQ(value, str + "value");
+  }
+  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), n_keys);
+  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), n_keys);
+}
+
+TEST(RocksDBReplicatorTest, 1_master_2_slaves_chain) {
+  int16_t master_port = 9097;
+  int16_t slave_port_1 = 9098;
+  int16_t slave_port_2 = 9099;
+  Host master(master_port);
+  Host slave_1(slave_port_1);
+  Host slave_2(slave_port_2);
+
+  auto db_master = cleanAndOpenDB("/tmp/db_master");
+  auto db_slave_1 = cleanAndOpenDB("/tmp/db_slave_1");
+  auto db_slave_2 = cleanAndOpenDB("/tmp/db_slave_2");
+
+  EXPECT_EQ(master.replicator_->addDB("shard1", db_master, ReplicaRole::LEADER),
+            ReturnCode::OK);
+  SocketAddress addr_master("127.0.0.1", master_port);
+  EXPECT_EQ(slave_1.replicator_->addDB("shard1", db_slave_1, ReplicaRole::FOLLOWER,
+                                       addr_master),
+            ReturnCode::OK);
+  SocketAddress addr_slave_1("127.0.0.1", slave_port_1);
+  EXPECT_EQ(slave_2.replicator_->addDB("shard1", db_slave_2, ReplicaRole::FOLLOWER,
+                                       addr_slave_1),
+            ReturnCode::OK);
+
+  EXPECT_EQ(db_master->GetLatestSequenceNumber(), 0);
+  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), 0);
+  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), 0);
+
+  WriteOptions options;
+  uint32_t n_keys = 100;
+  for (uint32_t i = 0; i < n_keys; ++i) {
+    WriteBatch updates;
+    auto str = to_string(i);
+    updates.Put(str + "key", str + "value");
+    EXPECT_EQ(master.replicator_->write("shard1", options, &updates),
+              ReturnCode::OK);
+    EXPECT_EQ(db_master->GetLatestSequenceNumber(), i + 1);
+  }
+
+  while (db_slave_2->GetLatestSequenceNumber() < n_keys) {
+    sleep_for(milliseconds(100));
+  }
+
+  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), n_keys);
+  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), n_keys);
+  ReadOptions read_options;
+  for (uint32_t i = 0; i < n_keys; ++i) {
+    auto str = to_string(i);
+    string value;
+    auto status = db_slave_1->Get(read_options, str + "key", &value);
+    EXPECT_TRUE(status.ok());
+    EXPECT_EQ(value, str + "value");
+
+    status = db_slave_2->Get(read_options, str + "key", &value);
+    EXPECT_TRUE(status.ok());
+    EXPECT_EQ(value, str + "value");
+  }
+  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), n_keys);
+  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), n_keys);
+
+  // remove the middle node, and write some more keys to the master
+  EXPECT_EQ(slave_1.replicator_->removeDB("shard1"), ReturnCode::OK);
+  for (uint32_t i = 0; i < n_keys; ++i) {
+    WriteBatch updates;
+    auto str = to_string(i);
+    updates.Put(str + "new_key", str + "new_value");
+    EXPECT_EQ(master.replicator_->write("shard1", options, &updates),
+              ReturnCode::OK);
+    EXPECT_EQ(db_master->GetLatestSequenceNumber(), i + n_keys + 1);
+  }
+
+  // non of slaves got them
+  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), n_keys);
+  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), n_keys);
+
+  // add the middle node back
+  EXPECT_EQ(slave_1.replicator_->addDB("shard1", db_slave_1, ReplicaRole::FOLLOWER,
+                                       addr_master),
+            ReturnCode::OK);
+
+  while (db_slave_2->GetLatestSequenceNumber() < 2 * n_keys) {
+    sleep_for(milliseconds(100));
+  }
+
+  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), 2 * n_keys);
+  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), 2 * n_keys);
+  for (uint32_t i = 0; i < n_keys; ++i) {
+    auto str = to_string(i);
+    string value;
+    auto status = db_slave_1->Get(read_options, str + "new_key", &value);
+    EXPECT_TRUE(status.ok());
+    EXPECT_EQ(value, str + "new_value");
+
+    status = db_slave_2->Get(read_options, str + "new_key", &value);
+    EXPECT_TRUE(status.ok());
+    EXPECT_EQ(value, str + "new_value");
+  }
+  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), 2 * n_keys);
+  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), 2 * n_keys);
 }
 
 TEST(RocksDBReplicatorTest, 1_master_1_slave_upstream_itself) {
@@ -319,106 +479,6 @@ TEST(RocksDBReplicatorTest, 1_master_2_slaves_stuck) {
   // we don't have helix setup in unit test, so reset won't succeed
   EXPECT_EQ(0, db_slave_1->GetLatestSequenceNumber());
   EXPECT_EQ(0, db_slave_2->GetLatestSequenceNumber());
-}
-
-TEST(RocksDBReplicatorTest, 1_master_2_slaves_chain) {
-  int16_t master_port = 9097;
-  int16_t slave_port_1 = 9098;
-  int16_t slave_port_2 = 9099;
-  Host master(master_port);
-  Host slave_1(slave_port_1);
-  Host slave_2(slave_port_2);
-
-  auto db_master = cleanAndOpenDB("/tmp/db_master");
-  auto db_slave_1 = cleanAndOpenDB("/tmp/db_slave_1");
-  auto db_slave_2 = cleanAndOpenDB("/tmp/db_slave_2");
-
-  EXPECT_EQ(master.replicator_->addDB("shard1", db_master, ReplicaRole::LEADER),
-            ReturnCode::OK);
-  SocketAddress addr_master("127.0.0.1", master_port);
-  EXPECT_EQ(slave_1.replicator_->addDB("shard1", db_slave_1, ReplicaRole::FOLLOWER,
-                                       addr_master),
-            ReturnCode::OK);
-  SocketAddress addr_slave_1("127.0.0.1", slave_port_1);
-  EXPECT_EQ(slave_2.replicator_->addDB("shard1", db_slave_2, ReplicaRole::FOLLOWER,
-                                       addr_slave_1),
-            ReturnCode::OK);
-
-  EXPECT_EQ(db_master->GetLatestSequenceNumber(), 0);
-  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), 0);
-  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), 0);
-
-  WriteOptions options;
-  uint32_t n_keys = 100;
-  for (uint32_t i = 0; i < n_keys; ++i) {
-    WriteBatch updates;
-    auto str = to_string(i);
-    updates.Put(str + "key", str + "value");
-    EXPECT_EQ(master.replicator_->write("shard1", options, &updates),
-              ReturnCode::OK);
-    EXPECT_EQ(db_master->GetLatestSequenceNumber(), i + 1);
-  }
-
-  while (db_slave_2->GetLatestSequenceNumber() < n_keys) {
-    sleep_for(milliseconds(100));
-  }
-
-  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), n_keys);
-  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), n_keys);
-  ReadOptions read_options;
-  for (uint32_t i = 0; i < n_keys; ++i) {
-    auto str = to_string(i);
-    string value;
-    auto status = db_slave_1->Get(read_options, str + "key", &value);
-    EXPECT_TRUE(status.ok());
-    EXPECT_EQ(value, str + "value");
-
-    status = db_slave_2->Get(read_options, str + "key", &value);
-    EXPECT_TRUE(status.ok());
-    EXPECT_EQ(value, str + "value");
-  }
-  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), n_keys);
-  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), n_keys);
-
-  // remove the middle node, and write some more keys to the master
-  EXPECT_EQ(slave_1.replicator_->removeDB("shard1"), ReturnCode::OK);
-  for (uint32_t i = 0; i < n_keys; ++i) {
-    WriteBatch updates;
-    auto str = to_string(i);
-    updates.Put(str + "new_key", str + "new_value");
-    EXPECT_EQ(master.replicator_->write("shard1", options, &updates),
-              ReturnCode::OK);
-    EXPECT_EQ(db_master->GetLatestSequenceNumber(), i + n_keys + 1);
-  }
-
-  // non of slaves got them
-  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), n_keys);
-  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), n_keys);
-
-  // add the middle node back
-  EXPECT_EQ(slave_1.replicator_->addDB("shard1", db_slave_1, ReplicaRole::FOLLOWER,
-                                       addr_master),
-            ReturnCode::OK);
-
-  while (db_slave_2->GetLatestSequenceNumber() < 2 * n_keys) {
-    sleep_for(milliseconds(100));
-  }
-
-  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), 2 * n_keys);
-  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), 2 * n_keys);
-  for (uint32_t i = 0; i < n_keys; ++i) {
-    auto str = to_string(i);
-    string value;
-    auto status = db_slave_1->Get(read_options, str + "new_key", &value);
-    EXPECT_TRUE(status.ok());
-    EXPECT_EQ(value, str + "new_value");
-
-    status = db_slave_2->Get(read_options, str + "new_key", &value);
-    EXPECT_TRUE(status.ok());
-    EXPECT_EQ(value, str + "new_value");
-  }
-  EXPECT_EQ(db_slave_1->GetLatestSequenceNumber(), 2 * n_keys);
-  EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), 2 * n_keys);
 }
 
 TEST(RocksDBReplicatorTest, Stress) {

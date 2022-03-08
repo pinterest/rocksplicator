@@ -67,7 +67,7 @@ const std::string kReplicatorPullRequestsFailure = "replicator_pull_requests_fai
 const std::string kReplicatorPullRequestsNoUpdates = "replicator_pull_requests_no_updates";
 const std::string kReplicatorPullLatency = "replicator_pull_latency";
 const std::string kReplicatorHandleResponseFailure = "replicator_handle_response_failure";
-const std::string kReplicatorResetUpstreamOnNoUpdates = "replicator_reset_upstream_on_no_updates";
+const std::string kReplicatorResetUpstreamOnNoUpdates = "replicator_reset_upstream_on_no_updates_attempted";
 
 void logMetric(const std::string& metric_name, int64_t value,
                const std::string& db_name) {

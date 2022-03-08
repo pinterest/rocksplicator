@@ -31,7 +31,6 @@
 #include "folly/Random.h"
 #include "rocksdb_replicator/replicator_stats.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
-#include "rocksdb_replicator/utils.h"
 
 DEFINE_int32(replicator_max_server_wait_time_ms, 10 * 1000,
              "Max wait time before an empty response is returned");
@@ -47,12 +46,13 @@ DEFINE_int32(replicator_pull_delay_on_error_ms, 5 * 1000,
 
 // When there are no updates, it roughly takes
 // replicator_pull_delay_on_error_ms * replicator_max_consecutive_no_updates_before_upstream_reset
-// to trigger a upstream reset. (e.g. with 5s pull delay and 10 consecutive pulls, that's 50s wait in between upstreamReset)
-// Additionally resetUpstream may be skipped as controlled by replication_error_reset_upstream_percentage.
+// to trigger a upstream reset. (e.g. with 5s pull delay and 5 consecutive pulls, that's 25s wait before an upstreamReset)
+// Additionally resetUpstream may be skipped as controlled by replication_error_reset_upstream_percentage (default to 10%),
+// So it may take up to 250s to reset the upstream.
 // This is mainly a protection against checking the upstream too often (currently adds load to ZK).
-// Once we move to checking upstream based on a local shardmap file, 
+// Once we move to checking upstream based on a local shardmap file,
 // we can check more aggressively.
-DEFINE_int32(replicator_max_consecutive_no_updates_before_upstream_reset, 10,
+DEFINE_int32(replicator_max_consecutive_no_updates_before_upstream_reset, 5,
              "The max number of consecutive replication responses with no updates, before a upstream reset is triggered");
 
 DEFINE_int32(replicator_replication_mode, 0,
@@ -336,7 +336,7 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
           } else {
             incCounter(kReplicatorPullRequestsNoUpdates, 1, db->db_name_);
             // no updates consecutively, and the upstream says it's NOT a leader.
-            // Therefore we reset upstream. 
+            // Therefore we reset upstream.
             db->pullFromUpstreamNoUpdates_++;
             if (response.role != ReplicaRole::LEADER
                 && FLAGS_reset_upstream_on_empty_updates_from_non_leader
@@ -443,7 +443,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
         }
         if (use_cached_iter || status.ok() || status.IsNotFound()) {
           ReplicateResponse response;
-          response.role = db->role_thrift_;
+          response.role = db->role_;
           uint64_t read_bytes = 0;
           for (int32_t i = 0;
                i < (*request)->max_updates && iter && iter->Valid();
