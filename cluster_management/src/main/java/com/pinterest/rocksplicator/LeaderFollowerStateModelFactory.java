@@ -385,6 +385,18 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
       partitionStateUpdater.removeLeader(resourceName, partitionName);
     }
 
+    public String getLeaderInstance(NotificationContext context) {
+      HelixAdmin admin = context.getManager().getClusterManagmentTool()
+      ExternalView view = admin.getResourceExternalView(cluster, resourceName);
+      Map<String, String> stateMap = view.getStateMap(partitionName);
+      for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
+        if (instanceNameAndRole.getValue().equalsIgnoreCase("LEADER")) {
+          return instanceNameAndRole.getKey();
+        }
+      }
+      return null;
+    }
+
     public Map<String, String> getLiveHostAndRole(NotificationContext context, String dbName) {
       HelixAdmin admin = context.getManager().getClusterManagmentTool();
       ExternalView view = admin.getResourceExternalView(cluster, resourceName);
@@ -469,6 +481,20 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
 
           // if rebuild is not needed, setup upstream and return
           if (!needRebuild) {
+            // It's possible we may have used a follower for catching up updates (when leader is unhealthy),
+            // now it's time to use the true leader as the upstream for subsequent replication requests.
+            // Otherwise it leads to various failures/degradations:
+            // - follower not receiving any updates (when upstream is itself, or followers using each other as upstream)
+            // - follower getting updates from another follower, causing replication tag and read consistency issue
+            // - leader not receiving ACK for this replica (2-ack mode at risk)
+            String leaderInstance = getLeaderInstance(context);
+            if (leaderInstance != null && leaderInstance != upstream) {
+              String[] leaderHostPort = leaderInstance.split("_");
+              upstreamHost = leaderHostPort[0];
+              upstreamPort = leaderHostPort[1];
+              LOG.error("Leader address differs from current upstream. Using leader " + upstreamHost + " as the upstream for " + dbName);
+            }
+
             Utils.changeDBRoleAndUpStream(LOCAL_HOST_IP, adminPort, dbName, "FOLLOWER",
                 upstreamHost, upstreamPort);
 
