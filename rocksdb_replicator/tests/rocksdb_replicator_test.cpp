@@ -361,7 +361,9 @@ TEST(RocksDBReplicatorTest, 1_master_2_slaves_chain) {
   EXPECT_EQ(db_slave_2->GetLatestSequenceNumber(), 2 * n_keys);
 }
 
-TEST(RocksDBReplicatorTest, 1_master_1_slave_upstream_itself) {
+// This tests the case when there is one leader and one follower for the shard,
+// and the follower sets itself as the upstream, which should trigger upstream reset.
+TEST(RocksDBReplicatorTest, 1_leader_1_follower_upstream_itself) {
   FLAGS_replicator_max_server_wait_time_ms = 100;
   FLAGS_replicator_client_server_timeout_difference_ms = 100;
   FLAGS_reset_upstream_on_empty_updates_from_non_leader = true;
@@ -417,7 +419,9 @@ TEST(RocksDBReplicatorTest, 1_master_1_slave_upstream_itself) {
   EXPECT_EQ(0, db_slave->GetLatestSequenceNumber());
 }
 
-TEST(RocksDBReplicatorTest, 1_master_2_slaves_stuck) {
+// This tests the case when there is one leader and two followers for the shard,
+// and the followers setting each other as the upstream, which should trigger upstream reset.
+TEST(RocksDBReplicatorTest, 1_leader_2_followers_deadlock) {
   int16_t master_port = 9097;
   int16_t slave_port_1 = 9098;
   int16_t slave_port_2 = 9099;
