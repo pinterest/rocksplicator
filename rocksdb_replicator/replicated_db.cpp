@@ -31,6 +31,7 @@
 #include "folly/Random.h"
 #include "rocksdb_replicator/replicator_stats.h"
 #include "rocksdb_replicator/rocksdb_replicator.h"
+#include "rocksdb_replicator/utils.h"
 
 DEFINE_int32(replicator_max_server_wait_time_ms, 10 * 1000,
              "Max wait time before an empty response is returned");
@@ -159,13 +160,6 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
 }
 
 std::string RocksDBReplicator::ReplicatedDB::Introspect() {
-  // TODO(jz): extract a common function for ReplicaRole -> string
-  std::string role_string = "__unknown_role__";
-  if (role_ == ReplicaRole::LEADER) {
-    role_string = "LEADER";
-  } else if (role_ == ReplicaRole::FOLLOWER) {
-    role_string = "FOLLOWER";
-  }
   auto upstream_addr_str = common::getNetworkAddressStr(upstream_addr_);
   auto cur_seq_no = db_wrapper_->LatestSequenceNumber();
 
@@ -173,7 +167,7 @@ std::string RocksDBReplicator::ReplicatedDB::Introspect() {
   std::stringstream ss;
   ss << "ReplicatedDB:" << std::endl;
   ss << "  name: " << db_name_ << std::endl;
-  ss << "  ReplicaRole: " << role_string << std::endl;
+  ss << "  ReplicaRole: " << role_str_ << std::endl;
   ss << "  upstream_addr: " << upstream_addr_str << std::endl;
   ss << "  cur_seq_no: " << cur_seq_no << std::endl;
   // TODO(jz): add max_seq_no_acked_
@@ -194,6 +188,7 @@ RocksDBReplicator::ReplicatedDB::ReplicatedDB(
     , db_wrapper_(std::move(db_wrapper))
     , executor_(executor)
     , role_(role)
+    , role_str_(ReplicaRoleString(role))
     , upstream_addr_(upstream_addr)
     , client_pool_(client_pool)
     , replicator_zk_cluster_(replicator_zk_cluster)
@@ -345,7 +340,8 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
             if (response.role != ReplicaRole::LEADER
                 && FLAGS_reset_upstream_on_empty_updates_from_non_leader
                 && db->pullFromUpstreamNoUpdates_ >= FLAGS_replicator_max_consecutive_no_updates_before_upstream_reset) {
-              LOG(ERROR) << "No updates when fetching from a non-leader upstream " + common::getNetworkAddressStr(db->upstream_addr_)
+              LOG(ERROR) << "No updates when fetching from a non-leader (" + std::string(ReplicaRoleString(response.role))
+                           + ") upstream " + common::getNetworkAddressStr(db->upstream_addr_)
                          << " for " << FLAGS_replicator_max_consecutive_no_updates_before_upstream_reset
                          << " consecutive times, resetting upstream for " + db->db_name_;
               incCounter(kReplicatorResetUpstreamOnNoUpdates, 1, db->db_name_);
