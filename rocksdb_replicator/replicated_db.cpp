@@ -337,7 +337,7 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
             // no updates consecutively, and the upstream says it's NOT a leader.
             // Therefore we reset upstream.
             db->pullFromUpstreamNoUpdates_++;
-            if (response.role != ReplicaRole::LEADER
+            if (response.__isset.role && response.role != ReplicaRole::LEADER
                 && FLAGS_reset_upstream_on_empty_updates_from_non_leader
                 && db->pullFromUpstreamNoUpdates_ >= FLAGS_replicator_max_consecutive_no_updates_before_upstream_reset) {
               LOG(ERROR) << "No updates when fetching from a non-leader (" + std::string(ReplicaRoleString(response.role))
@@ -443,7 +443,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
         }
         if (use_cached_iter || status.ok() || status.IsNotFound()) {
           ReplicateResponse response;
-          response.role = db->role_;
+          response.set_role(db->role_);
           uint64_t read_bytes = 0;
           for (int32_t i = 0;
                i < (*request)->max_updates && iter && iter->Valid();
