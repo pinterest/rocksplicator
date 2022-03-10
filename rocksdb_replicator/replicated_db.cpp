@@ -325,7 +325,7 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
             }
           }
 
-          if (response.role != ReplicaRole::LEADER) {
+          if (response.__isset.role && response.role != ReplicaRole::LEADER) {
             incCounter(kReplicatorPullFromNonLeader, 1, db->db_name_);
           }
 
