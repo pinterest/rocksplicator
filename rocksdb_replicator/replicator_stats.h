@@ -51,6 +51,7 @@ extern const std::string kReplicatorPullRequests;
 extern const std::string kReplicatorPullRequestsSuccess;
 extern const std::string kReplicatorPullRequestsFailure;
 extern const std::string kReplicatorPullRequestsNoUpdates;
+extern const std::string kReplicatorPullFromNonLeader;
 extern const std::string kReplicatorPullLatency;
 extern const std::string kReplicatorHandleResponseFailure;
 extern const std::string kReplicatorResetUpstreamOnNoUpdates;

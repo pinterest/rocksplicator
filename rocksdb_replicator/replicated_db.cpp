@@ -330,6 +330,10 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
             }
           }
 
+          if (response.role != ReplicaRole::LEADER) {
+            incCounter(kReplicatorPullFromNonLeader, 1, db->db_name_);
+          }
+
           if (!response.updates.empty()) {
             db->pullFromUpstreamNoUpdates_ = 0;
             db->cond_var_.notifyAll();
