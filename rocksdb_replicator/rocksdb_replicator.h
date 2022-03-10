@@ -130,6 +130,7 @@ class RocksDBReplicator {
     std::shared_ptr<replicator::DbWrapper> db_wrapper_;
     folly::Executor* const executor_;
     const ReplicaRole role_;
+    const char* role_str_;
     folly::SocketAddress upstream_addr_;
     uint32_t pullFromUpstreamNoUpdates_ {0};
     uint32_t resetUpstreamAttempts_ {0}; // currently only used for unit tests

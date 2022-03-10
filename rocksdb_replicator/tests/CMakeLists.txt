@@ -19,3 +19,7 @@ add_test(NAME rocksdb_assumption_test COMMAND rocksdb_assumption_test)
 add_executable(max_number_box_test max_number_box_test.cpp)
 target_link_libraries(max_number_box_test rocksdb_replicator gtest)
 add_test(NAME max_number_box_test COMMAND max_number_box_test)
+
+add_executable(replicator_utils_test utils_test.cpp)
+target_link_libraries(replicator_utils_test rocksdb_replicator gtest)
+add_test(NAME replicator_utils_test COMMAND replicator_utils_test)
