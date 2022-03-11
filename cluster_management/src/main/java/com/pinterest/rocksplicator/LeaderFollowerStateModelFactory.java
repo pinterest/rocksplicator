@@ -386,7 +386,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
     }
 
     public String getLeaderInstance(NotificationContext context) {
-      HelixAdmin admin = context.getManager().getClusterManagmentTool()
+      HelixAdmin admin = context.getManager().getClusterManagmentTool();
       ExternalView view = admin.getResourceExternalView(cluster, resourceName);
       Map<String, String> stateMap = view.getStateMap(partitionName);
       for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
@@ -491,7 +491,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
             if (leaderInstance != null && leaderInstance != upstream) {
               String[] leaderHostPort = leaderInstance.split("_");
               upstreamHost = leaderHostPort[0];
-              upstreamPort = leaderHostPort[1];
+              upstreamPort = Integer.parseInt(leaderHostPort[1]);
               LOG.error("Leader address differs from current upstream. Using leader " + upstreamHost + " as the upstream for " + dbName);
             }
 
