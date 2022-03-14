@@ -313,7 +313,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
 
         // Get the latest external view and state map
         LOG.error("[" + dbName + "] Getting external view");
-        view = admin.getResourceExternalView(cluster, resourceName);
+        view = Utils.getHelixExternalViewWithFixedRetry(admin, cluster, resourceName);
         LOG.error("[" + dbName + "] Got external view");
         stateMap = view.getStateMap(partitionName);
         // changeDBRoleAndUpStream(all_other_followers_or_offlines, "Follower", "my_ip_port")
@@ -387,7 +387,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
 
     public String getLeaderInstance(NotificationContext context) {
       HelixAdmin admin = context.getManager().getClusterManagmentTool();
-      ExternalView view = admin.getResourceExternalView(cluster, resourceName);
+      ExternalView view = Utils.getHelixExternalViewWithFixedRetry(admin, cluster, resourceName);
       Map<String, String> stateMap = view.getStateMap(partitionName);
       for (Map.Entry<String, String> instanceNameAndRole : stateMap.entrySet()) {
         if (instanceNameAndRole.getValue().equalsIgnoreCase("LEADER")) {
@@ -399,7 +399,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
 
     public Map<String, String> getLiveHostAndRole(NotificationContext context, String dbName) {
       HelixAdmin admin = context.getManager().getClusterManagmentTool();
-      ExternalView view = admin.getResourceExternalView(cluster, resourceName);
+      ExternalView view = Utils.getHelixExternalViewWithFixedRetry(admin, cluster, resourceName);
       Map<String, String> stateMap = view.getStateMap(partitionName);
 
       // find live replicas
@@ -663,7 +663,7 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
         // changeDBRoleAndUpStream(all_other_followers_or_offlines, "Follower",
         // "live_leader_or_follower")
         HelixAdmin admin = context.getManager().getClusterManagmentTool();
-        ExternalView view = admin.getResourceExternalView(cluster, resourceName);
+        ExternalView view = Utils.getHelixExternalViewWithFixedRetry(admin, cluster, resourceName);
         Map<String, String> stateMap = view.getStateMap(partitionName);
 
         // find upstream which is not me, and prefer leader
