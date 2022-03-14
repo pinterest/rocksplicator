@@ -68,9 +68,6 @@ DEFINE_uint64(replicator_timeout_ms, 5 * 1000,
               " waiting forever");
 
 DECLARE_int32(replicator_idle_iter_timeout_ms);
-DEFINE_bool(emit_stat_for_leader_behind,
-            false,
-            "Flag to control whether to emit a stat when the leader is behind the follower during a sync request.");
 DEFINE_string(replicator_zk_cluster, "", "Zookeeper cluster");
 DEFINE_string(replicator_helix_cluster, "", "Helix cluster");
 DEFINE_int32(replication_error_reset_upstream_percentage, 10,
@@ -386,7 +383,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
 
   // Inverse of predicate below: if requested sequence number is HIGHER than latest sequence number on leader, emit a stat)
   auto leaderSeqNum = db->db_wrapper_->LatestSequenceNumber();
-  if (FLAGS_emit_stat_for_leader_behind && leaderSeqNum < seq_no) {
+  if (leaderSeqNum < seq_no) {
     logMetric(kReplicatorLeaderSequenceNumbersBehind, seq_no - leaderSeqNum, db ->db_name_);
   }
 
