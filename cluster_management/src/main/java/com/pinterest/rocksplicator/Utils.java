@@ -80,13 +80,19 @@ public class Utils {
     // retry for maxRetries times with sleep in between
     final int maxRetries = 3;
     final int retryWaitSec = 1;
-    for (int retryCount = 0; retryCount < maxRetries; retryCount++) {
-      TimeUnit.SECONDS.sleep(retryWaitSec);
-      view = admin.getResourceExternalView(clusterName, resourceName);
-      if (view != null) {
-        return view;
+    try {
+      for (int retryCount = 1; retryCount <= maxRetries; retryCount++) {
+        TimeUnit.SECONDS.sleep(retryWaitSec * retryCount);
+        view = admin.getResourceExternalView(clusterName, resourceName);
+        if (view != null) {
+          return view;
+        }
       }
+    } catch (InterruptedException e) {
+      LOG.error("Interrupted when getting external view for resource " + resourceName, e);
+      return null;
     }
+    
     LOG.error("failed to obtain external view for resource {} in cluster {} after {} retries", resourceName, clusterName, maxRetries);
     return null;
   }
