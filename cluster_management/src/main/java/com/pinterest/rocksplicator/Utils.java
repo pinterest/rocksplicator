@@ -77,6 +77,8 @@ public class Utils {
       return view;
     }
 
+    LOG.error("Failed to get external view for " + resourceName + ", retry ...");
+
     // retry for maxRetries times with sleep in between
     final int maxRetries = 3;
     final int retryWaitSec = 1;
@@ -93,7 +95,7 @@ public class Utils {
       return null;
     }
 
-    LOG.error("failed to obtain external view for resource {} in cluster {} after {} retries", resourceName, clusterName, maxRetries);
+    LOG.error("Failed to obtain external view for resource {} in cluster {} after {} retries", resourceName, clusterName, maxRetries);
     return null;
   }
 
