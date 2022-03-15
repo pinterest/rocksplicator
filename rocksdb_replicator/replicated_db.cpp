@@ -454,8 +454,8 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
             // ref: https://github.com/facebook/rocksdb/blob/7ae4da924ad4df9ffc04ba4b3577d1aa7025f4aa/include/rocksdb/db.h#L1417
             // "If the sequence number is non existent, it returns an iterator at the first available seq_no after the requested seq_no"
             if (i == 0 && result.sequence != expected_seq_no) {
-              LOG(ERROR) << "Missing updates, expected sequence number: " << expected_seq_no
-                << ", got: " << response.updates[0].get_seq_no();
+              LOG(ERROR) << "Missing updates for " << db->db_name_ << ", expected sequence number: "
+                         << expected_seq_no << ", got: " << response.updates[0].get_seq_no();
               incCounter(kReplicatorGetUpdatesMissingSequence, 1, db->db_name_);
             }
 
