@@ -43,6 +43,8 @@ const std::string kReplicatorLeaderReset =
 
 const std::string kReplicatorGetUpdatesSinceErrors =
   "replicator_get_update_since_errors";
+const std::string kReplicatorGetUpdatesMissingSequence =
+  "replicator_get_update_missing_sequence";
 const std::string kReplicatorGetUpdatesSinceMs =
   "replicator_get_update_since_ms";
 const std::string kReplicatorReplyUpdatesSuccessLatency =
