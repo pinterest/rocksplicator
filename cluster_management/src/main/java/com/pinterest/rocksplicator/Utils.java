@@ -40,6 +40,8 @@ import com.pinterest.rocksdb_admin.thrift.SetDBOptionsRequest;
 import org.apache.curator.RetryLoop;
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.helix.model.Message;
+import org.apache.helix.HelixAdmin;
+import org.apache.helix.model.ExternalView;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.transport.TSocket;
@@ -52,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.TimeUnit;
 
 public class Utils {
 
@@ -59,6 +62,42 @@ public class Utils {
   static final String LOCAL_HOST_IP = "127.0.0.1";
   private static final String RESOURCE_INFO_META_SUFFIX = "resource_meta";
   private static final String RESOURCE_INFO_CONFIGS_SUFFIX = "resource_configs";
+
+  /**
+   * Obtain the Helix External View of a resource in a cluster.
+   * It performs a fixed number of retries to mitigate potential transient failure.
+   * @param admin Helix Admin client
+   * @param clusterName
+   * @param resourceName
+   * @return ExternalView, which will be null if failed
+   */
+  public static ExternalView getHelixExternalViewWithFixedRetry(HelixAdmin admin, String clusterName, String resourceName) {
+    ExternalView view = admin.getResourceExternalView(clusterName, resourceName);
+    if (view != null) {
+      return view;
+    }
+
+    LOG.error("Failed to get external view for " + resourceName + ", retry ...");
+
+    // retry for maxRetries times with sleep in between
+    final int maxRetries = 3;
+    final int retryWaitBaseSec = 1;
+    try {
+      for (int retryCount = 0; retryCount < maxRetries; retryCount++) {
+        TimeUnit.SECONDS.sleep(retryWaitBaseSec * (1 << retryCount));
+        view = admin.getResourceExternalView(clusterName, resourceName);
+        if (view != null) {
+          return view;
+        }
+      }
+    } catch (InterruptedException e) {
+      LOG.error("Interrupted when getting external view for resource " + resourceName, e);
+      return null;
+    }
+
+    LOG.error("Failed to obtain external view for resource {} in cluster {} after {} retries", resourceName, clusterName, maxRetries);
+    return null;
+  }
 
   /**
    * Build a thrift client to local adminPort

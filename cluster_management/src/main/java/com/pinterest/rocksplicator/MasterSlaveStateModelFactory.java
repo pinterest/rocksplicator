@@ -269,7 +269,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
 
         // Get the latest external view and state map
         LOG.error("[" + dbName + "] Getting external view");
-        view = admin.getResourceExternalView(cluster, resourceName);
+        view = Utils.getHelixExternalViewWithFixedRetry(admin, cluster, resourceName);
         LOG.error("[" + dbName + "] Got external view");
         stateMap = view.getStateMap(partitionName);
         // changeDBRoleAndUpStream(all_other_slaves_or_offlines, "Slave", "my_ip_port")
@@ -341,7 +341,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
 
     public Map<String, String> getLiveHostAndRole(NotificationContext context, String dbName) {
       HelixAdmin admin = context.getManager().getClusterManagmentTool();
-      ExternalView view = admin.getResourceExternalView(cluster, resourceName);
+      ExternalView view = Utils.getHelixExternalViewWithFixedRetry(admin, cluster, resourceName);
       Map<String, String> stateMap = view.getStateMap(partitionName);
 
       // find live replicas
@@ -560,7 +560,7 @@ public class MasterSlaveStateModelFactory extends StateModelFactory<StateModel> 
       try (Locker locker = new Locker(partitionMutex)) {
         // changeDBRoleAndUpStream(all_other_slaves_or_offlines, "Slave", "live_master_or_slave")
         HelixAdmin admin = context.getManager().getClusterManagmentTool();
-        ExternalView view = admin.getResourceExternalView(cluster, resourceName);
+        ExternalView view = Utils.getHelixExternalViewWithFixedRetry(admin, cluster, resourceName);
         Map<String, String> stateMap = view.getStateMap(partitionName);
 
         // find upstream which is not me, and prefer master
