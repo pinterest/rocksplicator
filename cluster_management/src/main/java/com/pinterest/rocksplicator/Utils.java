@@ -81,10 +81,10 @@ public class Utils {
 
     // retry for maxRetries times with sleep in between
     final int maxRetries = 3;
-    final int retryWaitSec = 1;
+    final int retryWaitBaseSec = 1;
     try {
-      for (int retryCount = 1; retryCount <= maxRetries; retryCount++) {
-        TimeUnit.SECONDS.sleep(retryWaitSec * retryCount);
+      for (int retryCount = 0; retryCount < maxRetries; retryCount++) {
+        TimeUnit.SECONDS.sleep(retryWaitBaseSec * (1 << retryCount));
         view = admin.getResourceExternalView(clusterName, resourceName);
         if (view != null) {
           return view;
