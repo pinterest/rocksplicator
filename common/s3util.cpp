@@ -32,6 +32,8 @@
 #include <aws/s3/model/Object.h>
 #include <aws/s3/model/PutObjectRequest.h>
 
+#include <folly/Format.h>
+
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
@@ -252,7 +254,11 @@ void S3Util::listObjectsHelper(const string& prefix, const string& delimiter,
     }
   } else {
     if (error_message != nullptr) {
-      *error_message = listObjectResult.GetError().GetMessage();
+      *error_message = folly::sformat("ListObjectsRequest failed with ResponseCode: {}, ExceptionName: {}, ErrorMessage: {}, ShouldRetry: {}.", 
+        static_cast<int32_t>(listObjectResult.GetError().GetResponseCode()),
+        listObjectResult.GetError().GetExceptionName(), 
+        listObjectResult.GetError().GetMessage(),
+        listObjectResult.GetError().ShouldRetry());
     }
   }
 }
