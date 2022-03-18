@@ -26,7 +26,7 @@ CDCApplicationDB::CDCApplicationDB(const std::string& db_name,
       db_(std::move(db_wrapper)),
       upstream_addr_(std::move(upstream_addr)),
       replicated_db_(nullptr) {
-  if (role == replicator::ReplicaRole::FOLLOWER) {
+  if (role == replicator::ReplicaRole::OBSERVER) {
     CHECK(upstream_addr_);
     auto ret = replicator::RocksDBReplicator::instance()->addDB(
         db_name_,
@@ -40,7 +40,7 @@ CDCApplicationDB::CDCApplicationDB(const std::string& db_name,
       throw ret;
     }
   }
-  // SLAVE should be the only role we use for CDC
+  // OBSERVER should be the only role we use for CDC
 }
 
 CDCApplicationDB::~CDCApplicationDB() {

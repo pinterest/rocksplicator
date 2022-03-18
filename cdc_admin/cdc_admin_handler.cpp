@@ -116,7 +116,7 @@ void CDCAdminHandler::async_tm_addObserver(
 
   // add the db to db_manager
   std::string err_msg;
-  replicator::ReplicaRole role = replicator::ReplicaRole::FOLLOWER;
+  replicator::ReplicaRole role = replicator::ReplicaRole::OBSERVER;
   const std::string replicator_zk_cluster =
       request->__isset.replicator_zk_cluster ? request->replicator_zk_cluster : std::string("");
   const std::string replicator_helix_cluster = request->__isset.replicator_helix_cluster
