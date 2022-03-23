@@ -59,6 +59,8 @@ extern const std::string kReplicatorPullFromNonLeader;
 extern const std::string kReplicatorPullLatency;
 extern const std::string kReplicatorHandleResponseFailure;
 extern const std::string kReplicatorResetUpstreamOnNoUpdates;
+extern const std::string kReplicatorLaggingBehindUpstream;
+
 
 // add value to metric_name. If db_name is not empty, add value to the per db
 // metric also

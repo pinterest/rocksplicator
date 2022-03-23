@@ -88,6 +88,8 @@ DEFINE_bool(reset_upstream_on_empty_updates_from_non_leader, false,
             "Flag to control whether to reset the upstream address when empty updates are provided from a non-leader upstream");
 DECLARE_int32(rocksdb_replicator_port);
 
+DEFINE_uint64(replicator_sequence_number_lag_threshold, 500, "The threshold of replication sequence number lagging behind the upstream");
+
 
 namespace {
 
@@ -176,7 +178,11 @@ std::string RocksDBReplicator::ReplicatedDB::Introspect() {
   ss << "  ReplicaRole: " << role_str_ << std::endl;
   ss << "  upstream_addr: " << upstream_addr_str << std::endl;
   ss << "  cur_seq_no: " << cur_seq_no << std::endl;
+<<<<<<< HEAD
   ss << "  current_replicator_timeout_ms_: " << current_replicator_timeout_ms_.load() << std::endl;
+=======
+  ss << "  upstream_latest_seq_no: " << upstream_latest_seq_no_.load() << std::endl;
+>>>>>>> da7d36e... rocksdb_replicator: check upstream latest seq number for tracking replication lag
   // TODO(jz): add max_seq_no_acked_
   return ss.str();
 }
@@ -197,6 +203,7 @@ RocksDBReplicator::ReplicatedDB::ReplicatedDB(
     , role_(role)
     , role_str_(ReplicaRoleString(role))
     , upstream_addr_(upstream_addr)
+    , upstream_latest_seq_no_(0)
     , client_pool_(client_pool)
     , replicator_zk_cluster_(replicator_zk_cluster)
     , replicator_helix_cluster_(replicator_helix_cluster)
@@ -363,8 +370,12 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
         } else {
           incCounter(kReplicatorPullRequestsSuccess, 1, db->db_name_);
           auto& response = t.value();
+          if (response.__isset.upstream_latest_seq_no && response.upstream_latest_seq_no > 0) {
+            db->upstream_latest_seq_no_.store(response.upstream_latest_seq_no);
+          }
           uint64_t write_bytes = 0;
           const auto now = GetCurrentTimeMs();
+          auto last_update_seq_no = 0;
           for (auto& update : response.updates) {
             if (update.timestamp != 0) {
               uint64_t then = update.timestamp;
@@ -379,6 +390,16 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
               delay_next_pull = true;
               break;
             }
+            if (update.__isset.seq_no && update.seq_no > last_update_seq_no) {
+              last_update_seq_no = update.seq_no;
+            }
+          }
+          if (last_update_seq_no == 0) {
+            last_update_seq_no = db->db_wrapper_->LatestSequenceNumber();
+          }
+          if (db->upstream_latest_seq_no_.load() >  last_update_seq_no 
+            && db->upstream_latest_seq_no_.load() - last_update_seq_no > FLAGS_replicator_sequence_number_lag_threshold) {
+            incCounter(kReplicatorLaggingBehindUpstream, 1, db->db_name_);
           }
 
           if (response.__isset.role && response.role != ReplicaRole::LEADER) {
@@ -530,6 +551,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
               update.timestamp = 0;
               LOG(WARNING) << "Failed to extract timestamp for " << db->db_name_;
             }
+            response.set_upstream_latest_seq_no(int64_t(db->db_wrapper_->LatestSequenceNumber()));
             response.updates.emplace_back(std::move(update));
           }
 
