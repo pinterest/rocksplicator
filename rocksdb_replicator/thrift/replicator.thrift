@@ -65,6 +65,10 @@ struct ReplicateResponse {
   1: required list<Update> updates,
   // role is the replica role of the upstream that provides the updates.
   2: optional ReplicaRole role;
+  // upstream_latest_seq_no is the latest sequence number the upstream current holds. 
+  // Note that this sequence number may not be part of the updates in the response,
+  // but rather an indication of the upstream's latest status.  
+  3: optional i64 upstream_latest_seq_no;
 }
 
 enum ErrorCode {

@@ -61,7 +61,8 @@ test_db:\n\
   name: test_db\n\
   ReplicaRole: LEADER\n\
   upstream_addr: unknown_addr\n\
-  cur_seq_no: 0\n\n";
+  cur_seq_no: 0\n\
+  upstream_latest_seq_no: 0\n\n";
   EXPECT_EQ(db_manager.Introspect(), std::string(test_db_state));
 
   auto ret_rocksdb = db_manager.removeDB("test_db", &error_message);

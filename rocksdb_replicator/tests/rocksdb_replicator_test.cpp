@@ -111,13 +111,16 @@ TEST(RocksDBReplicatorTest, Basics) {
   name: master\n\
   ReplicaRole: LEADER\n\
   upstream_addr: unknown_addr\n\
-  cur_seq_no: 2\n";
+  cur_seq_no: 2\n\
+  upstream_latest_seq_no: 0\n";
   const char* expected_slave_state =
 "ReplicatedDB:\n\
   name: slave\n\
   ReplicaRole: FOLLOWER\n\
   upstream_addr: 127.0.0.1\n\
-  cur_seq_no: 0\n";
+  cur_seq_no: 0\n\
+  upstream_latest_seq_no: 0\n";
+  
   EXPECT_EQ(replicated_db_master->Introspect(), std::string(expected_master_state));
   EXPECT_EQ(replicated_db_slave->Introspect(), std::string(expected_slave_state));
 
