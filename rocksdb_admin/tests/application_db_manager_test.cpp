@@ -61,6 +61,7 @@ test_db:\n\
   name: test_db\n\
   ReplicaRole: LEADER\n\
   upstream_addr: uninitialized_addr\n\
+<<<<<<< HEAD
   cur_seq_no: 0\n\
 <<<<<<< HEAD
   current_replicator_timeout_ms_: 2000\n\n";
@@ -68,6 +69,10 @@ test_db:\n\
 =======
   upstream_latest_seq_no: 0\n\n";
 >>>>>>> da7d36e... rocksdb_replicator: check upstream latest seq number for tracking replication lag
+=======
+  cur_seq_no: 0\n\n";
+//  upstream_latest_seq_no: 0\n\n";
+>>>>>>> 8349697... simplify
   EXPECT_EQ(db_manager.Introspect(), std::string(test_db_state));
 
   auto ret_rocksdb = db_manager.removeDB("test_db", &error_message);

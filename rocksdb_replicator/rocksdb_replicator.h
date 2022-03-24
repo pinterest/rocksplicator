@@ -53,6 +53,7 @@ namespace wangle {
 namespace replicator {
 
 const uint32_t kMinReplTimeoutMs = 1;
+const uint32_t kReplicatorSeqNumLagThreshold = 500; // The threshold of replication sequence number lagging behind the upstream, TODO: based on max_updates
 
 /*
  * An extractor to extract update time from an update
@@ -135,7 +136,6 @@ class RocksDBReplicator {
     const ReplicaRole role_;
     const char* role_str_;
     folly::SocketAddress upstream_addr_;
-    std::atomic<uint64_t> upstream_latest_seq_no_ {0};
     uint32_t pullFromUpstreamNoUpdates_ {0};
     uint32_t resetUpstreamAttempts_ {0}; // currently only used for unit tests
     common::ThriftClientPool<ReplicatorAsyncClient>* const client_pool_;
