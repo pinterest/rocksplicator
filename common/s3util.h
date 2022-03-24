@@ -285,6 +285,11 @@ class S3Util {
                          const string& marker, vector<string>* objects,
                          string* next_marker, string* error_message);
 
+  void listObjectsV2Helper(const string& prefix, const string& delimiter,
+                         const string& marker, vector<string>* objects,
+                         string* next_marker, string* error_message);
+
+
   // When there is no other S3Util instances, call Aws::InitAPI() to initialize
   // aws environment.
   static void TryAwsInitAPI(const SDKOptions& options) {

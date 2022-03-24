@@ -28,6 +28,7 @@
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/HeadObjectRequest.h>
 #include <aws/s3/model/ListObjectsRequest.h>
+#include <aws/s3/model/ListObjectsV2Request.h>
 #include <aws/s3/model/ListObjectsResult.h>
 #include <aws/s3/model/Object.h>
 #include <aws/s3/model/PutObjectRequest.h>
@@ -54,6 +55,7 @@ using Aws::S3::Model::CopyObjectRequest;
 using Aws::S3::Model::DeleteObjectRequest;
 using Aws::S3::Model::GetObjectRequest;
 using Aws::S3::Model::ListObjectsRequest;
+using Aws::S3::Model::ListObjectsV2Request;
 using Aws::S3::Model::HeadObjectRequest;
 using Aws::S3::Model::PutObjectRequest;
 
@@ -61,6 +63,7 @@ DEFINE_int32(direct_io_buffer_n_pages, 1,
              "Number of pages we need to set to direct io buffer");
 DEFINE_bool(disable_s3_download_stream_buffer, false,
             "disable the stream buffer used by s3 downloading");
+DEFINE_bool(use_list_objects_v2, false, "use ListObjectsV2 instead of ListObjects in S3Client.");
 
 
 namespace {
@@ -214,6 +217,59 @@ SdkGetObjectResponse S3Util::sdkGetObject(const string& key,
   return getObjectResult;
 }
 
+
+void S3Util::listObjectsV2Helper(const string& prefix, const string& delimiter,
+                               const string& marker, vector<string>* objects,
+                               string* next_marker, string* error_message) {
+  ListObjectsV2Request listObjectRequest;
+  listObjectRequest.SetBucket(bucket_);
+  listObjectRequest.SetPrefix(prefix);
+  if (!delimiter.empty()) {
+    listObjectRequest.SetDelimiter(delimiter);
+  }
+  if (!marker.empty()) {
+    listObjectRequest.SetContinuationToken(marker);
+  }
+  auto listObjectResult = s3Client->ListObjectsV2(listObjectRequest);
+  if (listObjectResult.IsSuccess()) {
+    if (!delimiter.empty()) {
+      Aws::Vector<Aws::S3::Model::CommonPrefix> contents =
+        listObjectResult.GetResult().GetCommonPrefixes();
+      for (const auto& object : contents) {
+        objects->push_back(object.GetPrefix());
+      }
+    } else {
+      Aws::Vector<Aws::S3::Model::Object> contents =
+        listObjectResult.GetResult().GetContents();
+      for (const auto& object : contents) {
+        objects->push_back(object.GetKey());
+      }
+    }
+    if (listObjectResult.GetResult().GetIsTruncated() &&
+            next_marker != nullptr) {
+      if (listObjectResult.GetResult().GetNextContinuationToken().empty()) {
+        // if the response is truncated but NextMarker is not set,
+        // last object of response can be used as marker.
+        *next_marker = objects->back();
+      } else {
+        *next_marker = listObjectResult.GetResult().GetNextContinuationToken();
+      }
+    }
+  } else {
+    if (error_message != nullptr) {
+      Stats::get()->Incr(folly::sformat("s3_list_objects_helper_error response_code={} exception_name={} should_retry={}", 
+        static_cast<int32_t>(listObjectResult.GetError().GetResponseCode()),
+        listObjectResult.GetError().GetExceptionName(), 
+        listObjectResult.GetError().ShouldRetry()));
+      *error_message = folly::sformat("ListObjectsRequest failed with ResponseCode: {}, ExceptionName: {}, ErrorMessage: {}, ShouldRetry: {}.", 
+        static_cast<int32_t>(listObjectResult.GetError().GetResponseCode()),
+        listObjectResult.GetError().GetExceptionName(), 
+        listObjectResult.GetError().GetMessage(),
+        listObjectResult.GetError().ShouldRetry());
+    }
+  }
+}
+
 void S3Util::listObjectsHelper(const string& prefix, const string& delimiter,
                                const string& marker, vector<string>* objects,
                                string* next_marker, string* error_message) {
@@ -234,6 +290,7 @@ void S3Util::listObjectsHelper(const string& prefix, const string& delimiter,
       for (const auto& object : contents) {
         objects->push_back(object.GetPrefix());
       }
+
     } else {
       Aws::Vector<Aws::S3::Model::Object> contents =
         listObjectResult.GetResult().GetContents();
@@ -241,7 +298,6 @@ void S3Util::listObjectsHelper(const string& prefix, const string& delimiter,
         objects->push_back(object.GetKey());
       }
     }
-
     if (listObjectResult.GetResult().GetIsTruncated() &&
             next_marker != nullptr) {
       if (listObjectResult.GetResult().GetNextMarker().empty()) {
@@ -300,7 +356,11 @@ ListObjectsResponseV2 S3Util::listAllObjects(const string& prefix, const string&
   string marker;
   string next_marker;
   do {
-    listObjectsHelper(prefix, delimiter, marker, &objects, &next_marker, &error_message);
+    if(FLAGS_use_list_objects_v2) {
+      listObjectsV2Helper(prefix, delimiter, marker, &objects, &next_marker, &error_message);
+    } else {
+      listObjectsHelper(prefix, delimiter, marker, &objects, &next_marker, &error_message);
+    }
     if (!error_message.empty()) {
       break;
     }
