@@ -254,6 +254,10 @@ void S3Util::listObjectsHelper(const string& prefix, const string& delimiter,
     }
   } else {
     if (error_message != nullptr) {
+      Stats::get()->Incr(folly::sformat("s3_list_objects_helper_error response_code={} exception_name={} should_retry={}", 
+        static_cast<int32_t>(listObjectResult.GetError().GetResponseCode()),
+        listObjectResult.GetError().GetExceptionName(), 
+        listObjectResult.GetError().ShouldRetry()));
       *error_message = folly::sformat("ListObjectsRequest failed with ResponseCode: {}, ExceptionName: {}, ErrorMessage: {}, ShouldRetry: {}.", 
         static_cast<int32_t>(listObjectResult.GetError().GetResponseCode()),
         listObjectResult.GetError().GetExceptionName(), 
