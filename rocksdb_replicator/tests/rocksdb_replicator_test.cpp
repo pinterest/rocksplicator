@@ -110,7 +110,7 @@ TEST(RocksDBReplicatorTest, Basics) {
 "ReplicatedDB:\n\
   name: master\n\
   ReplicaRole: LEADER\n\
-  upstream_addr: unknown_addr\n\
+  upstream_addr: uninitialized_addr\n\
   cur_seq_no: 2\n";
   const char* expected_slave_state =
 "ReplicatedDB:\n\

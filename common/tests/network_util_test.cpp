@@ -8,7 +8,7 @@ namespace common {
 
 TEST(NetworkUtilTest, GetNetworkAddressStr) {
   folly::SocketAddress addr;
-  EXPECT_EQ(common::getNetworkAddressStr(addr), "unknown_addr");
+  EXPECT_EQ(common::getNetworkAddressStr(addr), "uninitialized_addr");
 
   EXPECT_THROW(addr.setFromIpPort("bad-ip", 1234), std::runtime_error);
   EXPECT_EQ(common::getNetworkAddressStr(addr), "unknown_addr");
