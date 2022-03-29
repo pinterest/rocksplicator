@@ -281,6 +281,7 @@ class S3Util {
     uri_ = ss.str();
   }
 
+// Deprecated, use listObjectsHelperV2 whenever possible
   void listObjectsHelper(const string& prefix, const string& delimiter,
                          const string& marker, vector<string>* objects,
                          string* next_marker, string* error_message);
