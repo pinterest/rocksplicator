@@ -28,7 +28,8 @@ const std::string& getLocalIPAddress();
 
 /**
  * Get a string representation of the provide socket address if it is IPv4 or IPv6,
- * otherwise "unknown_addr" is returned.
+ * return "uninitialized_addr" if an empty address is provided;
+ * return "unknown_addr" if an error is encountered parsing the address.
  */
 std::string getNetworkAddressStr(const folly::SocketAddress&) noexcept;
 

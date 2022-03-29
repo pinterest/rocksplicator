@@ -52,6 +52,10 @@ const std::string& getLocalIPAddress() {
 }
 
 std::string getNetworkAddressStr(const folly::SocketAddress& addr) noexcept {
+  if (!addr.isInitialized()) {
+    return "uninitialized_addr";
+  }
+  
   std::string add_str = "unknown_addr";
   try {
     add_str = addr.getAddressStr();
