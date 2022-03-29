@@ -290,7 +290,6 @@ void S3Util::listObjectsHelper(const string& prefix, const string& delimiter,
       for (const auto& object : contents) {
         objects->push_back(object.GetPrefix());
       }
-
     } else {
       Aws::Vector<Aws::S3::Model::Object> contents =
         listObjectResult.GetResult().GetContents();
