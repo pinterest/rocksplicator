@@ -63,7 +63,7 @@ DEFINE_int32(direct_io_buffer_n_pages, 1,
              "Number of pages we need to set to direct io buffer");
 DEFINE_bool(disable_s3_download_stream_buffer, false,
             "disable the stream buffer used by s3 downloading");
-DEFINE_bool(use_list_objects_v2, false, "use ListObjectsV2 instead of ListObjects in S3Client.");
+DEFINE_bool(use_s3_list_objects_v2, false, "use ListObjectsV2 instead of ListObjects in S3Client.");
 
 
 namespace {
@@ -298,6 +298,7 @@ void S3Util::listObjectsHelper(const string& prefix, const string& delimiter,
         objects->push_back(object.GetKey());
       }
     }
+
     if (listObjectResult.GetResult().GetIsTruncated() &&
             next_marker != nullptr) {
       if (listObjectResult.GetResult().GetNextMarker().empty()) {
@@ -356,7 +357,7 @@ ListObjectsResponseV2 S3Util::listAllObjects(const string& prefix, const string&
   string marker;
   string next_marker;
   do {
-    if(FLAGS_use_list_objects_v2) {
+    if(FLAGS_use_s3_list_objects_v2) {
       listObjectsV2Helper(prefix, delimiter, marker, &objects, &next_marker, &error_message);
     } else {
       listObjectsHelper(prefix, delimiter, marker, &objects, &next_marker, &error_message);
