@@ -136,7 +136,7 @@ public class ClientShardMapAgent {
   public static void main(String[] args) throws Exception {
     org.apache.log4j.Logger.getRootLogger().setLevel(Level.INFO);
     BasicConfigurator.configure(new ConsoleAppender(
-        new PatternLayout("%d{HH:mm:ss.SSS} [%t] %-5p %30.30c - %m%n")
+        new PatternLayout("%d{dd MMM yyyy HH:mm:ss.SSS} [%t] %-5p %30.30c - %m%n")
     ));
     CommandLine cmd = processCommandLineArgs(args);
 
