@@ -123,7 +123,7 @@ ReturnCode RocksDBReplicator::addDB(const std::string& db_name,
     *replicated_db = new_db.get();
   }
 
-  if (role == ReplicaRole::FOLLOWER) {
+  if (role == ReplicaRole::FOLLOWER || role == ReplicaRole::OBSERVER) {
     new_db->pullFromUpstream();
   }
 

@@ -36,6 +36,9 @@ struct ReplicateRequest {
   # uppper limit set by client side.
   # A value of 0 means no limit
   4: required i32 max_updates,
+
+  # role is the replica role of the downstream host requesting the updates
+  5: optional ReplicaRole role;
 }
 
 typedef binary (cpp.type = "folly::IOBuf") IOBuf
@@ -56,7 +59,8 @@ struct Update {
 enum ReplicaRole {
   NOOP = 0, // no replication needed
   FOLLOWER = 1,
-  LEADER = 2
+  LEADER = 2,
+  OBSERVER = 3 // replicates but should not be counted as a follower ack
 }
 
 struct ReplicateResponse {

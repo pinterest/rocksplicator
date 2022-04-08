@@ -93,7 +93,7 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
     const rocksdb::WriteOptions& options,
     rocksdb::WriteBatch* updates,
     rocksdb::SequenceNumber* seq_no) {
-  if (role_ == ReplicaRole::FOLLOWER) {
+  if (role_ == ReplicaRole::FOLLOWER || role_ == ReplicaRole::OBSERVER) {
     throw ReturnCode::WRITE_TO_SLAVE;
   }
 
@@ -196,7 +196,7 @@ RocksDBReplicator::ReplicatedDB::ReplicatedDB(
     , write_options_()
     , cached_iters_()
     , cached_iters_mutex_() {
-  if (role == ReplicaRole::FOLLOWER) {
+  if (role == ReplicaRole::FOLLOWER || role == ReplicaRole::OBSERVER) {
     client_ = client_pool_->getClient(upstream_addr);
   }
 
@@ -254,7 +254,7 @@ void RocksDBReplicator::ReplicatedDB::resetUpstream() {
 }
 
 void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
-  CHECK(role_ == ReplicaRole::FOLLOWER);
+  CHECK(role_ == ReplicaRole::FOLLOWER || role_ == ReplicaRole::OBSERVER);
   ReplicateRequest req;
   req.seq_no = db_wrapper_->LatestSequenceNumber();
   req.db_name = db_name_;

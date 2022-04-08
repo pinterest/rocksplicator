@@ -24,6 +24,8 @@ const char* ReplicaRoleString(ReplicaRole role) {
         return "NOOP";
     case ReplicaRole::FOLLOWER:
         return "FOLLOWER";
+    case ReplicaRole::OBSERVER:
+        return "OBSERVER";
     case ReplicaRole::LEADER:
         return "LEADER" ;
 

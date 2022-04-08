@@ -20,6 +20,7 @@ TEST(ReplicatorUtilsTest, ReplicaRoleString) {
   std::unordered_map<replicator::ReplicaRole, std::string> testscases = {
       {replicator::ReplicaRole::LEADER, "LEADER"},
       {replicator::ReplicaRole::FOLLOWER, "FOLLOWER"},
+      {replicator::ReplicaRole::OBSERVER, "OBSERVER"},
       {replicator::ReplicaRole::NOOP, "NOOP"},
   };
   for (auto p : testscases) {
