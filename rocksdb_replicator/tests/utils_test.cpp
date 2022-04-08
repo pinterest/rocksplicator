@@ -27,6 +27,20 @@ TEST(ReplicatorUtilsTest, ReplicaRoleString) {
   }
 }
 
+TEST(ReplicatorUtilsTest, ReturnCodeString) {
+  std::unordered_map<replicator::ReturnCode, std::string> testscases = {
+      {replicator::ReturnCode::OK, "OK"},
+      {replicator::ReturnCode::DB_NOT_FOUND, "DB_NOT_FOUND"},
+      {replicator::ReturnCode::DB_PRE_EXIST, "DB_PRE_EXIST"},
+      {replicator::ReturnCode::WRITE_TO_SLAVE, "WRITE_TO_SLAVE"},
+      {replicator::ReturnCode::WRITE_ERROR, "WRITE_ERROR"},
+      {replicator::ReturnCode::WAIT_SLAVE_TIMEOUT, "WAIT_SLAVE_TIMEOUT"},
+  };
+  for (auto p : testscases) {
+      EXPECT_EQ(p.second, replicator::ReturnCodeString(p.first));
+  }
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

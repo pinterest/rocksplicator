@@ -15,6 +15,7 @@
 #pragma once
 
 #include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
+#include "rocksdb_replicator/rocksdb_replicator.h"
 
 namespace replicator {  // namespace replicator
 
@@ -29,6 +30,26 @@ const char* ReplicaRoleString(ReplicaRole role) {
 
     default:
         return "__unknown_role__";
+  }
+}
+
+const char* ReturnCodeString(ReturnCode code) {
+  switch(code) {
+    case ReturnCode::OK:
+        return "OK";
+    case ReturnCode::DB_NOT_FOUND:
+        return "DB_NOT_FOUND";
+    case ReturnCode::DB_PRE_EXIST:
+        return "DB_PRE_EXIST" ;
+    case ReturnCode::WRITE_TO_SLAVE:
+        return "WRITE_TO_SLAVE" ;
+    case ReturnCode::WRITE_ERROR:
+        return "WRITE_ERROR" ;
+    case ReturnCode::WAIT_SLAVE_TIMEOUT:
+        return "WAIT_SLAVE_TIMEOUT" ;
+
+    default:
+        return "__unknown_code__";
   }
 }
 
