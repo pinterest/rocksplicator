@@ -291,15 +291,13 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
           PartitionState lastState = stateManager.getState();
           if (!lastState.isValid()) {
             LOG.error("Invalid last state [part: " + partitionName + "] State:" + lastState.toString());
-          } else {
-            double tolerance = 0.5; 
-            if (localSeq >= (tolerance * lastState.seqNum)) { // FIXME(KV-5087): it seems this is never true since localSeq <= 0
-              LOG.error(String.format("OK [last.seq:%d curr.seq:%d]", lastState.seqNum, localSeq));
-            } else {
-              String errorString = String.format("Cannot Transition [last.seq:%d curr.seq:%d]", lastState.seqNum, localSeq);
-              LOG.error(errorString);
-              throw new RuntimeException(errorString);
-            }
+          } else if (lastState.seqNum > 0) {
+            // At this point, the leader replica doesn't have any updates, but the zk state shows the shard has historical updates;
+            // To avoid electing a new leader with no data when the old 3 nodes of the shard are currently down, 
+            // it's safer to error out, in case any of the old 3 nodes come back up.
+            String errorString = String.format("Cannot Transition [last.seq:%d curr.seq:%d]", lastState.seqNum, localSeq);
+            LOG.error(errorString);
+            throw new RuntimeException(errorString);
           }
         }
 
