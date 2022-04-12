@@ -61,6 +61,8 @@ const std::string kReplicatorWriteWaitTimedOut =
 const std::string kReplicatorWriteToLeaderMs = "replicator_write_to_leader_ms";
 const std::string kReplicatorWriteSuccessResponseTime = "replicator_write_success_response_time";
 const std::string kReplicatorWriteFailureResponseTime = "replicator_write_failure_response_time";
+const std::string kReplicatorWriteTwoAckDegraded = "replicator_write_two_ack_degraded";
+const std::string kReplicatorWriteTwoAckRecovered = "replicator_write_two_ack_recovered";
 
 const std::string kReplicatorLeaderSequenceNumbersBehind = "replicator_leader_sequence_numbers_behind";
 const std::string kReplicatorPullRequests = "replicator_pull_requests";
