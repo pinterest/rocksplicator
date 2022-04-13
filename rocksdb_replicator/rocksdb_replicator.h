@@ -53,6 +53,7 @@ namespace wangle {
 namespace replicator {
 
 const uint32_t kMinReplTimeoutMs = 1;
+const uint32_t kNumReplTimeoutsBeforeDegradation = 100;
 
 /*
  * An extractor to extract update time from an update

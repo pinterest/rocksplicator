@@ -87,7 +87,6 @@ DECLARE_int32(rocksdb_replicator_port);
 
 namespace {
 
-const uint32_t kNumReplTimeoutsBeforeDegradation = 100;
 
 uint64_t GetCurrentTimeMs() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
