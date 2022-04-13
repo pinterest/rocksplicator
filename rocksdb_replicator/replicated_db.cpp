@@ -382,6 +382,7 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
           }
           auto last_update_seq_no = db->db_wrapper_->LatestSequenceNumber();
           auto upstream_latest_seq_no = response.__isset.upstream_latest_seq_no? response.upstream_latest_seq_no : 0;
+          db->upstream_latest_seq_no_.store(upstream_latest_seq_no);
           if (upstream_latest_seq_no > 0 && upstream_latest_seq_no - last_update_seq_no > kReplicatorSeqNumLagThreshold) {
             incCounter(kReplicatorLaggingBehindUpstream, 1, db->db_name_);
           }
