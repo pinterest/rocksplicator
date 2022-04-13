@@ -53,7 +53,6 @@ namespace wangle {
 namespace replicator {
 
 const uint32_t kMinReplTimeoutMs = 1;
-const uint32_t kNumReplTimeoutsBeforeDegradation = 100;
 
 /*
  * An extractor to extract update time from an update
@@ -147,8 +146,8 @@ class RocksDBReplicator {
                 uint64_t>> cached_iters_;
     std::mutex cached_iters_mutex_;
     detail::MaxNumberBox max_seq_no_acked_;
-    uint32_t current_replicator_timeout_ms_ {kMinReplTimeoutMs};
-    uint32_t numConsecutiveReplTimeout_ {0};
+    std::atomic<uint32_t> current_replicator_timeout_ms_ {kMinReplTimeoutMs};
+    std::atomic<uint32_t> numConsecutiveReplTimeout_ {0};
     std::string replicator_zk_cluster_;
     std::string replicator_helix_cluster_;
 

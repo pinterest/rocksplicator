@@ -32,7 +32,6 @@ using replicator::ReplicaRole;
 using replicator::ReturnCode;
 using replicator::ReplicaRole;
 using replicator::RocksDBReplicator;
-using replicator::kNumReplTimeoutsBeforeDegradation;
 using rocksdb::DB;
 using rocksdb::Options;
 using rocksdb::ReadOptions;
@@ -57,6 +56,7 @@ DECLARE_int32(rocksdb_replicator_port);
 DECLARE_int32(replicator_replication_mode);
 DECLARE_uint64(replicator_timeout_ms);
 DECLARE_uint64(replicator_timeout_degraded_ms);
+DECLARE_uint64(replicator_consecutive_ack_timeout_before_degradation);
 
 shared_ptr<DB> cleanAndOpenDB(const string& path) {
   EXPECT_EQ(system(("rm -rf " + path).c_str()), 0);
@@ -107,13 +107,15 @@ TEST(RocksDBReplicatorTest, Basics) {
   name: master\n\
   ReplicaRole: LEADER\n\
   upstream_addr: uninitialized_addr\n\
-  cur_seq_no: 2\n";
+  cur_seq_no: 2\n\
+  current_replicator_timeout_ms_: 2000\n";
   const char* expected_slave_state =
 "ReplicatedDB:\n\
   name: slave\n\
   ReplicaRole: FOLLOWER\n\
   upstream_addr: 127.0.0.1\n\
-  cur_seq_no: 0\n";
+  cur_seq_no: 0\n\
+  current_replicator_timeout_ms_: 2000\n";
   EXPECT_EQ(replicated_db_master->Introspect(), std::string(expected_master_state));
   EXPECT_EQ(replicated_db_slave->Introspect(), std::string(expected_slave_state));
 
@@ -495,31 +497,46 @@ TEST(RocksDBReplicatorTest, 1_master_1_slave_replication_mode_2) {
 
   FLAGS_replicator_timeout_ms = 100;
   FLAGS_replicator_timeout_degraded_ms = 5;
+  FLAGS_replicator_consecutive_ack_timeout_before_degradation = 30;
 
-  // setup a shard with 1 master and 1 slave
+  // setup shard1 with 1 master and 1 slave
   int16_t master_port = 9092;
-  int16_t slave_port = 9093;
+  int16_t slave_port_1 = 9093;
+  int16_t slave_port_2 = 9094;
   Host master(master_port);
-  Host slave(slave_port);
+  Host slave_shard1(slave_port_1);
+  Host slave_shard2(slave_port_2);
 
-  auto db_master = cleanAndOpenDB("/tmp/db_master");
-  auto db_slave = cleanAndOpenDB("/tmp/db_slave");
+  auto db_master_shard1 = cleanAndOpenDB("/tmp/db_master_shard1");
+  auto db_master_shard2 = cleanAndOpenDB("/tmp/db_master_shard2");
+  auto db_slave_shard1 = cleanAndOpenDB("/tmp/db_slave_shard1");
+  auto db_slave_shard2 = cleanAndOpenDB("/tmp/db_slave_shard2");
 
-  RocksDBReplicator::ReplicatedDB* replicated_db_master;
-  RocksDBReplicator::ReplicatedDB* replicated_db_slave;
+  RocksDBReplicator::ReplicatedDB* replicated_db_master_shard1;
+  RocksDBReplicator::ReplicatedDB* replicated_db_master_shard2;
+  RocksDBReplicator::ReplicatedDB* replicated_db_slave_shard1;
+  RocksDBReplicator::ReplicatedDB* replicated_db_slave_shard2;
 
-  EXPECT_EQ(master.replicator_->addDB("shard1", db_master, ReplicaRole::LEADER, folly::SocketAddress(),
-                              &replicated_db_master),
+  EXPECT_EQ(master.replicator_->addDB("shard1", db_master_shard1, ReplicaRole::LEADER, folly::SocketAddress(),
+                              &replicated_db_master_shard1),
+            ReturnCode::OK);
+  EXPECT_EQ(master.replicator_->addDB("shard2", db_master_shard2, ReplicaRole::LEADER, folly::SocketAddress(),
+                              &replicated_db_master_shard2),
             ReturnCode::OK);
   SocketAddress addr_master("127.0.0.1", master_port);
-  EXPECT_EQ(slave.replicator_->addDB("shard1", db_slave, ReplicaRole::FOLLOWER,
-                                     addr_master, &replicated_db_slave),
+  EXPECT_EQ(slave_shard1.replicator_->addDB("shard1", db_slave_shard1, ReplicaRole::FOLLOWER,
+                                     addr_master, &replicated_db_slave_shard1),
+            ReturnCode::OK);
+   EXPECT_EQ(slave_shard2.replicator_->addDB("shard2", db_slave_shard2, ReplicaRole::FOLLOWER,
+                                     addr_master, &replicated_db_slave_shard2),
             ReturnCode::OK);
 
-  EXPECT_EQ(db_master->GetLatestSequenceNumber(), 0);
-  EXPECT_EQ(db_slave->GetLatestSequenceNumber(), 0);
+  EXPECT_EQ(db_master_shard1->GetLatestSequenceNumber(), 0);
+  EXPECT_EQ(db_slave_shard1->GetLatestSequenceNumber(), 0);
+  EXPECT_EQ(db_master_shard2->GetLatestSequenceNumber(), 0);
+  EXPECT_EQ(db_slave_shard2->GetLatestSequenceNumber(), 0);
 
-  // successful writes
+  // successful writes to both shard1 and shard2
   WriteOptions options;
   uint32_t n_keys = 10;
   for (uint32_t i = 0; i < n_keys; ++i) {
@@ -527,61 +544,83 @@ TEST(RocksDBReplicatorTest, 1_master_1_slave_replication_mode_2) {
     auto str = to_string(i);
     updates.Put(str + "key", str + "value");
     updates.Put(str + "key2", str + "value2");
+
     EXPECT_EQ(master.replicator_->write("shard1", options, &updates),
               ReturnCode::OK);
-    EXPECT_EQ(db_master->GetLatestSequenceNumber(), (i+1)*2);
+    EXPECT_EQ(db_master_shard1->GetLatestSequenceNumber(), (i+1)*2);
+
+    EXPECT_EQ(master.replicator_->write("shard2", options, &updates),
+              ReturnCode::OK);
+    EXPECT_EQ(db_master_shard2->GetLatestSequenceNumber(), (i+1)*2);
   }
 
-  // expect follower to catch up
-  while (db_slave->GetLatestSequenceNumber() < n_keys * 2) {
+  // expect follower to catch up (max 5s)
+  auto attempts = 50;
+  while (db_slave_shard1->GetLatestSequenceNumber() < n_keys * 2 && attempts != 0) {
     sleep_for(milliseconds(100));
+    attempts--;
   }
-  EXPECT_EQ(db_slave->GetLatestSequenceNumber(), n_keys * 2);
+  EXPECT_EQ(db_slave_shard1->GetLatestSequenceNumber(), n_keys * 2);
+
+  auto attempts2 = 50;
+  while (db_slave_shard2->GetLatestSequenceNumber() < n_keys * 2 && attempts2 != 0) {
+    sleep_for(milliseconds(100));
+    attempts2--;
+  }
+  EXPECT_EQ(db_slave_shard2->GetLatestSequenceNumber(), n_keys * 2);
 
   // 2-ack mode write timeouts:
   //
-  // remove the slave db from the replication library.
-  // write more keys to the master db and expect requests to fail
+  // remove the shard1 slave db from the replication library.
+  // write more keys to the shard1 master db and expect requests to fail
   // due to timeout waiting for slave db ACK.
-  // The slave db will not have the new keys.
-  EXPECT_EQ(slave.replicator_->removeDB("shard1"), ReturnCode::OK);
+  // The shard1 slave db will not have the new keys.
+  EXPECT_EQ(slave_shard1.replicator_->removeDB("shard1"), ReturnCode::OK);
   for (uint32_t i = 0; i < n_keys; ++i) {
     Status status;
     WriteBatch updates;
     auto str = to_string(i);
     updates.Put(str + "new_key", str + "new_value");
-    EXPECT_NO_THROW(status = replicated_db_master->Write(options, &updates));
+    EXPECT_NO_THROW(status = replicated_db_master_shard1->Write(options, &updates));
     EXPECT_TRUE(!status.ok());
     EXPECT_EQ(status, Status::TimedOut("Failed to receive ack from follower"));
 
-    EXPECT_EQ(db_master->GetLatestSequenceNumber(), i + 1 + n_keys * 2);
+    EXPECT_EQ(db_master_shard1->GetLatestSequenceNumber(), i + 1 + n_keys * 2);
   }
-  EXPECT_EQ(db_slave->GetLatestSequenceNumber(), n_keys * 2);
-  EXPECT_EQ(100 /* FLAGS_replicator_timeout_ms */, replicated_db_master->current_replicator_timeout_ms_);
+  EXPECT_EQ(db_slave_shard1->GetLatestSequenceNumber(), n_keys * 2);
+  EXPECT_EQ(100 /* FLAGS_replicator_timeout_ms */, replicated_db_master_shard1->current_replicator_timeout_ms_);
 
-  // enter degradation mode after consecutive timeouts
-  for (uint32_t i = 0; i < kNumReplTimeoutsBeforeDegradation; ++i) {
+  // shard1 enter degradation mode after consecutive timeouts
+  for (uint32_t i = 0; i < FLAGS_replicator_consecutive_ack_timeout_before_degradation; ++i) {
     Status status;
     WriteBatch updates;
     auto str = to_string(i);
     updates.Put(str + "new_key", str + "new_value");
-    EXPECT_NO_THROW(status = replicated_db_master->Write(options, &updates));
+    EXPECT_NO_THROW(status = replicated_db_master_shard1->Write(options, &updates));
     EXPECT_TRUE(!status.ok());
     EXPECT_EQ(status, Status::TimedOut("Failed to receive ack from follower"));
   }
-  EXPECT_EQ(db_slave->GetLatestSequenceNumber(), n_keys * 2);
-  EXPECT_EQ(5 /* FLAGS_replicator_timeout_degraded_ms */, replicated_db_master->current_replicator_timeout_ms_);
+  EXPECT_EQ(db_slave_shard1->GetLatestSequenceNumber(), n_keys * 2);
+  EXPECT_EQ(5 /* FLAGS_replicator_timeout_degraded_ms */, replicated_db_master_shard1->current_replicator_timeout_ms_);
 
-  // back to normal mode after adding the slave db back
-  EXPECT_EQ(slave.replicator_->addDB("shard1", db_slave, ReplicaRole::FOLLOWER,
-                                     addr_master, &replicated_db_slave),
+  // shard2 shouldn't be impacted
+  Status status_shard2;
+  WriteBatch updates_shard2;
+  updates_shard2.Put("new_key", "new_value");
+  EXPECT_NO_THROW(status_shard2 = replicated_db_master_shard2->Write(options, &updates_shard2));
+  EXPECT_TRUE(status_shard2.ok());
+  EXPECT_EQ(100 /* FLAGS_replicator_timeout_ms */, replicated_db_master_shard2->current_replicator_timeout_ms_);
+
+  // shard1 back to normal mode after adding the slave db back
+  EXPECT_EQ(slave_shard1.replicator_->addDB("shard1", db_slave_shard1, ReplicaRole::FOLLOWER,
+                                     addr_master, &replicated_db_slave_shard1),
             ReturnCode::OK);
-  Status status;
-  WriteBatch updates;
-  updates.Put("new_key", "new_value");
-  EXPECT_NO_THROW(status = replicated_db_master->Write(options, &updates));
-  EXPECT_TRUE(status.ok());
-  EXPECT_EQ(100 /* FLAGS_replicator_timeout_ms */, replicated_db_master->current_replicator_timeout_ms_);
+  Status status_shard1;
+  WriteBatch updates_shard1;
+  updates_shard1.Put("new_key", "new_value");
+  EXPECT_NO_THROW(status_shard1 = replicated_db_master_shard1->Write(options, &updates_shard1));
+  EXPECT_TRUE(status_shard1.ok());
+  EXPECT_EQ(100 /* FLAGS_replicator_timeout_ms */, replicated_db_master_shard1->current_replicator_timeout_ms_);
 }
 
 TEST(RocksDBReplicatorTest, Stress) {
