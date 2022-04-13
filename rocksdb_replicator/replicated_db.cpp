@@ -68,8 +68,8 @@ DEFINE_uint64(replicator_timeout_ms, 5 * 1000,
               " waiting forever");
 
 DEFINE_uint64(replicator_timeout_degraded_ms, 10,
-              "In Degradation mode, i.e. when the writes keep timeout out waiting for follower ACK, "
-              "we would use this small timeout to fail fast. "
+              "In Degradation mode, i.e. when the writes keep timing out waiting for follower ACK, "
+              "we would use this timeout to fail fast. "
               "0 means this mode is disabled. "
               "This needs to be smaller than replicator_timeout_ms for the config to be valid and used.");
 
@@ -146,30 +146,30 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
     // TODO(bol): This potentially could block all worker threads. We may
     // consider having a dedicated set of worker threads for admin requests,
     // and/or provide async write API when this turns out to be a problem.
-    if (!max_seq_no_acked_.wait(cur_seq_no, current_replication_timeout_ms_)) {
+    if (!max_seq_no_acked_.wait(cur_seq_no, current_replicator_timeout_ms_)) {
       incCounter(kReplicatorWriteWaitTimedOut, 1, db_name_);
       LOG(ERROR) << "Failed to receive ack from follower, timing out for " << db_name_;
       numConsecutiveReplTimeout_ ++;
 
       // enter degradation mode if there has been consecutive timeouts waiting for the follower ACK.
       // This allows us to use a smaller wait timeout to fail fast, instead of blocking for long.
-      if (current_replication_timeout_ms_ == FLAGS_replicator_timeout_ms
-          && numConsecutiveReplTimeout_ == kNumReplTimeoutsBeforeDegradation
+      if (numConsecutiveReplTimeout_ == kNumReplTimeoutsBeforeDegradation
+          && current_replicator_timeout_ms_ == FLAGS_replicator_timeout_ms
           && FLAGS_replicator_timeout_degraded_ms < FLAGS_replicator_timeout_ms
           && FLAGS_replicator_timeout_degraded_ms >= kMinReplTimeoutMs) {
-        current_replication_timeout_ms_ = FLAGS_replicator_timeout_degraded_ms;
+        current_replicator_timeout_ms_ = FLAGS_replicator_timeout_degraded_ms;
         LOG(ERROR) << "Enter degradation mode for db " << db_name_
                    << " after " << numConsecutiveReplTimeout_ << " write timeouts,"
-                   << " use new timeout to fail fast: " << current_replication_timeout_ms_ << "ms";
+                   << " use new timeout to fail fast: " << current_replicator_timeout_ms_ << "ms";
         incCounter(kReplicatorWriteTwoAckDegraded, 1, db_name_);
       }
       return rocksdb::Status::TimedOut("Failed to receive ack from follower");
     }
     numConsecutiveReplTimeout_ = 0;
-    if (current_replication_timeout_ms_ != FLAGS_replicator_timeout_ms) {
-      current_replication_timeout_ms_ = FLAGS_replicator_timeout_ms;
+    if (current_replicator_timeout_ms_ != FLAGS_replicator_timeout_ms) {
+      current_replicator_timeout_ms_ = FLAGS_replicator_timeout_ms;
       LOG(ERROR) << "2-ACK Write succeeded, exit degradation mode and switch to use normal replicator timeout: "
-                << current_replication_timeout_ms_ << "ms";
+                << current_replicator_timeout_ms_ << "ms";
       incCounter(kReplicatorWriteTwoAckRecovered, 1, db_name_);
     }
     break;
@@ -237,7 +237,7 @@ RocksDBReplicator::ReplicatedDB::ReplicatedDB(
   }
 
   if (FLAGS_replicator_timeout_ms > kMinReplTimeoutMs) {
-    current_replication_timeout_ms_ = FLAGS_replicator_timeout_ms;
+    current_replicator_timeout_ms_ = FLAGS_replicator_timeout_ms;
   }
 
   rpc_options_.setTimeout(

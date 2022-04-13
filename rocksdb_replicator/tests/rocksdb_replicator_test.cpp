@@ -542,7 +542,7 @@ TEST(RocksDBReplicatorTest, 1_master_1_slave_replication_mode_2) {
   //
   // remove the slave db from the replication library.
   // write more keys to the master db and expect requests to fail
-  // (WRITE_ERROR) due to timeout waiting for slave db ACK.
+  // due to timeout waiting for slave db ACK.
   // The slave db will not have the new keys.
   EXPECT_EQ(slave.replicator_->removeDB("shard1"), ReturnCode::OK);
   for (uint32_t i = 0; i < n_keys; ++i) {
@@ -557,7 +557,7 @@ TEST(RocksDBReplicatorTest, 1_master_1_slave_replication_mode_2) {
     EXPECT_EQ(db_master->GetLatestSequenceNumber(), i + 1 + n_keys * 2);
   }
   EXPECT_EQ(db_slave->GetLatestSequenceNumber(), n_keys * 2);
-  EXPECT_EQ(100 /* FLAGS_replicator_timeout_ms */, replicated_db_master->current_replication_timeout_ms_);
+  EXPECT_EQ(100 /* FLAGS_replicator_timeout_ms */, replicated_db_master->current_replicator_timeout_ms_);
 
   // enter degradation mode after consecutive timeouts
   for (uint32_t i = 0; i < kNumReplTimeoutsBeforeDegradation; ++i) {
@@ -570,7 +570,7 @@ TEST(RocksDBReplicatorTest, 1_master_1_slave_replication_mode_2) {
     EXPECT_EQ(status, Status::TimedOut("Failed to receive ack from follower"));
   }
   EXPECT_EQ(db_slave->GetLatestSequenceNumber(), n_keys * 2);
-  EXPECT_EQ(5 /* FLAGS_replicator_timeout_degraded_ms */, replicated_db_master->current_replication_timeout_ms_);
+  EXPECT_EQ(5 /* FLAGS_replicator_timeout_degraded_ms */, replicated_db_master->current_replicator_timeout_ms_);
 
   // back to normal mode after adding the slave db back
   EXPECT_EQ(slave.replicator_->addDB("shard1", db_slave, ReplicaRole::FOLLOWER,
@@ -581,7 +581,7 @@ TEST(RocksDBReplicatorTest, 1_master_1_slave_replication_mode_2) {
   updates.Put("new_key", "new_value");
   EXPECT_NO_THROW(status = replicated_db_master->Write(options, &updates));
   EXPECT_TRUE(status.ok());
-  EXPECT_EQ(100 /* FLAGS_replicator_timeout_ms */, replicated_db_master->current_replication_timeout_ms_);
+  EXPECT_EQ(100 /* FLAGS_replicator_timeout_ms */, replicated_db_master->current_replicator_timeout_ms_);
 }
 
 TEST(RocksDBReplicatorTest, Stress) {
