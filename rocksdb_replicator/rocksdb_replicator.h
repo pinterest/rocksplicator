@@ -118,6 +118,7 @@ class RocksDBReplicator {
 
     void pullFromUpstream();
     void resetUpstream();
+    rocksdb::Status writeWaitFollowerACK(uint64_t cur_seq_no);
     using CallbackType =
       apache::thrift::HandlerCallback<std::unique_ptr<ReplicateResponse>>;
     void handleReplicateRequest(std::unique_ptr<CallbackType> callback,
