@@ -71,7 +71,7 @@ DEFINE_uint64(replicator_timeout_degraded_ms, 10,
               "In Degradation mode, i.e. when the writes keep timing out waiting for follower ACK, "
               "we would use this timeout to fail fast. "
               "Note that for this config to be valid and used, it needs to be "
-              "smaller than replicator_timeout_ms, but not smaller than 1 (set by kMinReplTimeoutMs)");
+              "smaller than replicator_timeout_ms, but greater or equal to kMinReplTimeoutMs (currently 1))");
 
 DEFINE_uint64(replicator_consecutive_ack_timeout_before_degradation, 100,
              "The max number of consecutive replication timeout, before a DB enters degradation mode "
@@ -153,11 +153,14 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
     if (!max_seq_no_acked_.wait(cur_seq_no, current_replicator_timeout_ms_.load())) {
       incCounter(kReplicatorWriteWaitTimedOut, 1, db_name_);
       LOG(ERROR) << "Failed to receive ack from follower, timing out for " << db_name_;
-      numConsecutiveReplTimeout_ ++;
+      numConsecutiveReplTimeout_++;
 
       // enter degradation mode if there has been consecutive timeouts waiting for the follower ACK.
       // This allows us to use a smaller wait timeout to fail fast, instead of blocking for long.
-      if (numConsecutiveReplTimeout_.load() == FLAGS_replicator_consecutive_ack_timeout_before_degradation
+      // Note that we don't have a mutex lock for the below conditions check for perf reasons,
+      // so it's possible multiple thread calling this at the same time and decide to update
+      // current_replicator_timeout_ms_ multiple times, that is idempotent and it is okay.
+      if (numConsecutiveReplTimeout_.load() >= FLAGS_replicator_consecutive_ack_timeout_before_degradation
           && current_replicator_timeout_ms_.load() == FLAGS_replicator_timeout_ms
           && FLAGS_replicator_timeout_degraded_ms < FLAGS_replicator_timeout_ms
           && FLAGS_replicator_timeout_degraded_ms >= kMinReplTimeoutMs) {
