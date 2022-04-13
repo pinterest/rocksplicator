@@ -52,6 +52,8 @@ namespace wangle {
 
 namespace replicator {
 
+const uint32_t kMinReplTimeoutMs = 1;
+
 /*
  * An extractor to extract update time from an update
  */
@@ -116,6 +118,7 @@ class RocksDBReplicator {
 
     void pullFromUpstream();
     void resetUpstream();
+    rocksdb::Status writeWaitFollowerACK(uint64_t cur_seq_no);
     using CallbackType =
       apache::thrift::HandlerCallback<std::unique_ptr<ReplicateResponse>>;
     void handleReplicateRequest(std::unique_ptr<CallbackType> callback,
@@ -144,6 +147,8 @@ class RocksDBReplicator {
                 uint64_t>> cached_iters_;
     std::mutex cached_iters_mutex_;
     detail::MaxNumberBox max_seq_no_acked_;
+    std::atomic<uint32_t> current_replicator_timeout_ms_ {kMinReplTimeoutMs};
+    std::atomic<uint32_t> numConsecutiveReplTimeout_ {0};
     std::string replicator_zk_cluster_;
     std::string replicator_helix_cluster_;
 

@@ -63,9 +63,19 @@ DEFINE_int32(replicator_replication_mode, 0,
              "stack for the connection to one of the Slave; "
              "2: ack client once committed to Master and one of the Slaves.");
 
-DEFINE_uint64(replicator_timeout_ms, 5 * 1000,
-              "How long to wait for Slave before timeout a client write, 0 means"
+DEFINE_uint64(replicator_timeout_ms, 2 * 1000,
+              "How long to wait for Follower ACK before timeout a client write, 0 means"
               " waiting forever");
+
+DEFINE_uint64(replicator_timeout_degraded_ms, 10,
+              "In Degradation mode, i.e. when the writes keep timing out waiting for follower ACK, "
+              "we would use this timeout to fail fast. "
+              "Note that for this config to be valid and used, it needs to be "
+              "smaller than replicator_timeout_ms, but greater or equal to kMinReplTimeoutMs (currently 1))");
+
+DEFINE_uint64(replicator_consecutive_ack_timeout_before_degradation, 100,
+             "The max number of consecutive replication timeout, before a DB enters degradation mode "
+             "and use the above replicator_timeout_degraded_ms");
 
 DECLARE_int32(replicator_idle_iter_timeout_ms);
 DEFINE_string(replicator_zk_cluster, "", "Zookeeper cluster");
@@ -80,6 +90,7 @@ DECLARE_int32(rocksdb_replicator_port);
 
 
 namespace {
+
 
 uint64_t GetCurrentTimeMs() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -136,15 +147,13 @@ rocksdb::Status RocksDBReplicator::ReplicatedDB::Write(
   switch (replication_mode) {
   case 1:
   case 2:
-    // TODO(bol): This potentially could block all worker threads. We may
-    // consider having a dedicated set of worker threads for admin requests,
-    // and/or provide async write API when this turns out to be a problem.
-    if (!max_seq_no_acked_.wait(cur_seq_no, FLAGS_replicator_timeout_ms)) {
-      incCounter(kReplicatorWriteWaitTimedOut, 1, db_name_);
-      LOG(ERROR) << "Failed to receive ack from follower, timing out for " << db_name_;
-      return rocksdb::Status::TimedOut("Failed to receive ack from follower");
+    {
+      auto status = writeWaitFollowerACK(cur_seq_no);
+      if (!status.ok()) {
+        return status;
+      }
+      break;
     }
-    break;
   default:
     CHECK(replication_mode == 0)
       << "Invalid replicaton mode " << replication_mode;
@@ -167,6 +176,7 @@ std::string RocksDBReplicator::ReplicatedDB::Introspect() {
   ss << "  ReplicaRole: " << role_str_ << std::endl;
   ss << "  upstream_addr: " << upstream_addr_str << std::endl;
   ss << "  cur_seq_no: " << cur_seq_no << std::endl;
+  ss << "  current_replicator_timeout_ms_: " << current_replicator_timeout_ms_.load() << std::endl;
   // TODO(jz): add max_seq_no_acked_
   return ss.str();
 }
@@ -208,10 +218,58 @@ RocksDBReplicator::ReplicatedDB::ReplicatedDB(
     replicator_helix_cluster_ = FLAGS_replicator_helix_cluster;
   }
 
+  // ensure we don't use a timeout smaller than kMinReplTimeoutMs
+  if (FLAGS_replicator_timeout_ms > kMinReplTimeoutMs) {
+    current_replicator_timeout_ms_.store(FLAGS_replicator_timeout_ms);
+  }
+
   rpc_options_.setTimeout(
       std::chrono::milliseconds(
           FLAGS_replicator_max_server_wait_time_ms
           + FLAGS_replicator_client_server_timeout_difference_ms));
+}
+
+/*
+ * Helper function used in replication_mode 2 which waits for at least one follower to ACK the write
+ * by ensuring the max ACKed sequence number is at least cur_seq_no.
+ */
+rocksdb::Status RocksDBReplicator::ReplicatedDB::writeWaitFollowerACK(const uint64_t cur_seq_no) {
+  // TODO(bol): This potentially could block all worker threads. We may
+  // consider having a dedicated set of worker threads for admin requests,
+  // and/or provide async write API when this turns out to be a problem.
+  if (!max_seq_no_acked_.wait(cur_seq_no, current_replicator_timeout_ms_.load())) {
+    incCounter(kReplicatorWriteWaitTimedOut, 1, db_name_);
+    LOG(ERROR) << "Failed to receive ack from follower, timing out for " << db_name_;
+    numConsecutiveReplTimeout_++;
+
+    // enter degradation mode if there has been consecutive timeouts waiting for the follower ACK.
+    // This allows us to use a smaller wait timeout to fail fast, instead of blocking for long.
+    // Note that we don't have a mutex lock for the below conditions check for perf reasons,
+    // so it's possible multiple thread calling this at the same time and decide to update
+    // current_replicator_timeout_ms_ multiple times, that is idempotent and it is okay.
+    if (numConsecutiveReplTimeout_.load() >= FLAGS_replicator_consecutive_ack_timeout_before_degradation
+        && current_replicator_timeout_ms_.load() == FLAGS_replicator_timeout_ms
+        && FLAGS_replicator_timeout_degraded_ms < FLAGS_replicator_timeout_ms
+        && FLAGS_replicator_timeout_degraded_ms >= kMinReplTimeoutMs) {
+      current_replicator_timeout_ms_.store(FLAGS_replicator_timeout_degraded_ms);
+      LOG(ERROR) << "Enter degradation mode for db " << db_name_
+                << " after " << numConsecutiveReplTimeout_.load() << " write timeouts,"
+                << " use new timeout to fail fast: " << current_replicator_timeout_ms_.load() << "ms";
+      incCounter(kReplicatorWriteTwoAckDegraded, 1, db_name_);
+    }
+    return rocksdb::Status::TimedOut("Failed to receive ack from follower");
+  }
+
+  numConsecutiveReplTimeout_.store(0);
+  // TODO(jz): consider use CAS
+  if (current_replicator_timeout_ms_.load() != FLAGS_replicator_timeout_ms) {
+    current_replicator_timeout_ms_.store(FLAGS_replicator_timeout_ms);
+    LOG(ERROR) << "2-ACK Write succeeded, exit degradation mode and switch to use normal replicator timeout: "
+              << current_replicator_timeout_ms_.load() << "ms";
+    incCounter(kReplicatorWriteTwoAckRecovered, 1, db_name_);
+  }
+
+  return rocksdb::Status::OK();
 }
 
 /*

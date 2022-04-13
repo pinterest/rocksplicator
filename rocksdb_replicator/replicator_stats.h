@@ -47,6 +47,9 @@ extern const std::string kReplicatorWriteWaitTimedOut;
 extern const std::string kReplicatorWriteToLeaderMs;
 extern const std::string kReplicatorWriteSuccessResponseTime;
 extern const std::string kReplicatorWriteFailureResponseTime;
+extern const std::string kReplicatorWriteTwoAckDegraded;
+extern const std::string kReplicatorWriteTwoAckRecovered;
+
 
 extern const std::string kReplicatorPullRequests;
 extern const std::string kReplicatorPullRequestsSuccess;
