@@ -134,8 +134,9 @@ std::unique_ptr<const detail::ClusterLayout> parseConfig(
         }
         auto host_iter = cl->all_hosts.find(host);
         if (host_iter != cl->all_hosts.end()) {
-          // const_cast: I promise not to touch the variables used for sorting..we should refactor all_hosts to be a map
-          // instead of a set for this purpose..since set will always return const ref
+          // const_cast was introduced here because std::set iterator will always return a const value in order to prevent
+          // the user from modifying the comparison variables which is avoided.
+          // TODO(meariby): clean this up and use std::map instead keyed on the host identifier.
           auto& mapRef = const_cast<std::unordered_map<std::string, uint16_t>&>((*host_iter).groups_prefix_lengths);
           mapRef.insert(host.groups_prefix_lengths.begin(), host.groups_prefix_lengths.end());
           pHost = &(*host_iter);
