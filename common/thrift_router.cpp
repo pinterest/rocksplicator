@@ -125,21 +125,27 @@ std::unique_ptr<const detail::ClusterLayout> parseConfig(
           host_port_group == SHARD_NUM_STRs[1]) {
         continue;
       }
-
-      detail::Host host;
-      if (!parseHost(host_port_group, &host, segment, local_group)) {
-        LOG(ERROR) << "Invalid host port group " << host_port_group;
-        return nullptr;
+      const detail::Host* pHost = nullptr;
+      {
+        detail::Host host;
+        if (!parseHost(host_port_group, &host, segment, local_group)) {
+          LOG(ERROR) << "Invalid host port group " << host_port_group;
+          return nullptr;
+        }
+        auto host_iter = cl->all_hosts.find(host);
+        if (host_iter != cl->all_hosts.end()) {
+          // const_cast was introduced here because std::set iterator will always return a const value in order to prevent
+          // the user from modifying the comparison variables which is avoided.
+          // TODO(meariby): clean this up and use std::map instead keyed on the host identifier.
+          auto& mapRef = const_cast<std::unordered_map<std::string, uint16_t>&>((*host_iter).groups_prefix_lengths);
+          mapRef.insert(host.groups_prefix_lengths.begin(), host.groups_prefix_lengths.end());
+          pHost = &(*host_iter);
+        } else {
+          auto insertRecord = cl->all_hosts.insert(std::move(host));
+          pHost = &(*insertRecord.first);
+        }
       }
-      auto host_iter = cl->all_hosts.find(host);
-      if (host_iter != cl->all_hosts.end()) {
-        host.groups_prefix_lengths.insert(
-                host_iter->groups_prefix_lengths.begin(),
-                host_iter->groups_prefix_lengths.end());
-        cl->all_hosts.erase(host_iter);
-      }
-      cl->all_hosts.insert(std::move(host));
-      const detail::Host* pHost = &*(cl->all_hosts.find(host));
+      CHECK(pHost != nullptr);
       const auto& shard_list = segment_value[host_port_group];
       // for each shard
       for (Json::ArrayIndex i = 0; i < shard_list.size(); ++i) {
