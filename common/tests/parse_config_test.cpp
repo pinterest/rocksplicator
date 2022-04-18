@@ -23,8 +23,16 @@ static const char* g_config_v1 =
   "}";
 
 
-// This test requires ASAN enabled to function correctly
 TEST(ParseConfigTest, TestUseAfterFree) {
+    /*
+    This test was originally introduced to test for use after free in common::parseConfig
+    Since use after free produces undefined behavior, sometimes it may work sometimes it
+    doesn't for example: 
+    - In rocksplicator repo using cmake this test will succeed because newly allocated data will use same memory as freed data for set datastructure.
+    - In cosmos this test will fail
+
+    If you enable asan in cosmos this test will fail and show the use after free.
+    */
     auto result = common::parseConfig(g_config_v1, "");
     for(auto& segment: result->segments) {
       for(auto& shard_hosts: segment.second.shard_to_hosts) {
