@@ -50,6 +50,7 @@ import org.apache.zookeeper.KeeperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -97,6 +98,25 @@ public class Utils {
 
     LOG.error("Failed to obtain external view for resource {} in cluster {} after {} retries", resourceName, clusterName, maxRetries);
     return null;
+  }
+
+   /**
+   * Obtain the state map of a partition in the external view
+   * @param view Helix external view for a resource
+   * @param partitionName partition name to look up
+   * @return StateMap, which will be empty if the partition is not found, or there is no instance in the partition
+   */
+  public static Map<String, String> getStateMap(ExternalView view, String partitionName) {
+    if (partitionName == null || partitionName.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    Map<String, String> result = view.getStateMap(partitionName);
+    if (result == null) {
+      return Collections.emptyMap();
+    }
+
+    return result;
   }
 
   /**
