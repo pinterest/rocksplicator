@@ -150,6 +150,7 @@ class RocksDBReplicator {
     detail::MaxNumberBox max_seq_no_acked_;
     std::atomic<uint32_t> current_replicator_timeout_ms_ {kMinReplTimeoutMs};
     std::atomic<uint32_t> numConsecutiveReplTimeout_ {0};
+    std::atomic<uint64_t> upstream_latest_seq_no_{0};
     std::string replicator_zk_cluster_;
     std::string replicator_helix_cluster_;
 
