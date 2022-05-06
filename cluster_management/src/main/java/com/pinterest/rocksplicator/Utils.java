@@ -110,6 +110,10 @@ public class Utils {
     if (partitionName == null || partitionName.isEmpty()) {
       return Collections.emptyMap();
     }
+    
+    if (view == null) {
+      return Collections.emptyMap();
+    }
 
     Map<String, String> result = view.getStateMap(partitionName);
     if (result == null) {
