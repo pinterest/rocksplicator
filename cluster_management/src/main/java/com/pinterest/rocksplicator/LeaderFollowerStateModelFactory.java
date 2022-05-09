@@ -637,6 +637,9 @@ public class LeaderFollowerStateModelFactory extends StateModelFactory<StateMode
       // do not trigger rebuild if the latest db update is within min(wal_ttl_seconds, 1h).
       // the 1h upper bound is to ensure we are not too lagging behind when catching up from upstream via replication,
       // since wal_ttl_seconds can be large.
+      // TODO: we hard-code the 1h upper bound because we have been using the default wal_ttl_seconds as 1h
+      // for years in production without ever having to change it, but we should evaluate it in the future
+      // based on the restore speed, and how much lagging behind we can tolerate when a follower goes online.
       long maxLogCatchupTimeSec = Math.min(localStatus.wal_ttl_seconds, 60*60 /* 1h */);
       if (System.currentTimeMillis() <
           localStatus.last_update_timestamp_ms + maxLogCatchupTimeSec * 1000) {
