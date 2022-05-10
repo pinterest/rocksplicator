@@ -331,13 +331,16 @@ public class Utils {
       TSocket sock = new TSocket(host, adminPort);
       Admin.Client client = getAdminClientOnSocket(sock);
 
-      GetSequenceNumberRequest request = new GetSequenceNumberRequest(dbName);
-      GetSequenceNumberResponse response = client.getSequenceNumber(request);
-      LOG.error(
-          "Seq number for " + dbName + " on " + host + ": " + String.valueOf(response.seq_num));
-      
-      sock.close();
-      return response.seq_num;
+      try {
+        GetSequenceNumberRequest request = new GetSequenceNumberRequest(dbName);
+        GetSequenceNumberResponse response = client.getSequenceNumber(request);
+        LOG.error(
+            "Seq number for " + dbName + " on " + host + ": " + String.valueOf(response.seq_num));
+        return response.seq_num;
+      } finally {
+        // ensure the socket is closed when the request is completed (regardless of success or failure)
+        sock.close();
+      }
     } catch (TException e) {
       LOG.error("Failed to get sequence number for " + dbName, e);
       return -1;
