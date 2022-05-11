@@ -135,6 +135,9 @@ public class Utils {
 
   /**
    * Build a thrift client to host:adminPort
+   * Note this opens a socket underneath and doesn't close it. This would become a problem if 
+   * many admin clients are created on demand, causing connection leaking. 
+   * To properly close the connection, use getAdminClientOnSocket instead. 
    * @param host
    * @param adminPort
    * @return a client object
@@ -142,6 +145,18 @@ public class Utils {
    */
   public static Admin.Client getAdminClient(String host, int adminPort) throws TTransportException {
     TSocket sock = new TSocket(host, adminPort);
+    sock.open();
+    return new Admin.Client(new TBinaryProtocol(sock));
+  }
+
+   /**
+   * Open the provided TSocket and build a Admin thrift client on top of it for application usage.
+   * It's caller's responsibility to close the socket after usage. 
+   * @param sock user constructed TSocket
+   * @return an Admin client object
+   * @throws TTransportException 
+   */
+  public static Admin.Client getAdminClientOnSocket(TSocket sock) throws TTransportException {
     sock.open();
     return new Admin.Client(new TBinaryProtocol(sock));
   }
@@ -313,13 +328,19 @@ public class Utils {
   public static long getLatestSequenceNumber(String dbName, String host, int adminPort) {
     LOG.error("Get seq number from " + host + " for " + dbName);
     try {
-      Admin.Client client = getAdminClient(host, adminPort);
+      TSocket sock = new TSocket(host, adminPort);
+      Admin.Client client = getAdminClientOnSocket(sock);
 
-      GetSequenceNumberRequest request = new GetSequenceNumberRequest(dbName);
-      GetSequenceNumberResponse response = client.getSequenceNumber(request);
-      LOG.error(
-          "Seq number for " + dbName + " on " + host + ": " + String.valueOf(response.seq_num));
-      return response.seq_num;
+      try {
+        GetSequenceNumberRequest request = new GetSequenceNumberRequest(dbName);
+        GetSequenceNumberResponse response = client.getSequenceNumber(request);
+        LOG.error(
+            "Seq number for " + dbName + " on " + host + ": " + String.valueOf(response.seq_num));
+        return response.seq_num;
+      } finally {
+        // ensure the socket is closed when the request is completed (regardless of success or failure)
+        sock.close();
+      }
     } catch (TException e) {
       LOG.error("Failed to get sequence number for " + dbName, e);
       return -1;
