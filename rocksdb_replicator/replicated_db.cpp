@@ -87,7 +87,7 @@ DEFINE_bool(reset_upstream_on_std_exception, false,
 DEFINE_bool(reset_upstream_on_empty_updates_from_non_leader, false,
             "Flag to control whether to reset the upstream address when empty updates are provided from a non-leader upstream");
 DECLARE_int32(rocksdb_replicator_port);
-
+DEFINE_int32(replicator_log_frequency, 1000, "Flag to control log sample frequency in RocksDB replicator");
 
 namespace {
 
@@ -510,7 +510,7 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
             // ref: https://github.com/facebook/rocksdb/blob/7ae4da924ad4df9ffc04ba4b3577d1aa7025f4aa/include/rocksdb/db.h#L1417
             // "If the sequence number is non existent, it returns an iterator at the first available seq_no after the requested seq_no"
             if (i == 0 && result.sequence > expected_seq_no) {
-              LOG(ERROR) << "Missing updates for " << db->db_name_ << ", expected sequence number: "
+              LOG_EVERY_N(ERROR, FLAGS_replicator_log_frequency) << "[" << db->db_name_ << "]" << " received follower request for updates since sequence number: "
                          << expected_seq_no << ", got: " << result.sequence;
               incCounter(kReplicatorGetUpdatesMissingSequence, 1, db->db_name_);
             }
