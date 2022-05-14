@@ -21,9 +21,12 @@
 #include <string>
 
 #include "common/stats/stats.h"
+#include "common/segment_utils.h"
 
 DEFINE_bool(replicator_enable_per_db_stats, true,
             "Enable per db stats");
+DEFINE_bool(replicator_enable_per_dataset_stats, false,
+            "Enable per dataset stats");
 
 namespace replicator {
 
@@ -79,6 +82,8 @@ void logMetric(const std::string& metric_name, int64_t value,
   common::Stats::get()->AddMetric(metric_name, value);
   if (FLAGS_replicator_enable_per_db_stats && !db_name.empty()) {
     common::Stats::get()->AddMetric(metric_name + " db=" + db_name, value);
+  } else if (FLAGS_replicator_enable_per_dataset_stats && !db_name.empty()) {
+    common::Stats::get()->AddMetric(metric_name + " dataset=" + common::DbNameToSegment(db_name), value);
   }
 }
 
@@ -87,6 +92,8 @@ void incCounter(const std::string& counter_name, uint64_t value,
   common::Stats::get()->Incr(counter_name, value);
   if (FLAGS_replicator_enable_per_db_stats && !db_name.empty()) {
     common::Stats::get()->Incr(counter_name + " db=" + db_name, value);
+  } else if (FLAGS_replicator_enable_per_dataset_stats && !db_name.empty()) {
+    common::Stats::get()->Incr(counter_name + " dataset=" + common::DbNameToSegment(db_name), value);
   }
 }
 
