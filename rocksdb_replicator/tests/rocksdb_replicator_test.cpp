@@ -623,6 +623,120 @@ TEST(RocksDBReplicatorTest, 1_master_1_slave_replication_mode_2) {
   EXPECT_EQ(100 /* FLAGS_replicator_timeout_ms */, replicated_db_master_shard1->current_replicator_timeout_ms_);
 }
 
+TEST(RocksDBReplicatorTest, 1_master_1_slave_1_observer_replication_mode_2) {
+  gflags::FlagSaver saver;
+
+  // Enable 2-ACK mode.
+  FLAGS_replicator_replication_mode = 2;
+  FLAGS_replicator_timeout_ms = 100;
+
+  // Setup a shard with 1 master,  1 slave, and 1 observer.
+  const int16_t master_port = 9092;
+  const int16_t slave_port = 9093;
+  const int16_t observer_port = 9094;
+  Host master(master_port);
+  Host slave(slave_port);
+  Host observer(observer_port);
+
+  auto db_master = cleanAndOpenDB("/tmp/db_master");
+  auto db_slave = cleanAndOpenDB("/tmp/db_slave");
+  auto db_observer = cleanAndOpenDB("/tmp/db_observer");
+
+  RocksDBReplicator::ReplicatedDB* replicated_db_master;
+  RocksDBReplicator::ReplicatedDB* replicated_db_slave;
+  RocksDBReplicator::ReplicatedDB* replicated_db_observer;
+
+  EXPECT_EQ(master.replicator_->addDB("shard", db_master, ReplicaRole::LEADER, folly::SocketAddress(),
+                              &replicated_db_master),
+            ReturnCode::OK); 
+  SocketAddress addr_master("127.0.0.1", master_port);
+  EXPECT_EQ(slave.replicator_->addDB("shard", db_slave, ReplicaRole::FOLLOWER,
+                                     addr_master, &replicated_db_slave),
+            ReturnCode::OK);
+  EXPECT_EQ(observer.replicator_->addDB("shard", db_observer, ReplicaRole::OBSERVER,
+                                     addr_master, &replicated_db_observer),
+            ReturnCode::OK);
+
+  EXPECT_EQ(db_master->GetLatestSequenceNumber(), 0);
+  EXPECT_EQ(db_slave->GetLatestSequenceNumber(), 0);
+  EXPECT_EQ(db_observer->GetLatestSequenceNumber(), 0);
+
+  // Successful writes to the shard.
+  WriteOptions options;
+  uint32_t n_keys = 10;
+  for (uint32_t i = 0; i < n_keys; ++i) {
+    WriteBatch updates;
+    auto str = to_string(i);
+    updates.Put(str + "key", str + "value");
+    updates.Put(str + "key2", str + "value2");
+
+    EXPECT_EQ(master.replicator_->write("shard", options, &updates),
+              ReturnCode::OK);
+    EXPECT_EQ(db_master->GetLatestSequenceNumber(), (i+1)*2);
+  }
+
+  // Expect follower to catch up (max 5s).
+  auto attempts = 50;
+  while (db_slave->GetLatestSequenceNumber() < n_keys * 2 && attempts != 0) {
+    sleep_for(milliseconds(100));
+    attempts--;
+  }
+  EXPECT_EQ(db_slave->GetLatestSequenceNumber(), n_keys * 2);
+
+  // Expect observer to catch up (max 5s).
+  while (db_observer->GetLatestSequenceNumber() < n_keys * 2 && attempts != 0) {
+    sleep_for(milliseconds(100));
+    attempts--;
+  }
+  EXPECT_EQ(db_observer->GetLatestSequenceNumber(), n_keys * 2);
+
+  // Remove observer, 2-ack mode write should still succeed.
+  EXPECT_EQ(observer.replicator_->removeDB("shard"), ReturnCode::OK);
+  for (uint32_t i = 0; i < n_keys; ++i) {
+    Status status;
+    WriteBatch updates;
+    auto str = to_string(i);
+    updates.Put(str + "new_key", str + "new_value");
+    EXPECT_NO_THROW(status = replicated_db_master->Write(options, &updates));
+    EXPECT_TRUE(status.ok());
+
+    EXPECT_EQ(db_master->GetLatestSequenceNumber(), i + 1 + n_keys * 2);
+  }
+
+  // Now remove follower as well, expect 2-ack mode write to timeout.
+  EXPECT_EQ(slave.replicator_->removeDB("shard"), ReturnCode::OK);
+  for (uint32_t i = 0; i < n_keys; ++i) {
+    Status status;
+    WriteBatch updates;
+    auto str = to_string(i);
+    updates.Put(str + "new_key", str + "new_value");
+    ASSERT_NO_THROW(status = replicated_db_master->Write(options, &updates));
+    ASSERT_TRUE(!status.ok());
+    EXPECT_EQ(status, Status::TimedOut("Failed to receive ack from follower"));
+  }
+
+  // Add the observer back, 2-ack mode write still timeout, since observer ACK does not count.
+  EXPECT_EQ(observer.replicator_->addDB("shard", db_observer, ReplicaRole::OBSERVER,
+                                     addr_master, &replicated_db_observer),
+            ReturnCode::OK);
+  Status status;
+  WriteBatch updates;
+  updates.Put("new_key", "new_value");
+  ASSERT_NO_THROW(status = replicated_db_master->Write(options, &updates));
+  ASSERT_TRUE(!status.ok());
+  EXPECT_EQ(status, Status::TimedOut("Failed to receive ack from follower"));
+
+  // Add the follower db back, 2-ack mode writes should now succeed.
+  EXPECT_EQ(slave.replicator_->addDB("shard", db_slave, ReplicaRole::FOLLOWER,
+                                     addr_master, &replicated_db_slave),
+            ReturnCode::OK);
+  Status status1;
+  WriteBatch updates1;
+  updates1.Put("new_key", "new_value");
+  EXPECT_NO_THROW(status1 = replicated_db_master->Write(options, &updates1));
+  EXPECT_TRUE(status1.ok());
+}
+
 TEST(RocksDBReplicatorTest, Stress) {
   int16_t port_1 = 8081;
   int16_t port_2 = 8082;

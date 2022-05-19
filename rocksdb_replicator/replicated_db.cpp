@@ -318,6 +318,7 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
   req.db_name = db_name_;
   req.max_wait_ms = FLAGS_replicator_max_server_wait_time_ms;
   req.max_updates = FLAGS_replicator_max_updates_per_response;
+  req.set_role(role_);
 
   incCounter(kReplicatorPullRequests, 1, db_name_);
 
@@ -446,8 +447,13 @@ void RocksDBReplicator::ReplicatedDB::handleReplicateRequest(
     logMetric(kReplicatorLeaderSequenceNumbersBehind, seq_no - leaderSeqNum, db ->db_name_);
   }
 
-  // post the largest sequence number the Slave has committed
-  max_seq_no_acked_.post(seq_no);
+  // Post the largest sequence number the Slave has committed.
+  // If the request comes from an Observer, ignore the sequence number update.
+  if (request->__isset.role && request->role == ReplicaRole::OBSERVER) {
+    incCounter(kReplicatorHandleObserverRequests, 1, db->db_name_);
+  } else {
+    max_seq_no_acked_.post(seq_no);
+  }
 
   auto replication_mode =  common::DBConfigManager::get()->getReplicationMode(db_name_);
   // for now we have to support both till all clusters are migrated
