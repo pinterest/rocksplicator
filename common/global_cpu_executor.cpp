@@ -20,13 +20,8 @@
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
-
 #include "common/identical_name_thread_factory.h"
-#if __GNUC__ >= 8
 #include "folly/executors/CPUThreadPoolExecutor.h"
-#else
-#include "wangle/concurrent/CPUThreadPoolExecutor.h"
-#endif
 
 DEFINE_int32(global_worker_threads, sysconf(_SC_NPROCESSORS_ONLN),
              "The number of threads for global CPU executor.");
@@ -40,15 +35,9 @@ DEFINE_bool(block_on_global_cpu_pool_full, true,
 DEFINE_string(global_cpu_thread_pool_name, "g-cpu-pool",
               "The name for threads in the global cpu pool");
 
-#if __GNUC__ >= 8
 using folly::CPUThreadPoolExecutor;
 using folly::LifoSemMPMCQueue;
 using folly::QueueBehaviorIfFull;
-#else
-using wangle::CPUThreadPoolExecutor;
-using wangle::LifoSemMPMCQueue;
-using wangle::QueueBehaviorIfFull;
-#endif
 
 namespace {
 

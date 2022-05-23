@@ -21,21 +21,12 @@
 #include <string>
 #include <thread>
 
-#if __GNUC__ >= 8
 #include "folly/executors/thread_factory/ThreadFactory.h"
 #include "folly/system/ThreadName.h"
-#else
-#include "folly/ThreadName.h"
-#include "wangle/concurrent/ThreadFactory.h"
-#endif
 
 namespace common {
 
-#if __GNUC__ >= 8
 class IdenticalNameThreadFactory : public folly::ThreadFactory {
-#else
-class IdenticalNameThreadFactory : public wangle::ThreadFactory {
-#endif
  public:
   explicit IdenticalNameThreadFactory(const std::string& name)
     : name_(name) {}

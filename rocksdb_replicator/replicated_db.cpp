@@ -335,11 +335,7 @@ void RocksDBReplicator::ReplicatedDB::pullFromUpstream() {
           incCounter(kReplicatorPullRequestsFailure, 1, db->db_name_);
           delay_next_pull = true;
           try {
-#if __GNUC__ >= 8
             t.exception().throw_exception();
-#else
-            t.exception().throwException();
-#endif
           } catch (const ReplicateException& ex) {
             LOG(ERROR) << "ReplicateException: upstream = " << common::getNetworkAddressStr(db->upstream_addr_) << ", code = " << static_cast<int>(ex.code)
                        << ", message = " << ex.msg;

@@ -57,12 +57,8 @@
 #include "rocksdb_replicator/rocksdb_replicator.h"
 #include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
-#if __GNUC__ >= 8
 #include "folly/executors/CPUThreadPoolExecutor.h"
 #include "folly/system/ThreadName.h"
-#else
-#include "wangle/concurrent/CPUThreadPoolExecutor.h"
-#endif
 
 DEFINE_string(hdfs_name_node, "hdfs://hbasebak-infra-namenode-prod1c01-001:8020",
               "The hdfs name node used for backup");
@@ -134,15 +130,9 @@ DEFINE_int32(async_delete_dbs_wait_sec,
              60,
              "How long in sec to wait between the dbs deletion");
 
-#if __GNUC__ >= 8
 using folly::CPUThreadPoolExecutor;
 using folly::LifoSemMPMCQueue;
 using folly::QueueBehaviorIfFull;
-#else
-using wangle::CPUThreadPoolExecutor;
-using wangle::LifoSemMPMCQueue;
-using wangle::QueueBehaviorIfFull;
-#endif
 
 namespace {
 

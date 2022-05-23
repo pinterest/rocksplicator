@@ -27,9 +27,7 @@
 #include <vector>
 
 #include "folly/futures/Promise.h"
-#if __GNUC__ >= 8
 #include "folly/system/ThreadName.h"
-#endif
 #include "folly/io/async/EventBase.h"
 #include "folly/io/async/SSLContext.h"
 #include "folly/Demangle.h"
@@ -277,11 +275,9 @@ class ThriftClientPool {
         if (FLAGS_channel_enable_snappy) {
           channel->setTransform(apache::thrift::transport::THeader::SNAPPY_TRANSFORM);
         }
-#if __GNUC__ >= 8
         if (FLAGS_channel_enable_zstd) {
           channel->setTransform(apache::thrift::transport::THeader::ZSTD_TRANSFORM);
         }
-#endif
         if (USE_BINARY_PROTOCOL) {
           channel->setProtocolId(apache::thrift::protocol::T_BINARY_PROTOCOL);
           if (FLAGS_use_framed_transport_for_binary_protocol) {

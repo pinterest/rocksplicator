@@ -20,15 +20,8 @@
 #include "common/stats/stats.h"
 
 #include <folly/FileUtil.h>
-
-#if __GNUC__ >= 8
 #include <folly/hash/SpookyHashV2.h>
 #include <folly/system/ThreadName.h>
-#else
-#include <folly/SpookyHashV2.h>
-#include <folly/ThreadName.h>
-#endif
-
 #include <sys/inotify.h>
 
 #include <string>

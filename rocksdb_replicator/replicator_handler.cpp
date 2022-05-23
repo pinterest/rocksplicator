@@ -20,11 +20,7 @@
 
 namespace replicator {
 
-#if __GNUC__ >= 8
 void ReplicatorHandler::async_tm_replicate(
-#else
-void ReplicatorHandler::async_eb_replicate(
-#endif
     std::unique_ptr<apache::thrift::HandlerCallback<
       std::unique_ptr<ReplicateResponse>>> callback,
     std::unique_ptr<ReplicateRequest> request) {

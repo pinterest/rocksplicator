@@ -33,11 +33,7 @@ class ReplicatorHandler : public ReplicatorSvIf {
 
   explicit ReplicatorHandler(DBMapType* db_map) : db_map_(db_map) {}
 
-#if __GNUC__ >= 8
   void async_tm_replicate(
-#else
-  void async_eb_replicate(
-#endif
       std::unique_ptr<apache::thrift::HandlerCallback<
         std::unique_ptr<ReplicateResponse>>> callback,
       std::unique_ptr<ReplicateRequest> request) override;

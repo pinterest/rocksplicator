@@ -28,12 +28,8 @@
 #include "folly/futures/Future.h"
 #include "folly/futures/Promise.h"
 #include "folly/io/async/EventBase.h"
-#if __GNUC__ >= 8
 #include "folly/executors/task_queue/BlockingQueue.h"
 #include "folly/executors/CPUThreadPoolExecutor.h"
-#else
-#include "wangle/concurrent/CPUThreadPoolExecutor.h"
-#endif
 
 namespace common {
 
@@ -117,11 +113,7 @@ class SafeFutureClient {
 
           try {
             common::getGlobalCPUExecutor()->add(std::move(process_response_op));
-#if __GNUC__ >= 8
           } catch (const folly::QueueFullException& e) {
-#else
-          } catch (const wangle::QueueFullException& e) {
-#endif
             // If add() throws, process_response_op is ok to use here.
             // Remember that std::move() is just a typecast that doesn't
             // actually move anything. And Executor won't consume it if add()
@@ -176,11 +168,7 @@ class SafeFutureClient {
     common::Timer timer(RequestTraits<T>::response_processing_metric_name);
 
     if (recvState->isException()) {
-#if __GNUC__ >= 8
       p->setException(recvState->exception());
-#else
-      p->setException(recvState->exceptionWrapper());
-#endif
       return;
     }
 

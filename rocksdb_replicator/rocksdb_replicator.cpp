@@ -24,13 +24,9 @@
 
 #include "rocksdb_replicator/replicator_handler.h"
 #include "rocksdb_replicator/rocksdb_wrapper.h"
-#if __GNUC__ >= 8
 #include "folly/executors/CPUThreadPoolExecutor.h"
 #include "folly/executors/IOThreadPoolExecutor.h"
 #include "folly/executors/thread_factory/NamedThreadFactory.h"
-#else
-#include "wangle/concurrent/CPUThreadPoolExecutor.h"
-#endif
 
 DEFINE_int32(rocksdb_replicator_port, 9091,
              "The port # for the internal thrift server.");
@@ -47,34 +43,17 @@ RocksDBReplicator::RocksDBReplicator()
     : executor_()
     , client_pool_(FLAGS_num_replicator_io_threads)
     , db_map_()
-#if __GNUC__ >= 8
     , server_()
-#else
-    , server_("disabled", false)
-#endif
     , thread_()
     , cleaner_() {
-#if __GNUC__ >= 8
   executor_ = std::make_unique<folly::CPUThreadPoolExecutor>(
-#else
-  executor_ = std::make_unique<wangle::CPUThreadPoolExecutor>(
-#endif
     std::max(FLAGS_rocksdb_replicator_executor_threads, 16),
-#if __GNUC__ >= 8
     std::make_shared<folly::NamedThreadFactory>("rptor-worker-"));
-#else
-    std::make_shared<wangle::NamedThreadFactory>("rptor-worker-"));
-#endif
 
   server_.setInterface(std::make_unique<ReplicatorHandler>(&db_map_));
   server_.setPort(FLAGS_rocksdb_replicator_port);
-#if __GNUC__ >= 8
   auto io_thread_pool = std::make_shared<folly::IOThreadPoolExecutor>(
     0, std::make_shared<folly::NamedThreadFactory>("rptor-svr-io-"));
-#else
-  auto io_thread_pool = std::make_shared<wangle::IOThreadPoolExecutor>(
-    0, std::make_shared<wangle::NamedThreadFactory>("rptor-svr-io-"));
-#endif
   server_.setIOThreadPool(std::move(io_thread_pool));
   // TODO(bol) share io threads between server_ and client_pool_
   server_.setNWorkerThreads(FLAGS_num_replicator_io_threads);
