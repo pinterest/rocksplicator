@@ -76,6 +76,8 @@ const std::string kReplicatorPullFromNonLeader = "replicator_pull_from_non_leade
 const std::string kReplicatorPullLatency = "replicator_pull_latency";
 const std::string kReplicatorHandleResponseFailure = "replicator_handle_response_failure";
 const std::string kReplicatorResetUpstreamOnNoUpdates = "replicator_reset_upstream_on_no_updates_attempted";
+const std::string kReplicatorHandleObserverRequests = "replicator_handle_observer_requests";
+
 
 void logMetric(const std::string& metric_name, int64_t value,
                const std::string& db_name) {
