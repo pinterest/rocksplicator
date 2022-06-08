@@ -134,6 +134,16 @@ DEFINE_int32(async_delete_dbs_wait_sec,
              60,
              "How long in sec to wait between the dbs deletion");
 
+DEFINE_bool(enable_async_incremental_backup_dbs, false, "Enable incremental backup for db files");
+
+DEFINE_int32(async_incremental_backup_dbs_frequency_sec,
+             60,
+             "How frequently in sec to check the dbs need deleting in async way");
+             
+DEFINE_int32(async_incremental_backup_dbs_wait_sec,
+             60,
+             "How long in sec to wait between the dbs deletion");
+
 #if __GNUC__ >= 8
 using folly::CPUThreadPoolExecutor;
 using folly::LifoSemMPMCQueue;
@@ -432,6 +442,13 @@ void deleteTmpDBs() {
   }
 }
 
+void incrementalBackupDBs() {
+  static backup_cnt = 0;
+  ++backup_cnt;
+  LOG(INFO) << "Back dbs for the " << backup_cnt << "th time";
+  std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_incremental_backup_dbs_wait_sec));
+}
+
 }  // anonymous namespace
 
 namespace admin {
@@ -482,6 +499,21 @@ AdminHandler::AdminHandler(
         std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_delete_dbs_frequency_sec));
       }
       LOG(INFO) << "Stopping DB deletioin thread ...";
+    });
+  }
+
+  if (FLAGS_enable_async_incremental_backup_dbs) {
+    db_incremental_backup_thread_ = std::make_unique<std::thread>([this] {
+      if (!folly::setThreadName("DBIncreBackuper")) {
+        LOG(ERROR) << "Failed to set thread name for DB incremental backup thread";
+      }
+
+      LOG(INFO) << "Starting DB incremental backup thread ...";
+      while (!db_incremental_backup_thread_.load()) {
+        incrementalBackupDBs();
+        std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_incremental_backup_dbs_frequency_sec));
+      }
+      LOG(INFO) << "Stopping DB incremental backup thread ...";
     });
   }
 
@@ -703,7 +735,7 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
   if (!status.ok()) {
     e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
     e->message = status.ToString();
-    LOG(ERROR) << "Error happened when opending db for backup: " << e->message;
+    LOG(ERROR) << "Error happened when opening db for backup: " << e->message;
     return false;
   }
   std::unique_ptr<rocksdb::BackupEngine> backup_engine_holder(backup_engine);
@@ -772,7 +804,7 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
   if (!status.ok()) {
     e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
     e->message = status.ToString();
-    LOG(ERROR) << "Error happened when opending db for restore: " << e->message;
+    LOG(ERROR) << "Error happened when opening db for restore: " << e->message;
     return false;
   }
   std::unique_ptr<rocksdb::BackupEngine> backup_engine_holder(backup_engine);
