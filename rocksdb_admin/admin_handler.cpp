@@ -177,6 +177,7 @@ const std::string kHDFSRestoreMs = "hdfs_restore_ms";
 const std::string kS3BackupMs = "s3_backup_ms";
 const std::string kS3RestoreMs = "s3_restore_ms";
 const std::string kDeleteDBFailure = "delete_db_failure";
+const std::string kCompactDb = "compact_db";
 
 int64_t GetMessageTimestampSecs(const RdKafka::Message& message) {
   const auto ts = message.timestamp();
@@ -2134,8 +2135,11 @@ void AdminHandler::async_tm_compactDB(
       CompactDBResponse>>> callback,
     std::unique_ptr<CompactDBRequest> request) {
   ::admin::AdminException e;
+  const std::string statName = kCompactDb + " db=" + request->db_name;
   auto db = getDB(request->db_name, &e);
   if (db == nullptr) {
+    common::Stats::get()->Incr(statName + " status=failure");
+    LOG(ERROR) << "Compact DB: " << request->db_name << " failed: db not found";
     callback.release()->exceptionInThread(std::move(e));
     return;
   }
@@ -2145,8 +2149,13 @@ void AdminHandler::async_tm_compactDB(
   if (!status.ok()) {
     e.message = status.ToString();
     e.errorCode = AdminErrorCode::DB_ERROR;
+    common::Stats::get()->Incr(statName + " status=failed");
+    LOG(ERROR) << "Compact DB: " << request->db_name << " failed: " << e.message;
     callback.release()->exceptionInThread(std::move(e));
     return;
+  } else {
+    common::Stats::get()->Incr(statName + " status=success");
+    LOG(ERROR) << "Compact DB: " << request->db_name << " succeded";
   }
   callback.release()->result(CompactDBResponse());
 }
