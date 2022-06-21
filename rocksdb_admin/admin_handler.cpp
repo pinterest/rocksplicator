@@ -445,7 +445,7 @@ void deleteTmpDBs() {
 void incrementalBackupDBs() {
   static int backup_cnt = 0;
   ++backup_cnt;
-  LOG(INFO) << "Back dbs for the " << backup_cnt << "th time";
+  LOG(INFO) << "Backup dbs for the " << backup_cnt << "th time";
   std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_incremental_backup_dbs_wait_sec));
 }
 
@@ -464,7 +464,8 @@ AdminHandler::AdminHandler(
   , meta_db_(OpenMetaDB())
   , allow_overlapping_keys_segments_()
   , num_current_s3_sst_downloadings_(0)
-  , stop_db_deletion_thread_(false) {
+  , stop_db_deletion_thread_(false)
+  , stop_db_incremental_backup_thread_ (false) {
   if (db_manager_ == nullptr) {
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
@@ -509,7 +510,7 @@ AdminHandler::AdminHandler(
       }
 
       LOG(INFO) << "Starting DB incremental backup thread ...";
-      while (!db_incremental_backup_thread_.load()) {
+      while (!stop_db_incremental_backup_thread_.load()) {
         incrementalBackupDBs();
         std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_incremental_backup_dbs_frequency_sec));
       }
@@ -526,6 +527,11 @@ AdminHandler::~AdminHandler() {
   if (FLAGS_enable_async_delete_dbs) {
     stop_db_deletion_thread_ = true;
     db_deletion_thread_->join();
+  }
+
+  if (FLAGS_enable_async_incremental_backup_dbs) {
+    stop_db_incremental_backup_thread_ = true;
+    db_incremental_backup_thread_->join();
   }
 }
 
