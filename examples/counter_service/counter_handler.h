@@ -33,7 +33,7 @@ class CounterHandler
  public:
   CounterHandler(
     std::unique_ptr<::admin::ApplicationDBManager> db_manager,
-    admin::RocksDBOptionsGeneratorType rocksdb_options,
+    admin::RocksDBOptionsGenerator rocksdb_options,
     std::unique_ptr<CounterRouter> router,
     rocksdb::WriteOptions write_options,
     rocksdb::ReadOptions read_options)

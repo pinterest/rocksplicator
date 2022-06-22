@@ -27,6 +27,6 @@ namespace counter {
 /*
  * Get the rocksdb options used for segment name
  */
-rocksdb::Options GetRocksdbOptions(const std::string& segment);
+rocksdb::Options GetRocksdbOptions(const std::string& segment, const std::string& db);
 
 }  // namespace counter

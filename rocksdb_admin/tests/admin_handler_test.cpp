@@ -808,7 +808,7 @@ TEST(AdminHandlerTest, MetaData) {
 
   auto db_manager = std::make_unique<admin::ApplicationDBManager>();
   admin::AdminHandler handler(std::move(db_manager),
-                              admin::RocksDBOptionsGeneratorType());
+                              admin::RocksDBOptionsGenerator());
 
   const std::string db_name = "test_db";
   const std::string s3_bucket = "test_bucket";

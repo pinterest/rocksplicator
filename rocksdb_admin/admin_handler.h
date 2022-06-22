@@ -45,11 +45,20 @@ namespace admin {
 using RocksDBOptionsGeneratorType =
   std::function<rocksdb::Options(const std::string&)>;
 
+using RocksDBOptionsGenerator = 
+  std::function<rocksdb::Options(const std::string&, const std::string&)>;
+
+
 class AdminHandler : virtual public AdminSvIf {
  public:
+  // TODO deprecate after getting rid of all callsites
   AdminHandler(
     std::unique_ptr<ApplicationDBManager> db_manager,
     RocksDBOptionsGeneratorType rocksdb_options);
+
+  AdminHandler(
+    std::unique_ptr<ApplicationDBManager> db_manager,
+    RocksDBOptionsGenerator rocksdb_options);
 
   virtual ~AdminHandler();
 
@@ -162,7 +171,7 @@ class AdminHandler : virtual public AdminSvIf {
                      const int64_t last_kafka_msg_timestamp_ms = -1);
 
   std::unique_ptr<ApplicationDBManager> db_manager_;
-  RocksDBOptionsGeneratorType rocksdb_options_;
+  RocksDBOptionsGenerator rocksdb_options_;
   // S3 util used for download
   std::shared_ptr<common::S3Util> s3_util_;
   // Lock for protecting the s3 util
