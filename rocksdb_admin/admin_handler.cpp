@@ -245,7 +245,7 @@ folly::Future<std::unique_ptr<rocksdb::DB>> GetRocksdbFuture(
 
 
 std::unique_ptr<::admin::ApplicationDBManager> CreateDBBasedOnConfig(
-    const admin::RocksDBOptionsGeneratorType& rocksdb_options) {
+    const admin::RocksDBOptionsGenerator& rocksdb_options) {
   auto db_manager = std::make_unique<::admin::ApplicationDBManager>();
   std::string content;
   CHECK(folly::readFile(FLAGS_shard_config_path.c_str(), content));
@@ -276,7 +276,7 @@ std::unique_ptr<::admin::ApplicationDBManager> CreateDBBasedOnConfig(
       }
 
       auto db_name = common::SegmentToDbName(segment.first.c_str(), shard_id);
-      auto options = rocksdb_options(segment.first);
+      auto options = rocksdb_options(segment.first, db_name);
       auto db_future = GetRocksdbFuture(FLAGS_rocksdb_dir + db_name, options);
       std::unique_ptr<folly::SocketAddress> upstream_addr(nullptr);
       if (my_role == common::detail::Role::SLAVE) {
@@ -438,8 +438,16 @@ void deleteTmpDBs() {
 namespace admin {
 
 AdminHandler::AdminHandler(
+  std::unique_ptr<ApplicationDBManager> db_manager,
+  RocksDBOptionsGeneratorType rocksdb_options): AdminHandler(
+      std::move(db_manager), 
+      [rocksdb_options](const std::string& dataset, const std::string& db) {
+        return rocksdb_options(dataset);
+  }) {}
+
+AdminHandler::AdminHandler(
     std::unique_ptr<ApplicationDBManager> db_manager,
-    RocksDBOptionsGeneratorType rocksdb_options)
+    RocksDBOptionsGenerator rocksdb_options)
   : db_admin_lock_()
   , db_manager_(std::move(db_manager))
   , rocksdb_options_(std::move(rocksdb_options))
@@ -600,7 +608,7 @@ void AdminHandler::async_tm_addDB(
   if (request->overwrite) {
     LOG(INFO) << "Clearing DB: " << request->db_name;
     clearMetaData(request->db_name);
-    status = rocksdb::DestroyDB(db_path, rocksdb_options_(segment));
+    status = rocksdb::DestroyDB(db_path, rocksdb_options_(segment, request->db_name));
     if (!OKOrSetException(status,
                           AdminErrorCode::DB_ADMIN_ERROR,
                           &callback)) {
@@ -612,7 +620,7 @@ void AdminHandler::async_tm_addDB(
 
   // Open the actual rocksdb instance
   rocksdb::DB* rocksdb_db;
-  status = rocksdb::DB::Open(rocksdb_options_(segment), db_path, &rocksdb_db);
+  status = rocksdb::DB::Open(rocksdb_options_(segment, request->db_name), db_path, &rocksdb_db);
   if (!OKOrSetException(status,
                         AdminErrorCode::DB_ERROR,
                         &callback)) {
@@ -800,7 +808,7 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
 
   rocksdb::DB* rocksdb_db;
   auto segment = common::DbNameToSegment(db_name);
-  status = rocksdb::DB::Open(rocksdb_options_(segment), db_path, &rocksdb_db);
+  status = rocksdb::DB::Open(rocksdb_options_(segment, db_name), db_path, &rocksdb_db);
   if (!status.ok()) {
     e->errorCode = AdminErrorCode::DB_ERROR;
     e->message = status.ToString();
@@ -1258,7 +1266,7 @@ void AdminHandler::async_tm_restoreDBFromS3(
 
     rocksdb::DB* restore_db;
     auto segment = common::DbNameToSegment(request->db_name);
-    auto status = rocksdb::DB::Open(rocksdb_options_(segment), formatted_local_path, &restore_db);
+    auto status = rocksdb::DB::Open(rocksdb_options_(segment, request->db_name), formatted_local_path, &restore_db);
     if (!status.ok()) {
       OKOrSetException(status, AdminErrorCode::DB_ERROR, &callback);
       LOG(ERROR) << "Error happened when opening db via checkpoint: " << status.ToString();
@@ -1500,7 +1508,7 @@ void AdminHandler::async_tm_clearDB(
 
   removeDB(request->db_name, nullptr);
 
-  auto options = rocksdb_options_(common::DbNameToSegment(request->db_name));
+  auto options = rocksdb_options_(common::DbNameToSegment(request->db_name), request->db_name);
   auto db_path = FLAGS_rocksdb_dir + request->db_name;
   LOG(INFO) << "Clearing DB: " << request->db_name;
   clearMetaData(request->db_name);
@@ -1755,7 +1763,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     }
     db.reset();
     removeDB(request->db_name, nullptr);
-    auto options = rocksdb_options_(segment);
+    auto options = rocksdb_options_(segment, request->db_name);
     auto db_path = FLAGS_rocksdb_dir + request->db_name;
     LOG(INFO) << "Clearing DB: " << request->db_name;
     auto status = rocksdb::DestroyDB(db_path, options);

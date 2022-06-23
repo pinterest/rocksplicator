@@ -106,7 +106,7 @@ rocksdb::Options __GetRocksdbOptions() {
 
 namespace counter {
 
-rocksdb::Options GetRocksdbOptions(const std::string& segment) {
+rocksdb::Options GetRocksdbOptions(const std::string& segment, const std::string& db) {
   static const rocksdb::Options options = __GetRocksdbOptions();
   return options;
 }
