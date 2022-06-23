@@ -442,13 +442,6 @@ void deleteTmpDBs() {
   }
 }
 
-void incrementalBackupDBs() {
-  static int backup_cnt = 0;
-  ++backup_cnt;
-  LOG(INFO) << "Backup dbs for the " << backup_cnt << "th time";
-  std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_incremental_backup_dbs_wait_sec));
-}
-
 }  // anonymous namespace
 
 namespace admin {
@@ -504,18 +497,7 @@ AdminHandler::AdminHandler(
   }
 
   if (FLAGS_enable_async_incremental_backup_dbs) {
-    db_incremental_backup_thread_ = std::make_unique<std::thread>([this] {
-      if (!folly::setThreadName("DBIncreBackuper")) {
-        LOG(ERROR) << "Failed to set thread name for DB incremental backup thread";
-      }
-
-      LOG(INFO) << "Starting DB incremental backup thread ...";
-      while (!stop_db_incremental_backup_thread_.load()) {
-        incrementalBackupDBs();
-        std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_incremental_backup_dbs_frequency_sec));
-      }
-      LOG(INFO) << "Stopping DB incremental backup thread ...";
-    });
+    LOG(INFO) << "incremental backup gflag is enabled";
   }
 
   // Initialize the atomic int variables
