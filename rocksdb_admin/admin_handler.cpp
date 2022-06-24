@@ -134,6 +134,8 @@ DEFINE_int32(async_delete_dbs_wait_sec,
              60,
              "How long in sec to wait between the dbs deletion");
 
+DEFINE_bool(enable_async_incremental_backup_dbs, false, "Enable incremental backup for db files");
+
 #if __GNUC__ >= 8
 using folly::CPUThreadPoolExecutor;
 using folly::LifoSemMPMCQueue;
@@ -494,6 +496,10 @@ AdminHandler::AdminHandler(
     });
   }
 
+  if (FLAGS_enable_async_incremental_backup_dbs) {
+    LOG(INFO) << "incremental backup gflag is enabled";
+  }
+
   // Initialize the atomic int variables
   num_current_s3_sst_downloadings_.store(0);
   num_current_s3_sst_uploadings_.store(0);
@@ -712,7 +718,7 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
   if (!status.ok()) {
     e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
     e->message = status.ToString();
-    LOG(ERROR) << "Error happened when opending db for backup: " << e->message;
+    LOG(ERROR) << "Error happened when opening db for backup: " << e->message;
     return false;
   }
   std::unique_ptr<rocksdb::BackupEngine> backup_engine_holder(backup_engine);
@@ -781,7 +787,7 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
   if (!status.ok()) {
     e->errorCode = AdminErrorCode::DB_ADMIN_ERROR;
     e->message = status.ToString();
-    LOG(ERROR) << "Error happened when opending db for restore: " << e->message;
+    LOG(ERROR) << "Error happened when opening db for restore: " << e->message;
     return false;
   }
   std::unique_ptr<rocksdb::BackupEngine> backup_engine_holder(backup_engine);
