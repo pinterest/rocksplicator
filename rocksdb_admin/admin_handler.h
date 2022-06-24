@@ -203,9 +203,6 @@ class AdminHandler : virtual public AdminSvIf {
 
   std::unique_ptr<std::thread> db_deletion_thread_;
   std::atomic<bool> stop_db_deletion_thread_;
-
-  std::unique_ptr<std::thread> db_incremental_backup_thread_;
-  std::atomic<bool> stop_db_incremental_backup_thread_;
 };
 
 }  // namespace admin
