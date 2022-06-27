@@ -41,4 +41,9 @@ bool EncodeThriftStruct(const T& obj, std::string* data) {
   return !ex;
 }
 
+// Will remove and create a directory
+// returns true if any of these operations failed.
+bool ClearAndCreateDir(std::string dir_path, std::string* err);
+
+
 }  // namespace admin

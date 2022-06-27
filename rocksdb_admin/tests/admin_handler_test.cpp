@@ -92,14 +92,6 @@ DECLARE_string(rocksdb_dir);
 DECLARE_bool(enable_checkpoint_backup);
 DECLARE_bool(rocksdb_allow_overlapping_keys);
 
-void clearAndCreateDir(string dir_path) {
-  boost::system::error_code create_err;
-  boost::system::error_code remove_err;
-  fs::remove_all(dir_path, remove_err);
-  fs::create_directories(dir_path, create_err);
-  EXPECT_FALSE(remove_err || create_err);
-}
-
 string generateRandIntAsStr() {
   static thread_local unsigned int seed = time(nullptr);
   return to_string(rand_r(&seed));
@@ -147,8 +139,9 @@ class AdminHandlerTestBase : public testing::Test {
     FLAGS_s3_backup_prefix =
         FLAGS_s3_backup_prefix + testSessionIdAsStr() + "/";
 
-    LOG(INFO) << "Test start, clearAndCreateDir " << testDir();
-    clearAndCreateDir(testDir());
+    LOG(INFO) << "Test start, ClearAndCreateDir " << testDir();
+    std::string err;
+    EXPECT_TRUE(admin::ClearAndCreateDir(testDir(), &err));
 
     tie(handler_, server_, thread_, db_manager_) = makeServer(8090);
     sleep_for(seconds(1));
@@ -804,7 +797,8 @@ TEST_F(AdminHandlerTestBase, CheckDB) {
 
 TEST(AdminHandlerTest, MetaData) {
   FLAGS_rocksdb_dir = "/tmp/admin_handler_test/";
-  clearAndCreateDir(FLAGS_rocksdb_dir);
+  std::string err;
+  EXPECT_TRUE(admin::ClearAndCreateDir(FLAGS_rocksdb_dir, &err));
 
   auto db_manager = std::make_unique<admin::ApplicationDBManager>();
   admin::AdminHandler handler(std::move(db_manager),
@@ -880,6 +874,24 @@ TEST(AdminHandlerTest, MetaData) {
   meta.set_db_name(db_name);
   EXPECT_FALSE(DecodeThriftStruct(meta_from_backup, &meta));
   EXPECT_EQ(meta.db_name, db_name);
+}
+
+
+TEST(AdminHandlerTest, InitS3Tmp) {
+  gflags::FlagSaver saver;
+  FLAGS_rocksdb_dir = "/tmp/admin_handler_test/";
+  auto s3_path = FLAGS_rocksdb_dir + "s3_tmp/"; 
+  auto test_directory = s3_path + "test_directory";
+  std::string err;
+  EXPECT_TRUE(admin::ClearAndCreateDir(FLAGS_rocksdb_dir, &err));
+  EXPECT_TRUE(admin::ClearAndCreateDir(s3_path, &err));
+  EXPECT_TRUE(admin::ClearAndCreateDir(s3_path + "test_directory", &err));
+  EXPECT_TRUE(fs::exists(test_directory));
+
+  auto db_manager = std::make_unique<admin::ApplicationDBManager>();
+  admin::AdminHandler handler(std::move(db_manager),
+                              admin::RocksDBOptionsGenerator());
+  EXPECT_FALSE(fs::exists(test_directory));
 }
 
 }  // namespace admin
