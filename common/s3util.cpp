@@ -61,9 +61,15 @@ using Aws::S3::Model::PutObjectRequest;
 
 DEFINE_int32(direct_io_buffer_n_pages, 1,
              "Number of pages we need to set to direct io buffer");
+
 DEFINE_bool(disable_s3_download_stream_buffer, false,
             "disable the stream buffer used by s3 downloading");
+
 DEFINE_bool(use_s3_list_objects_v2, false, "use ListObjectsV2 instead of ListObjects in S3Client.");
+
+DEFINE_int32(s3_retry_limit, 3, "How many times S3Util will retry at most if one s3 operation fails.");
+
+DEFINE_int32(s3_retry_wait_scalefactor, 25, "Scale factor for the delay of retry, delay = (1 << attemptedRetries) * scaleFactor");
 
 
 namespace {
@@ -82,8 +88,6 @@ namespace {
   const std::string kS3GetObjectCallable = "s3_getobject_callable";
   const std::string kS3CopyObject = "s3_copyobject";
   const std::string kS3DeleteObject = "s3_deleteobject";
-  const int kS3RetryLimit = 3;
-  const int kS3RetrySec = 1;
 }
 
 namespace common {
@@ -176,23 +180,14 @@ GetObjectResponse S3Util::getObject(const string& key, iostream* out) {
   getObjectRequest.SetBucket(bucket_);
   getObjectRequest.SetKey(key);
   auto getObjectResult = s3Client->GetObject(getObjectRequest);
-
-  int retry_cnt = 0;
-
-  while (retry_cnt < kS3RetryLimit) {
-    if (getObjectResult.IsSuccess()) {
-      *out << getObjectResult.GetResult().GetBody().rdbuf();
-      return GetObjectResponse(true, "");
-    } else {
-      retry_cnt++;
-    }  
-
-    std::this_thread::sleep_for(std::chrono::seconds(kS3RetrySec));
+  if (getObjectResult.IsSuccess()) {
+    *out << getObjectResult.GetResult().GetBody().rdbuf();
+    return GetObjectResponse(true, "");
+  } else {
+    string err_msg_prefix = "Failed to get " + key + ", error: ";
+    return GetObjectResponse(false,
+        std::move(err_msg_prefix + getObjectResult.GetError().GetMessage()));
   }
-
-  string err_msg_prefix = "Failed to get " + key + ", error: ";
-  return GetObjectResponse(false,
-    std::move(err_msg_prefix + getObjectResult.GetError().GetMessage()));
 }
 
 SdkGetObjectResponse S3Util::sdkGetObject(const string& key,
@@ -367,29 +362,20 @@ ListObjectsResponseV2 S3Util::listAllObjects(const string& prefix, const string&
   string marker;
   string next_marker;
 
-  int retry_cnt = 0;
-
-  while (retry_cnt < kS3RetryLimit) {
-    do {
-      if(FLAGS_use_s3_list_objects_v2) {
-        listObjectsV2Helper(prefix, delimiter, marker, &objects, &next_marker, &error_message);
-      } else {
-        listObjectsHelper(prefix, delimiter, marker, &objects, &next_marker, &error_message);
-      }
-      if (!error_message.empty()) {
-        break;
-      }
-      output.insert(output.end(), objects.begin(), objects.end());
-      objects.clear();
-      marker = next_marker;
-      next_marker.clear();
-    } while (!marker.empty());
-
-    if (marker.empty()) break;
-    else retry_cnt++;
-
-    std::this_thread::sleep_for(std::chrono::seconds(kS3RetrySec));
-  }
+  do {
+    if(FLAGS_use_s3_list_objects_v2) {
+      listObjectsV2Helper(prefix, delimiter, marker, &objects, &next_marker, &error_message);
+    } else {
+      listObjectsHelper(prefix, delimiter, marker, &objects, &next_marker, &error_message);
+    }
+    if (!error_message.empty()) {
+      break;
+    }
+    output.insert(output.end(), objects.begin(), objects.end());
+    objects.clear();
+    marker = next_marker;
+    next_marker.clear();
+  } while (!marker.empty());
   Stats::get()->Incr(kS3ListAllObjectsItems, output.size());
   return ListObjectsResponseV2(ListObjectsResponseV2Body(output, next_marker), error_message);
 }
@@ -484,22 +470,16 @@ PutObjectResponse S3Util::putObject(const string& key, const string& local_path,
                                                   local_path.c_str(),
                                                   std::ios_base::in | std::ios_base::binary);
   object_request.SetBody(input_data);
+
   auto put_result = s3Client->PutObject(object_request);
 
-  int retry_cnt = 0;
-
-  while (retry_cnt < kS3RetryLimit) {
-    if (put_result.IsSuccess()) {
-      return PutObjectResponse(true, "");
-    } else {
-      retry_cnt++;
-    }
-    std::this_thread::sleep_for(std::chrono::seconds(kS3RetrySec));
+  if (put_result.IsSuccess()) {
+    return PutObjectResponse(true, "");
+  } else {
+    string err_msg_prefix = "Failed to upload file " + local_path + " to " + key + ", error: ";
+    return PutObjectResponse(false,
+                             std::move(err_msg_prefix + put_result.GetError().GetMessage()));
   }
-
-  string err_msg_prefix = "Failed to upload file " + local_path + " to " + key + ", error: ";
-  return PutObjectResponse(false,
-                          std::move(err_msg_prefix + put_result.GetError().GetMessage()));
 }
 
 Aws::S3::Model::PutObjectOutcomeCallable
@@ -576,6 +556,7 @@ shared_ptr<S3Util> S3Util::BuildS3Util(
   aws_config.connectTimeoutMs = connect_timeout_ms;
   aws_config.requestTimeoutMs = request_timeout_ms;
   aws_config.maxConnections = max_connections;
+  aws_config.retryStrategy = std::make_shared<Aws::Client::DefaultRetryStrategy>(FLAGS_s3_retry_limit, FLAGS_s3_retry_wait_scalefactor);
   if (read_ratelimit_mb > 0) {
     aws_config.readRateLimiter =
         std::make_shared<AwsS3RateLimiter>(
