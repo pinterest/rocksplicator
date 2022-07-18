@@ -67,9 +67,11 @@ DEFINE_bool(disable_s3_download_stream_buffer, false,
 
 DEFINE_bool(use_s3_list_objects_v2, false, "use ListObjectsV2 instead of ListObjects in S3Client.");
 
+DEFINE_bool(enable_s3_retry, false, "Enable retry feature for the s3 operations.");
+
 DEFINE_int32(s3_retry_limit, 3, "How many times S3Util will retry at most if one s3 operation fails.");
 
-DEFINE_int32(s3_retry_wait_scalefactor, 25, "Scale factor for the delay of retry, delay = (1 << attemptedRetries) * scaleFactor");
+DEFINE_int32(s3_retry_wait_scalefactor, 25, "Scale factor for the delay of retry, delay = (1 << attemptedRetries) * scaleFactor.");
 
 
 namespace {
@@ -556,7 +558,12 @@ shared_ptr<S3Util> S3Util::BuildS3Util(
   aws_config.connectTimeoutMs = connect_timeout_ms;
   aws_config.requestTimeoutMs = request_timeout_ms;
   aws_config.maxConnections = max_connections;
-  aws_config.retryStrategy = std::make_shared<Aws::Client::DefaultRetryStrategy>(FLAGS_s3_retry_limit, FLAGS_s3_retry_wait_scalefactor);
+
+  if (FLAGS_enable_s3_retry) {
+    aws_config.retryStrategy = std::make_shared<Aws::Client::DefaultRetryStrategy>(
+      FLAGS_s3_retry_limit, FLAGS_s3_retry_wait_scalefactor);
+  }
+  
   if (read_ratelimit_mb > 0) {
     aws_config.readRateLimiter =
         std::make_shared<AwsS3RateLimiter>(

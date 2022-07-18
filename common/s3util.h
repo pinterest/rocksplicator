@@ -56,10 +56,6 @@ using Aws::S3::S3Endpoint::ForRegion;
 
 DECLARE_int32(direct_io_buffer_n_pages);
 
-DECLARE_int32(s3_retry_limit);
-
-DECLARE_int32(s3_retry_wait_sec);
-
 namespace common {
 
 template <class T>
