@@ -136,6 +136,14 @@ DEFINE_int32(async_delete_dbs_wait_sec,
 
 DEFINE_bool(enable_async_incremental_backup_dbs, false, "Enable incremental backup for db files");
 
+DEFINE_int32(async_incremental_backup_dbs_frequency_sec,
+             60,
+             "How frequently in sec to check the dbs need deleting in async way");
+
+DEFINE_int32(async_incremental_backup_dbs_wait_sec,
+             60,
+             "How long in sec to wait between the dbs deletion");
+
 #if __GNUC__ >= 8
 using folly::CPUThreadPoolExecutor;
 using folly::LifoSemMPMCQueue;
@@ -458,7 +466,8 @@ AdminHandler::AdminHandler(
   , meta_db_(OpenMetaDB())
   , allow_overlapping_keys_segments_()
   , num_current_s3_sst_downloadings_(0)
-  , stop_db_deletion_thread_(false) {
+  , stop_db_deletion_thread_(false)
+  , stop_db_incremental_backup_thread_ (false) {
   if (db_manager_ == nullptr) {
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
@@ -509,6 +518,11 @@ AdminHandler::~AdminHandler() {
   if (FLAGS_enable_async_delete_dbs) {
     stop_db_deletion_thread_ = true;
     db_deletion_thread_->join();
+  }
+
+  if (FLAGS_enable_async_incremental_backup_dbs) {
+    stop_db_incremental_backup_thread_ = true;
+    db_incremental_backup_thread_->join();
   }
 }
 
