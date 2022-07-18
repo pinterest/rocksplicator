@@ -61,9 +61,17 @@ using Aws::S3::Model::PutObjectRequest;
 
 DEFINE_int32(direct_io_buffer_n_pages, 1,
              "Number of pages we need to set to direct io buffer");
+
 DEFINE_bool(disable_s3_download_stream_buffer, false,
             "disable the stream buffer used by s3 downloading");
+
 DEFINE_bool(use_s3_list_objects_v2, false, "use ListObjectsV2 instead of ListObjects in S3Client.");
+
+DEFINE_bool(enable_s3_retry, false, "Enable retry feature for the s3 operations.");
+
+DEFINE_int32(s3_retry_limit, 3, "How many times S3Util will retry at most if one s3 operation fails.");
+
+DEFINE_int32(s3_retry_wait_scalefactor, 25, "Scale factor for the delay of retry, delay = (1 << attemptedRetries) * scaleFactor.");
 
 
 namespace {
@@ -355,6 +363,7 @@ ListObjectsResponseV2 S3Util::listAllObjects(const string& prefix, const string&
   string error_message;
   string marker;
   string next_marker;
+
   do {
     if(FLAGS_use_s3_list_objects_v2) {
       listObjectsV2Helper(prefix, delimiter, marker, &objects, &next_marker, &error_message);
@@ -463,6 +472,7 @@ PutObjectResponse S3Util::putObject(const string& key, const string& local_path,
                                                   local_path.c_str(),
                                                   std::ios_base::in | std::ios_base::binary);
   object_request.SetBody(input_data);
+
   auto put_result = s3Client->PutObject(object_request);
 
   if (put_result.IsSuccess()) {
@@ -548,6 +558,12 @@ shared_ptr<S3Util> S3Util::BuildS3Util(
   aws_config.connectTimeoutMs = connect_timeout_ms;
   aws_config.requestTimeoutMs = request_timeout_ms;
   aws_config.maxConnections = max_connections;
+
+  if (FLAGS_enable_s3_retry) {
+    aws_config.retryStrategy = std::make_shared<Aws::Client::DefaultRetryStrategy>(
+      FLAGS_s3_retry_limit, FLAGS_s3_retry_wait_scalefactor);
+  }
+  
   if (read_ratelimit_mb > 0) {
     aws_config.readRateLimiter =
         std::make_shared<AwsS3RateLimiter>(
