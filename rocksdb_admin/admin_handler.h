@@ -210,6 +210,9 @@ class AdminHandler : virtual public AdminSvIf {
   std::shared_ptr<common::S3Util> createLocalS3Util(const uint32_t read_ratelimit_mb = 50,
                                                     const std::string& bucket = "");
 
+
+  void initS3Tmp();
+
   std::unique_ptr<std::thread> db_deletion_thread_;
   std::atomic<bool> stop_db_deletion_thread_;
 };

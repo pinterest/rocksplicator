@@ -435,6 +435,10 @@ void deleteTmpDBs() {
   }
 }
 
+inline std::string getS3TmpPath() {
+  return FLAGS_rocksdb_dir + "s3_tmp/"; 
+}
+
 }  // anonymous namespace
 
 namespace admin {
@@ -503,6 +507,14 @@ AdminHandler::AdminHandler(
   // Initialize the atomic int variables
   num_current_s3_sst_downloadings_.store(0);
   num_current_s3_sst_uploadings_.store(0);
+  // All interactions with admin handler that involve s3_tmp folder will
+  // be called on the admin handler instance, these are
+  // 1) backupDbToS3
+  // 2) addS3SstFilesToDB
+  // 3) restoreDbFromS3
+  // thus no way they can be called before the handler instance 
+  // finishes construction.
+  initS3Tmp();
 }
 
 AdminHandler::~AdminHandler() {
@@ -969,7 +981,7 @@ void AdminHandler::async_tm_backupDBToS3(
   common::Timer timer(kS3BackupMs);
   LOG(INFO) << "S3 Backup " << request->db_name << " to " << request->s3_backup_dir;
   auto ts = common::timeutil::GetCurrentTimestamp();
-  auto local_path = folly::stringPrintf("%ss3_tmp/%s%d/", FLAGS_rocksdb_dir.c_str(), request->db_name.c_str(), ts);
+  auto local_path = folly::stringPrintf("%s%s%d/", getS3TmpPath(), request->db_name.c_str(), ts);
   boost::system::error_code remove_err;
   boost::system::error_code create_err;
   boost::filesystem::remove_all(local_path, remove_err);
@@ -1163,7 +1175,7 @@ void AdminHandler::async_tm_restoreDBFromS3(
 
   auto ts = common::timeutil::GetCurrentTimestamp();
   auto local_path = FLAGS_enable_checkpoint_backup ? FLAGS_rocksdb_dir + request->db_name :
-                    folly::stringPrintf("%ss3_tmp/%s%d/", FLAGS_rocksdb_dir.c_str(), request->db_name.c_str(), ts);
+                    folly::stringPrintf("%s%s%d/", getS3TmpPath(), request->db_name.c_str(), ts);
   boost::system::error_code remove_err;
   boost::system::error_code create_err;
   boost::filesystem::remove_all(local_path, remove_err);
@@ -1692,7 +1704,7 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
     return;
   }
 
-  auto local_path = FLAGS_rocksdb_dir + "s3_tmp/" + request->db_name + "/";
+  auto local_path = getS3TmpPath() + request->db_name + "/";
   boost::system::error_code remove_err;
   boost::system::error_code create_err;
   boost::filesystem::remove_all(local_path, remove_err);
@@ -2180,6 +2192,14 @@ std::string AdminHandler::DumpDBStatsAsText() const {
 
 std::vector<std::string> AdminHandler::getAllDBNames() {
     return db_manager_->getAllDBNames();
+}
+
+void AdminHandler::initS3Tmp() {
+  auto s3_path = getS3TmpPath();
+  std::string error_message;
+  if(!ClearAndCreateDir(s3_path, &error_message)){
+    LOG(ERROR) << "Failed to clean and create directory: " << s3_path << ": " << error_message; 
+  }
 }
 
 }  // namespace admin
