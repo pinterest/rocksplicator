@@ -448,7 +448,7 @@ void deleteTmpDBs() {
 namespace admin {
 
 AdminHandler::AdminHandler(
-  std::unique_ptr<ApplicationDBManager> db_manager,
+  std::shared_ptr<ApplicationDBManager> db_manager,
   RocksDBOptionsGeneratorType rocksdb_options): AdminHandler(
       std::move(db_manager), 
       [rocksdb_options](const std::string& dataset, const std::string& db) {
@@ -456,10 +456,10 @@ AdminHandler::AdminHandler(
   }) {}
 
 AdminHandler::AdminHandler(
-    std::unique_ptr<ApplicationDBManager> db_manager,
+    std::shared_ptr<ApplicationDBManager> db_manager,
     RocksDBOptionsGenerator rocksdb_options)
   : db_admin_lock_()
-  , db_manager_(std::move(db_manager))
+  , db_manager_(db_manager)
   , rocksdb_options_(std::move(rocksdb_options))
   , s3_util_()
   , s3_util_lock_()
@@ -467,10 +467,14 @@ AdminHandler::AdminHandler(
   , allow_overlapping_keys_segments_()
   , num_current_s3_sst_downloadings_(0)
   , stop_db_deletion_thread_(false)
-  , stop_db_incremental_backup_thread_ (false) {
+  , stop_db_incremental_backup_thread_(false) {
   if (db_manager_ == nullptr) {
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
+
+  backup_manager_ = std::make_unique<ApplicationDBBackupManager>(
+    std::move(db_manager), FLAGS_rocksdb_dir, FLAGS_checkpoint_backup_batch_num_upload);
+
   folly::splitTo<std::string>(
       ",", FLAGS_allow_overlapping_keys_segments,
       std::inserter(allow_overlapping_keys_segments_,
@@ -506,7 +510,29 @@ AdminHandler::AdminHandler(
   }
 
   if (FLAGS_enable_async_incremental_backup_dbs) {
-    LOG(INFO) << "incremental backup gflag is enabled";
+    db_incremental_backup_thread_ = std::make_unique<std::thread>([this] {
+      if (!folly::setThreadName("DBBackuper")) {
+        LOG(ERROR) << "Failed to set thread name for DB backup thread";
+      }
+
+      LOG(INFO) << "Starting DB backup thread ...";
+      while (!stop_db_incremental_backup_thread_.load()) {
+        std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_incremental_backup_dbs_frequency_sec));
+        const auto n = num_current_s3_sst_uploadings_.fetch_add(1);
+
+        if (n >= FLAGS_max_s3_sst_loading_concurrency) {
+          auto err_str =
+              folly::stringPrintf("Concurrent uploading/downloading limit hits %d", n);
+          // SetException(err_str, AdminErrorCode::DB_ADMIN_ERROR, &callback);
+          LOG(ERROR) << err_str;
+          common::Stats::get()->Incr(kS3BackupFailure);
+        } else {
+          backup_manager_->backupAllDBsToS3(S3UploadAndDownloadExecutor(), meta_db_, db_admin_lock_);
+        }
+        num_current_s3_sst_uploadings_.fetch_sub(1);
+      }
+      LOG(INFO) << "Stopping DB backup thread ...";
+    });
   }
 
   // Initialize the atomic int variables
@@ -2194,6 +2220,14 @@ std::string AdminHandler::DumpDBStatsAsText() const {
 
 std::vector<std::string> AdminHandler::getAllDBNames() {
     return db_manager_->getAllDBNames();
+}
+
+void AdminHandler::setS3Config(
+    const std::string& s3_bucket,
+    const std::string& s3_backup_dir,
+    uint32_t limit_mbs,
+    bool include_meta) {
+  backup_manager_->setS3Config(std::move(s3_bucket), std::move(s3_backup_dir), limit_mbs, include_meta);
 }
 
 }  // namespace admin

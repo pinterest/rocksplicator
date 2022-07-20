@@ -149,6 +149,10 @@ std::string ApplicationDBManager::Introspect() const {
   return ss.str();
 }
 
+std::unordered_map<std::string, std::shared_ptr<ApplicationDB>> ApplicationDBManager::getAllDBs() {
+  return dbs_;
+}
+
 ApplicationDBManager::~ApplicationDBManager() {
   auto itor = dbs_.begin();
   while (itor != dbs_.end()) {

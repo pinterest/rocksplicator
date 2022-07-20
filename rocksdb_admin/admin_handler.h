@@ -26,10 +26,9 @@
 #include <thread>
 #include <unordered_set>
 
-#include "common/object_lock.h"
-#include "common/s3util.h"
 #include "folly/SocketAddress.h"
-#include "rocksdb_admin/application_db_manager.h"
+#include "rocksdb_admin/application_db_backup_manager.h"
+#include "rocksdb_admin/application_db_backup_manager.h"
 #ifdef PINTEREST_INTERNAL
 // NEVER SET THIS UNLESS PINTEREST INTERNAL USAGE.
 #include "schemas/gen-cpp2/Admin.h"
@@ -53,11 +52,11 @@ class AdminHandler : virtual public AdminSvIf {
  public:
   // TODO deprecate after getting rid of all callsites
   AdminHandler(
-    std::unique_ptr<ApplicationDBManager> db_manager,
+    std::shared_ptr<ApplicationDBManager> db_manager,
     RocksDBOptionsGeneratorType rocksdb_options);
 
   AdminHandler(
-    std::unique_ptr<ApplicationDBManager> db_manager,
+    std::shared_ptr<ApplicationDBManager> db_manager,
     RocksDBOptionsGenerator rocksdb_options);
 
   virtual ~AdminHandler();
@@ -153,6 +152,12 @@ class AdminHandler : virtual public AdminSvIf {
   // Get all the db names held by the AdminHandler
   std::vector<std::string> getAllDBNames();
 
+  // Set S3 config for the Backup Manager
+  void setS3Config(const std::string& s3_bucket,
+                   const std::string& s3_backup_dir,
+                   uint32_t limit_mbs,
+                   bool include_meta);
+
  protected:
   // Lock to synchronize DB admin operations at per DB granularity.
   // Put db_admin_lock in protected to provide flexibility
@@ -170,7 +175,8 @@ class AdminHandler : virtual public AdminSvIf {
                      const std::string& s3_path,
                      const int64_t last_kafka_msg_timestamp_ms = -1);
 
-  std::unique_ptr<ApplicationDBManager> db_manager_;
+  std::shared_ptr<ApplicationDBManager> db_manager_;
+  std::unique_ptr<ApplicationDBBackupManager> backup_manager_;
   RocksDBOptionsGenerator rocksdb_options_;
   // S3 util used for download
   std::shared_ptr<common::S3Util> s3_util_;
