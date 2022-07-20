@@ -175,7 +175,7 @@ bool ApplicationDBBackupManager::backupDBToS3(
 
   // Upload checkpoint to s3
   auto local_s3_util = createLocalS3Util(limit_mbs_, s3_bucket_);
-  std::string formatted_s3_dir_path = ensure_ends_with_pathsep(s3_backup_dir_);
+  std::string formatted_s3_dir_path = folly::stringPrintf("%s/%s/%d", ensure_ends_with_pathsep(checkpoint_local_path).c_str(), db->db_name().c_str(), ts);
   std::string formatted_checkpoint_local_path = ensure_ends_with_pathsep(checkpoint_local_path);
   auto upload_func = [&](const std::string& dest, const std::string& source) {
     LOG(INFO) << "Copying " << source << " to " << dest;
