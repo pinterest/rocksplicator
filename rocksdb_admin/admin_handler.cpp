@@ -2224,10 +2224,39 @@ std::vector<std::string> AdminHandler::getAllDBNames() {
 
 void AdminHandler::setS3Config(
     const std::string& s3_bucket,
-    const std::string& s3_backup_dir,
-    uint32_t limit_mbs,
-    bool include_meta) {
-  backup_manager_->setS3Config(std::move(s3_bucket), std::move(s3_backup_dir), limit_mbs, include_meta);
+    const std::string& s3_backup_dir_prefix,
+    const std::string& snapshot_host_port,
+    const uint32_t limit_mbs,
+    const bool include_meta) {
+  backup_manager_->setS3Config(std::move(s3_bucket), std::move(s3_backup_dir_prefix), 
+    std::move(snapshot_host_port), limit_mbs, include_meta);
+}
+
+bool AdminHandler::checkS3Object(
+    const uint32_t limit_mbs, 
+    const std::string& s3_bucket, 
+    const std::string& s3_path) {
+  auto local_s3_util = createLocalS3Util(limit_mbs, s3_bucket);
+  auto resp = local_s3_util->listAllObjects(ensure_ends_with_pathsep(s3_path));
+  if (!resp.Error().empty()) {
+    auto err_msg = folly::stringPrintf(
+        "Error happened when fetching files in checkpoint from S3: %s under path: %s",
+        resp.Error().c_str(), s3_path.c_str());
+    LOG(ERROR) << err_msg;
+    common::Stats::get()->Incr(kS3RestoreFailure);
+    return false;
+  }
+
+  if (resp.Body().objects.size() > 0) {
+    return true;
+  } else {
+    LOG(INFO) << "No data has been written into " << s3_path << " on S3";
+    return false;
+  }
+}
+
+bool AdminHandler::backupAllDBsToS3() {
+  return backup_manager_->backupAllDBsToS3(S3UploadAndDownloadExecutor(), meta_db_, db_admin_lock_);
 }
 
 }  // namespace admin

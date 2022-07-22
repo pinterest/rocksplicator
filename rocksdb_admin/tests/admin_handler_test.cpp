@@ -882,6 +882,29 @@ TEST(AdminHandlerTest, MetaData) {
   EXPECT_EQ(meta.db_name, db_name);
 }
 
+TEST_F(AdminHandlerTestBase, ApplicationDBBackupManagerTest) {
+  // backup an un-initialized DB should error out
+  const string testdb = generateDBName();
+  addDBWithRole(testdb, "LEADER");
+  auto meta = handler_->getMetaData(testdb);
+  verifyMeta(meta, testdb, true, "", "");
+
+  // use incremental backup 
+  handler_->writeMetaData(testdb, "fakes3bucket", "fakes3path");
+
+  std::string s3_bucket = FLAGS_s3_bucket;
+  std::string s3_backup_dir_prefix = "backup/cluster1/";
+  std::string snapshot_host_port = "host_8080";
+  const uint32_t limit_mbs = 100;
+  const bool include_meta = false;
+  std::string s3_path = s3_backup_dir_prefix + testdb + "/" + snapshot_host_port + "/";
+
+  handler_->setS3Config(s3_bucket, s3_backup_dir_prefix, snapshot_host_port, limit_mbs, include_meta);
+  EXPECT_TRUE(handler_->backupAllDBsToS3());
+  EXPECT_TRUE(handler_->checkS3Object(limit_mbs, s3_bucket, s3_path));
+}
+
+
 }  // namespace admin
 
 int main(int argc, char** argv) {

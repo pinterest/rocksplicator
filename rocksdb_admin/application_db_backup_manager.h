@@ -42,25 +42,23 @@ namespace admin {
 class ApplicationDBBackupManager {
  public:
   ApplicationDBBackupManager(std::shared_ptr<ApplicationDBManager> db_manager,
-                             const std::string& rocksdb_dir,
-                             uint32_t checkpoint_backup_batch_num_upload,
-                             const std::string& s3_bucket,
-                             const std::string& s3_backup_dir,
-                             uint32_t limit_mbs,
-                             bool include_meta);
+                                                       const std::string& rocksdb_dir,
+                                                       uint32_t checkpoint_backup_batch_num_upload,
+                                                       const std::string& s3_bucket,
+                                                       const std::string& s3_backup_dir_prefix,
+                                                       const std::string& snapshot_host_port,
+                                                       uint32_t limit_mbs,
+                                                       bool include_meta);
   
   ApplicationDBBackupManager(std::shared_ptr<ApplicationDBManager> db_manager,
                              const std::string& rocksdb_dir,
                              uint32_t checkpoint_backup_batch_num_upload);
   
   void setS3Config(const std::string& s3_bucket,
-                   const std::string& s3_backup_dir,
-                   uint32_t limit_mbs,
-                   bool include_meta);
-
-  // copy from admin_hamdler..
-  std::shared_ptr<common::S3Util> createLocalS3Util(const uint32_t limit_mbs,
-                                                    const std::string& s3_bucket);
+                   const std::string& s3_backup_dir_prefix,
+                   const std::string& snapshot_host_port,
+                   const uint32_t limit_mbs,
+                   const bool include_meta);
 
   bool backupAllDBsToS3(CPUThreadPoolExecutor* executor,
                         std::unique_ptr<rocksdb::DB>& meta_db,
@@ -72,11 +70,16 @@ class ApplicationDBBackupManager {
                     common::ObjectLock<std::string>& db_admin_lock);
 
  private:
+    // copy from admin_hamdler..
+  std::shared_ptr<common::S3Util> createLocalS3Util(const uint32_t limit_mbs,
+                                                    const std::string& s3_bucket);
+
   std::shared_ptr<ApplicationDBManager> db_manager_;
   std::string rocksdb_dir_;
   uint32_t checkpoint_backup_batch_num_upload_;
   std::string s3_bucket_;
-  std::string s3_backup_dir_;
+  std::string s3_backup_dir_prefix_;
+  std::string snapshot_host_port_;
   uint32_t limit_mbs_;
   bool include_meta_;
 

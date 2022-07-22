@@ -41,14 +41,16 @@ ApplicationDBBackupManager::ApplicationDBBackupManager(
     const std::string& rocksdb_dir,
     uint32_t checkpoint_backup_batch_num_upload,
     const std::string& s3_bucket,
-    const std::string& s3_backup_dir,
+    const std::string& s3_backup_dir_prefix,
+    const std::string& snapshot_host_port,
     uint32_t limit_mbs,
     bool include_meta) 
     : db_manager_(std::move(db_manager))
     , rocksdb_dir_(rocksdb_dir)
     , checkpoint_backup_batch_num_upload_(checkpoint_backup_batch_num_upload)
     , s3_bucket_(s3_bucket)
-    , s3_backup_dir_(s3_backup_dir)
+    , s3_backup_dir_prefix_(s3_backup_dir_prefix)
+    , snapshot_host_port_(snapshot_host_port)
     , limit_mbs_(limit_mbs)
     , include_meta_(include_meta)
     , s3_util_()
@@ -66,11 +68,13 @@ ApplicationDBBackupManager::ApplicationDBBackupManager(
 
 void ApplicationDBBackupManager::setS3Config(
     const std::string& s3_bucket,
-    const std::string& s3_backup_dir,
-    uint32_t limit_mbs,
-    bool include_meta) {
+    const std::string& s3_backup_dir_prefix,
+    const std::string& snapshot_host_port,
+    const uint32_t limit_mbs,
+    const bool include_meta) {
   s3_bucket_ = std::move(s3_bucket);
-  s3_backup_dir_ = std::move(s3_backup_dir);
+  s3_backup_dir_prefix_ = std::move(s3_backup_dir_prefix);
+  snapshot_host_port_ = std::move(snapshot_host_port);
   limit_mbs_ = limit_mbs;
   include_meta_ = include_meta;
 }
@@ -128,7 +132,8 @@ bool ApplicationDBBackupManager::backupDBToS3(
   // ::admin::AdminException e;
 
   common::Timer timer(kS3BackupMs);
-  LOG(INFO) << "S3 Backup " << db->db_name() << " to " << s3_backup_dir_;
+  LOG(INFO) << "S3 Backup " << db->db_name() << " to " << ensure_ends_with_pathsep(s3_backup_dir_prefix_) << db->db_name()
+    << "/" << ensure_ends_with_pathsep(snapshot_host_port_);
   auto ts = common::timeutil::GetCurrentTimestamp();
   auto local_path = folly::stringPrintf("%ss3_tmp/%s%d/", rocksdb_dir_.c_str(), db->db_name().c_str(), ts);
   boost::system::error_code remove_err;
@@ -175,7 +180,9 @@ bool ApplicationDBBackupManager::backupDBToS3(
 
   // Upload checkpoint to s3
   auto local_s3_util = createLocalS3Util(limit_mbs_, s3_bucket_);
-  std::string formatted_s3_dir_path = folly::stringPrintf("%s/%s/%d", ensure_ends_with_pathsep(checkpoint_local_path).c_str(), db->db_name().c_str(), ts);
+  std::string formatted_s3_dir_path = folly::stringPrintf("%s%s/%s%d/", 
+    ensure_ends_with_pathsep(s3_backup_dir_prefix_).c_str(), db->db_name().c_str(), 
+    ensure_ends_with_pathsep(snapshot_host_port_).c_str(), ts);
   std::string formatted_checkpoint_local_path = ensure_ends_with_pathsep(checkpoint_local_path);
   auto upload_func = [&](const std::string& dest, const std::string& source) {
     LOG(INFO) << "Copying " << source << " to " << dest;
@@ -281,18 +288,23 @@ bool ApplicationDBBackupManager::backupAllDBsToS3(
     CPUThreadPoolExecutor* executor,
     std::unique_ptr<rocksdb::DB>& meta_db,
     common::ObjectLock<std::string>& db_admin_lock) {
-  if (s3_bucket_.empty() || s3_backup_dir_.empty() || !limit_mbs_) {
+  if (s3_bucket_.empty() || s3_backup_dir_prefix_.empty() || snapshot_host_port_.empty() || !limit_mbs_) {
     LOG(INFO) << "S3 config has not been set, so incremental backup cannot be triggered";
     return false;
   }
+
+  bool ret = true;
   for (const auto& db : db_manager_->getAllDBs()) {
     LOG(INFO) << "Incremental backup for " << db.first;
     if(backupDBToS3(db.second, executor, meta_db, db_admin_lock)) {
       LOG(INFO) << "Backup for " << db.first << " succeeds";
     } else {
       LOG(INFO) << "Backup for " << db.first << " fails";
+      ret = false;
     }
   }
+
+  return ret;
 }
 
 }

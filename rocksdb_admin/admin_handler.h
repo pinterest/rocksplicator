@@ -154,9 +154,18 @@ class AdminHandler : virtual public AdminSvIf {
 
   // Set S3 config for the Backup Manager
   void setS3Config(const std::string& s3_bucket,
-                   const std::string& s3_backup_dir,
-                   uint32_t limit_mbs,
-                   bool include_meta);
+                   const std::string& s3_backup_dir_prefix,
+                   const std::string& snapshot_host_port,
+                   const uint32_t limit_mbs,
+                   const bool include_meta);
+
+  // Used for testing incremental backup 
+  bool checkS3Object(const uint32_t limit_mbs = 50, 
+                   const std::string& s3_bucket = "", 
+                   const std::string& s3_path = "");
+  
+  // Used for testing incremental backup 
+  bool backupAllDBsToS3();
 
  protected:
   // Lock to synchronize DB admin operations at per DB granularity.
