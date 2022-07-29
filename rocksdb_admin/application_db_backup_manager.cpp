@@ -53,10 +53,10 @@ const std::string kS3BackupFailure = "s3_backup_failure";
 const int kS3UtilRecheckSec = 5;
 
 ApplicationDBBackupManager::ApplicationDBBackupManager(
-    std::shared_ptr<ApplicationDBManager> db_manager,
-    std::shared_ptr<CPUThreadPoolExecutor> executor,
+    ApplicationDBManager* db_manager,
+    CPUThreadPoolExecutor* executor,
     std::shared_ptr<rocksdb::DB> meta_db,
-    std::shared_ptr<common::ObjectLock<std::string>> db_admin_lock,
+    common::ObjectLock<std::string>* db_admin_lock,
     const std::string& rocksdb_dir,
     const int32_t checkpoint_backup_batch_num_upload)
   : db_manager_(db_manager)

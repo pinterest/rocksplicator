@@ -68,11 +68,11 @@ class AdminHandler : virtual public AdminSvIf {
  public:
   // TODO deprecate after getting rid of all callsites
   AdminHandler(
-    std::shared_ptr<ApplicationDBManager> db_manager,
+    std::unique_ptr<ApplicationDBManager> db_manager,
     RocksDBOptionsGeneratorType rocksdb_options);
 
   AdminHandler(
-    std::shared_ptr<ApplicationDBManager> db_manager,
+    std::unique_ptr<ApplicationDBManager> db_manager,
     RocksDBOptionsGenerator rocksdb_options);
 
   virtual ~AdminHandler();
@@ -175,7 +175,7 @@ class AdminHandler : virtual public AdminSvIf {
   // Lock to synchronize DB admin operations at per DB granularity.
   // Put db_admin_lock in protected to provide flexibility
   // of overriding some admin functions
-  std::shared_ptr<common::ObjectLock<std::string>> db_admin_lock_;
+  common::ObjectLock<std::string> db_admin_lock_;
 
  private:
   std::unique_ptr<rocksdb::DB> removeDB(const std::string& db_name,
@@ -188,7 +188,7 @@ class AdminHandler : virtual public AdminSvIf {
                      const std::string& s3_path,
                      const int64_t last_kafka_msg_timestamp_ms = -1);
 
-  std::shared_ptr<ApplicationDBManager> db_manager_;
+  std::unique_ptr<ApplicationDBManager> db_manager_;
   std::unique_ptr<ApplicationDBBackupManager> backup_manager_;
   RocksDBOptionsGenerator rocksdb_options_;
   // S3 util used for download
@@ -208,8 +208,6 @@ class AdminHandler : virtual public AdminSvIf {
     kafka_watcher_map_;
   // Lock for synchronizing access to kafka_watcher_map_
   std::mutex kafka_watcher_lock_;
-  //
-  std::shared_ptr<CPUThreadPoolExecutor> executor_;
 
   bool backupDBHelper(const std::string& db_name,
                       const std::string& backup_dir,

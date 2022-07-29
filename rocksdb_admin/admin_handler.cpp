@@ -379,6 +379,16 @@ bool DeserializeKafkaPayload(
   }
 }
 
+CPUThreadPoolExecutor* S3UploadAndDownloadExecutor() {
+  static CPUThreadPoolExecutor executor(
+      FLAGS_num_s3_upload_download_threads,
+      std::make_unique<LifoSemMPMCQueue<CPUThreadPoolExecutor::CPUTask>>(
+      FLAGS_max_s3_upload_download_task_queue_size),
+      std::make_shared<common::IdenticalNameThreadFactory>("s3-upload-download"));
+
+  return &executor;
+}
+
 // The dbs moved to db_tmp/ shouldnt be re-used or re-opened, so we can
 // delete them via boost filesystem operations rather than rocksdb::DestroyDB()
 void deleteTmpDBs() {
@@ -410,7 +420,7 @@ void deleteTmpDBs() {
 namespace admin {
 
 AdminHandler::AdminHandler(
-  std::shared_ptr<ApplicationDBManager> db_manager,
+  std::unique_ptr<ApplicationDBManager> db_manager,
   RocksDBOptionsGeneratorType rocksdb_options): AdminHandler(
       std::move(db_manager), 
       [rocksdb_options](const std::string& dataset, const std::string& db) {
@@ -418,28 +428,24 @@ AdminHandler::AdminHandler(
   }) {}
 
 AdminHandler::AdminHandler(
-    std::shared_ptr<ApplicationDBManager> db_manager,
+    std::unique_ptr<ApplicationDBManager> db_manager,
     RocksDBOptionsGenerator rocksdb_options)
-  : db_admin_lock_(std::make_shared<common::ObjectLock<std::string>>())
-  , db_manager_(db_manager)
+  : db_admin_lock_()
+  , db_manager_(std::move(db_manager))
   , rocksdb_options_(std::move(rocksdb_options))
   , s3_util_()
   , s3_util_lock_()
   , meta_db_(OpenMetaDB())
   , allow_overlapping_keys_segments_()
   , num_current_s3_sst_downloadings_(0)
-  , stop_db_deletion_thread_(false)
-  , executor_(new CPUThreadPoolExecutor(FLAGS_num_s3_upload_download_threads,
-      std::make_unique<LifoSemMPMCQueue<CPUThreadPoolExecutor::CPUTask>>(
-      FLAGS_max_s3_upload_download_task_queue_size),
-      std::make_shared<common::IdenticalNameThreadFactory>("s3-upload-download"))) {
+  , stop_db_deletion_thread_(false) {
   if (db_manager_ == nullptr) {
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
 
   if (FLAGS_enable_async_incremental_backup_dbs) {
-    backup_manager_ = std::make_unique<ApplicationDBBackupManager>(db_manager, executor_, meta_db_, 
-      db_admin_lock_, FLAGS_rocksdb_dir, FLAGS_checkpoint_backup_batch_num_upload);
+    backup_manager_ = std::make_unique<ApplicationDBBackupManager>(db_manager_.get(), S3UploadAndDownloadExecutor(), 
+      meta_db_, &db_admin_lock_, FLAGS_rocksdb_dir, FLAGS_checkpoint_backup_batch_num_upload);
   }
 
   folly::splitTo<std::string>(
@@ -563,8 +569,8 @@ void AdminHandler::async_tm_addDB(
       std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
           AddDBResponse>>> callback,
       std::unique_ptr<AddDBRequest> request) {
-  db_admin_lock_->Lock(request->db_name);
-  SCOPE_EXIT { db_admin_lock_->Unlock(request->db_name); };
+  db_admin_lock_.Lock(request->db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
   AdminException e;
   auto db = getDB(request->db_name, &e);
@@ -667,8 +673,8 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
                                   bool include_meta,
                                   AdminException* e) {
   CHECK(env_holder != nullptr);
-  db_admin_lock_->Lock(db_name);
-  SCOPE_EXIT { db_admin_lock_->Unlock(db_name); };
+  db_admin_lock_.Lock(db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
 
   auto db = getDB(db_name, e);
   if (db == nullptr) {
@@ -738,8 +744,8 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
                                    const uint32_t restore_rate_limit,
                                    AdminException* e) {
   assert(env_holder != nullptr);
-  db_admin_lock_->Lock(db_name);
-  SCOPE_EXIT { db_admin_lock_->Unlock(db_name); };
+  db_admin_lock_.Lock(db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
 
   auto db = db_manager_->getDB(db_name, nullptr);
   if (db) {
@@ -958,8 +964,8 @@ void AdminHandler::async_tm_backupDBToS3(
   }
 
   if (FLAGS_enable_checkpoint_backup) {
-    db_admin_lock_->Lock(request->db_name);
-    SCOPE_EXIT { db_admin_lock_->Unlock(request->db_name); };
+    db_admin_lock_.Lock(request->db_name);
+    SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
     auto db = getDB(request->db_name, &e);
     if (db == nullptr) {
@@ -1029,7 +1035,7 @@ void AdminHandler::async_tm_backupDBToS3(
         auto p = folly::Promise<bool>();
         futures.push_back(p.getFuture());
 
-        executor_->add(
+        S3UploadAndDownloadExecutor()->add(
             [&, files = std::move(files), p = std::move(p)]() mutable {
               for (const auto& file : files) {
                 if (!upload_func(formatted_s3_dir_path + file, formatted_checkpoint_local_path + file)) {
@@ -1210,7 +1216,7 @@ void AdminHandler::async_tm_restoreDBFromS3(
         auto p = folly::Promise<bool>();
         futures.push_back(p.getFuture());
 
-        executor_->add(
+        S3UploadAndDownloadExecutor()->add(
             [&, files = std::move(files), p = std::move(p)]() mutable {
               for (const auto& file : files) {
                 if (!download_func(file)) {
@@ -1386,8 +1392,8 @@ void AdminHandler::async_tm_closeDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       CloseDBResponse>>> callback,
     std::unique_ptr<CloseDBRequest> request) {
-  db_admin_lock_->Lock(request->db_name);
-  SCOPE_EXIT { db_admin_lock_->Unlock(request->db_name); };
+  db_admin_lock_.Lock(request->db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
   AdminException e;
   if (removeDB(request->db_name, &e) == nullptr) {
@@ -1402,8 +1408,8 @@ void AdminHandler::async_tm_changeDBRoleAndUpStream(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       ChangeDBRoleAndUpstreamResponse>>> callback,
     std::unique_ptr<ChangeDBRoleAndUpstreamRequest> request) {
-  db_admin_lock_->Lock(request->db_name);
-  SCOPE_EXIT { db_admin_lock_->Unlock(request->db_name); };
+  db_admin_lock_.Lock(request->db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
   AdminException e;
   replicator::ReplicaRole new_role;
@@ -1469,8 +1475,8 @@ void AdminHandler::async_tm_clearDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       ClearDBResponse>>> callback,
     std::unique_ptr<ClearDBRequest> request) {
-  db_admin_lock_->Lock(request->db_name);
-  SCOPE_EXIT { db_admin_lock_->Unlock(request->db_name); };
+  db_admin_lock_.Lock(request->db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
   bool need_to_reopen = false;
   replicator::ReplicaRole db_role;
@@ -1602,8 +1608,8 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   admin::AdminException e;
   e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
 
-  db_admin_lock_->Lock(request->db_name);
-  SCOPE_EXIT { db_admin_lock_->Unlock(request->db_name); };
+  db_admin_lock_.Lock(request->db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
 
   auto db = getDB(request->db_name, nullptr);
   if (db == nullptr) {
@@ -1833,8 +1839,8 @@ void AdminHandler::async_tm_startMessageIngestion(
             << "serverset path: " << kafka_broker_serverset_path << ", "
             << "replay_timestamp_ms: " << replay_timestamp_ms;
 
-  db_admin_lock_->Lock(db_name);
-  SCOPE_EXIT { db_admin_lock_->Unlock(db_name); };
+  db_admin_lock_.Lock(db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
   auto db = getDB(db_name, &e);
   if (db == nullptr) {
     e.message = db_name + " doesn't exist.";
@@ -2056,8 +2062,8 @@ void AdminHandler::async_tm_stopMessageIngestion(
 
   const auto db_name = request->db_name;
   LOG(ERROR) << "Called stopMessageIngestion for " << db_name;
-  db_admin_lock_->Lock(db_name);
-  SCOPE_EXIT { db_admin_lock_->Unlock(db_name); };
+  db_admin_lock_.Lock(db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
   auto db = getDB(db_name, &e);
   if (db == nullptr) {
     e.message = db_name + " doesn't exist.";
@@ -2102,8 +2108,8 @@ void AdminHandler::async_tm_setDBOptions(
   for (auto& option_pair : request->options) {
     options.emplace(std::move(option_pair));
   }
-  db_admin_lock_->Lock(request->db_name);
-  SCOPE_EXIT { db_admin_lock_->Unlock(request->db_name); };
+  db_admin_lock_.Lock(request->db_name);
+  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
   ::admin::AdminException e;
   auto db = getDB(request->db_name, &e);
   if (db == nullptr) {
@@ -2156,10 +2162,6 @@ std::string AdminHandler::DumpDBStatsAsText() const {
 
 std::vector<std::string> AdminHandler::getAllDBNames() {
     return db_manager_->getAllDBNames();
-}
-
-bool AdminHandler::backupAllDBsToS3() {
-  return backup_manager_->backupAllDBsToS3();
 }
 
 }  // namespace admin

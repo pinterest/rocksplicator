@@ -57,10 +57,10 @@ class ApplicationDBBackupManager {
  public:
   
   ApplicationDBBackupManager(
-    std::shared_ptr<ApplicationDBManager> db_manager,
-    std::shared_ptr<CPUThreadPoolExecutor> executor,
+    ApplicationDBManager* db_manager,
+    CPUThreadPoolExecutor* executor,
     std::shared_ptr<rocksdb::DB> meta_db,
-    std::shared_ptr<common::ObjectLock<std::string>> db_admin_lock,
+    common::ObjectLock<std::string>* db_admin_lock,
     const std::string& rocksdb_dir,
     const int32_t checkpoint_backup_batch_num_upload);
   
@@ -77,10 +77,10 @@ class ApplicationDBBackupManager {
   std::shared_ptr<common::S3Util> createLocalS3Util(const uint32_t limit_mbs,
                                                     const std::string& s3_bucket);
 
-  std::shared_ptr<ApplicationDBManager> db_manager_;
-  std::shared_ptr<CPUThreadPoolExecutor> executor_;
+  ApplicationDBManager* db_manager_;
+  CPUThreadPoolExecutor* executor_;
   std::shared_ptr<rocksdb::DB> meta_db_;
-  std::shared_ptr<common::ObjectLock<std::string>> db_admin_lock_; 
+  common::ObjectLock<std::string>* db_admin_lock_; 
   std::string rocksdb_dir_;
   int32_t checkpoint_backup_batch_num_upload_;
 
