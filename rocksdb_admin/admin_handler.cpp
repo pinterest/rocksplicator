@@ -57,18 +57,11 @@
 #include "rocksdb_replicator/rocksdb_replicator.h"
 #include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
-#if __GNUC__ >= 8
-#include "folly/executors/CPUThreadPoolExecutor.h"
-#include "folly/system/ThreadName.h"
-#else
-#include "wangle/concurrent/CPUThreadPoolExecutor.h"
-#endif
 
 DEFINE_string(hdfs_name_node, "hdfs://hbasebak-infra-namenode-prod1c01-001:8020",
               "The hdfs name node used for backup");
 
-DEFINE_string(rocksdb_dir, "/tmp/",
-              "The dir for local rocksdb instances");
+DEFINE_string(rocksdb_dir, "/tmp/", "The dir for local rocksdb instances");
 
 DEFINE_int32(num_hdfs_access_threads, 8,
              "The number of threads for backup or restore to/from HDFS");
@@ -133,27 +126,6 @@ DEFINE_int32(async_delete_dbs_frequency_sec,
 DEFINE_int32(async_delete_dbs_wait_sec,
              60,
              "How long in sec to wait between the dbs deletion");
-
-DEFINE_bool(enable_async_incremental_backup_dbs, false, "Enable incremental backup for db files");
-
-DEFINE_int32(async_incremental_backup_dbs_frequency_sec,
-             60,
-             "How frequently in sec to check the dbs need deleting in async way");
-
-DEFINE_int32(async_incremental_backup_dbs_wait_sec,
-             60,
-             "How long in sec to wait between the dbs deletion");
-
-#if __GNUC__ >= 8
-using folly::CPUThreadPoolExecutor;
-using folly::LifoSemMPMCQueue;
-using folly::QueueBehaviorIfFull;
-#else
-using wangle::CPUThreadPoolExecutor;
-using wangle::LifoSemMPMCQueue;
-using wangle::QueueBehaviorIfFull;
-#endif
-
 namespace {
 
 const std::string kMetaFilename = "dbmeta";
@@ -407,16 +379,6 @@ bool DeserializeKafkaPayload(
   }
 }
 
-CPUThreadPoolExecutor* S3UploadAndDownloadExecutor() {
-  static CPUThreadPoolExecutor executor(
-      FLAGS_num_s3_upload_download_threads,
-      std::make_unique<LifoSemMPMCQueue<CPUThreadPoolExecutor::CPUTask>>(
-      FLAGS_max_s3_upload_download_task_queue_size),
-      std::make_shared<common::IdenticalNameThreadFactory>("s3-upload-download"));
-
-  return &executor;
-}
-
 // The dbs moved to db_tmp/ shouldnt be re-used or re-opened, so we can
 // delete them via boost filesystem operations rather than rocksdb::DestroyDB()
 void deleteTmpDBs() {
@@ -458,7 +420,7 @@ AdminHandler::AdminHandler(
 AdminHandler::AdminHandler(
     std::shared_ptr<ApplicationDBManager> db_manager,
     RocksDBOptionsGenerator rocksdb_options)
-  : db_admin_lock_()
+  : db_admin_lock_(std::make_shared<common::ObjectLock<std::string>>())
   , db_manager_(db_manager)
   , rocksdb_options_(std::move(rocksdb_options))
   , s3_util_()
@@ -467,13 +429,18 @@ AdminHandler::AdminHandler(
   , allow_overlapping_keys_segments_()
   , num_current_s3_sst_downloadings_(0)
   , stop_db_deletion_thread_(false)
-  , stop_db_incremental_backup_thread_(false) {
+  , executor_(new CPUThreadPoolExecutor(FLAGS_num_s3_upload_download_threads,
+      std::make_unique<LifoSemMPMCQueue<CPUThreadPoolExecutor::CPUTask>>(
+      FLAGS_max_s3_upload_download_task_queue_size),
+      std::make_shared<common::IdenticalNameThreadFactory>("s3-upload-download"))) {
   if (db_manager_ == nullptr) {
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
 
-  backup_manager_ = std::make_unique<ApplicationDBBackupManager>(
-    std::move(db_manager), FLAGS_rocksdb_dir, FLAGS_checkpoint_backup_batch_num_upload);
+  if (FLAGS_enable_async_incremental_backup_dbs) {
+    backup_manager_ = std::make_unique<ApplicationDBBackupManager>(db_manager, executor_, meta_db_, 
+      db_admin_lock_, FLAGS_rocksdb_dir, FLAGS_checkpoint_backup_batch_num_upload);
+  }
 
   folly::splitTo<std::string>(
       ",", FLAGS_allow_overlapping_keys_segments,
@@ -509,32 +476,6 @@ AdminHandler::AdminHandler(
     });
   }
 
-  if (FLAGS_enable_async_incremental_backup_dbs) {
-    db_incremental_backup_thread_ = std::make_unique<std::thread>([this] {
-      if (!folly::setThreadName("DBBackuper")) {
-        LOG(ERROR) << "Failed to set thread name for DB backup thread";
-      }
-
-      LOG(INFO) << "Starting DB backup thread ...";
-      while (!stop_db_incremental_backup_thread_.load()) {
-        std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_incremental_backup_dbs_frequency_sec));
-        const auto n = num_current_s3_sst_uploadings_.fetch_add(1);
-
-        if (n >= FLAGS_max_s3_sst_loading_concurrency) {
-          auto err_str =
-              folly::stringPrintf("Concurrent uploading/downloading limit hits %d", n);
-          // SetException(err_str, AdminErrorCode::DB_ADMIN_ERROR, &callback);
-          LOG(ERROR) << err_str;
-          common::Stats::get()->Incr(kS3BackupFailure);
-        } else {
-          backup_manager_->backupAllDBsToS3(S3UploadAndDownloadExecutor(), meta_db_, db_admin_lock_);
-        }
-        num_current_s3_sst_uploadings_.fetch_sub(1);
-      }
-      LOG(INFO) << "Stopping DB backup thread ...";
-    });
-  }
-
   // Initialize the atomic int variables
   num_current_s3_sst_downloadings_.store(0);
   num_current_s3_sst_uploadings_.store(0);
@@ -544,11 +485,6 @@ AdminHandler::~AdminHandler() {
   if (FLAGS_enable_async_delete_dbs) {
     stop_db_deletion_thread_ = true;
     db_deletion_thread_->join();
-  }
-
-  if (FLAGS_enable_async_incremental_backup_dbs) {
-    stop_db_incremental_backup_thread_ = true;
-    db_incremental_backup_thread_->join();
   }
 }
 
@@ -627,8 +563,8 @@ void AdminHandler::async_tm_addDB(
       std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
           AddDBResponse>>> callback,
       std::unique_ptr<AddDBRequest> request) {
-  db_admin_lock_.Lock(request->db_name);
-  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
+  db_admin_lock_->Lock(request->db_name);
+  SCOPE_EXIT { db_admin_lock_->Unlock(request->db_name); };
 
   AdminException e;
   auto db = getDB(request->db_name, &e);
@@ -731,8 +667,8 @@ bool AdminHandler::backupDBHelper(const std::string& db_name,
                                   bool include_meta,
                                   AdminException* e) {
   CHECK(env_holder != nullptr);
-  db_admin_lock_.Lock(db_name);
-  SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
+  db_admin_lock_->Lock(db_name);
+  SCOPE_EXIT { db_admin_lock_->Unlock(db_name); };
 
   auto db = getDB(db_name, e);
   if (db == nullptr) {
@@ -802,8 +738,8 @@ bool AdminHandler::restoreDBHelper(const std::string& db_name,
                                    const uint32_t restore_rate_limit,
                                    AdminException* e) {
   assert(env_holder != nullptr);
-  db_admin_lock_.Lock(db_name);
-  SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
+  db_admin_lock_->Lock(db_name);
+  SCOPE_EXIT { db_admin_lock_->Unlock(db_name); };
 
   auto db = db_manager_->getDB(db_name, nullptr);
   if (db) {
@@ -1022,8 +958,8 @@ void AdminHandler::async_tm_backupDBToS3(
   }
 
   if (FLAGS_enable_checkpoint_backup) {
-    db_admin_lock_.Lock(request->db_name);
-    SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
+    db_admin_lock_->Lock(request->db_name);
+    SCOPE_EXIT { db_admin_lock_->Unlock(request->db_name); };
 
     auto db = getDB(request->db_name, &e);
     if (db == nullptr) {
@@ -1093,7 +1029,7 @@ void AdminHandler::async_tm_backupDBToS3(
         auto p = folly::Promise<bool>();
         futures.push_back(p.getFuture());
 
-        S3UploadAndDownloadExecutor()->add(
+        executor_->add(
             [&, files = std::move(files), p = std::move(p)]() mutable {
               for (const auto& file : files) {
                 if (!upload_func(formatted_s3_dir_path + file, formatted_checkpoint_local_path + file)) {
@@ -1274,7 +1210,7 @@ void AdminHandler::async_tm_restoreDBFromS3(
         auto p = folly::Promise<bool>();
         futures.push_back(p.getFuture());
 
-        S3UploadAndDownloadExecutor()->add(
+        executor_->add(
             [&, files = std::move(files), p = std::move(p)]() mutable {
               for (const auto& file : files) {
                 if (!download_func(file)) {
@@ -1450,8 +1386,8 @@ void AdminHandler::async_tm_closeDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       CloseDBResponse>>> callback,
     std::unique_ptr<CloseDBRequest> request) {
-  db_admin_lock_.Lock(request->db_name);
-  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
+  db_admin_lock_->Lock(request->db_name);
+  SCOPE_EXIT { db_admin_lock_->Unlock(request->db_name); };
 
   AdminException e;
   if (removeDB(request->db_name, &e) == nullptr) {
@@ -1466,8 +1402,8 @@ void AdminHandler::async_tm_changeDBRoleAndUpStream(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       ChangeDBRoleAndUpstreamResponse>>> callback,
     std::unique_ptr<ChangeDBRoleAndUpstreamRequest> request) {
-  db_admin_lock_.Lock(request->db_name);
-  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
+  db_admin_lock_->Lock(request->db_name);
+  SCOPE_EXIT { db_admin_lock_->Unlock(request->db_name); };
 
   AdminException e;
   replicator::ReplicaRole new_role;
@@ -1533,8 +1469,8 @@ void AdminHandler::async_tm_clearDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       ClearDBResponse>>> callback,
     std::unique_ptr<ClearDBRequest> request) {
-  db_admin_lock_.Lock(request->db_name);
-  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
+  db_admin_lock_->Lock(request->db_name);
+  SCOPE_EXIT { db_admin_lock_->Unlock(request->db_name); };
 
   bool need_to_reopen = false;
   replicator::ReplicaRole db_role;
@@ -1666,8 +1602,8 @@ void AdminHandler::async_tm_addS3SstFilesToDB(
   admin::AdminException e;
   e.errorCode = AdminErrorCode::DB_ADMIN_ERROR;
 
-  db_admin_lock_.Lock(request->db_name);
-  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
+  db_admin_lock_->Lock(request->db_name);
+  SCOPE_EXIT { db_admin_lock_->Unlock(request->db_name); };
 
   auto db = getDB(request->db_name, nullptr);
   if (db == nullptr) {
@@ -1897,8 +1833,8 @@ void AdminHandler::async_tm_startMessageIngestion(
             << "serverset path: " << kafka_broker_serverset_path << ", "
             << "replay_timestamp_ms: " << replay_timestamp_ms;
 
-  db_admin_lock_.Lock(db_name);
-  SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
+  db_admin_lock_->Lock(db_name);
+  SCOPE_EXIT { db_admin_lock_->Unlock(db_name); };
   auto db = getDB(db_name, &e);
   if (db == nullptr) {
     e.message = db_name + " doesn't exist.";
@@ -2120,8 +2056,8 @@ void AdminHandler::async_tm_stopMessageIngestion(
 
   const auto db_name = request->db_name;
   LOG(ERROR) << "Called stopMessageIngestion for " << db_name;
-  db_admin_lock_.Lock(db_name);
-  SCOPE_EXIT { db_admin_lock_.Unlock(db_name); };
+  db_admin_lock_->Lock(db_name);
+  SCOPE_EXIT { db_admin_lock_->Unlock(db_name); };
   auto db = getDB(db_name, &e);
   if (db == nullptr) {
     e.message = db_name + " doesn't exist.";
@@ -2166,8 +2102,8 @@ void AdminHandler::async_tm_setDBOptions(
   for (auto& option_pair : request->options) {
     options.emplace(std::move(option_pair));
   }
-  db_admin_lock_.Lock(request->db_name);
-  SCOPE_EXIT { db_admin_lock_.Unlock(request->db_name); };
+  db_admin_lock_->Lock(request->db_name);
+  SCOPE_EXIT { db_admin_lock_->Unlock(request->db_name); };
   ::admin::AdminException e;
   auto db = getDB(request->db_name, &e);
   if (db == nullptr) {
@@ -2222,41 +2158,8 @@ std::vector<std::string> AdminHandler::getAllDBNames() {
     return db_manager_->getAllDBNames();
 }
 
-void AdminHandler::setS3Config(
-    const std::string& s3_bucket,
-    const std::string& s3_backup_dir_prefix,
-    const std::string& snapshot_host_port,
-    const uint32_t limit_mbs,
-    const bool include_meta) {
-  backup_manager_->setS3Config(std::move(s3_bucket), std::move(s3_backup_dir_prefix), 
-    std::move(snapshot_host_port), limit_mbs, include_meta);
-}
-
-bool AdminHandler::checkS3Object(
-    const uint32_t limit_mbs, 
-    const std::string& s3_bucket, 
-    const std::string& s3_path) {
-  auto local_s3_util = createLocalS3Util(limit_mbs, s3_bucket);
-  auto resp = local_s3_util->listAllObjects(ensure_ends_with_pathsep(s3_path));
-  if (!resp.Error().empty()) {
-    auto err_msg = folly::stringPrintf(
-        "Error happened when fetching files in checkpoint from S3: %s under path: %s",
-        resp.Error().c_str(), s3_path.c_str());
-    LOG(ERROR) << err_msg;
-    common::Stats::get()->Incr(kS3RestoreFailure);
-    return false;
-  }
-
-  if (resp.Body().objects.size() > 0) {
-    return true;
-  } else {
-    LOG(INFO) << "No data has been written into " << s3_path << " on S3";
-    return false;
-  }
-}
-
 bool AdminHandler::backupAllDBsToS3() {
-  return backup_manager_->backupAllDBsToS3(S3UploadAndDownloadExecutor(), meta_db_, db_admin_lock_);
+  return backup_manager_->backupAllDBsToS3();
 }
 
 }  // namespace admin

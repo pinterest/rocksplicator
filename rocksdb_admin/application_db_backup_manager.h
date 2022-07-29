@@ -37,37 +37,40 @@ using folly::CPUThreadPoolExecutor;
 using wangle::CPUThreadPoolExecutor;
 #endif
 
+DECLARE_bool(enable_async_incremental_backup_dbs);
+
+DECLARE_int32(async_incremental_backup_dbs_frequency_sec);
+
+DECLARE_int32(async_incremental_backup_dbs_wait_sec);
+
+DECLARE_string(s3_incre_backup_bucket);
+
+DECLARE_string(s3_incre_backup_prefix);
+
+DECLARE_int32(incre_backup_limit_mbs);
+
+DECLARE_bool(incre_backup_include_meta);
+
 namespace admin {
 
 class ApplicationDBBackupManager {
  public:
-  ApplicationDBBackupManager(std::shared_ptr<ApplicationDBManager> db_manager,
-                                                       const std::string& rocksdb_dir,
-                                                       uint32_t checkpoint_backup_batch_num_upload,
-                                                       const std::string& s3_bucket,
-                                                       const std::string& s3_backup_dir_prefix,
-                                                       const std::string& snapshot_host_port,
-                                                       uint32_t limit_mbs,
-                                                       bool include_meta);
   
-  ApplicationDBBackupManager(std::shared_ptr<ApplicationDBManager> db_manager,
-                             const std::string& rocksdb_dir,
-                             uint32_t checkpoint_backup_batch_num_upload);
+  ApplicationDBBackupManager(
+    std::shared_ptr<ApplicationDBManager> db_manager,
+    std::shared_ptr<CPUThreadPoolExecutor> executor,
+    std::shared_ptr<rocksdb::DB> meta_db,
+    std::shared_ptr<common::ObjectLock<std::string>> db_admin_lock,
+    const std::string& rocksdb_dir,
+    const int32_t checkpoint_backup_batch_num_upload);
   
-  void setS3Config(const std::string& s3_bucket,
-                   const std::string& s3_backup_dir_prefix,
-                   const std::string& snapshot_host_port,
-                   const uint32_t limit_mbs,
-                   const bool include_meta);
+  ~ApplicationDBBackupManager();
 
-  bool backupAllDBsToS3(CPUThreadPoolExecutor* executor,
-                        std::unique_ptr<rocksdb::DB>& meta_db,
-                        common::ObjectLock<std::string>& db_admin_lock);
+  void stopBackup();
 
-  bool backupDBToS3(const std::shared_ptr<ApplicationDB>& db,
-                    CPUThreadPoolExecutor* executor,
-                    std::unique_ptr<rocksdb::DB>& meta_db,
-                    common::ObjectLock<std::string>& db_admin_lock);
+  bool backupAllDBsToS3();
+
+  bool backupDBToS3(const std::shared_ptr<ApplicationDB>& db);
 
  private:
     // copy from admin_hamdler..
@@ -75,16 +78,17 @@ class ApplicationDBBackupManager {
                                                     const std::string& s3_bucket);
 
   std::shared_ptr<ApplicationDBManager> db_manager_;
+  std::shared_ptr<CPUThreadPoolExecutor> executor_;
+  std::shared_ptr<rocksdb::DB> meta_db_;
+  std::shared_ptr<common::ObjectLock<std::string>> db_admin_lock_; 
   std::string rocksdb_dir_;
-  uint32_t checkpoint_backup_batch_num_upload_;
-  std::string s3_bucket_;
-  std::string s3_backup_dir_prefix_;
-  std::string snapshot_host_port_;
-  uint32_t limit_mbs_;
-  bool include_meta_;
+  int32_t checkpoint_backup_batch_num_upload_;
 
   std::shared_ptr<common::S3Util> s3_util_;
   mutable std::mutex s3_util_lock_;
+
+  std::unique_ptr<std::thread> db_incremental_backup_thread_;
+  std::atomic<bool> stop_db_incremental_backup_thread_;
 };
 
 }

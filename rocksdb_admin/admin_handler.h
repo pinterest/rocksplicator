@@ -28,7 +28,7 @@
 
 #include "folly/SocketAddress.h"
 #include "rocksdb_admin/application_db_backup_manager.h"
-#include "rocksdb_admin/application_db_backup_manager.h"
+#include "rocksdb_admin/application_db_manager.h"
 #ifdef PINTEREST_INTERNAL
 // NEVER SET THIS UNLESS PINTEREST INTERNAL USAGE.
 #include "schemas/gen-cpp2/Admin.h"
@@ -36,6 +36,22 @@
 #include "rocksdb_admin/gen-cpp2/Admin.h"
 #endif
 #include "rocksdb/status.h"
+#if __GNUC__ >= 8
+#include "folly/executors/CPUThreadPoolExecutor.h"
+#include "folly/system/ThreadName.h"
+#else
+#include "wangle/concurrent/CPUThreadPoolExecutor.h"
+#endif
+
+#if __GNUC__ >= 8
+using folly::CPUThreadPoolExecutor;
+using folly::LifoSemMPMCQueue;
+using folly::QueueBehaviorIfFull;
+#else
+using wangle::CPUThreadPoolExecutor;
+using wangle::LifoSemMPMCQueue;
+using wangle::QueueBehaviorIfFull;
+#endif
 
 class KafkaWatcher;
 
@@ -151,18 +167,6 @@ class AdminHandler : virtual public AdminSvIf {
 
   // Get all the db names held by the AdminHandler
   std::vector<std::string> getAllDBNames();
-
-  // Set S3 config for the Backup Manager
-  void setS3Config(const std::string& s3_bucket,
-                   const std::string& s3_backup_dir_prefix,
-                   const std::string& snapshot_host_port,
-                   const uint32_t limit_mbs,
-                   const bool include_meta);
-
-  // Used for testing incremental backup 
-  bool checkS3Object(const uint32_t limit_mbs = 50, 
-                   const std::string& s3_bucket = "", 
-                   const std::string& s3_path = "");
   
   // Used for testing incremental backup 
   bool backupAllDBsToS3();
@@ -171,7 +175,7 @@ class AdminHandler : virtual public AdminSvIf {
   // Lock to synchronize DB admin operations at per DB granularity.
   // Put db_admin_lock in protected to provide flexibility
   // of overriding some admin functions
-  common::ObjectLock<std::string> db_admin_lock_;
+  std::shared_ptr<common::ObjectLock<std::string>> db_admin_lock_;
 
  private:
   std::unique_ptr<rocksdb::DB> removeDB(const std::string& db_name,
@@ -192,7 +196,7 @@ class AdminHandler : virtual public AdminSvIf {
   // Lock for protecting the s3 util
   mutable std::mutex s3_util_lock_;
   // db that contains meta data for all local rocksdb instances
-  std::unique_ptr<rocksdb::DB> meta_db_;
+  std::shared_ptr<rocksdb::DB> meta_db_;
   // segments which allow for overlapping keys when adding SST files
   std::unordered_set<std::string> allow_overlapping_keys_segments_;
   // number of the current concurrenty s3 downloadings
@@ -204,6 +208,8 @@ class AdminHandler : virtual public AdminSvIf {
     kafka_watcher_map_;
   // Lock for synchronizing access to kafka_watcher_map_
   std::mutex kafka_watcher_lock_;
+  //
+  std::shared_ptr<CPUThreadPoolExecutor> executor_;
 
   bool backupDBHelper(const std::string& db_name,
                       const std::string& backup_dir,
@@ -227,9 +233,6 @@ class AdminHandler : virtual public AdminSvIf {
 
   std::unique_ptr<std::thread> db_deletion_thread_;
   std::atomic<bool> stop_db_deletion_thread_;
-
-  std::unique_ptr<std::thread> db_incremental_backup_thread_;
-  std::atomic<bool> stop_db_incremental_backup_thread_;
 };
 
 }  // namespace admin

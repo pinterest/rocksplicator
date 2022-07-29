@@ -21,6 +21,7 @@
 #include <map>
 #include <thread>
 
+#include "common/s3util.h"
 #include "boost/filesystem.hpp"
 #include "folly/SocketAddress.h"
 #include "gtest/gtest.h"
@@ -142,6 +143,13 @@ namespace admin {
 class AdminHandlerTestBase : public testing::Test {
  public:
   AdminHandlerTestBase() {
+    const testing::TestInfo* const test_info =
+      testing::UnitTest::GetInstance()->current_test_info();
+    std:string back_up_test_name = "ApplicationDBBackupManagerTest";
+    if (strcmp(test_info->name(), back_up_test_name.c_str())) {
+      FLAGS_enable_async_incremental_backup_dbs = true;
+      FLAGS_async_incremental_backup_dbs_frequency_sec = 1;
+    }
     // setup local , s3 paths for test
     FLAGS_rocksdb_dir = testDir();
     FLAGS_s3_backup_prefix =
@@ -892,16 +900,12 @@ TEST_F(AdminHandlerTestBase, ApplicationDBBackupManagerTest) {
   // use incremental backup 
   handler_->writeMetaData(testdb, "fakes3bucket", "fakes3path");
 
-  std::string s3_bucket = FLAGS_s3_bucket;
-  std::string s3_backup_dir_prefix = "backup/cluster1/";
-  std::string snapshot_host_port = "host_8080";
-  const uint32_t limit_mbs = 100;
-  const bool include_meta = false;
-  std::string s3_path = s3_backup_dir_prefix + testdb + "/" + snapshot_host_port + "/";
+  std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_incremental_backup_dbs_frequency_sec * 2));
 
-  handler_->setS3Config(s3_bucket, s3_backup_dir_prefix, snapshot_host_port, limit_mbs, include_meta);
-  EXPECT_TRUE(handler_->backupAllDBsToS3());
-  EXPECT_TRUE(handler_->checkS3Object(limit_mbs, s3_bucket, s3_path));
+  std::string s3_path = FLAGS_s3_incre_backup_prefix + testdb + "/";
+  auto local_s3_util = common::S3Util::BuildS3Util(FLAGS_incre_backup_limit_mbs, FLAGS_s3_incre_backup_bucket);
+  auto resp = local_s3_util->listAllObjects(s3_path);
+  EXPECT_TRUE(resp.Body().objects.size() > 0);
 }
 
 
