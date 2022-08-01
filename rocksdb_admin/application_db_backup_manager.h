@@ -59,7 +59,7 @@ class ApplicationDBBackupManager {
   ApplicationDBBackupManager(
     ApplicationDBManager* db_manager,
     CPUThreadPoolExecutor* executor,
-    std::shared_ptr<rocksdb::DB> meta_db,
+    rocksdb::DB* meta_db,
     common::ObjectLock<std::string>* db_admin_lock,
     const std::string& rocksdb_dir,
     const int32_t checkpoint_backup_batch_num_upload);
@@ -79,7 +79,7 @@ class ApplicationDBBackupManager {
 
   ApplicationDBManager* db_manager_;
   CPUThreadPoolExecutor* executor_;
-  std::shared_ptr<rocksdb::DB> meta_db_;
+  rocksdb::DB* meta_db_;
   common::ObjectLock<std::string>* db_admin_lock_; 
   std::string rocksdb_dir_;
   int32_t checkpoint_backup_batch_num_upload_;

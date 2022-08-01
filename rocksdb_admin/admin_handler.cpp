@@ -57,6 +57,12 @@
 #include "rocksdb_replicator/rocksdb_replicator.h"
 #include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
+#if __GNUC__ >= 8
+#include "folly/executors/CPUThreadPoolExecutor.h"
+#include "folly/system/ThreadName.h"
+#else
+#include "wangle/concurrent/CPUThreadPoolExecutor.h"
+#endif
 
 DEFINE_string(hdfs_name_node, "hdfs://hbasebak-infra-namenode-prod1c01-001:8020",
               "The hdfs name node used for backup");
@@ -126,6 +132,17 @@ DEFINE_int32(async_delete_dbs_frequency_sec,
 DEFINE_int32(async_delete_dbs_wait_sec,
              60,
              "How long in sec to wait between the dbs deletion");
+
+#if __GNUC__ >= 8
+using folly::CPUThreadPoolExecutor;
+using folly::LifoSemMPMCQueue;
+using folly::QueueBehaviorIfFull;
+#else
+using wangle::CPUThreadPoolExecutor;
+using wangle::LifoSemMPMCQueue;
+using wangle::QueueBehaviorIfFull;
+#endif
+
 namespace {
 
 const std::string kMetaFilename = "dbmeta";
@@ -445,7 +462,7 @@ AdminHandler::AdminHandler(
 
   if (FLAGS_enable_async_incremental_backup_dbs) {
     backup_manager_ = std::make_unique<ApplicationDBBackupManager>(db_manager_.get(), S3UploadAndDownloadExecutor(), 
-      meta_db_, &db_admin_lock_, FLAGS_rocksdb_dir, FLAGS_checkpoint_backup_batch_num_upload);
+      meta_db_.get(), &db_admin_lock_, FLAGS_rocksdb_dir, FLAGS_checkpoint_backup_batch_num_upload);
   }
 
   folly::splitTo<std::string>(

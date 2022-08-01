@@ -36,22 +36,6 @@
 #include "rocksdb_admin/gen-cpp2/Admin.h"
 #endif
 #include "rocksdb/status.h"
-#if __GNUC__ >= 8
-#include "folly/executors/CPUThreadPoolExecutor.h"
-#include "folly/system/ThreadName.h"
-#else
-#include "wangle/concurrent/CPUThreadPoolExecutor.h"
-#endif
-
-#if __GNUC__ >= 8
-using folly::CPUThreadPoolExecutor;
-using folly::LifoSemMPMCQueue;
-using folly::QueueBehaviorIfFull;
-#else
-using wangle::CPUThreadPoolExecutor;
-using wangle::LifoSemMPMCQueue;
-using wangle::QueueBehaviorIfFull;
-#endif
 
 class KafkaWatcher;
 
@@ -167,9 +151,6 @@ class AdminHandler : virtual public AdminSvIf {
 
   // Get all the db names held by the AdminHandler
   std::vector<std::string> getAllDBNames();
-  
-  // Used for testing incremental backup 
-  bool backupAllDBsToS3();
 
  protected:
   // Lock to synchronize DB admin operations at per DB granularity.
@@ -196,7 +177,7 @@ class AdminHandler : virtual public AdminSvIf {
   // Lock for protecting the s3 util
   mutable std::mutex s3_util_lock_;
   // db that contains meta data for all local rocksdb instances
-  std::shared_ptr<rocksdb::DB> meta_db_;
+  std::unique_ptr<rocksdb::DB> meta_db_;
   // segments which allow for overlapping keys when adding SST files
   std::unordered_set<std::string> allow_overlapping_keys_segments_;
   // number of the current concurrenty s3 downloadings
