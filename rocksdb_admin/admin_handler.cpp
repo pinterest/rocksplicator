@@ -67,8 +67,7 @@
 DEFINE_string(hdfs_name_node, "hdfs://hbasebak-infra-namenode-prod1c01-001:8020",
               "The hdfs name node used for backup");
 
-DEFINE_string(rocksdb_dir, "/tmp/",
-              "The dir for local rocksdb instances");
+DEFINE_string(rocksdb_dir, "/tmp/", "The dir for local rocksdb instances");
 
 DEFINE_int32(num_hdfs_access_threads, 8,
              "The number of threads for backup or restore to/from HDFS");
@@ -133,8 +132,6 @@ DEFINE_int32(async_delete_dbs_frequency_sec,
 DEFINE_int32(async_delete_dbs_wait_sec,
              60,
              "How long in sec to wait between the dbs deletion");
-
-DEFINE_bool(enable_async_incremental_backup_dbs, false, "Enable incremental backup for db files");
 
 #if __GNUC__ >= 8
 using folly::CPUThreadPoolExecutor;
@@ -466,6 +463,12 @@ AdminHandler::AdminHandler(
   if (db_manager_ == nullptr) {
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
+
+  if (FLAGS_enable_async_incremental_backup_dbs) {
+    backup_manager_ = std::make_unique<ApplicationDBBackupManager>(db_manager_.get(), S3UploadAndDownloadExecutor(), 
+      meta_db_.get(), &db_admin_lock_, FLAGS_rocksdb_dir, FLAGS_checkpoint_backup_batch_num_upload);
+  }
+
   folly::splitTo<std::string>(
       ",", FLAGS_allow_overlapping_keys_segments,
       std::inserter(allow_overlapping_keys_segments_,
@@ -498,10 +501,6 @@ AdminHandler::AdminHandler(
       }
       LOG(INFO) << "Stopping DB deletioin thread ...";
     });
-  }
-
-  if (FLAGS_enable_async_incremental_backup_dbs) {
-    LOG(INFO) << "incremental backup gflag is enabled";
   }
 
   // Initialize the atomic int variables

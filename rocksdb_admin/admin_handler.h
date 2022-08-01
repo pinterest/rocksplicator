@@ -26,9 +26,8 @@
 #include <thread>
 #include <unordered_set>
 
-#include "common/object_lock.h"
-#include "common/s3util.h"
 #include "folly/SocketAddress.h"
+#include "rocksdb_admin/application_db_backup_manager.h"
 #include "rocksdb_admin/application_db_manager.h"
 #ifdef PINTEREST_INTERNAL
 // NEVER SET THIS UNLESS PINTEREST INTERNAL USAGE.
@@ -171,6 +170,7 @@ class AdminHandler : virtual public AdminSvIf {
                      const int64_t last_kafka_msg_timestamp_ms = -1);
 
   std::unique_ptr<ApplicationDBManager> db_manager_;
+  std::unique_ptr<ApplicationDBBackupManager> backup_manager_;
   RocksDBOptionsGenerator rocksdb_options_;
   // S3 util used for download
   std::shared_ptr<common::S3Util> s3_util_;

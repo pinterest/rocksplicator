@@ -86,6 +86,9 @@ class ApplicationDBManager {
   // Introspect ApplicationDBManager internal states
   std::string Introspect() const;
 
+  // Get all the name and the applicationDB 
+  std::unordered_map<std::string, std::shared_ptr<ApplicationDB>> getAllDBs();
+
   ~ApplicationDBManager();
 
  private:
