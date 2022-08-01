@@ -84,6 +84,10 @@ class ApplicationDBBackupManager {
   std::string rocksdb_dir_;
   int32_t checkpoint_backup_batch_num_upload_;
 
+  // used to store all backups for each db. 
+  // I only store the timestamps since I use that to name different backups.
+  std::unordered_map<std::string, std::vector<int64_t>> db_backups_;
+
   std::shared_ptr<common::S3Util> s3_util_;
   mutable std::mutex s3_util_lock_;
 

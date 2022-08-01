@@ -460,10 +460,16 @@ AdminHandler::AdminHandler(
     db_manager_ = CreateDBBasedOnConfig(rocksdb_options_);
   }
 
+<<<<<<< HEAD
   if (FLAGS_enable_async_incremental_backup_dbs) {
     backup_manager_ = std::make_unique<ApplicationDBBackupManager>(db_manager_.get(), S3UploadAndDownloadExecutor(), 
       meta_db_.get(), &db_admin_lock_, FLAGS_rocksdb_dir, FLAGS_checkpoint_backup_batch_num_upload);
   }
+=======
+  backup_manager_ = std::make_unique<ApplicationDBBackupManager>(
+    std::move(db_manager), FLAGS_rocksdb_dir, FLAGS_checkpoint_backup_batch_num_upload, 
+      FLAGS_s3_direct_io);
+>>>>>>> temp
 
   folly::splitTo<std::string>(
       ",", FLAGS_allow_overlapping_keys_segments,
