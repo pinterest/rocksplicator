@@ -22,6 +22,7 @@
 #include <aws/s3/S3Endpoint.h>
 #include <aws/core/Aws.h>
 #include <aws/core/client/ClientConfiguration.h>
+#include <aws/core/client/DefaultRetryStrategy.h>
 #include <aws/core/http/HttpClient.h>
 #include <aws/core/http/HttpResponse.h>
 #include <aws/core/utils/memory/stl/AWSStringStream.h>
@@ -47,6 +48,7 @@ using std::shared_ptr;
 using Aws::SDKOptions;
 using Aws::Client::ClientConfiguration;
 using Aws::Client::XmlOutcome;
+using Aws::Client::DefaultRetryStrategy;
 using Aws::Http::HttpMethod;
 using Aws::S3::S3Client;
 using Aws::S3::S3Endpoint::ForRegion;
@@ -176,6 +178,7 @@ class S3Util {
   ~S3Util() {
     TryAwsShutdownAPI(options_);
   }
+
   // Download an S3 Object to a local file
   GetObjectResponse getObject(const string& key, const string& local_path,
                               const bool direct_io = false);
