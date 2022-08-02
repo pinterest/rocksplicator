@@ -46,6 +46,8 @@ DEFINE_int32(incre_backup_limit_mbs, 100, "the rate limit for s3 client");
 
 DEFINE_bool(incre_backup_include_meta, false, "whether to backup meta data on s3");
 
+DECLARE_bool(s3_direct_io);
+
 namespace {
 
 const std::string kMetaFilename = "dbmeta";
@@ -104,6 +106,17 @@ inline std::string ensure_ends_with_pathsep(const std::string& s) {
   return s;
 }
 
+inline bool ends_with(const std::string& str, const std::string& suffix) {
+  return str.size() >= suffix.size() && 
+    0 == str.compare(str.size()-suffix.size(), suffix.size(), suffix);
+}
+
+// No checksum for current implementation, it needs to re-implement if checksum is enabled in sst names.
+inline int64_t parse_sst_id(const std::string& sst_name) {
+  // 123.sst (w/o checksum)
+  return std::stoll(sst_name.substr(sst_name.find_first_of('.')));
+}
+
 // copy from admin_hamdler.cpp
 inline bool should_new_s3_client(
     const common::S3Util& s3_util, const uint32_t limit_mbs, const std::string& s3_bucket) {
@@ -143,15 +156,14 @@ std::shared_ptr<common::S3Util> ApplicationDBBackupManager::createLocalS3Util(
 }
 
 // convert the string to a backup_descriptor map, if any error happens, it will return an empty map
-void parseBackupDescriptor(const std::string& contents, std::unordered_map<std::string, int64_t>* file_to_ts) {
+void parseBackupDesc(const std::string& contents, std::unordered_map<std::string, int64_t>* file_to_ts) {
   // Example:
   //   contents = "file1=1;file2=2;file3=3;"
   size_t pos = 0;
 
   while (pos < contents.size()) {
     size_t eq_pos = contents.find("=", pos);
-    if (eq_pos == std::string::npos) {
-      file_to_ts->clear();
+    if (eq_pos == std::string::npos) { // finish parsing
       return;
     } 
     std::string key = contents.substr(pos, eq_pos - pos);
@@ -174,6 +186,15 @@ void parseBackupDescriptor(const std::string& contents, std::unordered_map<std::
     
     file_to_ts->emplace(key, value);
   }
+}
+
+// convert file_to_ts map, ssd_id_min, ssd_id_max to a string.
+void makeUpBackupDescString(const std::unordered_map<std::string, int64_t>& file_to_ts, int64_t sst_id_min, int64_t sst_id_max, std::string& contents) {
+  contents.clear();
+  for (auto& item : file_to_ts) {
+    contents += item.first + "=" + std::to_string(item.second) + ";";
+  }
+  contents += std::to_string(sst_id_min) + "-" + std::to_string(sst_id_max) + ";";
 }
 
 bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationDB>& db) {
@@ -233,6 +254,13 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
 
   // if there exists last backup, we need to get the backup_descriptor
   auto local_s3_util = createLocalS3Util(FLAGS_incre_backup_limit_mbs, FLAGS_s3_incre_backup_bucket);
+  std::string formatted_s3_dir_path_upload = folly::stringPrintf("%s%s/%d/", 
+    ensure_ends_with_pathsep(FLAGS_s3_incre_backup_prefix).c_str(), db->db_name().c_str(), ts);
+  std::string formatted_checkpoint_local_path = ensure_ends_with_pathsep(checkpoint_local_path);
+
+  std::unordered_map<std::string, int64_t> file_to_ts;
+  std::unordered_map<std::string, int64_t> new_file_to_ts;
+  const string sst_suffix = ".sst";
 
   if (last_ts >= 0) {
     auto local_path_last_backup = folly::stringPrintf("%ss3_tmp/%s%d/", rocksdb_dir_.c_str(), db->db_name().c_str(), last_ts);
@@ -242,34 +270,42 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
 
     if (need_download)
       auto resp = local_s3_util->getObject(formatted_s3_last_backup_dir_path + backupDesc, 
-        local_path_last_backup + backupDesc, s3_direct_io_);
+        local_path_last_backup + backupDesc, FLAGS_s3_direct_io);
 
     std::string last_backup_desc_contents;
     common::FileUtil::readFileToString(local_path_last_backup + backupDesc, &last_backup_desc_contents);
-    std::unordered_map<std::string, int64_t> file_to_ts;
-    parseBackupDescriptor(last_backup_desc_contents, &file_to_ts);
+    
+    parseBackupDesc(last_backup_desc_contents, &file_to_ts);
     if (file_to_ts.empty()) {
       LOG(INFO) << "The backup of " << db->db_name() << " on timestamp " << last_ts << " is broken"; 
     }
 
     // Remove all the duplicate files
-    for (size_t i = 0; i < checkpoint_files.size(); ++i) {
-      auto& file = checkpoint_files[i];
-      if (file == "." || file == "..") {
-        continue;
-      } else if (file_to_ts.find(file) != file_to_ts.end()) {
-        // if (file == ".")
-      }
-    }
-    // checkpoint_files.erase(std::remove_if(checkpoint_files.begin(), checkpoint_files.end(), [](string file){
-    //   return file_to_ts.find(file) != file_to_ts.end();}), checkpoint_files.end());
+    checkpoint_files.erase(std::remove_if(checkpoint_files.begin(), checkpoint_files.end(), [&](string file){
+      return file_to_ts.find(file) != file_to_ts.end() && ends_with(file, sst_suffix);}), checkpoint_files.end());
+  
+    new_file_to_ts = std::move(file_to_ts);
+  } 
 
+  // Get the min_id and max_id for backup descriptor
+  int64_t sst_id_min = INT32_MAX;
+  int64_t sst_id_max = 0;
+  for (auto& file : checkpoint_files) {
+    if (ends_with(file, sst_suffix)) {
+      int64_t file_id = parse_sst_id(file);
+      new_file_to_ts.emplace(file, file_id);
+      sst_id_max = std::max(file_id, sst_id_max);
+      sst_id_min = std::min(file_id, sst_id_min);
+    }
   }
 
+  // Create the new backup descriptor file
+  std::string backup_desc_contents;
+  makeUpBackupDescString(new_file_to_ts, sst_id_min, sst_id_max, backup_desc_contents);
+  common::FileUtil::createFileWithContent(formatted_checkpoint_local_path, backupDesc, backup_desc_contents);
+  checkpoint_files.emplace_back(backupDesc);
+
   // Upload checkpoint to s3
-  std::string formatted_s3_dir_path_upload = folly::stringPrintf("%s%s/%d/", 
-    ensure_ends_with_pathsep(FLAGS_s3_incre_backup_prefix).c_str(), db->db_name().c_str(), ts);
-  std::string formatted_checkpoint_local_path = ensure_ends_with_pathsep(checkpoint_local_path);
   auto upload_func = [&](const std::string& dest, const std::string& source) {
     LOG(INFO) << "Copying " << source << " to " << dest;
     auto copy_resp = local_s3_util->putObject(dest, source);
