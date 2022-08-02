@@ -23,7 +23,12 @@
 #include "common/timer.h"
 #include "common/timeutil.h"
 #include "rocksdb/utilities/checkpoint.h"
+#ifdef PINTEREST_INTERNAL
+// NEVER SET THIS UNLESS PINTEREST INTERNAL USAGE.
+#include "schemas/gen-cpp2/rocksdb_admin_types.h"
+#else
 #include "rocksdb_admin/gen-cpp2/rocksdb_admin_types.h"
+#endif
 #include "rocksdb_admin/utils.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
 
@@ -199,6 +204,7 @@ void makeUpBackupDescString(const std::unordered_map<std::string, int64_t>& file
 
 bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationDB>& db) {
   // ::admin::AdminException e;
+
   common::Timer timer(kS3BackupMs);
   LOG(INFO) << "S3 Backup " << db->db_name() << " to " << ensure_ends_with_pathsep(FLAGS_s3_incre_backup_prefix) << db->db_name();
   auto ts = common::timeutil::GetCurrentTimestamp();
@@ -305,7 +311,6 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
   common::FileUtil::createFileWithContent(formatted_checkpoint_local_path, backupDesc, backup_desc_contents);
   checkpoint_files.emplace_back(backupDesc);
 
-  // Upload checkpoint to s3
   auto upload_func = [&](const std::string& dest, const std::string& source) {
     LOG(INFO) << "Copying " << source << " to " << dest;
     auto copy_resp = local_s3_util->putObject(dest, source);

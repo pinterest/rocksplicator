@@ -22,7 +22,6 @@
 #include "common/s3util.h"
 #include "rocksdb/db.h"
 #include "rocksdb_admin/application_db_manager.h"
-#include "rocksdb_replicator/thrift/gen-cpp2/Replicator.h"
 
 #if __GNUC__ >= 8
 #include "folly/executors/CPUThreadPoolExecutor.h"
