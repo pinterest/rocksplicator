@@ -23,7 +23,13 @@
 #include "common/timer.h"
 #include "common/timeutil.h"
 #include "rocksdb/utilities/checkpoint.h"
+
+#ifdef PINTEREST_INTERNAL
+// NEVER SET THIS UNLESS PINTEREST INTERNAL USAGE.
+#include "schemas/gen-cpp2/rocksdb_admin_types.h"
+#else
 #include "rocksdb_admin/gen-cpp2/rocksdb_admin_types.h"
+#endif
 #include "rocksdb_admin/utils.h"
 #include "thrift/lib/cpp2/protocol/Serializer.h"
 
