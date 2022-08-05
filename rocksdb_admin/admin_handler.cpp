@@ -981,7 +981,7 @@ void AdminHandler::async_tm_backupDBToS3(
   LOG(INFO) << "S3 Backup " << request->db_name << " to " << request->s3_backup_dir;
   auto ts = common::timeutil::GetCurrentTimestamp();
   const std::string s3_tmp_path = getS3TmpPath();
-  auto local_path = folly::stringPrintf("%s%s%d/", s3_tmp_path.c_str(), request->db_name.c_str(), ts);
+  auto local_path = folly::stringPrintf("%s%s%ld/", s3_tmp_path.c_str(), request->db_name.c_str(), ts);
   boost::system::error_code remove_err;
   boost::system::error_code create_err;
   boost::filesystem::remove_all(local_path, remove_err);
@@ -1176,7 +1176,7 @@ void AdminHandler::async_tm_restoreDBFromS3(
   auto ts = common::timeutil::GetCurrentTimestamp();
   const std::string s3_tmp_path = getS3TmpPath();
   auto local_path = FLAGS_enable_checkpoint_backup ? FLAGS_rocksdb_dir + request->db_name :
-                    folly::stringPrintf("%s%s%d/", s3_tmp_path.c_str(), request->db_name.c_str(), ts);
+                    folly::stringPrintf("%s%s%ld/", s3_tmp_path.c_str(), request->db_name.c_str(), ts);
   boost::system::error_code remove_err;
   boost::system::error_code create_err;
   boost::filesystem::remove_all(local_path, remove_err);
