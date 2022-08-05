@@ -71,6 +71,13 @@ class ApplicationDBBackupManager {
 
   bool backupDBToS3(const std::shared_ptr<ApplicationDB>& db);
 
+  std::vector<int64_t> getTimeStamp(const std::string& db);
+
+  void parseBackupDesc(const std::string& contents, std::unordered_map<std::string, int64_t>* file_to_ts);
+
+  void makeUpBackupDescString(const std::unordered_map<std::string, int64_t>& file_to_ts, int64_t sst_id_min, 
+                              int64_t sst_id_max, std::string& contents);
+
  private:
     // copy from admin_hamdler..
   std::shared_ptr<common::S3Util> createLocalS3Util(const uint32_t limit_mbs,

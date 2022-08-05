@@ -116,10 +116,20 @@ inline bool ends_with(const std::string& str, const std::string& suffix) {
     0 == str.compare(str.size()-suffix.size(), suffix.size(), suffix);
 }
 
+inline int64_t remove_leading_zero(std::string& num) {
+  size_t nonzero_pos = num.find_first_not_of('0');
+  if (nonzero_pos == std::string::npos) {
+    num.erase(0, num.size()-1);
+  } else {
+    num.erase(0, nonzero_pos);
+  }
+  return stoll(num);
+}
+
 // No checksum for current implementation, it needs to re-implement if checksum is enabled in sst names.
-inline int64_t parse_sst_id(const std::string& sst_name) {
+inline std::string parse_sst_id(const std::string& sst_name) {
   // 123.sst (w/o checksum)
-  return std::stoll(sst_name.substr(sst_name.find_first_of('.')));
+  return sst_name.substr(0, sst_name.find_first_of('.'));
 }
 
 // copy from admin_hamdler.cpp
@@ -161,40 +171,37 @@ std::shared_ptr<common::S3Util> ApplicationDBBackupManager::createLocalS3Util(
 }
 
 // convert the string to a backup_descriptor map, if any error happens, it will return an empty map
-void parseBackupDesc(const std::string& contents, std::unordered_map<std::string, int64_t>* file_to_ts) {
+// TODO: add sst_id_min and sst_id_max parsing
+void ApplicationDBBackupManager::parseBackupDesc(const std::string& contents, 
+    std::unordered_map<std::string, int64_t>* file_to_ts) {
   // Example:
-  //   contents = "file1=1;file2=2;file3=3;"
+  //   contents = "file1=1;file2=2;file3=3;sst_id_min,sstd_id_max;"
   size_t pos = 0;
 
   while (pos < contents.size()) {
     size_t eq_pos = contents.find("=", pos);
-    if (eq_pos == std::string::npos) { // finish parsing
-      return;
-    } 
+    // finish parsing
+    if (eq_pos == std::string::npos) return;
+
     std::string key = contents.substr(pos, eq_pos - pos);
-    if (key.empty()) {
-      file_to_ts->clear();
-      return;
-    }
+    if (key.empty()) return;
 
     size_t semi_pos = contents.find(";", eq_pos);
-    if (semi_pos == std::string::npos) {
-      file_to_ts->clear();
-      return;
-    } 
+    if (semi_pos == std::string::npos) return;
+
     std::string value_string = contents.substr(eq_pos + 1, semi_pos - eq_pos - 1);
-    if (value_string.empty()) {
-      file_to_ts->clear();
-      return;
-    } 
-    int64_t value = std::stoll(value_string, nullptr, 10);
-    
+    if (value_string.empty()) return;
+
+    int64_t value = remove_leading_zero(value_string);
     file_to_ts->emplace(key, value);
+    
+    pos = semi_pos+1;
   }
 }
 
 // convert file_to_ts map, ssd_id_min, ssd_id_max to a string.
-void makeUpBackupDescString(const std::unordered_map<std::string, int64_t>& file_to_ts, int64_t sst_id_min, int64_t sst_id_max, std::string& contents) {
+void ApplicationDBBackupManager::makeUpBackupDescString(const std::unordered_map<std::string, int64_t>& 
+    file_to_ts, int64_t sst_id_min, int64_t sst_id_max, std::string& contents) {
   contents.clear();
   for (auto& item : file_to_ts) {
     contents += item.first + "=" + std::to_string(item.second) + ";";
@@ -208,14 +215,14 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
   common::Timer timer(kS3BackupMs);
   LOG(INFO) << "S3 Backup " << db->db_name() << " to " << ensure_ends_with_pathsep(FLAGS_s3_incre_backup_prefix) << db->db_name();
   auto ts = common::timeutil::GetCurrentTimestamp();
-  auto local_path = folly::stringPrintf("%ss3_tmp/%s%d/", rocksdb_dir_.c_str(), db->db_name().c_str(), ts);
+  auto local_path = folly::stringPrintf("%ss3_tmp/%s%ld/", rocksdb_dir_.c_str(), db->db_name().c_str(), ts);
   boost::system::error_code remove_err;
   boost::system::error_code create_err;
   boost::filesystem::remove_all(local_path, remove_err);
   boost::filesystem::create_directories(local_path, create_err);
   SCOPE_EXIT { boost::filesystem::remove_all(local_path, remove_err); };
   if (remove_err || create_err) {
-    // SetException("Cannot remove/create dir for backup: " + local_path, AdminErrorCode::DB_ADMIN_ERROR, &callback);
+    LOG(ERROR) << "Cannot remove/create dir for backup: " << local_path;
     common::Stats::get()->Incr(kS3BackupFailure);
     return false;
   }
@@ -226,7 +233,6 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
   rocksdb::Checkpoint* checkpoint;
   auto status = rocksdb::Checkpoint::Create(db->rocksdb(), &checkpoint);
   if (!status.ok()) {
-    // OKOrSetException(status, AdminErrorCode::DB_ADMIN_ERROR, &callback);
     LOG(ERROR) << "Error happened when trying to initialize checkpoint: " << status.ToString();
     common::Stats::get()->Incr(kS3BackupFailure);
     return false;
@@ -235,7 +241,6 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
   auto checkpoint_local_path = local_path + "checkpoint";
   status = checkpoint->CreateCheckpoint(checkpoint_local_path);
   if (!status.ok()) {
-    // OKOrSetException(status, AdminErrorCode::DB_ADMIN_ERROR, &callback);
     LOG(ERROR) << "Error happened when trying to create checkpoint: " << status.ToString();
     common::Stats::get()->Incr(kS3BackupFailure);
     return false;
@@ -245,7 +250,6 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
   std::vector<std::string> checkpoint_files;
   status = rocksdb::Env::Default()->GetChildren(checkpoint_local_path, &checkpoint_files);
   if (!status.ok()) {
-    // OKOrSetException(status, AdminErrorCode::DB_ADMIN_ERROR, &callback);
     LOG(ERROR) << "Error happened when trying to list files in the checkpoint: " << status.ToString();
     common::Stats::get()->Incr(kS3BackupFailure);
     return false;
@@ -260,37 +264,51 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
 
   // if there exists last backup, we need to get the backup_descriptor
   auto local_s3_util = createLocalS3Util(FLAGS_incre_backup_limit_mbs, FLAGS_s3_incre_backup_bucket);
-  std::string formatted_s3_dir_path_upload = folly::stringPrintf("%s%s/%d/", 
+  std::string formatted_s3_dir_path_upload = folly::stringPrintf("%s%s/%ld/", 
     ensure_ends_with_pathsep(FLAGS_s3_incre_backup_prefix).c_str(), db->db_name().c_str(), ts);
   std::string formatted_checkpoint_local_path = ensure_ends_with_pathsep(checkpoint_local_path);
 
   std::unordered_map<std::string, int64_t> file_to_ts;
-  std::unordered_map<std::string, int64_t> new_file_to_ts;
   const string sst_suffix = ".sst";
 
   if (last_ts >= 0) {
-    auto local_path_last_backup = folly::stringPrintf("%ss3_tmp/%s%d/", rocksdb_dir_.c_str(), db->db_name().c_str(), last_ts);
-    std::string formatted_s3_last_backup_dir_path = folly::stringPrintf("%s%s/%d/", 
+    LOG(INFO) << "find the last backup on " << last_ts;
+    std::string local_path_last_backup = folly::stringPrintf("%ss3_tmp/%s%ld/", rocksdb_dir_.c_str(), db->db_name().c_str(), last_ts) + "checkpoint/";
+    std::string formatted_s3_last_backup_dir_path = folly::stringPrintf("%s%s/%ld/", 
       ensure_ends_with_pathsep(FLAGS_s3_incre_backup_prefix).c_str(), db->db_name().c_str(), last_ts);
-    bool need_download = !(boost::filesystem::is_directory(local_path_last_backup));
 
-    if (need_download)
+    boost::system::error_code remove_last_backup_err;
+    boost::system::error_code create_last_backup_err;
+    // if we have not removed the last backup, we do not need to download it
+    bool need_download = !boost::filesystem::exists(local_path_last_backup + backupDesc);
+    boost::filesystem::create_directories(local_path_last_backup, create_last_backup_err);
+    SCOPE_EXIT { boost::filesystem::remove_all(local_path_last_backup, remove_last_backup_err); };
+    if (create_err) {
+      // SetException("Cannot remove/create dir for backup: " + local_path, AdminErrorCode::DB_ADMIN_ERROR, &callback);
+      common::Stats::get()->Incr(kS3BackupFailure);
+      return false;
+    }
+
+    if (need_download) {
       auto resp = local_s3_util->getObject(formatted_s3_last_backup_dir_path + backupDesc, 
         local_path_last_backup + backupDesc, FLAGS_s3_direct_io);
+    } else {
+      assert(boost::filesystem::exists(local_path_last_backup + backupDesc));
+    }
 
     std::string last_backup_desc_contents;
     common::FileUtil::readFileToString(local_path_last_backup + backupDesc, &last_backup_desc_contents);
     
     parseBackupDesc(last_backup_desc_contents, &file_to_ts);
     if (file_to_ts.empty()) {
-      LOG(INFO) << "The backup of " << db->db_name() << " on timestamp " << last_ts << " is broken"; 
-    }
+      LOG(INFO) << "The last backup of " << db->db_name() << " on timestamp " << last_ts << " is broken"; 
+    } 
 
     // Remove all the duplicate files
     checkpoint_files.erase(std::remove_if(checkpoint_files.begin(), checkpoint_files.end(), [&](string file){
       return file_to_ts.find(file) != file_to_ts.end() && ends_with(file, sst_suffix);}), checkpoint_files.end());
-  
-    new_file_to_ts = std::move(file_to_ts);
+
+    LOG(INFO) << "finish parsing last backup";
   } 
 
   // Get the min_id and max_id for backup descriptor
@@ -298,16 +316,17 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
   int64_t sst_id_max = 0;
   for (auto& file : checkpoint_files) {
     if (ends_with(file, sst_suffix)) {
-      int64_t file_id = parse_sst_id(file);
-      new_file_to_ts.emplace(file, file_id);
-      sst_id_max = std::max(file_id, sst_id_max);
-      sst_id_min = std::min(file_id, sst_id_min);
+      std::string file_id = parse_sst_id(file);
+      int64_t file_num = remove_leading_zero(file_id);
+      file_to_ts.emplace(file, ts);
+      sst_id_max = std::max(file_num, sst_id_max);
+      sst_id_min = std::min(file_num, sst_id_min);
     }
   }
 
   // Create the new backup descriptor file
   std::string backup_desc_contents;
-  makeUpBackupDescString(new_file_to_ts, sst_id_min, sst_id_max, backup_desc_contents);
+  makeUpBackupDescString(file_to_ts, sst_id_min, sst_id_max, backup_desc_contents);
   common::FileUtil::createFileWithContent(formatted_checkpoint_local_path, backupDesc, backup_desc_contents);
   checkpoint_files.emplace_back(backupDesc);
 
@@ -354,9 +373,7 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
     for (auto& f : futures) {
       auto res = std::move(f).get();
       if (!res) {
-        // SetException("Error happened when uploading files from checkpoint to S3",
-        //               AdminErrorCode::DB_ADMIN_ERROR,
-        //               &callback);
+        LOG(ERROR) << "Error happened when uploading files from checkpoint to S3";
         common::Stats::get()->Incr(kS3BackupFailure);
         return false;
       }
@@ -368,9 +385,7 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
       }
       if (!upload_func(formatted_s3_dir_path_upload + file, formatted_checkpoint_local_path + file)) {
         // If there is error in one file uploading, then we fail the whole backup process
-        // SetException("Error happened when uploading files from checkpoint to S3",
-        //               AdminErrorCode::DB_ADMIN_ERROR,
-        //               &callback);
+        LOG(ERROR) << "Error happened when uploading files from checkpoint to S3";
         common::Stats::get()->Incr(kS3BackupFailure);
         return false;
       }
@@ -394,21 +409,25 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
       dbmeta_path = common::FileUtil::createFileWithContent(
           formatted_checkpoint_local_path, kMetaFilename, encoded_meta);
     } catch (std::exception& e) {
-      // SetException("Failed to create meta file, " + std::string(e.what()),
-      //               AdminErrorCode::DB_ADMIN_ERROR, &callback);
+      LOG(ERROR) << "Failed to create meta file, " << std::string(e.what());
       common::Stats::get()->Incr(kS3BackupFailure);
       return false;
     }
     if (!upload_func(formatted_s3_dir_path_upload + kMetaFilename, dbmeta_path)) {
-      // SetException("Error happened when upload meta from checkpoint to S3",
-      //               AdminErrorCode::DB_ADMIN_ERROR, &callback);
+      LOG(ERROR) << "Error happened when upload meta from checkpoint to S3";
       common::Stats::get()->Incr(kS3BackupFailure);
       return false;
     }
   }
 
-  // Delete the directory to remove the snapshot.
-  boost::filesystem::remove_all(local_path);
+  auto it = db_backups_.find(db->db_name());
+  if (it != db_backups_.end()) {
+    it->second.emplace_back(ts);
+  } else {
+    db_backups_.emplace(db->db_name(), std::vector<int64_t>(1, ts));
+  }
+
+  return true;
 }
 
 bool ApplicationDBBackupManager::backupAllDBsToS3() {
@@ -429,6 +448,11 @@ bool ApplicationDBBackupManager::backupAllDBsToS3() {
   }
 
   return ret;
+}
+
+std::vector<int64_t> ApplicationDBBackupManager::getTimeStamp(const std::string& db) {
+  if (db_backups_.find(db) != db_backups_.end()) return db_backups_[db];
+  else return std::vector<int64_t>();
 }
 
 }
