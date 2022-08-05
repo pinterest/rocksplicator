@@ -123,7 +123,7 @@ inline int64_t remove_leading_zero(std::string& num) {
   } else {
     num.erase(0, nonzero_pos);
   }
-  return stoll(num);
+  return std::stol(num);
 }
 
 // No checksum for current implementation, it needs to re-implement if checksum is enabled in sst names.
