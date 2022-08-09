@@ -23,7 +23,6 @@
 
 #include "common/file_util.h"
 #include "common/s3util.h"
-#include "common/segment_utils.h"
 #include "boost/filesystem.hpp"
 #include "boost/range/iterator_range.hpp"
 #include "folly/SocketAddress.h"

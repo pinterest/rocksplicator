@@ -90,6 +90,7 @@ class ApplicationDBBackupManager {
 
   // used to store all backups for each db. 
   // I only store the timestamps since I use that to name different backups.
+  // May add checksum in the future.
   std::unordered_map<std::string, std::vector<int64_t>> db_backups_;
 
   std::shared_ptr<common::S3Util> s3_util_;

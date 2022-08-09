@@ -118,22 +118,6 @@ inline bool ends_with(const std::string& str, const std::string& suffix) {
     0 == str.compare(str.size()-suffix.size(), suffix.size(), suffix);
 }
 
-inline int64_t remove_leading_zero(std::string num) {
-  size_t nonzero_pos = num.find_first_not_of('0');
-  if (nonzero_pos == std::string::npos) {
-    num.erase(0, num.size()-1);
-  } else {
-    num.erase(0, nonzero_pos);
-  }
-  return std::stol(num);
-}
-
-// No checksum for current implementation, it needs to re-implement if checksum is enabled in sst names.
-inline std::string parse_sst_id(const std::string& sst_name) {
-  // 123.sst (w/o checksum)
-  return sst_name.substr(0, sst_name.find_first_of('.'));
-}
-
 // copy from admin_hamdler.cpp
 inline bool should_new_s3_client(
     const common::S3Util& s3_util, const uint32_t limit_mbs, const std::string& s3_bucket) {
