@@ -58,8 +58,10 @@ namespace {
 const std::string kMetaFilename = "dbmeta";
 const std::string kS3BackupMs = "s3_backup_ms";
 const std::string kS3BackupFailure = "s3_backup_failure";
-const int kS3UtilRecheckSec = 5;
+const int32_t kS3UtilRecheckSec = 5;
 const std::string backupDesc = "backup_descriptor";
+const std::string lastBackupTs = "last_backup_ts";
+const std::string fileToTs = "file_to_ts";
 
 }
 
@@ -116,7 +118,7 @@ inline bool ends_with(const std::string& str, const std::string& suffix) {
     0 == str.compare(str.size()-suffix.size(), suffix.size(), suffix);
 }
 
-inline int64_t remove_leading_zero(std::string& num) {
+inline int64_t remove_leading_zero(std::string num) {
   size_t nonzero_pos = num.find_first_not_of('0');
   if (nonzero_pos == std::string::npos) {
     num.erase(0, num.size()-1);
@@ -170,43 +172,16 @@ std::shared_ptr<common::S3Util> ApplicationDBBackupManager::createLocalS3Util(
   return local_s3_util;
 }
 
-// convert the string to a backup_descriptor map, if any error happens, it will return an empty map
-// TODO: add sst_id_min and sst_id_max parsing
-void ApplicationDBBackupManager::parseBackupDesc(const std::string& contents, 
-    std::unordered_map<std::string, int64_t>* file_to_ts) {
-  // Example:
-  //   contents = "file1=1;file2=2;file3=3;sst_id_min,sstd_id_max;"
-  size_t pos = 0;
-
-  while (pos < contents.size()) {
-    size_t eq_pos = contents.find("=", pos);
-    // finish parsing
-    if (eq_pos == std::string::npos) return;
-
-    std::string key = contents.substr(pos, eq_pos - pos);
-    if (key.empty()) return;
-
-    size_t semi_pos = contents.find(";", eq_pos);
-    if (semi_pos == std::string::npos) return;
-
-    std::string value_string = contents.substr(eq_pos + 1, semi_pos - eq_pos - 1);
-    if (value_string.empty()) return;
-
-    int64_t value = remove_leading_zero(value_string);
-    file_to_ts->emplace(key, value);
-    
-    pos = semi_pos+1;
-  }
-}
-
-// convert file_to_ts map, ssd_id_min, ssd_id_max to a string.
-void ApplicationDBBackupManager::makeUpBackupDescString(const std::unordered_map<std::string, int64_t>& 
-    file_to_ts, int64_t sst_id_min, int64_t sst_id_max, std::string& contents) {
+// convert file_to_ts map, last_ts to a json value.
+void ApplicationDBBackupManager::makeUpBackupDescJson(const std::unordered_map<std::string, int64_t>& 
+    file_to_ts, int64_t last_ts, Json::Value& contents) {
   contents.clear();
+  Json::Value temp_map(Json::objectValue);
   for (auto& item : file_to_ts) {
-    contents += item.first + "=" + std::to_string(item.second) + ";";
+    temp_map[item.first] = item.second;
   }
-  contents += std::to_string(sst_id_min) + "-" + std::to_string(sst_id_max) + ";";
+  contents[fileToTs] = temp_map;
+  contents[lastBackupTs] = last_ts;
 }
 
 bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationDB>& db) {
@@ -215,7 +190,8 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
   common::Timer timer(kS3BackupMs);
   LOG(INFO) << "S3 Backup " << db->db_name() << " to " << ensure_ends_with_pathsep(FLAGS_s3_incre_backup_prefix) << db->db_name();
   auto ts = common::timeutil::GetCurrentTimestamp();
-  auto local_path = folly::stringPrintf("%ss3_tmp/%s%ld/", rocksdb_dir_.c_str(), db->db_name().c_str(), ts);
+  std::string s3_incre_path = rocksdb_dir_ + "s3_incre/"; 
+  auto local_path = folly::stringPrintf("%s/%s%ld/", s3_incre_path.c_str(), db->db_name().c_str(), ts);
   boost::system::error_code remove_err;
   boost::system::error_code create_err;
   boost::filesystem::remove_all(local_path, remove_err);
@@ -273,14 +249,13 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
 
   if (last_ts >= 0) {
     LOG(INFO) << "find the last backup on " << last_ts;
-    std::string local_path_last_backup = folly::stringPrintf("%ss3_tmp/%s%ld/", rocksdb_dir_.c_str(), db->db_name().c_str(), last_ts) + "checkpoint/";
+    std::string local_path_last_backup = folly::stringPrintf("%s/%s%ld/", s3_incre_path.c_str(), db->db_name().c_str(), last_ts) + "checkpoint/";
     std::string formatted_s3_last_backup_dir_path = folly::stringPrintf("%s%s/%ld/", 
       ensure_ends_with_pathsep(FLAGS_s3_incre_backup_prefix).c_str(), db->db_name().c_str(), last_ts);
 
     boost::system::error_code remove_last_backup_err;
     boost::system::error_code create_last_backup_err;
     // if we have not removed the last backup, we do not need to download it
-    bool need_download = !boost::filesystem::exists(local_path_last_backup + backupDesc);
     boost::filesystem::create_directories(local_path_last_backup, create_last_backup_err);
     SCOPE_EXIT { boost::filesystem::remove_all(local_path_last_backup, remove_last_backup_err); };
     if (create_err) {
@@ -289,17 +264,29 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
       return false;
     }
 
-    if (need_download) {
-      auto resp = local_s3_util->getObject(formatted_s3_last_backup_dir_path + backupDesc, 
-        local_path_last_backup + backupDesc, FLAGS_s3_direct_io);
-    } else {
-      assert(boost::filesystem::exists(local_path_last_backup + backupDesc));
+    auto resp = local_s3_util->getObject(formatted_s3_last_backup_dir_path + backupDesc, 
+      local_path_last_backup + backupDesc, FLAGS_s3_direct_io);
+    if (!resp.Error().empty()) {
+      LOG(ERROR) << "Error happened when downloading the backup descriptor from S3 to local: "
+                 << resp.Error();
+      return false;
     }
 
+    Json::Reader reader;
+    Json::Value last_backup_desc;
     std::string last_backup_desc_contents;
     common::FileUtil::readFileToString(local_path_last_backup + backupDesc, &last_backup_desc_contents);
-    
-    parseBackupDesc(last_backup_desc_contents, &file_to_ts);
+    if (!reader.parse(last_backup_desc_contents, last_backup_desc) || !last_backup_desc.isObject()) {
+      LOG(ERROR) << "Error happened when parsing the backup descriptor: "
+                 << resp.Error();
+      return false;
+    }
+
+    const auto& file_map = last_backup_desc[fileToTs];
+    for (Json::Value::const_iterator it = file_map.begin(); it != file_map.end(); ++it) {
+      file_to_ts.emplace(it.key().asString(), it->asInt64());
+    }
+
     if (file_to_ts.empty()) {
       LOG(INFO) << "The last backup of " << db->db_name() << " on timestamp " << last_ts << " is broken"; 
     } 
@@ -311,24 +298,17 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
     LOG(INFO) << "finish parsing last backup";
   } 
 
-  // Get the min_id and max_id for backup descriptor
-  int64_t sst_id_min = INT32_MAX;
-  int64_t sst_id_max = 0;
+  // Put new files into the map
   for (auto& file : checkpoint_files) {
     if (ends_with(file, sst_suffix)) {
-      std::string file_id = parse_sst_id(file);
-      int64_t file_num = remove_leading_zero(file_id);
       file_to_ts.emplace(file, ts);
-      sst_id_max = std::max(file_num, sst_id_max);
-      sst_id_min = std::min(file_num, sst_id_min);
     }
   }
 
   // Create the new backup descriptor file
-  std::string backup_desc_contents;
-  makeUpBackupDescString(file_to_ts, sst_id_min, sst_id_max, backup_desc_contents);
-  common::FileUtil::createFileWithContent(formatted_checkpoint_local_path, backupDesc, backup_desc_contents);
-  checkpoint_files.emplace_back(backupDesc);
+  Json::Value backup_desc_contents(Json::objectValue);
+  makeUpBackupDescJson(file_to_ts, last_ts, backup_desc_contents);
+  common::FileUtil::createFileWithContent(formatted_checkpoint_local_path, backupDesc, backup_desc_contents.toStyledString());
 
   auto upload_func = [&](const std::string& dest, const std::string& source) {
     LOG(INFO) << "Copying " << source << " to " << dest;
@@ -418,6 +398,15 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
       common::Stats::get()->Incr(kS3BackupFailure);
       return false;
     }
+  }
+
+  // make sure the all other files has been uploaded successfully before uploading the backup descriptor
+  // TODO: add another json to represent the timestamp for the latest backup, we can name it as the "backup starter"
+  if (!upload_func(formatted_s3_dir_path_upload + backupDesc, 
+    formatted_checkpoint_local_path + backupDesc)) {
+    LOG(ERROR) << "Error happened when upload backup descriptor from checkpoint to S3";
+    common::Stats::get()->Incr(kS3BackupFailure);
+    return false;
   }
 
   auto it = db_backups_.find(db->db_name());

@@ -983,13 +983,21 @@ TEST_F(AdminHandlerTestBase, BackupDescriptorTest) {
   std::unordered_map<std::string, int64_t> file_to_ts;
   const std::string backupDesc = "backup_descriptor";
   common::FileUtil::readFileToString(restore_path + backupDesc, &last_backup_desc_contents);
-  handler_->backup_manager_->parseBackupDesc(last_backup_desc_contents, &file_to_ts);
 
-  // download necessary from previous backup
-  for (auto& it : file_to_ts) {
-    if (it.second != timestamps[1]) {
-      auto response = local_s3_util->getObject(s3_path + std::to_string(it.second) + "/" + it.first, restore_path + it.first, 
-                                        FLAGS_s3_direct_io);
+  Json::Reader reader;
+  Json::Value last_backup_desc;
+  EXPECT_TRUE(reader.parse(last_backup_desc_contents, last_backup_desc));
+  EXPECT_TRUE(last_backup_desc.isObject());
+
+  const std::string fileToTs = "file_to_ts";
+  const auto& file_map = last_backup_desc[fileToTs];
+
+  // filter repeated files from previous backup
+  for (Json::Value::const_iterator it = file_map.begin(); it != file_map.end(); ++it) {
+    auto key = it.key().asString();
+    auto value = it->asInt64();
+    if (value != timestamps[1]) {
+      auto response = local_s3_util->getObject(s3_path + std::to_string(value) + "/" + key, restore_path + key, FLAGS_s3_direct_io);
       EXPECT_TRUE(response.Error().empty());
     }
   }

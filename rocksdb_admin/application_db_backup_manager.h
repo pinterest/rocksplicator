@@ -18,6 +18,7 @@
 #include <shared_mutex>
 #include <string>
 
+#include "common/jsoncpp/include/json/json.h"
 #include "common/object_lock.h"
 #include "common/s3util.h"
 #include "rocksdb/db.h"
@@ -73,10 +74,7 @@ class ApplicationDBBackupManager {
 
   std::vector<int64_t> getTimeStamp(const std::string& db);
 
-  void parseBackupDesc(const std::string& contents, std::unordered_map<std::string, int64_t>* file_to_ts);
-
-  void makeUpBackupDescString(const std::unordered_map<std::string, int64_t>& file_to_ts, int64_t sst_id_min, 
-                              int64_t sst_id_max, std::string& contents);
+  void makeUpBackupDescJson(const std::unordered_map<std::string, int64_t>& file_to_ts, int64_t last_ts, Json::Value& contents);
 
  private:
     // copy from admin_hamdler..
