@@ -1069,6 +1069,8 @@ TEST_F(AdminHandlerTestBase, RestoreFromIncreBackupTest) {
     int32_t range = 10;
     auto local_s3_util = common::S3Util::BuildS3Util(FLAGS_incre_backup_limit_mbs, FLAGS_s3_incre_backup_bucket);
 
+    // TODO: abstract these traffic by some method (it is also shared in BackupDescriptorTest), make it
+    // an integration test.
     for (int32_t i = 0; i < range; ++i) {
       std::string kv_tmp = folly::stringPrintf("%04d", i); // doing this for an predicted order 0001 < 0011 but 11 < 2 in string level.
       writeToDB(testdb, kv_tmp, kv_tmp + "_" + kv_tmp);
