@@ -385,7 +385,9 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
   }
 
   // make sure the all other files has been uploaded successfully before uploading the backup descriptor
-  // TODO: add another json to represent the timestamp for the latest backup, we can name it as the "backup starter"
+  // TODO: add another json to represent the timestamp for the latest backup, we can name it as the "backup starter".
+  // In this way, we do not need to store any timestamp offline and reduce the work for sync it. We may store the all 
+  // the timestamp on the file of backup descriptor so that we can check each one quickly.
   if (!upload_func(formatted_s3_dir_path_upload + backupDesc, 
     formatted_checkpoint_local_path + backupDesc)) {
     LOG(ERROR) << "Error happened when upload backup descriptor from checkpoint to S3";

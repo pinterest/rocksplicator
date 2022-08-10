@@ -950,10 +950,6 @@ TEST_F(AdminHandlerTestBase, BackupDescriptorTest) {
   // wait for the first incremental backup
   std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_incremental_backup_dbs_frequency_sec));
 
-  uint64_t manifest_size = 0;
-  std::vector<std::string> files;
-  db_->GetLiveFiles(files, &manifest_size, true);
-
   // some overlap between two batches of kv pairs for compaction test later
   for (int32_t i = 0; i < range; ++i) {
     std::string kv_tmp = std::to_string(i + range/2);
@@ -991,7 +987,7 @@ TEST_F(AdminHandlerTestBase, BackupDescriptorTest) {
   const std::string fileToTs = "file_to_ts";
   const auto& file_map = last_backup_desc[fileToTs];
 
-  // filter repeated files from previous backup
+  // download files from previous backup
   for (Json::Value::const_iterator it = file_map.begin(); it != file_map.end(); ++it) {
     auto key = it.key().asString();
     auto value = it->asInt64();
