@@ -97,6 +97,8 @@ DECLARE_string(rocksdb_dir);
 DECLARE_bool(enable_checkpoint_backup);
 DECLARE_bool(rocksdb_allow_overlapping_keys);
 DECLARE_bool(s3_direct_io);
+DECLARE_string(s3_incre_backup_bucket);
+DECLARE_string(s3_incre_backup_prefix);
 
 string generateRandIntAsStr() {
   static thread_local unsigned int seed = time(nullptr);
@@ -144,10 +146,15 @@ class AdminHandlerTestBase : public testing::Test {
       testing::UnitTest::GetInstance()->current_test_info();
     std::string back_up_test_name = "ApplicationDBBackupManagerTest";
     std::string backup_desc_test_name = "BackupDescriptorTest";
+    std::string restore_incre_test_name = "RestoreFromIncreBackupTest";
     if (0 == strcmp(test_info->name(), back_up_test_name.c_str())) {
       FLAGS_enable_async_incremental_backup_dbs = true;
       FLAGS_async_incremental_backup_dbs_frequency_sec = 1;
     } else if (0 == strcmp(test_info->name(), backup_desc_test_name.c_str())) {
+      FLAGS_enable_async_incremental_backup_dbs = true;
+      FLAGS_async_incremental_backup_dbs_frequency_sec = 3;
+    } else if (0 == strcmp(test_info->name(), restore_incre_test_name.c_str())) {
+      FLAGS_enable_checkpoint_backup = true;
       FLAGS_enable_async_incremental_backup_dbs = true;
       FLAGS_async_incremental_backup_dbs_frequency_sec = 3;
     }
@@ -1046,6 +1053,83 @@ TEST_F(AdminHandlerTestBase, BackupDescriptorTest) {
   }
   EXPECT_FALSE(it_db_->Valid() || it_restore_db_->Valid());
 }
+
+TEST_F(AdminHandlerTestBase, RestoreFromIncreBackupTest) {
+  // addDB
+  const string testdb = generateDBName();
+  addDBWithRole(testdb, "LEADER");
+  auto meta = handler_->getMetaData(testdb);
+  verifyMeta(meta, testdb, true, "", "");
+
+  // restore from incremental backup
+  {
+    FLAGS_enable_checkpoint_backup = true;
+    SCOPE_EXIT { FLAGS_enable_checkpoint_backup = false; };
+
+    int32_t range = 10;
+    auto local_s3_util = common::S3Util::BuildS3Util(FLAGS_incre_backup_limit_mbs, FLAGS_s3_incre_backup_bucket);
+
+    for (int32_t i = 0; i < range; ++i) {
+      std::string kv_tmp = folly::stringPrintf("%04d", i); // doing this for an predicted order 0001 < 0011 but 11 < 2 in string level.
+      writeToDB(testdb, kv_tmp, kv_tmp + "_" + kv_tmp);
+    }
+    flushDB(testdb);
+    // wait for the first incremental backup
+    std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_incremental_backup_dbs_frequency_sec));
+
+    // some overlap between two batches of kv pairs for compaction test later
+    for (int32_t i = 0; i < range; ++i) {
+      std::string kv_tmp = folly::stringPrintf("%04d", i + range/2);
+      writeToDB(testdb, kv_tmp, kv_tmp + "_" + kv_tmp + "_" + kv_tmp);
+    }
+    flushDB(testdb);
+    // wait for the second incremental backup
+    std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_incremental_backup_dbs_frequency_sec));
+
+    CloseDBRequest close_req;
+    close_req.db_name = testdb;
+    auto close_resp = client_->future_closeDB(close_req).get();
+
+    LOG(INFO) << "Restore db: " << testdb;
+    RestoreDBFromS3Request restore_req;
+    restore_req.db_name = testdb;
+    restore_req.s3_bucket = FLAGS_s3_bucket;
+    restore_req.s3_backup_dir =
+        FLAGS_s3_backup_prefix + "checkpoint/" + testdb;
+    restore_req.upstream_ip = localIP();
+    restore_req.upstream_port = 8090;
+    RestoreDBFromS3Response restore_resp ; 
+    EXPECT_NO_THROW(restore_resp = client_->future_restoreDBFromS3(restore_req).get());
+    // test for all the key value pairs 
+    // 0-499 i i_i
+    // 500-1499 i i_i_i
+
+    // verify backup & restore with meta for checkpoint
+    AdminException e;
+    rocksdb::DB* restore_db_ = handler_->getDB(testdb, &e)->rocksdb();
+
+    ReadOptions restore_db_readoptions = ReadOptions();  
+    auto it_restore_db_ = restore_db_->NewIterator(restore_db_readoptions);
+
+    // compare local db with restore db
+    int32_t i = 0;
+    for (it_restore_db_->SeekToFirst(), i = 0; it_restore_db_->Valid() && 
+        i < range / 2; it_restore_db_->Next(), ++i) {
+      std::string kv_tmp = folly::stringPrintf("%04d", i);
+      EXPECT_TRUE(kv_tmp.c_str() == it_restore_db_->key());
+      EXPECT_TRUE((kv_tmp + "_" + kv_tmp).c_str() == it_restore_db_->value());
+    }
+
+    for (i = 0; it_restore_db_->Valid() && i < range; it_restore_db_->Next(), ++i) {
+      std::string kv_tmp = folly::stringPrintf("%04d", i + range/2);
+      EXPECT_TRUE(kv_tmp.c_str() == it_restore_db_->key());
+      EXPECT_TRUE((kv_tmp + "_" + kv_tmp + "_" + kv_tmp).c_str() == it_restore_db_->value());
+    }
+
+    EXPECT_FALSE(it_restore_db_->Valid());
+  }
+}
+
 
 }  // namespace admin
 
