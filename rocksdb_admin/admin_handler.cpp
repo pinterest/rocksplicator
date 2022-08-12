@@ -964,6 +964,14 @@ void AdminHandler::async_tm_backupDBToS3(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       BackupDBToS3Response>>> callback,
     std::unique_ptr<BackupDBToS3Request> request) {
+
+  if (FLAGS_enable_async_incremental_backup_dbs) {
+    LOG(INFO) << "S3 Backup for " << request->db_name << " will be handled by incremental backup"
+    common::Stats::get()->Incr(kS3BackupSuccess);
+    callback->result(BackupDBToS3Response());
+    return;
+  }
+  
   AdminException e;
   const auto n = num_current_s3_sst_uploadings_.fetch_add(1);
   SCOPE_EXIT {
