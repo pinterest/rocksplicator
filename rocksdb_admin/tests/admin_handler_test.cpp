@@ -943,7 +943,7 @@ TEST_F(AdminHandlerTestBase, BackupDescriptorTest) {
   auto local_s3_util = common::S3Util::BuildS3Util(FLAGS_incre_backup_limit_mbs, FLAGS_s3_incre_backup_bucket);
 
   for (int32_t i = 0; i < range; ++i) {
-    std::string kv_tmp = std::to_string(i);
+    std::string kv_tmp = folly::stringPrintf("%04d", i);
     writeToDB(testdb, kv_tmp, kv_tmp + "_" + kv_tmp);
   }
   flushDB(testdb);
@@ -952,25 +952,35 @@ TEST_F(AdminHandlerTestBase, BackupDescriptorTest) {
 
   // some overlap between two batches of kv pairs for compaction test later
   for (int32_t i = 0; i < range; ++i) {
-    std::string kv_tmp = std::to_string(i + range/2);
+    std::string kv_tmp = folly::stringPrintf("%04d", i + range/2);
     writeToDB(testdb, kv_tmp, kv_tmp + "_" + kv_tmp + "_" + kv_tmp);
   }
   flushDB(testdb);
   // wait for the second incremental backup
   std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_incremental_backup_dbs_frequency_sec));
 
-  auto timestamps = handler_->backup_manager_->getTimeStamp(testdb);
-  EXPECT_TRUE(timestamps.size() >= 2);
   std::string s3_path = FLAGS_s3_incre_backup_prefix + testdb + "/";
   std::string restore_path = "/restore_tmp/" + testdb + "/";
-  
+
   boost::system::error_code remove_err;
   boost::system::error_code create_err;
   fs::create_directories(restore_path, create_err);
   SCOPE_EXIT { fs::remove_all(restore_path, remove_err); };
 
+  const std::string backupStarter = "backup_starter";
+  auto starter_resp = local_s3_util->getObject(s3_path + backupStarter, 
+    restore_path + backupStarter, FLAGS_s3_direct_io);
+  EXPECT_TRUE(starter_resp.Error().empty());
+  
+  Json::Reader starter_reader;
+  Json::Value starter;
+  std::string starter_content;
+  common::FileUtil::readFileToString(restore_path + backupStarter, &starter_content);
+  EXPECT_TRUE(starter_reader.parse(starter_content, starter) || starter.isNumeric());
+  int64_t last_ts = starter.asInt64();
+
   // download the latest backup
-  auto responses = local_s3_util->getObjects(s3_path + std::to_string(timestamps[1]) + "/", restore_path, "/",
+  auto responses = local_s3_util->getObjects(s3_path + std::to_string(last_ts) + "/", restore_path, "/",
                                         FLAGS_s3_direct_io);
   EXPECT_TRUE(responses.Error().empty() && responses.Body().size() > 0);
 
@@ -991,13 +1001,16 @@ TEST_F(AdminHandlerTestBase, BackupDescriptorTest) {
   for (Json::Value::const_iterator it = file_map.begin(); it != file_map.end(); ++it) {
     auto key = it.key().asString();
     auto value = it->asInt64();
-    if (value != timestamps[1]) {
+    if (value != last_ts) {
       auto response = local_s3_util->getObject(s3_path + std::to_string(value) + "/" + key, restore_path + key, FLAGS_s3_direct_io);
       EXPECT_TRUE(response.Error().empty());
     }
   }
   boost::system::error_code remove_backup_desc_err;
-  boost::filesystem::remove(restore_path + backupDesc);
+  boost::filesystem::remove(restore_path + backupDesc, remove_backup_desc_err);
+
+  boost::system::error_code remove_backup_starter_err;
+  boost::filesystem::remove(restore_path + backupStarter, remove_backup_starter_err);
   
   rocksdb::DB* restore_db_;
   Options options_restore;
@@ -1019,8 +1032,8 @@ TEST_F(AdminHandlerTestBase, BackupDescriptorTest) {
   EXPECT_FALSE(it_db_->Valid() || it_restore_db_->Valid());
 
   // compact local db and then compare again
-  rocksdb::Slice key_begin("0");
-  rocksdb::Slice key_end(std::to_string(range - 1 + range/2));
+  rocksdb::Slice key_begin(folly::stringPrintf("%04d", 0));
+  rocksdb::Slice key_end(folly::stringPrintf("%04d", range - 1 + range/2));
   auto s = db_->CompactRange(CompactRangeOptions(), &key_begin, &key_end);
   EXPECT_TRUE(s.ok());
 

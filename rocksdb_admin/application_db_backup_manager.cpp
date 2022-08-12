@@ -62,6 +62,7 @@ const int32_t kS3UtilRecheckSec = 5;
 const std::string backupDesc = "backup_descriptor";
 const std::string lastBackupTs = "last_backup_ts";
 const std::string fileToTs = "file_to_ts";
+const std::string backupStarter = "backup_starter";
 
 }
 
@@ -171,6 +172,12 @@ void ApplicationDBBackupManager::makeUpBackupDescJson(const std::unordered_map<s
 bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationDB>& db) {
   // ::admin::AdminException e;
 
+  auto status = db->rocksdb()->Flush(rocksdb::FlushOptions());
+  if(!status.ok()) {
+    LOG(ERROR) << db->db_name() << " can't flush successfully before backup";
+    return false;
+  }
+
   common::Timer timer(kS3BackupMs);
   LOG(INFO) << "S3 Backup " << db->db_name() << " to " << ensure_ends_with_pathsep(FLAGS_s3_incre_backup_prefix) << db->db_name();
   auto ts = common::timeutil::GetCurrentTimestamp();
@@ -191,7 +198,7 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
   SCOPE_EXIT { db_admin_lock_->Unlock(db->db_name()); };
 
   rocksdb::Checkpoint* checkpoint;
-  auto status = rocksdb::Checkpoint::Create(db->rocksdb(), &checkpoint);
+  status = rocksdb::Checkpoint::Create(db->rocksdb(), &checkpoint);
   if (!status.ok()) {
     LOG(ERROR) << "Error happened when trying to initialize checkpoint: " << status.ToString();
     common::Stats::get()->Incr(kS3BackupFailure);
@@ -217,52 +224,69 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
 
   // find the timestamp of last backup
   int64_t last_ts = -1;
-  auto itor = db_backups_.find(db->db_name());
-  if (itor != db_backups_.end()) {
-    last_ts = itor->second[(int)itor->second.size()-1];
-  }
 
   // if there exists last backup, we need to get the backup_descriptor
   auto local_s3_util = createLocalS3Util(FLAGS_incre_backup_limit_mbs, FLAGS_s3_incre_backup_bucket);
-  std::string formatted_s3_dir_path_upload = folly::stringPrintf("%s%s/%ld/", 
-    ensure_ends_with_pathsep(FLAGS_s3_incre_backup_prefix).c_str(), db->db_name().c_str(), ts);
+  std::string formatted_s3_prefix = folly::stringPrintf("%s%s/", ensure_ends_with_pathsep(FLAGS_s3_incre_backup_prefix).c_str(),
+    db->db_name().c_str());
+  std::string formatted_s3_dir_path_upload = formatted_s3_prefix + std::to_string(ts) + "/";
   std::string formatted_checkpoint_local_path = ensure_ends_with_pathsep(checkpoint_local_path);
+  std::string local_path_last_backup = folly::stringPrintf("%s/%s%ld/", s3_incre_path.c_str(), db->db_name().c_str(), last_ts) + "checkpoint/";
+
+  boost::system::error_code remove_last_backup_err;
+  boost::system::error_code create_last_backup_err;
+
+  boost::filesystem::create_directories(local_path_last_backup, create_last_backup_err);
+  SCOPE_EXIT { boost::filesystem::remove_all(local_path_last_backup, remove_last_backup_err); };
+  if (create_err) {
+    LOG(ERROR) << "Cannot remove/create dir for backup: " + local_path_last_backup;
+    common::Stats::get()->Incr(kS3BackupFailure);
+    return false;
+  }
+
+  auto starter_resp = local_s3_util->getObject(formatted_s3_prefix + backupStarter, 
+    local_path_last_backup + backupStarter, FLAGS_s3_direct_io);
+  if (!starter_resp.Error().empty()) {
+    // No previous starter file, this is the first backup
+    LOG(ERROR) << "Error happened when downloading the backup starter from S3 to local: "
+                << starter_resp.Error();
+  } else {
+    Json::Reader starter_reader;
+    Json::Value starter;
+    std::string starter_content;
+    common::FileUtil::readFileToString(local_path_last_backup + backupStarter, &starter_content);
+    if (!starter_reader.parse(starter_content, starter) || !starter.isNumeric()) {
+      LOG(ERROR) << "Error happened when parsing the backup starter: "; // TODO: add error messages
+    } else {
+      last_ts = starter.asInt64();
+    }
+  }
 
   std::unordered_map<std::string, int64_t> file_to_ts;
   const string sst_suffix = ".sst";
 
   if (last_ts >= 0) {
     LOG(INFO) << "find the last backup on " << last_ts;
-    std::string local_path_last_backup = folly::stringPrintf("%s/%s%ld/", s3_incre_path.c_str(), db->db_name().c_str(), last_ts) + "checkpoint/";
     std::string formatted_s3_last_backup_dir_path = folly::stringPrintf("%s%s/%ld/", 
       ensure_ends_with_pathsep(FLAGS_s3_incre_backup_prefix).c_str(), db->db_name().c_str(), last_ts);
 
     boost::system::error_code remove_last_backup_err;
     boost::system::error_code create_last_backup_err;
-    // if we have not removed the last backup, we do not need to download it
-    boost::filesystem::create_directories(local_path_last_backup, create_last_backup_err);
-    SCOPE_EXIT { boost::filesystem::remove_all(local_path_last_backup, remove_last_backup_err); };
-    if (create_err) {
-      // SetException("Cannot remove/create dir for backup: " + local_path, AdminErrorCode::DB_ADMIN_ERROR, &callback);
-      common::Stats::get()->Incr(kS3BackupFailure);
-      return false;
-    }
 
-    auto resp = local_s3_util->getObject(formatted_s3_last_backup_dir_path + backupDesc, 
+    auto descriptor_resp = local_s3_util->getObject(formatted_s3_last_backup_dir_path + backupDesc, 
       local_path_last_backup + backupDesc, FLAGS_s3_direct_io);
-    if (!resp.Error().empty()) {
+    if (!descriptor_resp.Error().empty()) {
       LOG(ERROR) << "Error happened when downloading the backup descriptor from S3 to local: "
-                 << resp.Error();
+                 << descriptor_resp.Error();
       return false;
     }
 
-    Json::Reader reader;
+    Json::Reader descriptor_reader;
     Json::Value last_backup_desc;
     std::string last_backup_desc_contents;
     common::FileUtil::readFileToString(local_path_last_backup + backupDesc, &last_backup_desc_contents);
-    if (!reader.parse(last_backup_desc_contents, last_backup_desc) || !last_backup_desc.isObject()) {
-      LOG(ERROR) << "Error happened when parsing the backup descriptor: "
-                 << resp.Error();
+    if (!descriptor_reader.parse(last_backup_desc_contents, last_backup_desc) || !last_backup_desc.isObject()) {
+      LOG(ERROR) << "Error happened when parsing the backup descriptor: "; // TODO: add error messages
       return false;
     }
 
@@ -293,6 +317,10 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
   Json::Value backup_desc_contents(Json::objectValue);
   makeUpBackupDescJson(file_to_ts, last_ts, backup_desc_contents);
   common::FileUtil::createFileWithContent(formatted_checkpoint_local_path, backupDesc, backup_desc_contents.toStyledString());
+
+  // Create the new backup starter file
+  Json::Value ts_starter(ts);
+  common::FileUtil::createFileWithContent(formatted_checkpoint_local_path, backupStarter, ts_starter.toStyledString());
 
   auto upload_func = [&](const std::string& dest, const std::string& source) {
     LOG(INFO) << "Copying " << source << " to " << dest;
@@ -385,12 +413,18 @@ bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationD
   }
 
   // make sure the all other files has been uploaded successfully before uploading the backup descriptor
-  // TODO: add another json to represent the timestamp for the latest backup, we can name it as the "backup starter".
-  // In this way, we do not need to store any timestamp offline and reduce the work for sync it. We may store the all 
-  // the timestamp on the file of backup descriptor so that we can check each one quickly.
+  // TODO: We may store the all the timestamp on the backup starter so that we can check each one quickly.
   if (!upload_func(formatted_s3_dir_path_upload + backupDesc, 
     formatted_checkpoint_local_path + backupDesc)) {
     LOG(ERROR) << "Error happened when upload backup descriptor from checkpoint to S3";
+    common::Stats::get()->Incr(kS3BackupFailure);
+    return false;
+  }
+
+  // upload the starter file
+  if (!upload_func(formatted_s3_prefix + backupStarter, 
+    formatted_checkpoint_local_path + backupStarter)) {
+    LOG(ERROR) << "Error happened when upload backup starter from checkpoint to S3";
     common::Stats::get()->Incr(kS3BackupFailure);
     return false;
   }
