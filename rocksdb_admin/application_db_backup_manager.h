@@ -75,6 +75,8 @@ class ApplicationDBBackupManager {
   std::vector<int64_t> getTimeStamp(const std::string& db);
 
   void makeUpBackupDescJson(const std::unordered_map<std::string, int64_t>& file_to_ts, int64_t last_ts, Json::Value& contents);
+  
+  int64_t findNearestTs(const std::string& db_name, int64_t ts);
 
  private:
     // copy from admin_hamdler..

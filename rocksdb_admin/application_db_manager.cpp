@@ -150,6 +150,7 @@ std::string ApplicationDBManager::Introspect() const {
 }
 
 std::unordered_map<std::string, std::shared_ptr<ApplicationDB>> ApplicationDBManager::getAllDBs() {
+  std::shared_lock<std::shared_mutex> lock(dbs_lock_);
   return dbs_;
 }
 

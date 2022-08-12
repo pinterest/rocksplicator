@@ -177,6 +177,9 @@ const std::string kS3BackupMs = "s3_backup_ms";
 const std::string kS3RestoreMs = "s3_restore_ms";
 const std::string kDeleteDBFailure = "delete_db_failure";
 const std::string kCompactDb = "compact_db";
+const std::string backupDesc = "backup_descriptor";
+const std::string fileToTs = "file_to_ts";
+const std::string backupStarter = "backup_starter";
 
 int64_t GetMessageTimestampSecs(const RdKafka::Message& message) {
   const auto ts = message.timestamp();
@@ -961,6 +964,14 @@ void AdminHandler::async_tm_backupDBToS3(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       BackupDBToS3Response>>> callback,
     std::unique_ptr<BackupDBToS3Request> request) {
+
+  if (FLAGS_enable_async_incremental_backup_dbs) {
+    LOG(INFO) << "S3 Backup for " << request->db_name << " will be handled by incremental backup"
+    common::Stats::get()->Incr(kS3BackupSuccess);
+    callback->result(BackupDBToS3Response());
+    return;
+  }
+  
   AdminException e;
   const auto n = num_current_s3_sst_uploadings_.fetch_add(1);
   SCOPE_EXIT {
@@ -1202,14 +1213,44 @@ void AdminHandler::async_tm_restoreDBFromS3(
   }
 
   common::Timer timer(kS3RestoreMs);
-  LOG(INFO) << "S3 Restore " << request->db_name << " from " << request->s3_backup_dir;
-  auto local_s3_util = createLocalS3Util(request->limit_mbs, request->s3_bucket);
 
-  if (FLAGS_enable_checkpoint_backup) {
-    std::string formatted_s3_dir_path = ensure_ends_with_pathsep(request->s3_backup_dir);
-    std::string formatted_local_path = ensure_ends_with_pathsep(local_path);
-    // fetch all files using the given path as the key prefix in S3
-    auto resp = local_s3_util->listAllObjects(formatted_s3_dir_path);
+  // TODO: if we do not want to sync backup timestamp between leader and follower, we can write it to an file on S3
+  // for every restoration, we can find all the timestamp and find the nearest one on them.
+  if (FLAGS_enable_async_incremental_backup_dbs) {
+    LOG(INFO) << "S3 Restore " << request->db_name << " from " << FLAGS_s3_incre_backup_prefix;
+    auto local_s3_util = createLocalS3Util(request->limit_mbs, FLAGS_s3_incre_backup_bucket);
+
+    std::string formatted_s3_dir_path = folly::stringPrintf("%s%s/", 
+      ensure_ends_with_pathsep(FLAGS_s3_incre_backup_prefix).c_str(), request->db_name.c_str());
+    std::string formatted_local_path = ensure_ends_with_pathsep(local_path); 
+
+    int64_t backup_ts = -1;
+    // TODO: abstract getting starter (last timestamp as a method)
+    auto starter_resp = local_s3_util->getObject(formatted_s3_dir_path + backupStarter, 
+      formatted_local_path + backupStarter, FLAGS_s3_direct_io);
+    if (!starter_resp.Error().empty()) {
+      SetException("No previous backup for the db " + request->db_name + " has been finished", AdminErrorCode::DB_ADMIN_ERROR, &callback);
+      common::Stats::get()->Incr(kS3RestoreFailure);
+      return;
+    } else {
+      Json::Reader starter_reader;
+      Json::Value starter;
+      std::string starter_content;
+      common::FileUtil::readFileToString(formatted_local_path + backupStarter, &starter_content);
+      if (!starter_reader.parse(starter_content, starter) || !starter.isNumeric()) {
+        LOG(ERROR) << "Error happened when parsing the backup starter: "; // TODO: add error messages
+      } else {
+        backup_ts = starter.asInt64();
+      }
+    }
+
+    if (backup_ts == -1) {
+      SetException("No backup for the db " + request->db_name + " has been finished", AdminErrorCode::DB_ADMIN_ERROR, &callback);
+      common::Stats::get()->Incr(kS3RestoreFailure);
+      return;
+    } 
+
+    auto resp = local_s3_util->listAllObjects(formatted_s3_dir_path + std::to_string(backup_ts) + "/");
     if (!resp.Error().empty()) {
       auto err_msg = folly::stringPrintf(
           "Error happened when fetching files in checkpoint from S3: %s under path: %s",
@@ -1222,14 +1263,14 @@ void AdminHandler::async_tm_restoreDBFromS3(
 
     auto download_func = [&](const std::string& s3_path) {
       const string dest =
-          formatted_local_path + s3_path.substr(formatted_s3_dir_path.size());
+          formatted_local_path + s3_path.substr(formatted_s3_dir_path.size() + std::to_string(backup_ts).size() + 1); // 1 for "/"
       LOG(INFO) << "Copying " << s3_path << " to " << dest;
       auto get_resp =
           local_s3_util->getObject(s3_path, dest, FLAGS_s3_direct_io);
       if (!get_resp.Error().empty()) {
         LOG(ERROR) << "Error happened when downloading the file in checkpoint "
                       "from S3 to local: "
-                   << get_resp.Error();
+                  << get_resp.Error();
         return false;
       }
       return true;
@@ -1263,8 +1304,8 @@ void AdminHandler::async_tm_restoreDBFromS3(
         auto res = std::move(f).get();
         if (!res) {
           SetException("Error happened when downloading the file in checkpoint from S3 to local",
-                       AdminErrorCode::DB_ADMIN_ERROR,
-                       &callback);
+                      AdminErrorCode::DB_ADMIN_ERROR,
+                      &callback);
           common::Stats::get()->Incr(kS3RestoreFailure);
           return;
         }
@@ -1274,14 +1315,44 @@ void AdminHandler::async_tm_restoreDBFromS3(
         if (!download_func(v)) {
           // If there is error in one file uploading, then we fail the whole backup process
           SetException("Error happened when downloading the file in checkpoint from S3 to local",
-                       AdminErrorCode::DB_ADMIN_ERROR,
-                       &callback);
+                      AdminErrorCode::DB_ADMIN_ERROR,
+                      &callback);
           common::Stats::get()->Incr(kS3RestoreFailure);
           return;
         }
       }
     }
 
+    std::string backup_desc_contents;
+    common::FileUtil::readFileToString(formatted_local_path + backupDesc, &backup_desc_contents);
+    Json::Reader reader;
+    Json::Value backup_desc;
+    if (!reader.parse(backup_desc_contents, backup_desc) || !backup_desc.isObject()) {
+      SetException("Error happened when parsing the backup descriptor: " + resp.Error(),
+                  AdminErrorCode::DB_ADMIN_ERROR,
+                  &callback);
+      return;
+    }
+
+    // find those files not in the latest backup and download them
+    const auto& file_map = backup_desc[fileToTs];
+    for (Json::Value::const_iterator it = file_map.begin(); it != file_map.end(); ++it) {
+      auto key = it.key().asString();
+      auto value = it->asInt64();
+      if (value != backup_ts) {
+        if (!download_func(formatted_s3_dir_path + std::to_string(value) + "/" + key)) {
+          SetException("Error happened when downloading the file in previous backup " + std::to_string(value) + 
+                      " from S3 to local",
+                      AdminErrorCode::DB_ADMIN_ERROR,
+                      &callback);
+          common::Stats::get()->Incr(kS3RestoreFailure);
+          return;
+        }
+      }
+    }
+
+    boost::system::error_code remove_backup_desc_err;
+    boost::filesystem::remove(formatted_local_path + backupDesc, remove_backup_desc_err);
 
     rocksdb::DB* restore_db;
     auto segment = common::DbNameToSegment(request->db_name);
@@ -1301,7 +1372,7 @@ void AdminHandler::async_tm_restoreDBFromS3(
       boost::filesystem::remove_all(restored_dbmeta_file);
       if (!DecodeThriftStruct(meta_content, &meta)) {
         std::string errMsg = "Failed to decode DBMetaData from " +
-                             meta_content + " for " + request->db_name;
+                            meta_content + " for " + request->db_name;
         SetException(errMsg, AdminErrorCode::DB_ADMIN_ERROR, &callback);
         common::Stats::get()->Incr(kS3RestoreFailure);
         return;
@@ -1326,20 +1397,144 @@ void AdminHandler::async_tm_restoreDBFromS3(
       return;
     }
   } else {
-    std::string formatted_s3_dir_path = rtrim(request->s3_backup_dir, '/');
-    rocksdb::Env* s3_env = new rocksdb::S3Env(
-        formatted_s3_dir_path, std::move(local_path), std::move(local_s3_util));
+    LOG(INFO) << "S3 Restore " << request->db_name << " from " << request->s3_backup_dir;
+    auto local_s3_util = createLocalS3Util(request->limit_mbs, request->s3_bucket);
 
-    if (!restoreDBHelper(request->db_name,
-                         formatted_s3_dir_path,
-                         std::unique_ptr<rocksdb::Env>(s3_env),
-                         std::move(upstream_addr),
-                         request->__isset.limit_mbs,
-                         request->limit_mbs,
-                         &e)) {
-      callback.release()->exceptionInThread(std::move(e));
-      common::Stats::get()->Incr(kS3RestoreFailure);
-      return;
+    if (FLAGS_enable_checkpoint_backup) {
+      std::string formatted_s3_dir_path = ensure_ends_with_pathsep(request->s3_backup_dir);
+      std::string formatted_local_path = ensure_ends_with_pathsep(local_path);
+      // fetch all files using the given path as the key prefix in S3
+      auto resp = local_s3_util->listAllObjects(formatted_s3_dir_path);
+      if (!resp.Error().empty()) {
+        auto err_msg = folly::stringPrintf(
+            "Error happened when fetching files in checkpoint from S3: %s under path: %s",
+            resp.Error().c_str(), formatted_s3_dir_path.c_str());
+        LOG(ERROR) << err_msg;
+        SetException(err_msg, AdminErrorCode::DB_ADMIN_ERROR, &callback);
+        common::Stats::get()->Incr(kS3RestoreFailure);
+        return;
+      }
+
+      auto download_func = [&](const std::string& s3_path) {
+        const string dest =
+            formatted_local_path + s3_path.substr(formatted_s3_dir_path.size());
+        LOG(INFO) << "Copying " << s3_path << " to " << dest;
+        auto get_resp =
+            local_s3_util->getObject(s3_path, dest, FLAGS_s3_direct_io);
+        if (!get_resp.Error().empty()) {
+          LOG(ERROR) << "Error happened when downloading the file in checkpoint "
+                        "from S3 to local: "
+                    << get_resp.Error();
+          return false;
+        }
+        return true;
+      };
+
+      if (FLAGS_checkpoint_backup_batch_num_download> 1) {
+        // Download checkpoint files to s3 in parallel
+        std::vector<std::vector<std::string>> file_batches(FLAGS_checkpoint_backup_batch_num_download);
+        for (size_t i = 0; i < resp.Body().objects.size(); ++i) {
+          file_batches[i%FLAGS_checkpoint_backup_batch_num_download].push_back(resp.Body().objects[i]);
+        }
+
+        std::vector<folly::Future<bool>> futures;
+        for (auto& files : file_batches) {
+          auto p = folly::Promise<bool>();
+          futures.push_back(p.getFuture());
+
+          S3UploadAndDownloadExecutor()->add(
+              [&, files = std::move(files), p = std::move(p)]() mutable {
+                for (const auto& file : files) {
+                  if (!download_func(file)) {
+                    p.setValue(false);
+                    return;
+                  }
+                }
+                p.setValue(true);
+              });
+        }
+
+        for (auto& f : futures) {
+          auto res = std::move(f).get();
+          if (!res) {
+            SetException("Error happened when downloading the file in checkpoint from S3 to local",
+                        AdminErrorCode::DB_ADMIN_ERROR,
+                        &callback);
+            common::Stats::get()->Incr(kS3RestoreFailure);
+            return;
+          }
+        }
+      } else {
+        for (auto& v : resp.Body().objects) {
+          if (!download_func(v)) {
+            // If there is error in one file uploading, then we fail the whole backup process
+            SetException("Error happened when downloading the file in checkpoint from S3 to local",
+                        AdminErrorCode::DB_ADMIN_ERROR,
+                        &callback);
+            common::Stats::get()->Incr(kS3RestoreFailure);
+            return;
+          }
+        }
+      }
+
+      rocksdb::DB* restore_db;
+      auto segment = common::DbNameToSegment(request->db_name);
+      auto status = rocksdb::DB::Open(rocksdb_options_(segment, request->db_name), formatted_local_path, &restore_db);
+      if (!status.ok()) {
+        OKOrSetException(status, AdminErrorCode::DB_ERROR, &callback);
+        LOG(ERROR) << "Error happened when opening db via checkpoint: " << status.ToString();
+        common::Stats::get()->Incr(kS3RestoreFailure);
+        return;
+      }
+
+      DBMetaData meta;
+      std::string meta_content;
+      std::string restored_dbmeta_file = formatted_local_path + kMetaFilename;
+      if (boost::filesystem::exists(restored_dbmeta_file)) {
+        common::FileUtil::readFileToString(restored_dbmeta_file, &meta_content);
+        boost::filesystem::remove_all(restored_dbmeta_file);
+        if (!DecodeThriftStruct(meta_content, &meta)) {
+          std::string errMsg = "Failed to decode DBMetaData from " +
+                              meta_content + " for " + request->db_name;
+          SetException(errMsg, AdminErrorCode::DB_ADMIN_ERROR, &callback);
+          common::Stats::get()->Incr(kS3RestoreFailure);
+          return;
+        }
+      }
+      if (!writeMetaData(request->db_name, meta.s3_bucket, meta.s3_path)) {
+        std::string errMsg =
+            "RestoreDBFromS3 failed to write DBMetaData for " + request->db_name;
+        SetException(errMsg, AdminErrorCode::DB_ADMIN_ERROR, &callback);
+        common::Stats::get()->Incr(kS3RestoreFailure);
+        return;
+      }
+
+      std::string err_msg;
+      if (!db_manager_->addDB(request->db_name,
+                              std::unique_ptr<rocksdb::DB>(restore_db),
+                              replicator::ReplicaRole::FOLLOWER,
+                              std::move(upstream_addr), &err_msg)) {
+        LOG(ERROR) << "Error happened when adding db after restore by checkpoint: " << err_msg;
+        SetException(err_msg, AdminErrorCode::DB_ADMIN_ERROR, &callback);
+        common::Stats::get()->Incr(kS3RestoreFailure);
+        return;
+      }
+    } else {
+      std::string formatted_s3_dir_path = rtrim(request->s3_backup_dir, '/');
+      rocksdb::Env* s3_env = new rocksdb::S3Env(
+          formatted_s3_dir_path, std::move(local_path), std::move(local_s3_util));
+
+      if (!restoreDBHelper(request->db_name,
+                          formatted_s3_dir_path,
+                          std::unique_ptr<rocksdb::Env>(s3_env),
+                          std::move(upstream_addr),
+                          request->__isset.limit_mbs,
+                          request->limit_mbs,
+                          &e)) {
+        callback.release()->exceptionInThread(std::move(e));
+        common::Stats::get()->Incr(kS3RestoreFailure);
+        return;
+      }
     }
   }
 

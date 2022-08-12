@@ -169,6 +169,26 @@ void ApplicationDBBackupManager::makeUpBackupDescJson(const std::unordered_map<s
   contents[lastBackupTs] = last_ts;
 }
 
+/*
+  find the biggest timestamp (before ts) the handler can use to restore a db  
+  return: 
+    -1 : no backup for this db
+    -2 : no backup before the ts for this db
+*/
+
+int64_t ApplicationDBBackupManager::findNearestTs(const std::string& db_name, int64_t ts) {
+  if (db_backups_.find(db_name) == db_backups_.end() || db_backups_[db_name].empty()) {
+    return -1;
+  } else {
+    auto low = std::lower_bound(db_backups_[db_name].begin(), db_backups_[db_name].end(), ts);
+    if (low == db_backups_[db_name].begin()) {
+      return -2;
+    } else {
+      return *(--low);
+    }
+  }
+}
+
 bool ApplicationDBBackupManager::backupDBToS3(const std::shared_ptr<ApplicationDB>& db) {
   // ::admin::AdminException e;
 
