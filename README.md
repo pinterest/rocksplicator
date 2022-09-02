@@ -1,6 +1,6 @@
 # Rocksplicator
 
-> **Important**: Rocksplicator is an archived project that is no longer actively maintained or supported by Pinterest.
+> **Important**: Rocksplicator is an [archived](https://github.com/pinterest/rocksplicator/issues/636) project that is no longer actively maintained or supported by Pinterest.
 
 [![Build Status](https://travis-ci.org/pinterest/rocksplicator.svg)](https://travis-ci.org/pinterest/rocksplicator)
 
