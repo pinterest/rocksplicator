@@ -237,6 +237,11 @@ class ThriftClientPool {
         // good for use and it's not too soon to create a new one or we want to
         // be aggressive
         if (!channel_good && (!too_soon || aggressively)) {
+          // close the bad channel before establising a new one.
+          // This is to avoid potentially accumulating CLOSE_WAIT on the client side.
+          if (channel) {
+            channel->closeNow();
+          }
           should_new_channel = true;
         }
       }
