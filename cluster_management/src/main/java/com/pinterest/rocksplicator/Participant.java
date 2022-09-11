@@ -74,6 +74,8 @@ public class Participant {
   private static final String hostPort = "port";
   private static final String stateModel = "stateModelType";
   private static final String configPostUrl = "configPostUrl";
+  private static final String shardMapZkSvrArg = "shardMapZkSvr";
+
   private static final String s3Bucket = "s3Bucket";
   private static final String disableSpectator = "disableSpectator";
   private static final String handoffEventHistoryzkSvr = "handoffEventHistoryzkSvr";
@@ -131,10 +133,16 @@ public class Participant {
     stateModelOption.setArgName("StateModel Type (Required)");
 
     Option configPostUrlOption =
-        OptionBuilder.withLongOpt(configPostUrl).withDescription("URL to post config").create();
+        OptionBuilder.withLongOpt(configPostUrl).withDescription("URL to post config (Optional)").create();
     configPostUrlOption.setArgs(1);
-    configPostUrlOption.setRequired(true);
-    configPostUrlOption.setArgName("URL to post config (Required)");
+    configPostUrlOption.setRequired(false);
+    configPostUrlOption.setArgName("URL to post config (Optional)");
+
+    Option shardMapZkSvrOption =
+        OptionBuilder.withLongOpt(shardMapZkSvrArg).withDescription("Zk Server to post shard_map").create();
+    shardMapZkSvrOption.setArgs(1);
+    shardMapZkSvrOption.setRequired(false);
+    shardMapZkSvrOption.setArgName(shardMapZkSvrArg);
 
     Option s3BucketOption =
         OptionBuilder.withLongOpt(s3Bucket).withDescription("S3 Bucket").create();
@@ -198,6 +206,7 @@ public class Participant {
         .addOption(portOption)
         .addOption(stateModelOption)
         .addOption(configPostUrlOption)
+        .addOption(shardMapZkSvrOption)
         .addOption(s3BucketOption)
         .addOption(disableSpectatorOption)
         .addOption(handoffEventHistoryzkSvrOption)
@@ -229,7 +238,8 @@ public class Participant {
     final String host = cmd.getOptionValue(hostAddress);
     final String port = cmd.getOptionValue(hostPort);
     final String stateModelType = cmd.getOptionValue(stateModel);
-    final String postUrl = cmd.getOptionValue(configPostUrl);
+    final String postUrl = cmd.getOptionValue(configPostUrl, "");
+    final String shardMapZkSvr = cmd.getOptionValue(shardMapZkSvrArg, "");
     final String instanceName = host + "_" + port;
     String s3BucketName = "";
     final boolean useS3Backup = cmd.hasOption(s3Bucket);
@@ -266,7 +276,7 @@ public class Participant {
 
     LOG.error("Starting participant with ZK:" + zkConnectString);
     Participant participant = new Participant(zkConnectString, clusterName, instanceName,
-        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator);
+        stateModelType, Integer.parseInt(port), postUrl, shardMapZkSvr, useS3Backup, s3BucketName, runSpectator);
 
     /** TODO:grajpurohit
      * This should probably be done right after connecting to the zk with HelixManager.
@@ -335,8 +345,8 @@ public class Participant {
   }
 
   private Participant(String zkConnectString, String clusterName, String instanceName,
-                      String stateModelType, int port, String postUrl, boolean useS3Backup,
-                      String s3BucketName, boolean runSpectator)
+                      String stateModelType, int port, String postUrl, String shardMapZkSvr,
+                      boolean useS3Backup, String s3BucketName, boolean runSpectator)
       throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
@@ -447,14 +457,20 @@ public class Participant {
     Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
 
     if (runSpectator) {
+      ShardMapPublisherBuilder publisherBuilder = ShardMapPublisherBuilder
+          .create(clusterName).withLocalDump();
+      if (postUrl != null && !postUrl.isEmpty()) {
+        publisherBuilder = publisherBuilder.withPostUrl(postUrl);
+      }
+      if (shardMapZkSvr != null && !shardMapZkSvr.isEmpty()) {
+        publisherBuilder = publisherBuilder.withZkShardMap(shardMapZkSvr);
+      }
+
       // Add callback to create rocksplicator shard config
       ConfigGenerator configGenerator = new ConfigGenerator(
           clusterName,
           helixManager,
-          ShardMapPublisherBuilder.create(helixManager.getClusterName())
-              .withPostUrl(postUrl)
-              .withLocalDump()
-              .build(),
+          publisherBuilder.build(),
           monitor,
           new ExternalViewLeaderEventsLoggerImpl(staticSpectatorLeaderEventsLogger));
 
