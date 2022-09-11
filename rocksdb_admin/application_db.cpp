@@ -119,6 +119,21 @@ std::vector<rocksdb::Status> ApplicationDB::MultiGet(
   return db_->MultiGet(options, slice, value);
 }
 
+std::vector<rocksdb::Status> ApplicationDB::MultiGet(
+    const rocksdb::ReadOptions& options,
+    const size_t num_keys,
+    const rocksdb::Slice* keys,
+    rocksdb::PinnableSlice* values,
+    rocksdb::Status* statuses) {
+  if (FLAGS_disable_rocksplicator_db_stats) {
+    return db_->MultiGet(options, db_->DefaultColumnFamily(), num_keys, keys, values, statuses);
+  } else {
+    common::Stats::get()->Incr(kRocksdbMultiGet);
+    common::Timer timer(kRocksdbMultiGetMs);
+    return db_->MultiGet(options, db_->DefaultColumnFamily(), num_keys, keys, values, statuses);
+  }
+}
+
 rocksdb::Status ApplicationDB::Write(const rocksdb::WriteOptions& options,
     rocksdb::WriteBatch* write_batch) {
   common::Stats::get()->Incr(kRocksdbWrite);
