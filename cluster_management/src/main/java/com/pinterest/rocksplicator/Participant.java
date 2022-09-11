@@ -56,6 +56,7 @@ import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.ConsoleAppender;
 import org.apache.log4j.Level;
 import org.apache.log4j.PatternLayout;
+import com.google.common.base.Preconditions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,6 +77,7 @@ public class Participant {
   private static final String configPostUrl = "configPostUrl";
   private static final String s3Bucket = "s3Bucket";
   private static final String disableSpectator = "disableSpectator";
+  private static final String disableParticipantWhenExiting = "disableParticipantWhenExiting";
   private static final String handoffEventHistoryzkSvr = "handoffEventHistoryzkSvr";
   private static final String handoffEventHistoryConfigPath = "handoffEventHistoryConfigPath";
   private static final String handoffEventHistoryConfigType = "handoffEventHistoryConfigType";
@@ -91,6 +93,10 @@ public class Participant {
       staticClientShardMapLeaderEventLoggerDriver =
       null;
   private static StateModelFactory<StateModel> stateModelFactory;
+  private static String staticClusterName = null;
+  private static String staticInstanceId = null;
+  private static boolean staticDisableParticipantInstanceWhenExiting = false;
+  private static String staticZkConnectString = null;
   private final RocksplicatorMonitor monitor;
 
   private static Options constructCommandLineOptions() {
@@ -148,6 +154,12 @@ public class Participant {
     disableSpectatorOption.setRequired(false);
     disableSpectatorOption.setArgName("Disable Spectator (Optional)");
 
+    Option disableParticipantWhenExitingOption =
+        OptionBuilder.withLongOpt(disableParticipantWhenExiting).withDescription("Disable Participant").create();
+    disableParticipantWhenExitingOption.setArgs(0);
+    disableParticipantWhenExitingOption.setRequired(false);
+    disableParticipantWhenExitingOption.setArgName("Disable Participant Instance when exiting (Optional)");
+
     Option handoffEventHistoryzkSvrOption =
         OptionBuilder.withLongOpt(handoffEventHistoryzkSvr)
             .withDescription(
@@ -200,6 +212,7 @@ public class Participant {
         .addOption(configPostUrlOption)
         .addOption(s3BucketOption)
         .addOption(disableSpectatorOption)
+        .addOption(disableParticipantWhenExitingOption)
         .addOption(handoffEventHistoryzkSvrOption)
         .addOption(handoffEventHistoryConfigPathOption)
         .addOption(handoffEventHistoryConfigTypeOption)
@@ -224,24 +237,52 @@ public class Participant {
     ));
     CommandLine cmd = processCommandLineArgs(args);
     final String zkConnectString = cmd.getOptionValue(zkServer);
+    LOG.error(String.format("CmdLine: zkServer: %s", zkConnectString));
+
     final String clusterName = cmd.getOptionValue(cluster);
+    LOG.error(String.format("CmdLine: cluster: %s", clusterName));
+
     final String domainName = cmd.getOptionValue(domain);
+    LOG.error(String.format("CmdLine: domain: %s", domainName));
     final String host = cmd.getOptionValue(hostAddress);
+    LOG.error(String.format("CmdLine: host: %s", host));
     final String port = cmd.getOptionValue(hostPort);
+    LOG.error(String.format("CmdLine: hostPort: %s", port));
+
     final String stateModelType = cmd.getOptionValue(stateModel);
+    LOG.error(String.format("CmdLine: stateModel: %s", stateModelType));
     final String postUrl = cmd.getOptionValue(configPostUrl);
+    LOG.error(String.format("CmdLine: configPostUrl: %s", postUrl));
     final String instanceName = host + "_" + port;
+    LOG.error(String.format("Constructed Arg: instanceName: %s", instanceName));
+
     String s3BucketName = "";
     final boolean useS3Backup = cmd.hasOption(s3Bucket);
+    LOG.error(String.format("CmdLine: useS3Backup: %s", Boolean.toString(useS3Backup)));
     if (useS3Backup) {
       s3BucketName = cmd.getOptionValue(s3Bucket);
+      LOG.error(String.format("CmdLine: s3BucketName: %s", s3Bucket));
+
     }
     final boolean runSpectator = !cmd.hasOption(disableSpectator);
+    LOG.error(String.format("CmdLine: disableSpectator: %s", Boolean.toString(runSpectator)));
+    final boolean disableParticipantInstanceWhenExiting = cmd.hasOption(disableParticipantWhenExiting);
+    LOG.error(String.format("CmdLine: disableParticipantWhenExiting: %s", Boolean.toString(disableParticipantInstanceWhenExiting)));
 
     final String zkEventHistoryStr = cmd.getOptionValue(handoffEventHistoryzkSvr, "");
+    LOG.error(String.format("CmdLine: handoffEventHistoryzkSvr: %s", zkEventHistoryStr));
     final String resourceConfigPath = cmd.getOptionValue(handoffEventHistoryConfigPath, "");
+    LOG.error(String.format("CmdLine: handoffEventHistoryConfigPath: %s", resourceConfigPath));
     final String resourceConfigType = cmd.getOptionValue(handoffEventHistoryConfigType, "");
+    LOG.error(String.format("CmdLine: handoffEventHistoryConfigType: %s", resourceConfigType));
     final String shardMapPath = cmd.getOptionValue(handoffClientEventHistoryJsonShardMapPath, "");
+    LOG.error(String.format("CmdLine: handoffClientEventHistoryJsonShardMapPath: %s", shardMapPath));
+
+
+    staticZkConnectString = zkConnectString;
+    staticClusterName = clusterName;
+    staticInstanceId = instanceName;
+    staticDisableParticipantInstanceWhenExiting = disableParticipantInstanceWhenExiting;
 
     /**
      * Note that the last parameter is empty, since we don't dictate
@@ -265,78 +306,16 @@ public class Participant {
     }
 
     LOG.error("Starting participant with ZK:" + zkConnectString);
-    Participant participant = new Participant(zkConnectString, clusterName, instanceName,
-        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator);
-
-    /** TODO:grajpurohit
-     * This should probably be done right after connecting to the zk with HelixManager.
-     * Ideal way would be to first be able to register a participant and then register the
-     * stateModelFactory with the stateMachine of the helixManager. There is a race
-     * condition here, since we connect to helixManager right after registering the
-     * stateModelFactory. In this case the state transitions can start, even before
-     * we had a chance to setup the participant's domain information, which is critical
-     * to helix when assigning partitions for resources which needs domain-aware assignment.
-     */
-    HelixAdmin helixAdmin = new ZKHelixAdmin(zkConnectString);
-    HelixConfigScope scope =
-        new HelixConfigScopeBuilder(HelixConfigScope.ConfigScopeProperty.PARTICIPANT)
-            .forCluster(clusterName).forParticipant(instanceName)
-            .build();
-    Map<String, String> properties = new HashMap<String, String>();
-    properties.put("DOMAIN", domainName + ",instance=" + instanceName);
-    helixAdmin.setConfig(scope, properties);
+    Participant participant = new Participant(zkConnectString, clusterName, instanceName, domainName,
+        stateModelType, Integer.parseInt(port), postUrl, useS3Backup, s3BucketName, runSpectator, disableParticipantInstanceWhenExiting);
 
     LOG.error("Participant running");
     Thread.currentThread().join();
   }
 
-  /**
-   * This method is called from CPP code, when the service is about to do down.
-   * This will cause all states to transition to offline eventually.
-   */
-  public static void shutDownParticipant() throws Exception {
-
-    /**
-     * TODO: grajpurohit: Improve the logic to cleanly shutdown.
-     *
-     * This is probably not the right way. When a participant is going down,
-     * we need a chance to cleanly offline the currently top-state and second
-     * top-state resources (e.g.. all partitions state should be brought to offline
-     * state) before going down. That will be a graceful shutdown. However, when
-     * helixManager disconnects, it releases all message handlers / listeners there after
-     * there is no way for resources to be brought down through state transition.
-     *
-     * Ideal way will be whereby
-     *
-     * 1. We setup instanceTag "disabled" so that spectator has a first chance to be notified that
-     * this participant is going down without bringing down the hosted partition replicas.
-     *
-     * 2. Wait to ensure that the instanceTag has been added to the participant instance.
-     *
-     * 3. We should then disable this instance (currently this is the only way we figured out to
-     * force controller to issue state transitions to existing current states of all partitions
-     * hosted by this participant) to move to OFFLINE state.
-     *
-     * 4. Wait until all partition replicas hosted by this participant to have moved to OFFLINE
-     * state.
-     *
-     * 5. Now we are free to disconnect to HelixManager, so that all listeners and message callback
-     * handlers are properly un-registered.
-     */
-    if (helixManager != null) {
-      helixManager.disconnect();
-      helixManager = null;
-    }
-    if (staticParticipantLeaderEventsLogger != null) {
-      LOG.error("Stopping Participant LeaderEventsLogger");
-      staticParticipantLeaderEventsLogger.close();
-      staticParticipantLeaderEventsLogger = null;
-    }
-  }
-
-  private Participant(String zkConnectString, String clusterName, String instanceName,
+  private Participant(String zkConnectString, String clusterName, String instanceName, String domainName,
                       String stateModelType, int port, String postUrl, boolean useS3Backup,
-                      String s3BucketName, boolean runSpectator)
+                      String s3BucketName, boolean runSpectator, boolean disableParticipantInstanceWhenExiting)
       throws Exception {
     helixManager = HelixManagerFactory.getZKHelixManager(clusterName, instanceName,
         InstanceType.PARTICIPANT, zkConnectString);
@@ -395,6 +374,43 @@ public class Participant {
       LOG.error("Unknown state model: " + stateModelType);
     }
 
+    helixManager.connect();
+
+    /**
+     * If the instance has already been marked for maintenance, we shouldn't re-enable this instance
+     * and load any data.
+     */
+    Preconditions.checkArgument(! isThisInstanceMarkedForMaintenance(
+        helixManager.getClusterManagmentTool(), clusterName, instanceName));
+
+    /**
+     * Register the domain of the instance, before enabling the instance.
+     */
+    registerInstanceDomain(
+        helixManager.getClusterManagmentTool(), clusterName, instanceName, domainName);
+
+    enableInstance(helixManager.getClusterManagmentTool(), clusterName, instanceName);
+
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      @Override
+      public void run() {
+        if (helixManager != null && helixManager.isConnected()) {
+          /**
+           * Do not automatically disable the instance, unless specifically asked to do so through
+           * flag.
+           */
+          try {
+            if (disableParticipantInstanceWhenExiting) {
+              disableInstance(helixManager.getClusterManagmentTool(), clusterName, instanceName);
+            }
+          } finally {
+            new HelixManagerShutdownHook(helixManager).run();
+          }
+          helixManager = null;
+        }
+      }
+    });
+
     StateMachineEngine stateMach = helixManager.getStateMachineEngine();
 
     if (stateModelFactory != null) {
@@ -412,39 +428,8 @@ public class Participant {
       LOG.error(clusterName + " has registered to Tasks: " + taskFactoryRegistry.keySet());
     }
 
-    helixManager.connect();
-
     helixManager.getMessagingService().registerMessageHandlerFactory(
         Message.MessageType.STATE_TRANSITION.name(), stateMach);
-
-    /** TODO: grajpurohit
-     * As soon as the helixManager is connected, we should setup the participant's DOMAIN
-     * information here, and not outside this constructor.
-     *
-     * Next we should first give Spectator a chance to remove this participant from
-     * disabled instances so that next state transitions will quickly be picked up and will
-     * start receiving the traffic (if it applies)
-     *
-     * In order to do as above, we should first remove the "disabled" instanceTag from this
-     * instance, if it exists and ensure that the "disabled" tag has been removed.
-     *
-     * Next we should make sure that instance is enabled (e.g. if it was previously disabled)
-     * Until the instance is enabled, we should wait in loop and throw exception if we can't
-     * enable this instance. This will trigger all state transitions for the partition replicas
-     * with their states that would otherwise be assigned to this Participant.
-     *
-     * We do not need to wait here until all offline partitions of this participant moves to next
-     * state. However for the purpose of being sure that the participant is correctly registered,
-     * we should at least wait until at least one of the OFFLINE partitions moves to next up-ward
-     * state (SLAVE, MASTER, FOLLOWER, LEADER, ONLINE...).
-     */
-
-    /**
-     * This is again, as explained above, not the clean / gracious way to shutdown as explained
-     * above. We need to ensure a proper procedure to shutdown the participant is followed, and
-     * graciously handles shutdown. Simply disconnecting from helixManager is not graceful.
-     */
-    Runtime.getRuntime().addShutdownHook(new HelixManagerShutdownHook(helixManager));
 
     if (runSpectator) {
       // Add callback to create rocksplicator shard config
@@ -508,5 +493,303 @@ public class Participant {
         }
       });
     }
+  }
+
+  /**
+   * This method is called from CPP code, when the service is about to do down.
+   * This will cause all states to transition to offline eventually.
+   */
+  public static void shutDownParticipant() throws Exception {
+
+    /**
+     * TODO: grajpurohit: Improve the logic to cleanly shutdown.
+     *
+     * This is probably not the right way. When a participant is going down,
+     * we need a chance to cleanly offline the currently top-state and second
+     * top-state resources (e.g.. all partitions state should be brought to offline
+     * state) before going down. That will be a graceful shutdown. However, when
+     * helixManager disconnects, it releases all message handlers / listeners there after
+     * there is no way for resources to be brought down through state transition.
+     *
+     * Ideal way will be whereby
+     *
+     * 1. We setup instanceTag "disabled" so that spectator has a first chance to be notified that
+     * this participant is going down without bringing down the hosted partition replicas.
+     *
+     * 2. Wait to ensure that the instanceTag has been added to the participant instance.
+     *
+     * 3. We should then disable this instance (currently this is the only way we figured out to
+     * force controller to issue state transitions to existing current states of all partitions
+     * hosted by this participant) to move to OFFLINE state.
+     *
+     * 4. Wait until all partition replicas hosted by this participant to have moved to OFFLINE state.
+     *
+     * 5. Now we are free to disconnect to HelixManager, so that all listeners and message callback
+     * handlers are properly un-registered.
+     */
+    if (helixManager != null && helixManager.isConnected()) {
+      if (staticDisableParticipantInstanceWhenExiting) {
+        /**
+         * Do not automatically disable the instance, unless specifically asked to do so through
+         * flag.
+         */
+        disableInstance(helixManager.getClusterManagmentTool(), staticClusterName, staticInstanceId);
+      }
+
+      if (helixManager != null) {
+        new HelixManagerShutdownHook(helixManager).run();
+        helixManager = null;
+      }
+
+      if (staticDisableParticipantInstanceWhenExiting) {
+        try {
+        HelixAdmin helixAdmin = new ZKHelixAdmin(staticZkConnectString);
+        enableInstance(helixAdmin, staticClusterName, staticInstanceId);
+        helixAdmin.close();
+        } catch (Exception exp) {
+          LOG.error("Error while re-anabling the participant in helix, after shutdown", exp);
+        }
+      }
+    }
+
+    if (staticParticipantLeaderEventsLogger != null) {
+      LOG.error("Stopping Participant LeaderEventsLogger");
+      staticParticipantLeaderEventsLogger.close();
+      staticParticipantLeaderEventsLogger = null;
+    }
+  }
+
+  private static void registerInstanceDomain(
+      final HelixAdmin helixAdmin,
+      final String clusterName,
+      final String instanceName,
+      final String domainName) {
+    HelixConfigScope scope =
+        new HelixConfigScopeBuilder(HelixConfigScope.ConfigScopeProperty.PARTICIPANT)
+            .forCluster(clusterName).forParticipant(instanceName)
+            .build();
+    Map<String, String> properties = new HashMap<String, String>();
+    properties.put("DOMAIN", domainName + ",instance=" + instanceName);
+    helixAdmin.setConfig(scope, properties);
+  }
+
+  private static void disableInstance(
+      final HelixAdmin helixAdmin,
+      final String clusterName,
+      final String instanceId) {
+    LOG.error(String.format("Disabling the instance %s, on cluster %s", staticInstanceId, staticClusterName));
+    waitUntilAllPartitionsAreOffline(helixAdmin, clusterName, instanceId);
+
+    retryWithBoundedExponentialBackOff(
+        "disableInstance",
+        new ExceptionalAction() {
+          @Override
+          public void apply() throws Exception {
+            LOG.error("Disabling the instance to force offlining existing resources");
+            helixAdmin.enableInstance(clusterName, instanceId, false);
+          }
+        },
+        new ExceptionalCondition() {
+          @Override
+          public boolean apply() throws Exception {
+            // When the instance is no longer enabled
+            return ! helixAdmin.getInstanceConfig(clusterName, instanceId).getInstanceEnabled();
+          }
+        }, 10);
+
+    retryWithBoundedExponentialBackOff(
+        "disableInstanceTag",
+        new ExceptionalAction() {
+          @Override
+          public void apply() throws Exception {
+            LOG.error(
+                "Adding \"disabled\" instance tag, to force spectator to remove this instance from "
+                    + "shard_map ");
+            helixAdmin.addInstanceTag(clusterName, instanceId, "disabled");
+          }
+        },
+        new ExceptionalCondition() {
+          @Override
+          public boolean apply() throws Exception {
+            // When the instance config tag contains the "disabled" tag.
+            return helixAdmin.getInstanceConfig(clusterName, instanceId).containsTag("disabled");
+          }
+        }, 10);
+
+    waitUntilAllPartitionsAreOffline(helixAdmin, clusterName, instanceId);
+  }
+
+  private static boolean waitUntilAllPartitionsAreOffline(
+      final HelixAdmin helixAdmin,
+      final String clusterName,
+      final String instanceId) {
+    LOG.error(String.format(
+        "waitUntilAllPartitionsAreOffline cluster: %s instance: %s", clusterName, instanceId));
+
+    /**
+     * Currently we don't have a good way to guarantee that all the partitions of the instance have
+     * been offlined. There doesn't seem to be direct api for the same. We could potentially
+     * attempt to retrieve all resources and their externalViews and then iterate through them
+     * to make sure that this instances doesn't have any replica in non-offline (active) state.
+     * However, for large participant clusters, participant retrieving externalViews for all
+     * resources is bit risky approach since it could generate lot of traffic to the zk, zk may
+     * get overloaded. Until we have better solution to figure out how to retrieve current states
+     * corresponding to this participant for a given session, we will simply wait for 5 seconds
+     * to provide helix controller to generate all necessary state transitions for this instance
+     *
+     * Here we are assuming that this instance has been disabled in helix, before calling this
+     * method.
+     */
+    try {
+      Thread.sleep(5000);
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+    }
+
+    return true;
+  }
+
+
+  /**
+   * If the instance has been marked for maintenance by an external script this
+   * participant should fail to load and not enable the instance in helix.
+   * This is so that the external scrip performing maintenance work, need some
+   * way of guarantee that when it marks the instance for maintenance or removal
+   * it doesn't conflict with any ongoing deploy that could re-enable this
+   * instance of Participant node.
+   */
+  private static boolean isThisInstanceMarkedForMaintenance(
+      final HelixAdmin helixAdmin,
+      final String clusterName,
+      final String instanceId) {
+    LOG.error(String.format("Attempt to get instanceTag : maintenance"));
+    boolean result = helixAdmin.getInstanceConfig(clusterName, instanceId).containsTag("maintenance");
+    if (result) {
+      LOG.error(String.format("The instance %s in cluster: %s is marked for maintenance with an "
+              + "instance tag 'maintenance'",
+          instanceId, clusterName));
+    }
+    return result;
+  }
+
+  /**
+   * Attempt to enable this instance and remove the "disable" tag.
+   * The order is first to remove the instanceTag, and then enable the instance in helix.
+   * If either of the attempts fail for successive 10 retries, then we throw a RuntimeException
+   * since it is not same to have this participant serve any traffic unless the instance is
+   * enabled and the disabled tag has been removed.
+   */
+  private static void enableInstance(
+      final HelixAdmin helixAdmin,
+      final String clusterName,
+      final String instanceId) {
+
+    retryWithBoundedExponentialBackOff(
+        "enableInstanceTag",
+        new ExceptionalAction() {
+          @Override
+          public void apply() throws Exception {
+            LOG.error(
+                "Removing any previously added \"disabled\" instance tag,"
+                    + " to force spectator to consider this instance in shard_map "
+                    + "potentially even befoer any partitions have been active ");
+            helixAdmin.removeInstanceTag(clusterName, instanceId, "disabled");
+          }
+        },
+        new ExceptionalCondition() {
+          @Override
+          public boolean apply() throws Exception {
+            // When the instance config tag contains the "disabled" tag.
+            return ! helixAdmin.getInstanceConfig(clusterName, instanceId).containsTag("disabled");
+          }
+        }, 10);
+
+    retryWithBoundedExponentialBackOff(
+        "enableInstance",
+        new ExceptionalAction() {
+          @Override
+          public void apply() throws Exception {
+            LOG.error("Enabling the instance to prepare for state transitions");
+            helixAdmin.enableInstance(clusterName, instanceId, true);
+          }
+        },
+        new ExceptionalCondition() {
+          @Override
+          public boolean apply() throws Exception {
+            // When the instance is  enabled
+            return helixAdmin.getInstanceConfig(clusterName, instanceId).getInstanceEnabled();
+          }
+        }, 10);
+  }
+
+  private static void retryWithBoundedExponentialBackOff(
+      final String context,
+      ExceptionalAction action, ExceptionalCondition condition, int maxRetries) {
+    long minSleep = 200;
+    double factor = 1.5;
+    long maxSleep = 10000;
+
+    long attemptNum = 0;
+    Throwable lastThrowable = null;
+
+    long currentWaitTimeMillis = minSleep;
+      do {
+        if (attemptNum > maxRetries) {
+          if (lastThrowable != null) {
+            LOG.error(String.format(
+                "retryWithBoundedExponentialBackOff Exhausted All Retries:"
+                    + " %s attempNum: %d, with exception",
+                context, attemptNum), lastThrowable);
+            throw new RuntimeException(lastThrowable);
+          } else {
+            LOG.error(String.format(
+                "retryWithBoundedExponentialBackOff  Exhausted All Retries:"
+                    + " %s attempNum: %d, without exceptions",
+                context, attemptNum));
+            throw new RuntimeException("Exhauted All Retries: " + context);
+          }
+        }
+        LOG.error(String.format("retryWithBoundedExponentialBackOff: %s attempNum: %d", context, attemptNum));
+
+        try {
+          action.apply();
+        } catch (Exception e) {
+          lastThrowable = e;
+          LOG.error(String.format(
+              "retryWithBoundedExponentialBackOff: %s attempNum: %d, with exception",
+              context, attemptNum), lastThrowable);
+        }
+
+        try {
+          Thread.sleep(currentWaitTimeMillis);
+        } catch (InterruptedException ie) {
+          LOG.error("retryWithBoundedExponentialBackOff: " + context, ie);
+        }
+
+        try {
+          if (condition.apply()) {
+            break;
+          }
+        } catch (Exception e) {
+          lastThrowable = e;
+          LOG.error(String.format(
+              "retryWithBoundedExponentialBackOff: %s attempNum: %d, with exception",
+              context, attemptNum), lastThrowable);
+        }
+
+        // Update the wait time
+        currentWaitTimeMillis = Math.min(maxSleep, (long) (currentWaitTimeMillis * factor));
+        ++attemptNum;
+      } while (true);
+    }
+
+  private interface ExceptionalAction {
+
+    void apply() throws Exception;
+  }
+
+  private interface ExceptionalCondition {
+
+    boolean apply() throws Exception;
   }
 }
