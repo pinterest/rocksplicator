@@ -278,6 +278,8 @@ class ThriftRouter {
       auto& segments = (*local_cluster_layout_)->segments;
       auto itor = segments.find(segment);
       if (itor == segments.end()) {
+        // if the segment is missing from cluster_layout we are sure that
+        // all shards are missing clients. So we return eagerly
         LOG(ERROR) << "Unknown segment: " << segment;
         return ReturnCode::UNKNOWN_SEGMENT;
       }
@@ -291,8 +293,12 @@ class ThriftRouter {
       auto ret = ReturnCode::OK;
       for (auto& s_c : *shard_to_clients) {
         if (s_c.first >= shard_to_hosts.size()) {
-          LOG(ERROR) << "Unknown shard: " << s_c.first;
-          return ReturnCode::UNKNOWN_SHARD;
+          // if a shard_id is missing in the cluster layout, we mark
+          // the last known ReturnCode to UNKNOWN_SHARD and
+          // continue processing clients for other shards
+          LOG_EVERY_N(ERROR, FLAGS_thrift_router_log_frequency) << "Unknown shard: " << s_c.first;
+          ret = ReturnCode::UNKNOWN_SHARD;
+          continue;
         }
         // find clients for shard
         auto shard = s_c.first;
@@ -307,6 +313,7 @@ class ThriftRouter {
         auto hosts_for_shard = selectHosts(
           shard_to_hosts[shard], role, rotation_counter, segment, shrink_target, specific_az);
         if (hosts_for_shard.empty()) {
+          // intentionally do not return and continue processing clients for other shards
           LOG_EVERY_N(ERROR, FLAGS_thrift_router_log_frequency)
             << "Could not find hosts for shard " << shard;
           ret = ReturnCode::NOT_FOUND;
@@ -317,6 +324,7 @@ class ThriftRouter {
         filterBadHosts(&hosts_for_shard);
         if (sz != hosts_for_shard.size() && quantity == Quantity::ALL) {
           // exist some bad hosts, and we want all of them
+          // intentionally do not return and continue processing clients for other shards
           LOG_EVERY_N(ERROR, FLAGS_thrift_router_log_frequency)
             << "There is at least one bad host for shard " << shard;
           ret = ReturnCode::BAD_HOST;
