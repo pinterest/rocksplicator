@@ -18,6 +18,7 @@
 #include <shared_mutex>
 #include <string>
 
+#include "common/jsoncpp/include/json/json.h"
 #include "common/object_lock.h"
 #include "common/s3util.h"
 #include "rocksdb/db.h"
@@ -71,6 +72,10 @@ class ApplicationDBBackupManager {
 
   bool backupDBToS3(const std::shared_ptr<ApplicationDB>& db);
 
+  std::vector<int64_t> getTimeStamp(const std::string& db);
+
+  void makeUpBackupDescJson(const std::unordered_map<std::string, int64_t>& file_to_ts, int64_t last_ts, Json::Value& contents);
+
  private:
     // copy from admin_hamdler..
   std::shared_ptr<common::S3Util> createLocalS3Util(const uint32_t limit_mbs,
@@ -82,6 +87,11 @@ class ApplicationDBBackupManager {
   common::ObjectLock<std::string>* db_admin_lock_; 
   std::string rocksdb_dir_;
   int32_t checkpoint_backup_batch_num_upload_;
+
+  // used to store all backups for each db. 
+  // I only store the timestamps since I use that to name different backups.
+  // May add checksum in the future.
+  std::unordered_map<std::string, std::vector<int64_t>> db_backups_;
 
   std::shared_ptr<common::S3Util> s3_util_;
   mutable std::mutex s3_util_lock_;

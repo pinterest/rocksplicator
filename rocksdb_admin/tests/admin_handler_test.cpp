@@ -21,8 +21,10 @@
 #include <map>
 #include <thread>
 
+#include "common/file_util.h"
 #include "common/s3util.h"
 #include "boost/filesystem.hpp"
+#include "boost/range/iterator_range.hpp"
 #include "folly/SocketAddress.h"
 #include "gtest/gtest.h"
 #include "rocksdb/options.h"
@@ -62,7 +64,9 @@ using apache::thrift::RpcOptions;
 using apache::thrift::ThriftServer;
 using apache::thrift::async::TAsyncSocket;
 using common::ThriftClientPool;
+using rocksdb::CompactRangeOptions;
 using rocksdb::FlushOptions;
+using rocksdb::IngestExternalFileOptions;
 using rocksdb::Options;
 using rocksdb::ReadOptions;
 using rocksdb::Status;
@@ -92,6 +96,7 @@ DEFINE_bool(
 DECLARE_string(rocksdb_dir);
 DECLARE_bool(enable_checkpoint_backup);
 DECLARE_bool(rocksdb_allow_overlapping_keys);
+DECLARE_bool(s3_direct_io);
 
 string generateRandIntAsStr() {
   static thread_local unsigned int seed = time(nullptr);
@@ -137,10 +142,14 @@ class AdminHandlerTestBase : public testing::Test {
   AdminHandlerTestBase() {
     const testing::TestInfo* const test_info =
       testing::UnitTest::GetInstance()->current_test_info();
-    std:string back_up_test_name = "ApplicationDBBackupManagerTest";
-    if (strcmp(test_info->name(), back_up_test_name.c_str())) {
+    std::string back_up_test_name = "ApplicationDBBackupManagerTest";
+    std::string backup_desc_test_name = "BackupDescriptorTest";
+    if (0 == strcmp(test_info->name(), back_up_test_name.c_str())) {
       FLAGS_enable_async_incremental_backup_dbs = true;
       FLAGS_async_incremental_backup_dbs_frequency_sec = 1;
+    } else if (0 == strcmp(test_info->name(), backup_desc_test_name.c_str())) {
+      FLAGS_enable_async_incremental_backup_dbs = true;
+      FLAGS_async_incremental_backup_dbs_frequency_sec = 3;
     }
     // setup local , s3 paths for test
     FLAGS_rocksdb_dir = testDir();
@@ -917,6 +926,125 @@ TEST(AdminHandlerTest, InitS3Tmp) {
   admin::AdminHandler handler(std::move(db_manager),
                               admin::RocksDBOptionsGenerator());
   EXPECT_FALSE(fs::exists(test_directory));
+}
+
+TEST_F(AdminHandlerTestBase, BackupDescriptorTest) {
+  int32_t range = 1000;
+  const string testdb = generateDBName();
+  addDBWithRole(testdb, "LEADER");
+  auto meta = handler_->getMetaData(testdb);
+  verifyMeta(meta, testdb, true, "", "");
+
+  // use incremental backup 
+  handler_->writeMetaData(testdb, "fakes3bucket", "fakes3path");
+  
+  AdminException e;
+  auto db_ = handler_->getDB(testdb, &e)->rocksdb();
+  auto local_s3_util = common::S3Util::BuildS3Util(FLAGS_incre_backup_limit_mbs, FLAGS_s3_incre_backup_bucket);
+
+  for (int32_t i = 0; i < range; ++i) {
+    std::string kv_tmp = folly::stringPrintf("%04d", i);
+    writeToDB(testdb, kv_tmp, kv_tmp + "_" + kv_tmp);
+  }
+  flushDB(testdb);
+  // wait for the first incremental backup
+  std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_incremental_backup_dbs_frequency_sec));
+
+  // some overlap between two batches of kv pairs for compaction test later
+  for (int32_t i = 0; i < range; ++i) {
+    std::string kv_tmp = folly::stringPrintf("%04d", i + range/2);
+    writeToDB(testdb, kv_tmp, kv_tmp + "_" + kv_tmp + "_" + kv_tmp);
+  }
+  flushDB(testdb);
+  // wait for the second incremental backup
+  std::this_thread::sleep_for(std::chrono::seconds(FLAGS_async_incremental_backup_dbs_frequency_sec));
+
+  std::string s3_path = FLAGS_s3_incre_backup_prefix + testdb + "/";
+  std::string restore_path = "/restore_tmp/" + testdb + "/";
+
+  boost::system::error_code remove_err;
+  boost::system::error_code create_err;
+  fs::create_directories(restore_path, create_err);
+  SCOPE_EXIT { fs::remove_all(restore_path, remove_err); };
+
+  const std::string backupStarter = "backup_starter";
+  auto starter_resp = local_s3_util->getObject(s3_path + backupStarter, 
+    restore_path + backupStarter, FLAGS_s3_direct_io);
+  EXPECT_TRUE(starter_resp.Error().empty());
+  
+  Json::Reader starter_reader;
+  Json::Value starter;
+  std::string starter_content;
+  common::FileUtil::readFileToString(restore_path + backupStarter, &starter_content);
+  EXPECT_TRUE(starter_reader.parse(starter_content, starter) || starter.isNumeric());
+  int64_t last_ts = starter.asInt64();
+
+  // download the latest backup
+  auto responses = local_s3_util->getObjects(s3_path + std::to_string(last_ts) + "/", restore_path, "/",
+                                        FLAGS_s3_direct_io);
+  EXPECT_TRUE(responses.Error().empty() && responses.Body().size() > 0);
+
+  std::string last_backup_desc_contents;
+  std::unordered_map<std::string, int64_t> file_to_ts;
+  const std::string backupDesc = "backup_descriptor";
+  common::FileUtil::readFileToString(restore_path + backupDesc, &last_backup_desc_contents);
+
+  Json::Reader reader;
+  Json::Value last_backup_desc;
+  EXPECT_TRUE(reader.parse(last_backup_desc_contents, last_backup_desc));
+  EXPECT_TRUE(last_backup_desc.isObject());
+
+  const std::string fileToTs = "file_to_ts";
+  const auto& file_map = last_backup_desc[fileToTs];
+
+  // download files from previous backup
+  for (Json::Value::const_iterator it = file_map.begin(); it != file_map.end(); ++it) {
+    auto key = it.key().asString();
+    auto value = it->asInt64();
+    if (value != last_ts) {
+      auto response = local_s3_util->getObject(s3_path + std::to_string(value) + "/" + key, restore_path + key, FLAGS_s3_direct_io);
+      EXPECT_TRUE(response.Error().empty());
+    }
+  }
+  boost::system::error_code remove_backup_desc_err;
+  boost::filesystem::remove(restore_path + backupDesc, remove_backup_desc_err);
+
+  boost::system::error_code remove_backup_starter_err;
+  boost::filesystem::remove(restore_path + backupStarter, remove_backup_starter_err);
+  
+  rocksdb::DB* restore_db_;
+  Options options_restore;
+  auto status = rocksdb::DB::Open(options_restore, restore_path, &restore_db_);
+  EXPECT_TRUE(status.ok());
+
+  ReadOptions db_readoptions = ReadOptions();  
+  auto it_db_ = db_->NewIterator(db_readoptions);
+
+  ReadOptions restore_db_readoptions = ReadOptions();  
+  auto it_restore_db_ = restore_db_->NewIterator(restore_db_readoptions);
+
+  // compare local db with restore db
+  for (it_db_->SeekToFirst(), it_restore_db_->SeekToFirst(); it_db_->Valid() && 
+      it_restore_db_->Valid(); it_db_->Next(), it_restore_db_->Next()) {
+    EXPECT_TRUE(it_db_->key() == it_restore_db_->key());
+    EXPECT_TRUE(it_db_->value() == it_restore_db_->value());
+  }
+  EXPECT_FALSE(it_db_->Valid() || it_restore_db_->Valid());
+
+  // compact local db and then compare again
+  rocksdb::Slice key_begin(folly::stringPrintf("%04d", 0));
+  rocksdb::Slice key_end(folly::stringPrintf("%04d", range - 1 + range/2));
+  auto s = db_->CompactRange(CompactRangeOptions(), &key_begin, &key_end);
+  EXPECT_TRUE(s.ok());
+
+  it_db_ = db_->NewIterator(db_readoptions);
+  it_restore_db_ = restore_db_->NewIterator(restore_db_readoptions);
+  for (it_db_->SeekToFirst(), it_restore_db_->SeekToFirst(); it_db_->Valid() && 
+      it_restore_db_->Valid(); it_db_->Next(), it_restore_db_->Next()) {
+    EXPECT_TRUE(it_db_->key() == it_restore_db_->key());
+    EXPECT_TRUE(it_db_->value() == it_restore_db_->value());
+  }
+  EXPECT_FALSE(it_db_->Valid() || it_restore_db_->Valid());
 }
 
 }  // namespace admin
