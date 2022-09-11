@@ -291,9 +291,9 @@ TEST(S3BackupRestoreCheckpointTest, Basics) {
 
   auto ts = common::timeutil::GetCurrentTimestamp();
   std::string local_db_checkpoint_path = folly::stringPrintf(
-      "%s%s/%d", FLAGS_local_backup_dir.c_str(), test_db_name.c_str(), ts);
+      "%s%s/%ld", FLAGS_local_backup_dir.c_str(), test_db_name.c_str(), ts);
   std::string formatted_s3_dir_path = folly::stringPrintf(
-      "%s/%s/%d/", FLAGS_s3_backup_prefix_checkpoint.c_str(),
+      "%s/%s/%ld/", FLAGS_s3_backup_prefix_checkpoint.c_str(),
       test_db_name.c_str(), ts);
 
   LOG(INFO) << "Create checkpoint for localDB: " << local_db_path
