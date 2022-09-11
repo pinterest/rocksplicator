@@ -106,11 +106,7 @@ class FileWatcher {
 
   struct INotifyHandler : public folly::EventHandler {
     INotifyHandler(folly::EventBase* evb, int fd, FileWatcher* watcher)
-#if __GNUC__ >= 8
         : folly::EventHandler(evb, folly::NetworkSocket(fd))
-#else
-        : folly::EventHandler(evb, fd)
-#endif
         , watcher_(watcher) {
     }
 

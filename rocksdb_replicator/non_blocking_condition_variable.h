@@ -110,11 +110,7 @@ class NonBlockingConditionVariable {
       // we may accumulate some unnecessary tasks if they have run before the
       // timeout.
       std::weak_ptr<Task> weak_task(task);
-#if __GNUC__ >= 8
       auto future = folly::futures::sleepUnsafe(std::chrono::milliseconds(timeout_ms));
-#else
-      auto future = folly::futures::sleep(std::chrono::milliseconds(timeout_ms));
-#endif
       std::move(future).then([weak_task = std::move(weak_task), executor = executor_] (folly::Try<folly::Unit>&& t) {
           auto task = weak_task.lock();
           if (task && task->should_i_run()) {

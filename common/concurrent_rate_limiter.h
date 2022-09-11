@@ -18,12 +18,7 @@
 
 #pragma once
 
-#if __GNUC__ >= 8
 #include "folly/synchronization/AtomicStruct.h"
-#else
-#include "folly/AtomicStruct.h"
-#endif
-
 #include "glog/logging.h"
 
 namespace common {

@@ -58,11 +58,7 @@ std::shared_ptr<folly::SSLContext> loadSSLContext() {
 void scheduleRefresh(std::shared_ptr<folly::SSLContext>* cur_ctx) {
   auto delayed_future =
     common::GenerateDelayedFuture(std::chrono::seconds(60 * 60));
-#if __GNUC__ >= 8
   std::move(delayed_future).then([cur_ctx] (auto&&) {
-#else
-  delayed_future.then([cur_ctx] () {
-#endif
       auto new_ctx = loadSSLContext();
       if (new_ctx) {
         LOG(INFO) << "Got a new SSLContext, swapping";
