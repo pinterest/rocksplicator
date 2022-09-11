@@ -29,6 +29,7 @@
 #include <map>
 
 #include "boost/filesystem.hpp"
+#include "common/helix_client.h"
 #include "common/identical_name_thread_factory.h"
 #include "common/kafka/kafka_broker_file_watcher.h"
 #include "common/kafka/kafka_consumer_pool.h"
@@ -1353,6 +1354,16 @@ void AdminHandler::async_tm_checkDB(
     std::unique_ptr<apache::thrift::HandlerCallback<std::unique_ptr<
       CheckDBResponse>>> callback,
     std::unique_ptr<CheckDBRequest> request) {
+
+  // Ping JVM
+  try {
+    common::PingJVM();
+  } catch (const std::exception& ex) {
+    SetException("Failed to call PingJVM, " + std::string(ex.what()),
+                  AdminErrorCode::DB_ADMIN_ERROR, &callback);
+    return;
+  }
+
   AdminException e;
   auto db = getDB(request->db_name, &e);
   if (db == nullptr) {

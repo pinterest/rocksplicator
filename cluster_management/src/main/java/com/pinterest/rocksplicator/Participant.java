@@ -334,6 +334,10 @@ public class Participant {
     }
   }
 
+  public static void ping() {
+    LOG.error("[participant] Received ping");
+  }
+
   private Participant(String zkConnectString, String clusterName, String instanceName,
                       String stateModelType, int port, String postUrl, boolean useS3Backup,
                       String s3BucketName, boolean runSpectator)
