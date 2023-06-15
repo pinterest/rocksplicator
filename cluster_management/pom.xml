@@ -210,7 +210,7 @@
     <dependency>
       <groupId>org.xerial.snappy</groupId>
       <artifactId>snappy-java</artifactId>
-      <version>1.1.8.2</version>
+      <version>1.1.10.1</version>
     </dependency>
     <dependency>
       <groupId>org.mockito</groupId>
